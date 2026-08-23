@@ -174,6 +174,43 @@ class GroovyApiService {
     return null;
   }
 
+  Future<AuthResponse> updateProfile({
+    required String token,
+    String? name,
+    String? avatarUrl,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/auth/profile');
+      final res = await http.put(
+        uri,
+        headers: _headers(token),
+        body: jsonEncode({
+          if (name != null) 'name': name.trim(),
+          if (avatarUrl != null) 'avatarUrl': avatarUrl,
+        }),
+      ).timeout(const Duration(seconds: 12));
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
+        return AuthResponse(
+          success: true,
+          user: data['user'] != null ? GroovyUser.fromJson(data['user'] as Map<String, dynamic>) : null,
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          error: data['error'] as String? ?? 'Error al actualizar perfil (${res.statusCode})',
+        );
+      }
+    } catch (e) {
+      debugPrint('[GroovyApiService] updateProfile error: $e');
+      return AuthResponse(
+        success: false,
+        error: 'No se pudo conectar con el servidor Groovy.',
+      );
+    }
+  }
+
   // ----------------------------------------------------
   // FAVORITES
   // ----------------------------------------------------

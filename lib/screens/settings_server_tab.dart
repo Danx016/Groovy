@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings/settings_section_card.dart';
+import '../widgets/user_avatar.dart';
 import '../utils/context_extensions.dart';
+import '../utils/navigation_helper.dart';
+import 'edit_profile_screen.dart';
 
 class SettingsServerTab extends StatefulWidget {
   const SettingsServerTab({super.key});
@@ -22,7 +24,6 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
 
     final userName = user?.name.isNotEmpty == true ? user!.name : 'Usuario Groovy';
     final userEmail = user?.email.isNotEmpty == true ? user!.email : 'No autenticado';
-    final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : 'G';
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -35,33 +36,10 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF1DB954), Color(0xFF15883e)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF1DB954).withValues(alpha: 0.3),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      userInitial,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                      ),
-                    ),
+                  UserAvatar(
+                    name: userName,
+                    avatarUrl: user?.avatarUrl,
+                    size: 56,
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -103,6 +81,17 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
                         ),
                       ],
                     ),
+                  ),
+                  IconButton(
+                    icon: const Icon(
+                      CupertinoIcons.pencil_circle_fill,
+                      color: AppTheme.appleMusicRed,
+                      size: 30,
+                    ),
+                    tooltip: 'Editar Perfil',
+                    onPressed: () {
+                      NavigationHelper.push(context, const EditProfileScreen());
+                    },
                   ),
                 ],
               ),

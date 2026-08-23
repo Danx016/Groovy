@@ -17,6 +17,8 @@ import 'favorites_screen.dart';
 import 'liked_albums_screen.dart';
 import 'playlists_screen.dart';
 import 'settings_screen.dart';
+import 'edit_profile_screen.dart';
+import '../widgets/user_avatar.dart';
 import 'library_search_delegate.dart';
 import 'artist_screen.dart';
 import 'radio_screen.dart';
@@ -985,7 +987,6 @@ class _SettingsSheet extends StatelessWidget {
 
     final userName = user?.name.isNotEmpty == true ? user!.name : 'Usuario Groovy';
     final userEmail = user?.email.isNotEmpty == true ? user!.email : 'Conectado a Groovy Cloud';
-    final userInitial = userName.isNotEmpty ? userName[0].toUpperCase() : 'G';
 
     return Container(
       decoration: BoxDecoration(
@@ -1028,26 +1029,10 @@ class _SettingsSheet extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
-                      Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF1DB954), Color(0xFF15883e)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          shape: BoxShape.circle,
-                        ),
-                        alignment: Alignment.center,
-                        child: Text(
-                          userInitial,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
+                      UserAvatar(
+                        name: userName,
+                        avatarUrl: user?.avatarUrl,
+                        size: 52,
                       ),
                       const SizedBox(width: 14),
                       Expanded(
@@ -1095,11 +1080,36 @@ class _SettingsSheet extends StatelessWidget {
                           ],
                         ),
                       ),
+                      IconButton(
+                        icon: const Icon(CupertinoIcons.pencil_circle_fill, color: AppTheme.appleMusicRed, size: 28),
+                        tooltip: 'Editar Perfil',
+                        onPressed: () {
+                          Navigator.pop(context);
+                          NavigationHelper.push(context, const EditProfileScreen());
+                        },
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(
+                  CupertinoIcons.person_crop_circle_badge_checkmark,
+                  color: AppTheme.appleMusicRed,
+                ),
+                title: const Text('Editar Perfil'),
+                subtitle: const Text('Cambiar foto y nombre de usuario'),
+                trailing: Icon(
+                  CupertinoIcons.chevron_forward,
+                  size: 18,
+                  color: isDark ? AppTheme.darkDivider : AppTheme.lightDivider,
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  NavigationHelper.push(context, const EditProfileScreen());
+                },
+              ),
               ListTile(
                 leading: Icon(
                   CupertinoIcons.gear_alt,

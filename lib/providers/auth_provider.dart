@@ -135,6 +135,46 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateUserProfile({
+    required String name,
+    String? avatarUrl,
+  }) async {
+    _error = null;
+    if (_currentUser == null) return false;
+
+    // 1. If online and has token, sync with backend
+    if (_token != null && _token!.isNotEmpty) {
+      final response = await _apiService.updateProfile(
+        token: _token!,
+        name: name,
+        avatarUrl: avatarUrl,
+      );
+      if (response.success && response.user != null) {
+        _currentUser = response.user;
+        await _storageService.saveUserAuth(token: _token!, userJson: _currentUser!.toJson());
+        notifyListeners();
+        return true;
+      }
+    }
+
+    // 2. Local fallback update
+    _currentUser = GroovyUser(
+      id: _currentUser?.id ?? 1,
+      name: name.trim(),
+      email: _currentUser?.email ?? '',
+      avatarUrl: avatarUrl ?? _currentUser?.avatarUrl,
+      createdAt: _currentUser?.createdAt,
+    );
+
+    if (_token != null) {
+      await _storageService.saveUserAuth(token: _token!, userJson: _currentUser!.toJson());
+    } else {
+      await _storageService.saveUserProfile(_currentUser!.toJson());
+    }
+    notifyListeners();
+    return true;
+  }
+
   void enterOfflineMode() {
     OfflineService().setOfflineMode(true);
     _state = AuthState.offlineMode;
