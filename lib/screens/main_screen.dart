@@ -131,172 +131,271 @@ class _MainScreenState extends State<MainScreen> {
 
         return StatefulBuilder(
           builder: (dialogCtx, setDialogState) => Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 480, maxHeight: 600),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(28),
+            ),
+            backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+            elevation: 24,
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 580),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.1)
+                      : Colors.black.withValues(alpha: 0.06),
+                  width: 1,
+                ),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [AppTheme.appleMusicRed, AppTheme.appleMusicPink],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-                    ),
+                  // Sleek Top Header
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(
-                          CupertinoIcons.arrow_up_circle_fill,
-                          color: Colors.white,
-                          size: 40,
+                        // Glowing Icon Badge
+                        Container(
+                          width: 64,
+                          height: 64,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFFFF334B), Color(0xFFE50914)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFFE50914).withValues(alpha: 0.4),
+                                blurRadius: 20,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.sparkles,
+                            color: Colors.white,
+                            size: 30,
+                          ),
                         ),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 18),
                         Text(
                           l10n.updateAvailable,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.5,
+                            color: isDark ? Colors.white : Colors.black87,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 6),
                         Text(
-                          l10n.updateAvailableSubtitle,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
+                          'Hay una nueva versión de Groovy lista para ti',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDark ? Colors.white60 : Colors.black54,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            _VersionBadge(
-                              label: l10n.updateCurrentVersion(
-                                UpdateService.currentVersion,
+                        const SizedBox(height: 14),
+
+                        // Version Transition Pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? Colors.white.withValues(alpha: 0.07)
+                                : Colors.black.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                'v${UpdateService.currentVersion}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white60 : Colors.black54,
+                                ),
                               ),
-                              color: Colors.white24,
-                            ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              CupertinoIcons.arrow_right,
-                              color: Colors.white70,
-                              size: 16,
-                            ),
-                            const SizedBox(width: 8),
-                            _VersionBadge(
-                              label: l10n.updateLatestVersion(release.version),
-                              color: Colors.white.withValues(alpha: 0.3),
-                              bold: true,
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Icon(
+                                CupertinoIcons.arrow_right,
+                                size: 12,
+                                color: isDark ? Colors.white38 : Colors.black38,
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF1DB954).withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Text(
+                                  'v${release.version}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF1DB954),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
                   ),
+
+                  // Changelog Box
                   if (changelog.isNotEmpty && !isDownloading)
                     Flexible(
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              l10n.whatsNew,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                color: isDark ? Colors.white54 : Colors.black45,
-                                letterSpacing: 0.8,
-                              ),
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? const Color(0xFF222226)
+                                : const Color(0xFFF4F4F6),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withValues(alpha: 0.05)
+                                  : Colors.black.withValues(alpha: 0.04),
                             ),
-                            const SizedBox(height: 8),
-                            Flexible(
-                              child: Scrollbar(
-                                thumbVisibility: true,
-                                child: SingleChildScrollView(
-                                  child: Text(
-                                    changelog,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    CupertinoIcons.doc_text_fill,
+                                    size: 14,
+                                    color: isDark ? Colors.white70 : Colors.black54,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Novedades y mejoras',
                                     style: TextStyle(
-                                      fontSize: 13,
-                                      height: 1.5,
-                                      color:
-                                          isDark ? Colors.white70 : Colors.black87,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.3,
+                                      color: isDark ? Colors.white70 : Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              Flexible(
+                                child: Scrollbar(
+                                  thumbVisibility: true,
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      changelog,
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        height: 1.45,
+                                        color: isDark ? Colors.white70 : Colors.black87,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),
+
+                  // Live Downloading Progress View
                   if (isDownloading)
                     Padding(
-                      padding: const EdgeInsets.all(24),
+                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          LinearProgressIndicator(
-                            value: progress > 0 ? progress : null,
-                            backgroundColor:
-                                isDark ? Colors.white10 : Colors.black12,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              AppTheme.appleMusicRed,
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: LinearProgressIndicator(
+                              value: progress > 0 ? progress : null,
+                              backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                              valueColor: const AlwaysStoppedAnimation<Color>(
+                                Color(0xFFE50914),
+                              ),
+                              minHeight: 10,
                             ),
-                            borderRadius: BorderRadius.circular(4),
-                            minHeight: 8,
                           ),
-                          const SizedBox(height: 12),
-                          Text(
-                            progress > 0
-                                ? 'Descargando actualización... ${(progress * 100).toInt()}%'
-                                : 'Iniciando descarga...',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: isDark ? Colors.white70 : Colors.black87,
-                              fontWeight: FontWeight.w500,
-                            ),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Descargando...',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white70 : Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                '${(progress * 100).toInt()}%',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFE50914),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
+
                   if (errorMessage != null)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                       child: Text(
                         errorMessage!,
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                        style: const TextStyle(color: Colors.redAccent, fontSize: 12),
                         textAlign: TextAlign.center,
                       ),
                     ),
+
+                  // Bottom Action Buttons
                   Padding(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
                     child: Row(
                       children: [
                         if (!isDownloading)
                           Expanded(
-                            child: OutlinedButton(
+                            child: TextButton(
                               onPressed: () => Navigator.of(ctx).pop(),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
+                                foregroundColor:
+                                    isDark ? Colors.white60 : Colors.black54,
                               ),
-                              child: Text(l10n.remindLater),
+                              child: Text(
+                                l10n.remindLater,
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
                             ),
                           ),
                         if (!isDownloading) const SizedBox(width: 12),
                         Expanded(
-                          flex: 2,
+                          flex: isDownloading ? 1 : 2,
                           child: ElevatedButton.icon(
                             onPressed: isDownloading
                                 ? null
@@ -342,20 +441,26 @@ class _MainScreenState extends State<MainScreen> {
                             icon: Icon(
                               isDownloading
                                   ? CupertinoIcons.hourglass
-                                  : CupertinoIcons.cloud_download,
+                                  : CupertinoIcons.arrow_down_to_line_alt,
                               size: 18,
                             ),
                             label: Text(
                               isDownloading
                                   ? 'Descargando...'
-                                  : l10n.downloadUpdate,
+                                  : 'Actualizar ahora',
+                              style: const TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              backgroundColor: AppTheme.appleMusicRed,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              backgroundColor: const Color(0xFFE50914),
                               foregroundColor: Colors.white,
+                              elevation: 4,
+                              shadowColor: const Color(0xFFE50914).withValues(alpha: 0.4),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(16),
                               ),
                             ),
                           ),
