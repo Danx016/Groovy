@@ -1167,7 +1167,7 @@
   "@updateAvailable": {
     "description": "Title of the update available dialog"
   },
-  "updateAvailableSubtitle": "¡Una nueva versión de Musly está disponible!",
+  "updateAvailableSubtitle": "¡Una nueva versión de Groovy está disponible!",
   "@updateAvailableSubtitle": {
     "description": "Subtitle in the update dialog"
   },
