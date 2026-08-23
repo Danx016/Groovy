@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ReleaseAsset {
   final String name;
@@ -29,6 +32,14 @@ class ReleaseInfo {
     required this.assets,
   });
 
+  String? get apkDownloadUrl {
+    final apkAsset = assets.cast<ReleaseAsset?>().firstWhere(
+          (a) => a?.name.toLowerCase().endsWith('.apk') ?? false,
+          orElse: () => null,
+        );
+    return apkAsset?.browserDownloadUrl;
+  }
+
   factory ReleaseInfo.fromJson(Map<String, dynamic> json) {
     final tag = json['tag_name'] as String? ?? '';
     return ReleaseInfo(
@@ -46,14 +57,15 @@ class ReleaseInfo {
 
 class UpdateService {
   static const String currentVersion = '1.0.13';
+  static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
 
   static const String _apiUrl =
       'https://api.github.com/repos/Danx016/Groovy/releases/latest';
 
   static final _dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 8),
-      receiveTimeout: const Duration(seconds: 8),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 60),
       headers: {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
@@ -75,6 +87,39 @@ class UpdateService {
     } catch (e) {
       debugPrint('UpdateService: check failed – $e');
       return null;
+    }
+  }
+
+  static Future<void> downloadAndInstallApk({
+    required String downloadUrl,
+    required void Function(double progress) onProgress,
+    required void Function(String error) onError,
+  }) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final filePath = '${dir.path}/app-update.apk';
+      final file = File(filePath);
+      if (await file.exists()) {
+        try {
+          await file.delete();
+        } catch (_) {}
+      }
+
+      await _dio.download(
+        downloadUrl,
+        filePath,
+        onReceiveProgress: (received, total) {
+          if (total > 0) {
+            onProgress(received / total);
+          }
+        },
+      );
+
+      if (!kIsWeb && Platform.isAndroid) {
+        await _channel.invokeMethod('installApk', {'filePath': filePath});
+      }
+    } catch (e) {
+      onError(e.toString());
     }
   }
 

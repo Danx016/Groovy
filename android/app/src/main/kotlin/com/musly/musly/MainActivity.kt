@@ -114,5 +114,39 @@ class MainActivity : AudioServiceFragmentActivity() {
                 }
             }
         }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.devid.musly/app_updater").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "installApk" -> {
+                    val filePath = call.argument<String>("filePath")
+                    if (filePath.isNullOrEmpty()) {
+                        result.error("INVALID_PATH", "File path cannot be empty", null)
+                        return@setMethodCallHandler
+                    }
+                    try {
+                        val file = java.io.File(filePath)
+                        if (!file.exists()) {
+                            result.error("FILE_NOT_FOUND", "APK file does not exist at $filePath", null)
+                            return@setMethodCallHandler
+                        }
+                        val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                            this@MainActivity,
+                            "${applicationContext.packageName}.fileProvider",
+                            file
+                        )
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                            setDataAndType(apkUri, "application/vnd.android.package-archive")
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("INSTALL_ERROR", e.message, e.stackTraceToString())
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 }
