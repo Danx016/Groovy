@@ -317,6 +317,11 @@ class StorageService {
     await _safeSecureWrite(_userTokenKey, token);
   }
 
+  Future<void> saveUserProfile(Map<String, dynamic> userJson) async {
+    final prefs = await _prefs;
+    await prefs.setString(_userProfileKey, jsonEncode(userJson));
+  }
+
   Future<String?> getUserToken() async {
     final secure = await _safeSecureRead(_userTokenKey);
     if (secure != null && secure.isNotEmpty) return secure;
