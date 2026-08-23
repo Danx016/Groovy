@@ -908,33 +908,3 @@ class _MainScreenState extends State<MainScreen> {
   }
 }
 
-class _VersionBadge extends StatelessWidget {
-  final String label;
-  final Color color;
-  final bool bold;
-
-  const _VersionBadge({
-    required this.label,
-    required this.color,
-    this.bold = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
-        ),
-      ),
-    );
-  }
-}
