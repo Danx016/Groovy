@@ -52,7 +52,7 @@ jobs:
         run: |
           mkdir -p release-assets
           cp build/app/outputs/flutter-apk/app-release.apk release-assets/app-release.apk
-          cp build/app/outputs/flutter-apk/app-release.apk release-assets/Groovy-${{ env.VERSION }}.apk
+          cp build/app/outputs/flutter-apk/app-release.apk release-assets/Groovy.apk
 
       - name: Create or Update GitHub Release
         uses: softprops/action-gh-release@v2
@@ -63,6 +63,6 @@ jobs:
           make_latest: true
           files: |
             release-assets/app-release.apk
-            release-assets/Groovy-${{ env.VERSION }}.apk
+            release-assets/Groovy.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
