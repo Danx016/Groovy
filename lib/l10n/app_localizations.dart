@@ -2359,7 +2359,7 @@ abstract class AppLocalizations {
   /// Subtitle in the update dialog
   ///
   /// In en, this message translates to:
-  /// **'A new version of Musly is available!'**
+  /// **'A new version of Groovy is available!'**
   String get updateAvailableSubtitle;
 
   /// Current version label in the update dialog

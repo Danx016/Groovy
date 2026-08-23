@@ -1225,7 +1225,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get updateAvailableSubtitle =>
-      '¡Una nueva versión de Musly está disponible!';
+      '¡Una nueva versión de Groovy está disponible!';
 
   @override
   String updateCurrentVersion(String version) {
