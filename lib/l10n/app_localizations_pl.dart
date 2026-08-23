@@ -1213,7 +1213,7 @@ class AppLocalizationsPl extends AppLocalizations {
   String get updateAvailable => 'Update Available';
 
   @override
-  String get updateAvailableSubtitle => 'A new version of Musly is available!';
+  String get updateAvailableSubtitle => 'A new version of Groovy is available!';
 
   @override
   String updateCurrentVersion(String version) {
