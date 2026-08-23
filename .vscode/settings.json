@@ -1,0 +1,7 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "flutter": true
+    },
+    "cmake.ignoreCMakeListsMissing": true,
+    "java.jdt.ls.java.home": "C:\\Program Files\\Android\\Android Studio\\jbr"
+}

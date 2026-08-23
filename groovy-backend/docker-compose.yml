@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: groovy-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: groovy_root_secure_2026
+      MYSQL_DATABASE: groovy_db
+      MYSQL_USER: groovy_user
+      MYSQL_PASSWORD: groovy_pass_2026
+    ports:
+      - "127.0.0.1:3307:3306"
+    volumes:
+      - groovy_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "groovy_user", "-pgroovy_pass_2026"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: groovy-api
+    restart: always
+    environment:
+      PORT: 4000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: groovy_user
+      DB_PASSWORD: groovy_pass_2026
+      DB_NAME: groovy_db
+      JWT_SECRET: groovy_super_secret_jwt_key_2026_music
+    ports:
+      - "4000:4000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  groovy_mysql_data:
+    name: groovy_mysql_data

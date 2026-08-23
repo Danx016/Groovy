@@ -1,0 +1,116 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:provider/provider.dart';
+import 'package:groovy/models/song.dart';
+import 'package:groovy/providers/player_provider.dart';
+import 'package:groovy/services/subsonic_service.dart';
+import 'package:groovy/services/storage_service.dart';
+import 'package:groovy/services/upnp_service.dart';
+import 'package:groovy/services/audio_handler.dart';
+import 'package:groovy/services/jukebox_service.dart';
+import 'package:groovy/services/transcoding_service.dart';
+import 'package:groovy/widgets/song_tile.dart';
+import '../test_helpers.dart';
+import '../bootstrap.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
+
+void main() {
+  initializeTestEnvironment();
+  group('SongTile', () {
+    late SubsonicService subsonicService;
+    late PlayerProvider playerProvider;
+
+    setUp(() {
+      SharedPreferences.setMockInitialValues({});
+      subsonicService = SubsonicService();
+      playerProvider = PlayerProvider(
+        subsonicService,
+        StorageService(),
+        FakeCastService(),
+        UpnpService(),
+        MuslyAudioHandler(),
+        JukeboxService(),
+        TranscodingService(),
+      );
+    });
+
+    tearDown(() {
+      playerProvider.dispose();
+    });
+
+    testWidgets('should display song information', (tester) async {
+      final song = Song(
+        id: '1',
+        title: 'Test Song',
+        artist: 'Test Artist',
+        album: 'Test Album',
+        duration: 180,
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<SubsonicService>.value(value: subsonicService),
+            ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: SongTile(song: song, showArtist: true)),
+          ),
+        ),
+      );
+
+      expect(find.text('Test Song'), findsOneWidget);
+      expect(find.text('Test Artist'), findsOneWidget);
+    });
+
+    testWidgets('should show duration when enabled', (tester) async {
+      final song = Song(
+        id: '1',
+        title: 'Test Song',
+        artist: 'Test Artist',
+        duration: 180,
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<SubsonicService>.value(value: subsonicService),
+            ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
+          ],
+          child: MaterialApp(
+            home: Scaffold(body: SongTile(song: song, showDuration: true)),
+          ),
+        ),
+      );
+
+      expect(find.text('3:00'), findsOneWidget);
+    });
+
+    testWidgets('should show album when enabled', (tester) async {
+      final song = Song(
+        id: '1',
+        title: 'Test Song',
+        artist: 'Test Artist',
+        album: 'Test Album',
+      );
+
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            Provider<SubsonicService>.value(value: subsonicService),
+            ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: SongTile(song: song, showArtist: true, showAlbum: true),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.textContaining('Test Artist'), findsOneWidget);
+      expect(find.textContaining('Test Album'), findsOneWidget);
+    });
+  });
+}

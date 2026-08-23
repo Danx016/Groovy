@@ -1,0 +1,161 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=SF+Pro+Display:wght@400;500;600;700;800&display=swap');
+
+/* ===== APP THEME – Groovy (matches Android AppTheme exactly) ===== */
+:root {
+  /* Brand Primary – Apple Music Red */
+  --primary:        #FA243C;
+  --primary-dim:    #c41c2e;
+  --primary-glow:   rgba(250, 36, 60, 0.35);
+  --primary-faint:  rgba(250, 36, 60, 0.12);
+
+  /* Backgrounds – Spotify Dark */
+  --bg:             #000000;   /* darkBackground */
+  --bg-surface:     #121212;   /* darkSurface     */
+  --bg-card:        #181818;   /* darkCard        */
+  --bg-elevated:    #282828;   /* darkElevated    */
+  --bg-sidebar:     #000000;   /* sidebarBackground */
+  --bg-sidebar-card:#121212;   /* sidebarCard     */
+  --bg-player:      #181818;   /* playerBarDark   */
+
+  /* Text */
+  --text-primary:   #ffffff;
+  --text-secondary: #B3B3B3;   /* darkSecondaryText */
+  --text-tertiary:  #6B6B6B;   /* darkTertiaryText  */
+
+  /* Borders / Dividers */
+  --divider:        #404040;   /* darkDivider */
+  --border:         rgba(255,255,255,0.08);
+  --border-h:       rgba(255,255,255,0.15);
+
+  /* Gradients */
+  --grad-primary: linear-gradient(135deg, #FA243C 0%, #FF6B81 100%);
+  --grad-card:    linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
+
+  /* Bottom Nav */
+  --bottom-nav-bg: #1C1C1E;
+
+  /* Radius – matching Flutter borderRadius: 12 */
+  --r-xs:   6px;
+  --r-sm:   8px;
+  --r-md:   12px;
+  --r-lg:   16px;
+  --r-xl:   20px;
+  --r-full: 9999px;
+
+  /* Fonts – iOS/macOS style stack */
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+
+  /* Transitions */
+  --ease: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== Reset ===== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+h1,h2,h3,h4,h5,h6 {
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+button {
+  font-family: var(--font);
+  cursor: pointer;
+  border: none;
+  background: none;
+  outline: none;
+  transition: all var(--ease);
+}
+
+input, textarea, select {
+  font-family: var(--font);
+  outline: none;
+}
+
+/* ===== Scrollbar (Spotify style – minimal) ===== */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: var(--r-full); }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.35); }
+
+/* ===== Glass panel (for modals/overlays) ===== */
+.glass {
+  background: rgba(24, 24, 24, 0.95);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* ===== Equalizer bars animation ===== */
+@keyframes eq-bar {
+  0%, 100% { height: 4px; }
+  50% { height: 16px; }
+}
+
+.eq-bar {
+  width: 3px;
+  background: var(--primary);
+  border-radius: 2px;
+  animation: eq-bar 0.8s ease-in-out infinite;
+}
+.eq-bar:nth-child(1) { animation-delay: 0.00s; }
+.eq-bar:nth-child(2) { animation-delay: 0.15s; }
+.eq-bar:nth-child(3) { animation-delay: 0.30s; }
+.eq-bar:nth-child(4) { animation-delay: 0.10s; }
+
+/* ===== Utilities ===== */
+.text-gradient {
+  background: var(--grad-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.primary-btn {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  border-radius: var(--r-md);
+  padding: 13px 24px;
+  font-size: 15px;
+  transition: all var(--ease);
+}
+.primary-btn:hover { background: var(--primary-dim); transform: scale(1.02); }
+.primary-btn:active { transform: scale(0.98); }
+
+/* ===== Pulse animation for online badge ===== */
+@keyframes ping {
+  0% { transform: scale(1); opacity: 0.8; }
+  75%, 100% { transform: scale(2.2); opacity: 0; }
+}
+.animate-ping { animation: ping 1.5s cubic-bezier(0,0,0.2,1) infinite; }
+
+/* ===== Spin ===== */
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
+
+/* ===== Fade in ===== */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.fade-in { animation: fadeIn 0.25s ease forwards; }
