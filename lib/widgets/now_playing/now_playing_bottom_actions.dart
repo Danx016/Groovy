@@ -21,24 +21,29 @@ class NowPlayingBottomActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 12.0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          CastButton(
-            iconSize: 24,
-            iconColor: Colors.white.withValues(alpha: 0.5),
-          ),
+          // 1. Lyrics Button
           _ActionButton(
             icon: Icons.chat_bubble_outline_rounded,
             isActive: isLyricsActive,
-            activeColor: accentColor,
+            activeColor: Colors.white,
             onTap: onLyricsTap,
           ),
+
+          // 2. Cast / AirPlay Button
+          CastButton(
+            iconSize: 22,
+            iconColor: Colors.white.withValues(alpha: 0.6),
+          ),
+
+          // 3. Queue / Playlist Button
           _ActionButton(
-            icon: Icons.queue_music_rounded,
+            icon: Icons.format_list_bulleted_rounded,
             isActive: isQueueActive,
-            activeColor: accentColor,
+            activeColor: Colors.white,
             onTap: onQueueTap,
           ),
         ],
@@ -47,7 +52,7 @@ class NowPlayingBottomActions extends StatelessWidget {
   }
 }
 
-class _ActionButton extends StatelessWidget {
+class _ActionButton extends StatefulWidget {
   final IconData icon;
   final VoidCallback onTap;
   final bool isActive;
@@ -61,24 +66,45 @@ class _ActionButton extends StatelessWidget {
   });
 
   @override
+  State<_ActionButton> createState() => _ActionButtonState();
+}
+
+class _ActionButtonState extends State<_ActionButton> {
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    return IconButton(
-      icon: Container(
-        padding: const EdgeInsets.all(8.0),
-        decoration: BoxDecoration(
-          color: isActive ? activeColor.withValues(alpha: 0.2) : Colors.transparent,
-          borderRadius: BorderRadius.circular(8.0),
-        ),
-        child: Icon(
-          icon,
-          color: isActive ? activeColor : Colors.white.withValues(alpha: 0.5),
-          size: 24,
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        HapticFeedback.lightImpact();
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.88 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        curve: Curves.easeOut,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.all(10.0),
+          decoration: BoxDecoration(
+            color: widget.isActive
+                ? Colors.white.withValues(alpha: 0.22)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10.0),
+          ),
+          child: Icon(
+            widget.icon,
+            color: widget.isActive 
+                ? widget.activeColor 
+                : Colors.white.withValues(alpha: 0.6),
+            size: 22,
+          ),
         ),
       ),
-      onPressed: () {
-        HapticFeedback.lightImpact();
-        onTap();
-      },
     );
   }
 }
+

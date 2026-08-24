@@ -221,72 +221,89 @@ class _LyricsListViewState extends State<LyricsListView> {
         }
         return false;
       },
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        padding: EdgeInsets.only(
-          top: 85,
-          bottom: MediaQuery.of(context).size.height * 0.45,
-          left: 0,
-          right: 0,
-        ),
-        child: Column(
-          children: List.generate(_items.length, (index) {
-            final item = _items[index];
-            
-            if (item.type == ItemType.interlude) {
+      child: ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              Colors.white,
+              Colors.white,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.08, 0.88, 1.0],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          padding: EdgeInsets.only(
+            top: 24,
+            bottom: MediaQuery.of(context).size.height * 0.40,
+            left: 0,
+            right: 0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              
+              if (item.type == ItemType.interlude) {
+                return Container(
+                  key: _keys[index],
+                  padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 12.0),
+                  child: InterludeDotsWidget(
+                    currentTime: widget.currentTime,
+                    targetTime: item.endTime,
+                  ),
+                );
+              }
+
+              final line = item.line!;
+              final lyricIndex = item.lyricIndex!;
+              
+              LyricLineState state = LyricLineState.future;
+              if (_currentLyricIndex != -1) {
+                if (lyricIndex < _currentLyricIndex) {
+                  state = LyricLineState.past;
+                } else if (lyricIndex == _currentLyricIndex) {
+                  state = LyricLineState.current;
+                }
+              } else {
+                if (item.endTime <= widget.currentTime) {
+                  state = LyricLineState.past;
+                }
+              }
+
+              final distance = _currentLyricIndex != -1 
+                  ? (lyricIndex - _currentLyricIndex).abs() 
+                  : 3;
+
               return Container(
                 key: _keys[index],
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                child: InterludeDotsWidget(
-                  currentTime: widget.currentTime,
-                  targetTime: item.endTime,
+                child: RepaintBoundary(
+                  child: LyricsLineWidget(
+                    line: line,
+                    state: state,
+                    currentTime: widget.currentTime,
+                    distance: distance,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      widget.onSeek(line.startTime);
+                      
+                      setState(() => _isManualScrolling = false);
+                      _resumeAutoScrollTimer?.cancel();
+                    },
+                  ),
                 ),
               );
-            }
-
-            final line = item.line!;
-            final lyricIndex = item.lyricIndex!;
-            
-            LyricLineState state = LyricLineState.future;
-            if (_currentLyricIndex != -1) {
-              if (lyricIndex < _currentLyricIndex) {
-                state = LyricLineState.past;
-              } else if (lyricIndex == _currentLyricIndex) {
-                state = LyricLineState.current;
-              }
-            } else {
-              // During an interlude, we want all lyrics to look past or future
-              // We can determine this by comparing startTime with currentTime
-              if (item.endTime <= widget.currentTime) {
-                state = LyricLineState.past;
-              }
-            }
-
-            final distance = _currentLyricIndex != -1 
-                ? (lyricIndex - _currentLyricIndex).abs() 
-                : 3; // large distance when interlude is active
-
-            return Container(
-              key: _keys[index],
-              child: RepaintBoundary(
-                child: LyricsLineWidget(
-                  line: line,
-                  state: state,
-                  currentTime: widget.currentTime,
-                  distance: distance,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    widget.onSeek(line.startTime);
-                    
-                    setState(() => _isManualScrolling = false);
-                    _resumeAutoScrollTimer?.cancel();
-                  },
-                ),
-              ),
-            );
-          }),
+            }),
+          ),
         ),
       ),
     );
   }
 }
+

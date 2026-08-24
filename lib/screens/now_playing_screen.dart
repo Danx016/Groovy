@@ -5,7 +5,7 @@ import '../widgets/now_playing/marquee_text.dart';
 import '../widgets/now_playing/playback_controls.dart';
 import '../widgets/now_playing/playback_progress_slider.dart';
 import '../widgets/now_playing/now_playing_bottom_actions.dart';
-import 'lyrics_screen.dart';
+import '../widgets/lyrics/lyrics_list_view.dart';
 import '../models/lyric_line.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
@@ -20,7 +20,7 @@ import '../services/offline_service.dart';
 import '../services/lrc_ttml_parser.dart';
 import '../widgets/now_playing/queue_view.dart';
 import '../widgets/now_playing/now_playing_more_menu.dart';
-import '../widgets/now_playing/add_to_menu.dart';
+import '../widgets/now_playing/track_navigation_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class NowPlayingScreen extends StatefulWidget {
@@ -79,6 +79,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
   }
 
+  static final Map<String, List<LyricLine>> _lyricsCache = {};
+
   Future<void> _updateImageProviderAndColors() async {
     if (_lastSong == null) return;
     final subsonic = Provider.of<SubsonicService>(context, listen: false);
@@ -93,73 +95,91 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   Future<void> _fetchLyrics() async {
     if (_lastSong == null) return;
+    final songId = _lastSong!.id;
+
+    // Instant cache check: if already fetched, show immediately without spinner
+    if (_lyricsCache.containsKey(songId)) {
+      if (mounted) {
+        setState(() {
+          _fetchedLyrics = _lyricsCache[songId]!;
+          _isLoadingLyrics = false;
+        });
+      }
+      return;
+    }
     
-    setState(() => _isLoadingLyrics = true);
+    if (mounted) {
+      setState(() => _isLoadingLyrics = true);
+    }
+
     try {
       final subsonic = Provider.of<SubsonicService>(context, listen: false);
       final offlineService = OfflineService();
       
       Map<String, dynamic>? rawLyrics;
       
-      if (offlineService.isOfflineMode || _lastSong!.isLocal || offlineService.isSongDownloaded(_lastSong!.id)) {
-        rawLyrics = await offlineService.getLocalLyrics(_lastSong!.id);
+      if (offlineService.isOfflineMode || _lastSong!.isLocal || offlineService.isSongDownloaded(songId)) {
+        rawLyrics = await offlineService.getLocalLyrics(songId);
       }
       
       if (rawLyrics == null && !offlineService.isOfflineMode) {
-        rawLyrics = await subsonic.getLyricsBySongId(_lastSong!.id) ?? 
-                    await subsonic.getLyrics(
-                      artist: _lastSong!.artist, 
-                      title: _lastSong!.title,
-                      duration: _lastSong!.duration,
-                    );
+        rawLyrics = await Future.any([
+          subsonic.getLyricsBySongId(songId),
+          subsonic.getLyrics(
+            artist: _lastSong!.artist, 
+            title: _lastSong!.title,
+            duration: _lastSong!.duration,
+          ),
+        ]).timeout(
+          const Duration(seconds: 6),
+          onTimeout: () => null,
+        );
       }
       
+      // If user switched songs while loading, discard this result
+      if (!mounted || _lastSong?.id != songId) return;
+
+      List<LyricLine> parsed = [];
       if (rawLyrics != null) {
         if (rawLyrics['value'] != null) {
           final lrcText = rawLyrics['value'] as String;
-          if (mounted) {
-            setState(() {
-              _fetchedLyrics = LrcParser.parseLrc(lrcText);
-              _isLoadingLyrics = false;
-            });
-          }
-          return;
+          parsed = LrcParser.parseLrc(lrcText);
         } else if (rawLyrics['structuredLyrics'] != null) {
           final structured = rawLyrics['structuredLyrics'] as List?;
           if (structured != null && structured.isNotEmpty) {
             final lines = structured.first['line'] as List?;
             if (lines != null) {
-              final parsedLines = lines.map((l) {
+              parsed = lines.map((l) {
                 return LyricLine(
                   startTime: Duration(milliseconds: l['start'] as int),
                   text: l['value'] as String,
                 );
               }).toList();
-              if (mounted) {
-                setState(() {
-                  _fetchedLyrics = parsedLines;
-                  _isLoadingLyrics = false;
-                });
-              }
-              return;
             }
           }
         }
       }
       
-      // Fallback se nessun testo è stato trovato o parsato
-      if (mounted) {
+      _lyricsCache[songId] = parsed;
+
+      if (mounted && _lastSong?.id == songId) {
         setState(() {
-          _fetchedLyrics = [];
+          _fetchedLyrics = parsed;
           _isLoadingLyrics = false;
         });
       }
     } catch (e) {
       debugPrint('Error fetching lyrics: $e');
-    }
-    
-    if (mounted) {
-      setState(() => _isLoadingLyrics = false);
+      if (mounted && _lastSong?.id == songId) {
+        setState(() {
+          _fetchedLyrics = [];
+          _isLoadingLyrics = false;
+        });
+      }
+    } finally {
+      if (mounted && _lastSong?.id == songId) {
+        setState(() => _isLoadingLyrics = false);
+      }
     }
   }
 
@@ -198,6 +218,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   Widget build(BuildContext context) {
     // The accent color can be derived from the extracted colors, or white
     final accentColor = _bgColors.isNotEmpty ? _bgColors.first : Colors.white;
+    final playerProvider = Provider.of<PlayerProvider>(context);
+    final songForBadge = playerProvider.currentSong ?? widget.song;
+    String qualityBadge = 'Lossless';
+    if (songForBadge?.hasDolbyAtmos == true) {
+      qualityBadge = 'Dolby Atmos';
+    } else if (songForBadge?.suffix != null) {
+      final s = songForBadge!.suffix!.toUpperCase();
+      if (s == 'FLAC' || s == 'ALAC' || s == 'WAV') {
+        qualityBadge = 'Lossless';
+      } else if (s == 'DSD' || s == 'DSF' || ((songForBadge.bitRate ?? 0) > 1411)) {
+        qualityBadge = 'Hi-Res Lossless';
+      } else {
+        qualityBadge = s;
+      }
+    }
 
     return Theme(
       // Force dark mode for Now Playing as per Apple Music
@@ -223,31 +258,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       },
                       children: [
                         // Page 0: Main Cover Art View
-                        _buildMainView(accentColor),
+                        _buildMainView(accentColor, qualityBadge),
                         
-                        // Page 1: Lyrics View
-                        _fetchedLyrics.isNotEmpty
-                            ? StreamBuilder<Duration>(
-                                stream: Provider.of<PlayerProvider>(context, listen: false).positionStream,
-                                initialData: Provider.of<PlayerProvider>(context, listen: false).position,
-                                builder: (context, snapshot) {
-                                  return LyricsScreen(
-                                    lyrics: _fetchedLyrics,
-                                    currentTime: snapshot.data ?? Duration.zero,
-                                    onSeek: (duration) {
-                                      Provider.of<PlayerProvider>(context, listen: false).seek(duration);
-                                    },
-                                  );
-                                },
-                              )
-                            : Center(
-                                child: _isLoadingLyrics 
-                                    ? const CircularProgressIndicator(color: Colors.white)
-                                    : const Text(
-                                        "Letra no disponible",
-                                        style: TextStyle(color: Colors.white70, fontSize: 18),
-                                      ),
-                              ),
+                        // Page 1: Apple Music Lyrics View
+                        _buildLyricsPageView(accentColor, qualityBadge),
                         
                         // Page 2: Queue View
                         const QueueView(),
@@ -260,13 +274,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               // 2. Drag Handle (Top)
               Align(
                 alignment: Alignment.topCenter,
-                child: Container(
-                  width: 36,
-                  height: 5,
-                  margin: EdgeInsets.only(top: widget.topPadding > 0 ? widget.topPadding + 8 : 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.4),
-                    borderRadius: BorderRadius.circular(3),
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
+                    margin: EdgeInsets.only(top: widget.topPadding > 0 ? widget.topPadding + 6 : 12),
+                    child: Container(
+                      width: 36,
+                      height: 5,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.38),
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -284,33 +305,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       ? _buildLyricsHeader(context)
                       : (_currentPage == 2
                           ? _buildQueueHeader(context)
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.keyboard_arrow_down_rounded, 
-                                    color: Colors.white, 
-                                    size: 32
-                                  ),
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
-                                  onPressed: () {
-                                    showModalBottomSheet(
-                                      context: context,
-                                      backgroundColor: Colors.transparent,
-                                      isScrollControlled: true,
-                                      useRootNavigator: true,
-                                      builder: (context) => const NowPlayingMoreMenu(),
-                                    );
-                                  },
-                                ),
-                              ],
-                            )),
+                          : const SizedBox.shrink()),
                 ),
               ),
             ],
@@ -362,7 +357,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         final isStarred = currentSong?.starred ?? false;
 
         return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
           child: Row(
             children: [
               // 1. Album Cover Art -> Navigate to Album
@@ -379,20 +374,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   }
                 },
                 child: Container(
-                  width: 48,
-                  height: 48,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(10),
                     child: Image(
                       image: _currentImageProvider ?? widget.image,
                       fit: BoxFit.cover,
@@ -400,31 +395,27 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ),
                 ),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
 
-              // 2. Title & Artist
+              // 2. Title & Artist -> Apple Music Sheet (Ir al artista / Ir al álbum)
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Title -> Navigate to Album
-                    GestureDetector(
-                      onTap: () {
-                        if (currentSong?.albumId != null && currentSong!.albumId!.isNotEmpty) {
-                          NavigationHelper.push(context, AlbumScreen(albumId: currentSong.albumId!));
-                        } else {
-                          _pageController.animateToPage(
-                            0,
-                            duration: const Duration(milliseconds: 300),
-                            curve: Curves.easeInOut,
-                          );
-                        }
-                      },
-                      child: Text(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    TrackNavigationBottomSheet.show(
+                      context,
+                      song: currentSong,
+                      coverProvider: _currentImageProvider ?? widget.image,
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 17,
+                          fontSize: 16,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                           letterSpacing: -0.3,
@@ -432,30 +423,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    // Artist -> Navigate to Artist
-                    GestureDetector(
-                      onTap: () {
-                        final artId = currentSong?.artistId;
-                        if (artId != null && artId.isNotEmpty) {
-                          NavigationHelper.push(context, ArtistScreen(artistId: artId));
-                        } else if (artist.isNotEmpty) {
-                          NavigationHelper.push(context, ArtistScreen(artistId: artist));
-                        }
-                      },
-                      child: Text(
+                      const SizedBox(height: 2),
+                      Text(
                         artist,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: 13,
                           fontWeight: FontWeight.w400,
-                          color: Colors.white.withValues(alpha: 0.7),
+                          color: Colors.white.withValues(alpha: 0.65),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
 
@@ -470,18 +450,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       }
                     },
                     child: Container(
-                      width: 38,
-                      height: 38,
-                      margin: const EdgeInsets.only(right: 10),
+                      width: 36,
+                      height: 36,
+                      margin: const EdgeInsets.only(right: 8),
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.16),
+                        color: Colors.white.withValues(alpha: 0.14),
                       ),
                       child: Center(
                         child: Icon(
                           isFav ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: isFav ? Colors.amber : Colors.white,
-                          size: 22,
+                          color: isFav ? const Color(0xFFFFD600) : Colors.white,
+                          size: 20,
                         ),
                       ),
                     ),
@@ -501,17 +481,17 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   );
                 },
                 child: Container(
-                  width: 38,
-                  height: 38,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.16),
+                    color: Colors.white.withValues(alpha: 0.14),
                   ),
                   child: const Center(
                     child: Icon(
                       Icons.more_horiz_rounded,
                       color: Colors.white,
-                      size: 22,
+                      size: 20,
                     ),
                   ),
                 ),
@@ -523,13 +503,137 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Widget _buildMainView(Color accentColor) {
+  Widget _buildLyricsPageView(Color accentColor, String qualityBadge) {
+    return Consumer<PlayerProvider>(
+      builder: (context, provider, child) {
+        return SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 60), // Space for lyrics header
+
+              // Scrollable Lyrics View
+              Expanded(
+                child: _fetchedLyrics.isNotEmpty
+                    ? StreamBuilder<Duration>(
+                        stream: provider.positionStream,
+                        initialData: provider.position,
+                        builder: (context, snapshot) {
+                          return LyricsListView(
+                            lyrics: _fetchedLyrics,
+                            currentTime: snapshot.data ?? Duration.zero,
+                            onSeek: (duration) {
+                              provider.seek(duration);
+                            },
+                          );
+                        },
+                      )
+                    : Center(
+                        child: _isLoadingLyrics
+                            ? const CircularProgressIndicator(color: Colors.white)
+                            : const Text(
+                                "Letra no disponible",
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                      ),
+              ),
+
+              // Scrubber Progress Slider & Audio Quality Badge
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: StreamBuilder<Duration>(
+                  stream: provider.positionStream,
+                  initialData: provider.position,
+                  builder: (context, snapshot) {
+                    return PlaybackProgressSlider(
+                      position: snapshot.data ?? Duration.zero,
+                      duration: provider.duration,
+                      accentColor: Colors.white,
+                      qualityBadge: qualityBadge,
+                      onChanged: (val) {
+                        provider.seek(val);
+                      },
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 3-Button Iconic Playback Controls
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: PlaybackControls(
+                  isPlaying: provider.isPlaying,
+                  isShuffleEnabled: provider.shuffleEnabled,
+                  isRepeatEnabled: provider.repeatMode != RepeatMode.off,
+                  accentColor: accentColor,
+                  onPlayPause: () => provider.togglePlayPause(),
+                  onNext: () => provider.skipNext(),
+                  onPrevious: () => provider.skipPrevious(),
+                  onShuffleToggle: () => provider.toggleShuffle(),
+                  onRepeatToggle: () => provider.toggleRepeat(),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Bottom Actions (Lyrics active chip, Cast, Queue)
+              NowPlayingBottomActions(
+                isLyricsActive: _currentPage == 1,
+                isQueueActive: _currentPage == 2,
+                accentColor: accentColor,
+                onLyricsTap: () {
+                  if (_currentPage == 1) {
+                    _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  } else {
+                    _pageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  }
+                },
+                onQueueTap: () {
+                  if (_currentPage == 2) {
+                    _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  } else {
+                    _pageController.animateToPage(2, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  }
+                },
+              ),
+
+              const SizedBox(height: 6),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+
+  Widget _buildMainView(Color accentColor, [String? qualityBadgeParam]) {
     return Consumer<PlayerProvider>(
       builder: (context, provider, child) {
         final currentSong = provider.currentSong ?? widget.song;
         final title = currentSong?.title ?? widget.title;
         final artist = currentSong?.artist ?? widget.artist;
         final isStarred = currentSong?.starred ?? false;
+
+        String qualityBadge = qualityBadgeParam ?? 'Lossless';
+        if (qualityBadgeParam == null) {
+          if (currentSong?.hasDolbyAtmos == true) {
+            qualityBadge = 'Dolby Atmos';
+          } else if (currentSong?.suffix != null) {
+            final s = currentSong!.suffix!.toUpperCase();
+            if (s == 'FLAC' || s == 'ALAC' || s == 'WAV') {
+              qualityBadge = 'Lossless';
+            } else if (s == 'DSD' || s == 'DSF' || ((currentSong.bitRate ?? 0) > 1411)) {
+              qualityBadge = 'Hi-Res Lossless';
+            } else {
+              qualityBadge = s;
+            }
+          }
+        }
 
         return SafeArea(
           child: LayoutBuilder(
@@ -544,12 +648,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       flex: 5,
                       child: Center(
                         child: Padding(
-                          padding: const EdgeInsets.fromLTRB(32.0, 56.0, 16.0, 24.0),
+                          padding: const EdgeInsets.fromLTRB(32.0, 48.0, 16.0, 24.0),
                           child: AspectRatio(
                             aspectRatio: 1.0,
                             child: AlbumArtView(
                               image: _currentImageProvider ?? widget.image,
                               tag: currentSong?.id ?? widget.heroTag,
+                              isPlaying: provider.isPlaying,
                             ),
                           ),
                         ),
@@ -560,57 +665,108 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     Expanded(
                       flex: 6,
                       child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16.0, 56.0, 32.0, 16.0),
+                        padding: const EdgeInsets.fromLTRB(16.0, 48.0, 32.0, 16.0),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            // Title & Artist
+                            // Title & Artist with Star and More buttons
                             Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      MarqueeText(
-                                        text: title,
-                                        style: const TextStyle(
-                                          fontSize: 20,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
+                                  child: GestureDetector(
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () {
+                                      TrackNavigationBottomSheet.show(
+                                        context,
+                                        song: currentSong,
+                                        coverProvider: _currentImageProvider ?? widget.image,
+                                      );
+                                    },
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        MarqueeText(
+                                          text: title,
+                                          style: const TextStyle(
+                                            fontSize: 20,
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.white,
+                                            letterSpacing: -0.3,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        artist,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          color: Colors.white.withValues(alpha: 0.75),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          artist,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w500,
+                                            color: Colors.white.withValues(alpha: 0.65),
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
                                 ),
-                                IconButton(
-                                  icon: Icon(
-                                    isStarred ? Icons.favorite_rounded : Icons.add_circle_outline_rounded,
-                                    color: isStarred ? Theme.of(context).colorScheme.primary : Colors.white,
-                                  ),
-                                  onPressed: () {
-                                    if (currentSong == null) return;
+                                const SizedBox(width: 10),
+                                // Star Button
+                                Consumer<LibraryProvider>(
+                                  builder: (context, lib, _) {
+                                    final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
+                                    return GestureDetector(
+                                      onTap: () async {
+                                        if (currentSong != null) {
+                                          await lib.toggleStarSong(currentSong);
+                                        }
+                                      },
+                                      child: Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: Colors.white.withValues(alpha: 0.14),
+                                        ),
+                                        child: Center(
+                                          child: Icon(
+                                            isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                                            color: isFav ? const Color(0xFFFFD600) : Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 8),
+                                // More Options Button
+                                GestureDetector(
+                                  onTap: () {
                                     showModalBottomSheet(
                                       context: context,
                                       backgroundColor: Colors.transparent,
                                       isScrollControlled: true,
                                       useRootNavigator: true,
-                                      builder: (context) => AddToMenu(
-                                        song: currentSong,
-                                        coverProvider: _currentImageProvider ?? widget.image,
-                                      ),
+                                      builder: (context) => const NowPlayingMoreMenu(),
                                     );
                                   },
+                                  child: Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: Colors.white.withValues(alpha: 0.14),
+                                    ),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.more_horiz_rounded,
+                                        color: Colors.white,
+                                        size: 20,
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ],
                             ),
@@ -625,6 +781,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                   position: snapshot.data ?? Duration.zero,
                                   duration: provider.duration,
                                   accentColor: Colors.white,
+                                  qualityBadge: qualityBadge,
                                   onChanged: (val) {
                                     provider.seek(val);
                                   },
@@ -679,14 +836,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               final isCompact = constraints.maxHeight < 680;
               return Column(
                 children: [
-                  const SizedBox(height: 56), // Space for header
+                  SizedBox(height: isCompact ? 16 : 28), // Space for top drag handle
                   
                   // Album Art
                   Expanded(
                     child: Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(
-                          horizontal: isCompact ? 32.0 : 40.0,
+                          horizontal: isCompact ? 36.0 : 44.0,
                           vertical: isCompact ? 8.0 : 16.0,
                         ),
                         child: AspectRatio(
@@ -694,72 +851,124 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                           child: AlbumArtView(
                             image: _currentImageProvider ?? widget.image,
                             tag: currentSong?.id ?? widget.heroTag,
+                            isPlaying: provider.isPlaying,
                           ),
                         ),
                       ),
                     ),
                   ),
 
-                  // Title & Artist
+                  // Title & Artist + Star & More Options (Apple Music Row)
                   Padding(
                     padding: EdgeInsets.symmetric(
-                      horizontal: 32.0,
-                      vertical: isCompact ? 12.0 : 20.0,
+                      horizontal: 28.0,
+                      vertical: isCompact ? 10.0 : 16.0,
                     ),
                     child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              MarqueeText(
-                                text: title,
-                                style: TextStyle(
-                                  fontSize: isCompact ? 20 : 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              TrackNavigationBottomSheet.show(
+                                context,
+                                song: currentSong,
+                                coverProvider: _currentImageProvider ?? widget.image,
+                              );
+                            },
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                MarqueeText(
+                                  text: title,
+                                  style: TextStyle(
+                                    fontSize: isCompact ? 20 : 22,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                    letterSpacing: -0.3,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                artist,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: isCompact ? 15 : 18,
-                                  color: Colors.white.withValues(alpha: 0.75),
+                                const SizedBox(height: 3),
+                                Text(
+                                  artist,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: isCompact ? 15 : 17,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withValues(alpha: 0.65),
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
-                        IconButton(
-                          icon: Icon(
-                            isStarred ? Icons.favorite_rounded : Icons.add_circle_outline_rounded,
-                            color: isStarred ? Theme.of(context).colorScheme.primary : Colors.white,
-                          ),
-                          onPressed: () {
-                            if (currentSong == null) return;
+                        const SizedBox(width: 10),
+                        // Star Button
+                        Consumer<LibraryProvider>(
+                          builder: (context, lib, _) {
+                            final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
+                            return GestureDetector(
+                              onTap: () async {
+                                if (currentSong != null) {
+                                  await lib.toggleStarSong(currentSong);
+                                }
+                              },
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: Colors.white.withValues(alpha: 0.14),
+                                ),
+                                child: Center(
+                                  child: Icon(
+                                    isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                                    color: isFav ? const Color(0xFFFFD600) : Colors.white,
+                                    size: 20,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        // More Options Button
+                        GestureDetector(
+                          onTap: () {
                             showModalBottomSheet(
                               context: context,
                               backgroundColor: Colors.transparent,
                               isScrollControlled: true,
                               useRootNavigator: true,
-                              builder: (context) => AddToMenu(
-                                song: currentSong,
-                                coverProvider: _currentImageProvider ?? widget.image,
-                              ),
+                              builder: (context) => const NowPlayingMoreMenu(),
                             );
                           },
+                          child: Container(
+                            width: 36,
+                            height: 36,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.white.withValues(alpha: 0.14),
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.more_horiz_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
 
-                  // Progress
+                  // Progress Slider & Lossless Badge
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 28.0),
                     child: StreamBuilder<Duration>(
                       stream: provider.positionStream,
                       initialData: provider.position,
@@ -768,6 +977,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                           position: snapshot.data ?? Duration.zero,
                           duration: provider.duration,
                           accentColor: Colors.white,
+                          qualityBadge: qualityBadge,
                           onChanged: (val) {
                             provider.seek(val);
                           },
@@ -776,11 +986,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     ),
                   ),
 
-                  SizedBox(height: isCompact ? 8 : 16),
+                  SizedBox(height: isCompact ? 10 : 20),
 
-                  // Controls
+                  // 3-Button Iconic Playback Controls
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                    padding: const EdgeInsets.symmetric(horizontal: 28.0),
                     child: PlaybackControls(
                       isPlaying: provider.isPlaying,
                       isShuffleEnabled: provider.shuffleEnabled,
@@ -794,9 +1004,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     ),
                   ),
 
-                  SizedBox(height: isCompact ? 8 : 16),
+                  SizedBox(height: isCompact ? 10 : 20),
 
-                  // Bottom Actions
+                  // Bottom Actions (Lyrics, Cast, Queue)
                   NowPlayingBottomActions(
                     isLyricsActive: _currentPage == 1,
                     isQueueActive: _currentPage == 2,
@@ -817,7 +1027,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     },
                   ),
 
-                  SizedBox(height: isCompact ? 8 : 16),
+                  SizedBox(height: isCompact ? 6 : 16),
                 ],
               );
             },
@@ -827,3 +1037,4 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 }
+

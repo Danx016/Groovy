@@ -11,6 +11,7 @@ class PlaybackControls extends StatelessWidget {
   final bool isRepeatEnabled;
   final VoidCallback onRepeatToggle;
   final Color accentColor;
+  final bool showSecondaryControls;
 
   const PlaybackControls({
     super.key,
@@ -23,39 +24,64 @@ class PlaybackControls extends StatelessWidget {
     required this.isRepeatEnabled,
     required this.onRepeatToggle,
     this.accentColor = Colors.white,
+    this.showSecondaryControls = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    if (showSecondaryControls) {
+      return Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          _SecondaryControlButton(
+            icon: Icons.shuffle_rounded,
+            isActive: isShuffleEnabled,
+            activeColor: accentColor,
+            onTap: onShuffleToggle,
+          ),
+          _MainControlButton(
+            icon: Icons.skip_previous_rounded,
+            size: 44,
+            onTap: onPrevious,
+          ),
+          _PlayPauseButton(
+            isPlaying: isPlaying,
+            onTap: onPlayPause,
+            size: 68,
+          ),
+          _MainControlButton(
+            icon: Icons.skip_next_rounded,
+            size: 44,
+            onTap: onNext,
+          ),
+          _SecondaryControlButton(
+            icon: Icons.repeat_rounded,
+            isActive: isRepeatEnabled,
+            activeColor: accentColor,
+            onTap: onRepeatToggle,
+          ),
+        ],
+      );
+    }
+
+    // Iconic Apple Music 3-button layout
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _SecondaryControlButton(
-          icon: Icons.shuffle,
-          isActive: isShuffleEnabled,
-          activeColor: accentColor,
-          onTap: onShuffleToggle,
-        ),
         _MainControlButton(
           icon: Icons.skip_previous_rounded,
-          size: 48,
+          size: 44,
           onTap: onPrevious,
         ),
         _PlayPauseButton(
           isPlaying: isPlaying,
           onTap: onPlayPause,
-          size: 72,
+          size: 68,
         ),
         _MainControlButton(
           icon: Icons.skip_next_rounded,
-          size: 48,
+          size: 44,
           onTap: onNext,
-        ),
-        _SecondaryControlButton(
-          icon: Icons.repeat,
-          isActive: isRepeatEnabled,
-          activeColor: accentColor,
-          onTap: onRepeatToggle,
         ),
       ],
     );
@@ -70,7 +96,7 @@ class _PlayPauseButton extends StatefulWidget {
   const _PlayPauseButton({
     required this.isPlaying,
     required this.onTap,
-    this.size = 72,
+    this.size = 68,
   });
 
   @override
@@ -93,20 +119,18 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> {
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.92 : 1.0,
+        scale: _isPressed ? 0.88 : 1.0,
         duration: const Duration(milliseconds: 100),
         curve: Curves.easeOut,
-        child: Container(
+        child: SizedBox(
           width: widget.size,
           height: widget.size,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: Colors.white.withValues(alpha: 0.2), // Apple Music uses a slightly translucent white/grey fill
-          ),
-          child: Icon(
-            widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-            size: widget.size * 0.6,
-            color: Colors.white,
+          child: Center(
+            child: Icon(
+              widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+              size: widget.size,
+              color: Colors.white,
+            ),
           ),
         ),
       ),
@@ -122,7 +146,7 @@ class _MainControlButton extends StatefulWidget {
   const _MainControlButton({
     required this.icon,
     required this.onTap,
-    this.size = 48,
+    this.size = 44,
   });
 
   @override
@@ -145,13 +169,19 @@ class _MainControlButtonState extends State<_MainControlButton> {
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.85 : 1.0,
+        scale: _isPressed ? 0.82 : 1.0,
         duration: const Duration(milliseconds: 100),
         curve: Curves.easeOut,
-        child: Icon(
-          widget.icon,
-          size: widget.size,
-          color: Colors.white,
+        child: SizedBox(
+          width: 56,
+          height: 56,
+          child: Center(
+            child: Icon(
+              widget.icon,
+              size: widget.size,
+              color: Colors.white,
+            ),
+          ),
         ),
       ),
     );
@@ -203,3 +233,4 @@ class _SecondaryControlButton extends StatelessWidget {
     );
   }
 }
+

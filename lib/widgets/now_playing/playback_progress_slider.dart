@@ -5,6 +5,7 @@ class PlaybackProgressSlider extends StatefulWidget {
   final Duration duration;
   final ValueChanged<Duration> onChanged;
   final Color accentColor;
+  final String? qualityBadge;
 
   const PlaybackProgressSlider({
     super.key,
@@ -12,6 +13,7 @@ class PlaybackProgressSlider extends StatefulWidget {
     required this.duration,
     required this.onChanged,
     required this.accentColor,
+    this.qualityBadge,
   });
 
   @override
@@ -23,13 +25,14 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
   double _dragValue = 0.0;
 
   String _formatDuration(Duration duration) {
+    if (duration.isNegative) duration = Duration.zero;
     String twoDigits(int n) => n.toString().padLeft(2, "0");
-    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
     if (duration.inHours > 0) {
-      return "${duration.inHours}:$twoDigitMinutes:$twoDigitSeconds";
+      return "${duration.inHours}:${twoDigits(minutes)}:$seconds";
     }
-    return "$twoDigitMinutes:$twoDigitSeconds";
+    return "$minutes:$seconds";
   }
 
   @override
@@ -41,6 +44,9 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
         
     final safeMax = maxDuration > 0 ? maxDuration : 1.0;
     final progress = (currentDuration / safeMax).clamp(0.0, 1.0);
+    final remainingDuration = widget.duration - Duration(milliseconds: currentDuration.toInt());
+
+    final badgeText = widget.qualityBadge ?? 'LOSSLESS';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -72,37 +78,82 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
             widget.onChanged(Duration(milliseconds: tapValue.toInt()));
           },
           child: Container(
-            height: 30, // Tappable area
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            height: 24, // Tappable area
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: CustomPaint(
-              size: const Size(double.infinity, 30),
+              size: const Size(double.infinity, 24),
               painter: _SliderPainter(
                 progress: progress,
                 isDragging: _isDragging,
-                activeColor: widget.accentColor,
-                inactiveColor: Colors.white.withValues(alpha: 0.3),
+                activeColor: Colors.white.withValues(alpha: 0.9),
+                inactiveColor: Colors.white.withValues(alpha: 0.22),
               ),
             ),
           ),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 2),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              _formatDuration(Duration(milliseconds: currentDuration.toInt())),
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+            // Current position
+            SizedBox(
+              width: 55,
+              child: Text(
+                _formatDuration(Duration(milliseconds: currentDuration.toInt())),
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
-            Text(
-              "-${_formatDuration(widget.duration - Duration(milliseconds: currentDuration.toInt()))}",
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
+
+            // Apple Music Lossless / Audio Quality Badge
+            if (badgeText.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.graphic_eq_rounded,
+                      size: 11,
+                      color: Colors.white.withValues(alpha: 0.8),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      badgeText,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.8),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              const SizedBox.shrink(),
+
+            // Remaining duration
+            SizedBox(
+              width: 55,
+              child: Text(
+                "-${_formatDuration(remainingDuration)}",
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.65),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
               ),
             ),
           ],
@@ -127,7 +178,7 @@ class _SliderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final trackHeight = isDragging ? 8.0 : 4.0;
+    final trackHeight = isDragging ? 6.0 : 4.0;
     final trackRadius = Radius.circular(trackHeight / 2);
     
     final centerY = size.height / 2;
@@ -157,7 +208,7 @@ class _SliderPainter extends CustomPainter {
 
     // Thumb (only visible when dragging)
     if (isDragging) {
-      final thumbRadius = trackHeight + 2;
+      final thumbRadius = trackHeight + 2.5;
       final thumbPaint = Paint()..color = Colors.white;
       canvas.drawCircle(Offset(activeWidth, centerY), thumbRadius, thumbPaint);
     }
@@ -171,3 +222,4 @@ class _SliderPainter extends CustomPainter {
            oldDelegate.inactiveColor != inactiveColor;
   }
 }
+
