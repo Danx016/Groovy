@@ -215,46 +215,34 @@ void main() async {
   localeService.loadSavedLocale().catchError((e) {
     debugPrint('Failed to load saved locale: $e');
   });
-  await themeService.initialize().catchError((e) {
-    debugPrint('Failed to initialize theme service: $e');
-  });
   jukeboxService.initialize().catchError((e) {
     debugPrint('Failed to initialize jukebox service: $e');
   });
-
-
-  // Initialize favorite playlists service
   FavoritePlaylistsService().initialize().catchError((e) {
     debugPrint('Failed to initialize favorite playlists service: $e');
   });
-
-  // Initialize recent searches service
   RecentSearchesService().initialize().catchError((e) {
     debugPrint('Failed to initialize recent searches service: $e');
   });
-
-  // Initialize analytics service (privacy-first, anonymous)
-  final analyticsService = AnalyticsService();
-  analyticsService.initialize().catchError((e) {
+  AnalyticsService().initialize().catchError((e) {
     debugPrint('Failed to initialize analytics: $e');
   });
-
-  // Analytics service is initialized and used via AnalyticsNavigatorObserver
-
-  try {
-    await PlayerUiSettingsService().initialize();
-  } catch (e) {
-    debugPrint('Failed to initialize player UI settings: $e');
-  }
-
-  // Request notification permissions on Android 13+ so the media lockscreen notification always displays
   if (!kIsWeb && Platform.isAndroid) {
     Permission.notification.request().catchError((_) => PermissionStatus.denied);
   }
 
-  // Initialise the audio service BEFORE runApp so the background audio engine
-  // is ready and fully decoupled from the Flutter widget lifecycle on iOS.
-  final audioHandler = await initAudioService();
+  // Parallel async initialization of core services to minimize startup time
+  final initResults = await Future.wait([
+    themeService.initialize().catchError((e) {
+      debugPrint('Failed to initialize theme service: $e');
+    }),
+    PlayerUiSettingsService().initialize().catchError((e) {
+      debugPrint('Failed to initialize player UI settings: $e');
+    }),
+    initAudioService(),
+  ]);
+
+  final audioHandler = initResults[2] as MuslyAudioHandler;
 
   // Create TranscodingService instance to share across providers
   final transcodingService = TranscodingService();

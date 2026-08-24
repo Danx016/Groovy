@@ -78,6 +78,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     return Scaffold(
       backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
           // 1. Top App Bar with Red Action Buttons
           SliverAppBar(

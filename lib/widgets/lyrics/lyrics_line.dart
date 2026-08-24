@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../models/lyric_line.dart';
 
@@ -25,7 +24,7 @@ class LyricsLineWidget extends StatelessWidget {
     final isCurrent = state == LyricLineState.current;
     final isPast = state == LyricLineState.past;
 
-    final targetOpacity = isCurrent ? 1.0 : (isPast ? 0.42 : 0.35);
+    final targetOpacity = isCurrent ? 1.0 : (isPast ? 0.40 : 0.28);
     final targetScale = isCurrent ? 1.0 : 0.94;
 
     return GestureDetector(
@@ -35,12 +34,12 @@ class LyricsLineWidget extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 28.0),
         child: AnimatedScale(
           scale: targetScale,
-          duration: const Duration(milliseconds: 320),
+          duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           alignment: Alignment.centerLeft,
           child: AnimatedOpacity(
             opacity: targetOpacity,
-            duration: const Duration(milliseconds: 320),
+            duration: const Duration(milliseconds: 300),
             curve: Curves.easeOutCubic,
             child: _buildText(isCurrent),
           ),
@@ -65,8 +64,8 @@ class LyricsLineWidget extends StatelessWidget {
         shadows: isCurrent
             ? [
                 const Shadow(
-                  color: Colors.black45,
-                  blurRadius: 18,
+                  color: Colors.black54,
+                  blurRadius: 20,
                   offset: Offset(0, 4),
                 ),
               ]
@@ -92,11 +91,18 @@ class LyricsLineWidget extends StatelessWidget {
             child: ShaderMask(
               shaderCallback: (bounds) {
                 return LinearGradient(
-                  colors: [
+                  colors: const [
                     Colors.white,
-                    Colors.white.withValues(alpha: 0.35),
+                    Colors.white,
+                    Colors.white38,
+                    Colors.white38,
                   ],
-                  stops: [progress, progress],
+                  stops: [
+                    0.0,
+                    progress,
+                    progress,
+                    1.0,
+                  ],
                 ).createShader(bounds);
               },
               child: Text(
@@ -104,9 +110,16 @@ class LyricsLineWidget extends StatelessWidget {
                 style: const TextStyle(
                   fontSize: 32,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: -0.7,
+                  letterSpacing: -0.6,
                   color: Colors.white,
                   height: 1.25,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black54,
+                      blurRadius: 20,
+                      offset: Offset(0, 4),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -116,4 +129,3 @@ class LyricsLineWidget extends StatelessWidget {
     );
   }
 }
-
