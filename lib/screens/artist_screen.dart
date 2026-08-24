@@ -56,12 +56,22 @@ class _ArtistScreenState extends State<ArtistScreen> {
             .where((s) => s.artistId == widget.artistId)
             .toList();
       } else {
-        try {
-          artist = await subsonicService.getArtist(widget.artistId);
-          _artistInfo = await subsonicService.getArtistInfo(widget.artistId);
+        // First check if widget.artistId matches an artist in libraryProvider
+        Artist? libraryMatch;
+        for (final a in libraryProvider.artists) {
+          if (a.id == widget.artistId || a.name.toLowerCase() == widget.artistId.toLowerCase()) {
+            libraryMatch = a;
+            break;
+          }
+        }
+        final targetId = libraryMatch?.id ?? widget.artistId;
 
-          topSongs = await subsonicService.getArtistTopSongs(widget.artistId);
-          albums = await subsonicService.getArtistAlbums(widget.artistId);
+        try {
+          artist = await subsonicService.getArtist(targetId);
+          _artistInfo = await subsonicService.getArtistInfo(targetId);
+
+          topSongs = await subsonicService.getArtistTopSongs(targetId);
+          albums = await subsonicService.getArtistAlbums(targetId);
           if (albums.isNotEmpty) {
             final topSongIds = topSongs.map((s) => s.id).toSet();
             final seenIds = {...topSongIds};
