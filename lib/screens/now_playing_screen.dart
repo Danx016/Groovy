@@ -272,47 +272,198 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 alignment: Alignment.topCenter,
                 child: Padding(
                   padding: EdgeInsets.only(
-                    top: widget.topPadding > 0 ? widget.topPadding + 16 : 24, 
+                    top: widget.topPadding > 0 ? widget.topPadding + 14 : 20, 
                     left: 8.0, 
                     right: 8.0
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        icon: Icon(
-                          _currentPage == 0 ? Icons.keyboard_arrow_down_rounded : Icons.close_rounded, 
-                          color: Colors.white, 
-                          size: 32
+                  child: _currentPage == 1 
+                      ? _buildLyricsHeader(context)
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                _currentPage == 0 ? Icons.keyboard_arrow_down_rounded : Icons.close_rounded, 
+                                color: Colors.white, 
+                                size: 32
+                              ),
+                              onPressed: () {
+                                if (_currentPage != 0) {
+                                  _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                                } else {
+                                  Navigator.of(context).pop();
+                                }
+                              },
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
+                              onPressed: () {
+                                showModalBottomSheet(
+                                  context: context,
+                                  backgroundColor: Colors.transparent,
+                                  isScrollControlled: true,
+                                  useRootNavigator: true,
+                                  builder: (context) => const NowPlayingMoreMenu(),
+                                );
+                              },
+                            ),
+                          ],
                         ),
-                        onPressed: () {
-                          if (_currentPage != 0) {
-                            _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                          } else {
-                            Navigator.of(context).pop();
-                          }
-                        },
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
-                        onPressed: () {
-                          showModalBottomSheet(
-                            context: context,
-                            backgroundColor: Colors.transparent,
-                            isScrollControlled: true,
-                            useRootNavigator: true,
-                            builder: (context) => const NowPlayingMoreMenu(),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
                 ),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildLyricsHeader(BuildContext context) {
+    return Consumer<PlayerProvider>(
+      builder: (context, provider, child) {
+        final currentSong = provider.currentSong ?? widget.song;
+        final title = currentSong?.title ?? widget.title;
+        final artist = currentSong?.artist ?? widget.artist;
+        final isStarred = currentSong?.starred ?? false;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
+          child: Row(
+            children: [
+              // 1. Album Cover Art (tapping returns to main cover view)
+              GestureDetector(
+                onTap: () {
+                  _pageController.animateToPage(
+                    0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.easeInOut,
+                  );
+                },
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.35),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: _currentImageProvider != null
+                        ? Image(image: _currentImageProvider!, fit: BoxFit.cover)
+                        : (widget.image != null
+                            ? Image(image: widget.image!, fit: BoxFit.cover)
+                            : Container(
+                                color: Colors.grey[800],
+                                child: const Icon(Icons.music_note, color: Colors.white),
+                              )),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // 2. Title & Artist
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    _pageController.animateToPage(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                          letterSpacing: -0.3,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        artist,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withValues(alpha: 0.7),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              // 3. Star (Favorite) Button
+              GestureDetector(
+                onTap: () {
+                  if (currentSong != null) {
+                    provider.toggleStar(currentSong);
+                  }
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  margin: const EdgeInsets.only(right: 10),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.16),
+                  ),
+                  child: Center(
+                    child: Icon(
+                      isStarred ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: isStarred ? Colors.amber : Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+
+              // 4. More Options Button
+              GestureDetector(
+                onTap: () {
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    useRootNavigator: true,
+                    builder: (context) => const NowPlayingMoreMenu(),
+                  );
+                },
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: 0.16),
+                  ),
+                  child: const Center(
+                    child: Icon(
+                      Icons.more_horiz_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
