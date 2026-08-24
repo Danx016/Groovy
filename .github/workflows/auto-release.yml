@@ -88,13 +88,14 @@ jobs:
             ## 🎵 Groovy v${{ env.VERSION }}
 
             ### ✨ Novedades y Mejoras:
-            - 🛡️ **Validación Estricta de Letras**: Coincidencia exacta de artista y título evitando letras de otras canciones.
-            - 🎨 **Interfaz de Letras Apple Music**: Toca la carátula o título para abrir el Álbum y el artista para abrir su perfil.
-            - 📋 **Cola de Reproducción Dedicada**: Corrección de saltos a la letra al interactuar con la lista de reproducción.
-            - 🔔 **Reproductor en Pantalla de Bloqueo Permanente**: Soporte y permisos completos para Android 13+ y control multimedia continuo.
-            - ⚡ **Optimización y Rendimiento**: Cargas de audio más rápidas y pre-buffering fluido en segundo plano.
-            - 🔑 **Recuperación de Contraseña**: Flujo de validación con código OTP de 6 dígitos enviado por correo con diseño Groovy.
-            - 🌐 **100% en Español**: Nombre de marca unificado a Groovy y localización en español.
+            - 🚀 **Rendimiento a 120 Hz desbloqueado**: Animaciones ultra fluidas en pantalla completa, carátula y letras sin caídas de fotogramas.
+            - 🍎 **Rediseño Completo Apple Music**:
+              - **Biblioteca**: Categorías con iconos rojos (*Playlists, Artistas, Álbumes, Canciones*) y cuadrícula de *Agregadas recientemente*.
+              - **Cuenta**: Cabecera con avatar, edición de perfil, suscripciones y configuración estilo Apple Music.
+              - **Cola de Reproducción ("A continuación")**: Controles inferiores anclados y accesos directos (*Aleatorio, Repetir*).
+              - **Fondo dinámico radiante**: Degradados de malla ambiental en alta resolución.
+            - ⚡ **Búsqueda Instantánea en 0 ms**: Resultados locales inmediatos mientras escribes sin bloqueos de red.
+            - 🛡️ **Navegación Fluida a Artista y Álbum**: Toca el título o artista para explorar su perfil y discografía completa.
           make_latest: true
           files: |
             release-assets/app-release.apk
