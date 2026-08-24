@@ -264,7 +264,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         _buildLyricsPageView(accentColor, qualityBadge),
                         
                         // Page 2: Queue View
-                        const QueueView(),
+                        _buildQueuePageView(accentColor, qualityBadge),
                       ],
                     ),
                   ),
@@ -292,7 +292,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ),
               ),
 
-              // 3. Header (Persistent across pages)
+              // 3. Header (Lyrics header when on page 1)
               Align(
                 alignment: Alignment.topCenter,
                 child: Padding(
@@ -303,9 +303,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ),
                   child: _currentPage == 1 
                       ? _buildLyricsHeader(context)
-                      : (_currentPage == 2
-                          ? _buildQueueHeader(context)
-                          : const SizedBox.shrink()),
+                      : const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -315,38 +313,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Widget _buildQueueHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 32),
-            onPressed: () {
-              _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-            },
-          ),
-          const Text(
-            "A continuación",
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          IconButton(
-            icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
-            onPressed: () {
-              showModalBottomSheet(
-                context: context,
-                backgroundColor: Colors.transparent,
-                isScrollControlled: true,
-                useRootNavigator: true,
-                builder: (context) => const NowPlayingMoreMenu(),
-              );
-            },
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _buildLyricsHeader(BuildContext context) {
     return Consumer<PlayerProvider>(
@@ -582,6 +549,88 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               const SizedBox(height: 10),
 
               // Bottom Actions (Lyrics active chip, Cast, Queue)
+              NowPlayingBottomActions(
+                isLyricsActive: _currentPage == 1,
+                isQueueActive: _currentPage == 2,
+                accentColor: accentColor,
+                onLyricsTap: () {
+                  if (_currentPage == 1) {
+                    _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  } else {
+                    _pageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  }
+                },
+                onQueueTap: () {
+                  if (_currentPage == 2) {
+                    _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  } else {
+                    _pageController.animateToPage(2, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                  }
+                },
+              ),
+
+              const SizedBox(height: 6),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildQueuePageView(Color accentColor, String qualityBadge) {
+    return Consumer<PlayerProvider>(
+      builder: (context, provider, child) {
+        return SafeArea(
+          child: Column(
+            children: [
+              const SizedBox(height: 16),
+
+              // Queue List
+              const Expanded(
+                child: QueueView(),
+              ),
+
+              // Scrubber Progress Slider
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: StreamBuilder<Duration>(
+                  stream: provider.positionStream,
+                  initialData: provider.position,
+                  builder: (context, snapshot) {
+                    return PlaybackProgressSlider(
+                      position: snapshot.data ?? Duration.zero,
+                      duration: provider.duration,
+                      accentColor: Colors.white,
+                      qualityBadge: qualityBadge,
+                      onChanged: (val) {
+                        provider.seek(val);
+                      },
+                    );
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 3-Button Iconic Playback Controls
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: PlaybackControls(
+                  isPlaying: provider.isPlaying,
+                  isShuffleEnabled: provider.shuffleEnabled,
+                  isRepeatEnabled: provider.repeatMode != RepeatMode.off,
+                  accentColor: accentColor,
+                  onPlayPause: () => provider.togglePlayPause(),
+                  onNext: () => provider.skipNext(),
+                  onPrevious: () => provider.skipPrevious(),
+                  onShuffleToggle: () => provider.toggleShuffle(),
+                  onRepeatToggle: () => provider.toggleRepeat(),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              // Bottom Actions (Lyrics, Cast, Queue active chip)
               NowPlayingBottomActions(
                 isLyricsActive: _currentPage == 1,
                 isQueueActive: _currentPage == 2,

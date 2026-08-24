@@ -56,7 +56,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static const String currentVersion = '1.0.22';
+  static const String currentVersion = '1.0.23';
   static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
 
   static const String _apiUrl =
