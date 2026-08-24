@@ -393,7 +393,7 @@ class _SongCard extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         final player = Provider.of<PlayerProvider>(context, listen: false);
-        player.playSong(song, playlist: playlist, index: index);
+        player.playSong(song, playlist: playlist, startIndex: index);
       },
       child: SizedBox(
         width: size,
