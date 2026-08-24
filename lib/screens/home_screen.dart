@@ -67,23 +67,27 @@ class _HomeScreenState extends State<HomeScreen> {
             floating: true,
             expandedHeight: isDesktop ? 80 : 70,
             backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+            elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: EdgeInsets.only(left: hPad, bottom: 14),
               title: Text(
-                _getGreeting(),
+                'Inicio',
                 style: TextStyle(
                   fontSize: isDesktop ? 28 : 24,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: -0.5,
                   color: isDark ? Colors.white : Colors.black,
                 ),
               ),
             ),
             actions: [
               IconButton(
-                icon: Icon(
-                  CupertinoIcons.clock,
-                  color: isDark ? Colors.white : Colors.black,
+                icon: const Icon(
+                  CupertinoIcons.ellipsis_vertical,
+                  color: AppTheme.appleMusicRed,
+                  size: 22,
                 ),
+                tooltip: 'Historial de reproducción',
                 onPressed: () {
                   NavigationHelper.push(context, const HistoryScreen());
                 },
@@ -108,7 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       allSongs,
                     );
                     _cachedPersonalized = recommendationService
-                        .getPersonalizedFeed(allSongs, limit: 10);
+                        .getPersonalizedFeed(allSongs, limit: 12);
                     _lastRandomKey = key;
                   }
                 } else {
@@ -140,83 +144,61 @@ class _HomeScreenState extends State<HomeScreen> {
                     .toList();
                 List<Playlist> playlists = libraryProvider.playlists;
 
-                final isOffline = Provider.of<AuthProvider>(context, listen: false).state == AuthState.offlineMode;
-                final offlineService = OfflineService();
-
-                if (isOffline) {
-                  final downloadedIds =
-                      offlineService.getDownloadedSongIds().toSet();
-                  final downloadedPlaylistIds =
-                      offlineService.downloadedPlaylistIds.value.toSet();
-
-                  final allSongs = libraryProvider.cachedAllSongs;
-                  final Set<String> downloadedAlbumIds = {};
-                  for (final song in allSongs) {
-                    if (downloadedIds.contains(song.id) &&
-                        song.albumId != null) {
-                      downloadedAlbumIds.add(song.albumId!);
-                    }
-                  }
-
-                  recentAlbums = recentAlbums
-                      .where((a) => downloadedAlbumIds.contains(a.id))
-                      .toList();
-                  playlists = playlists
-                      .where((p) => downloadedPlaylistIds.contains(p.id))
-                      .toList();
-
-                  final Map<String, List<Song>> offlineMixes = {};
-                  for (final entry in mixes.entries) {
-                    final filtered = entry.value
-                        .where((s) => downloadedIds.contains(s.id))
-                        .toList();
-                    if (filtered.isNotEmpty) {
-                      offlineMixes[entry.key] = filtered;
-                    }
-                  }
-                  mixes = offlineMixes;
-
-                  personalizedFeed = personalizedFeed
-                      .where((s) => downloadedIds.contains(s.id))
-                      .toList();
-                }
-
-                // Quick access items: prioritize dynamic recommendations if available, else recent albums/playlists
-                final List<dynamic> quickItems = [];
-                if (dynamicRecs.isNotEmpty && !isOffline) {
-                  quickItems.addAll(dynamicRecs.take(isDesktop ? 6 : 4));
-                } else {
-                  quickItems.addAll(recentAlbums.take(isDesktop ? 6 : 4));
-                  quickItems.addAll(playlists.take(isDesktop ? 3 : 2));
-                }
+                // Extract recent songs from profiles / recentlyPlayed
+                final cachedSongMap = {for (var s in libraryProvider.cachedAllSongs) s.id: s};
+                final recentSongsFromProfiles = recommendationService.recentlyPlayed
+                    .where((id) => cachedSongMap.containsKey(id))
+                    .map((id) => cachedSongMap[id]!)
+                    .toList();
 
                 return Padding(
                   padding: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (quickItems.isNotEmpty) ...[
-                        const SizedBox(height: 16),
-                        _QuickAccessGrid(
-                          albums: quickItems,
-                          playlists: const [],
-                          isDesktop: isDesktop,
-                          hPad: hPad,
-                        ),
-                      ],
+                      const SizedBox(height: 12),
 
-                      const SizedBox(height: 24),
-
-                      // Favorite Playlists Section
-                      const FavoritePlaylistsSection(),
-                      const SizedBox(height: 24),
-
-                      if (recommendationService.enabled &&
-                          personalizedFeed.isNotEmpty)
+                      // 1. REPRODUCCIONES RECIENTES
+                      if (recentSongsFromProfiles.isNotEmpty)
                         _buildMixSection(
                           context: context,
-                          title: AppLocalizations.of(context)!.forYou,
-                          icon: Icons.stars_rounded,
+                          title: 'Reproducciones recientes',
+                          songs: recentSongsFromProfiles,
+                          isDesktop: isDesktop,
+                          hPad: hPad,
+                          onSeeAllTap: () => NavigationHelper.push(
+                            context,
+                            const HistoryScreen(),
+                          ),
+                        )
+                      else if (recentAlbums.isNotEmpty) ...[
+                        HorizontalScrollSection(
+                          title: 'Reproducciones recientes',
+                          padding: EdgeInsets.symmetric(horizontal: hPad),
+                          cardSize: isDesktop ? 180 : 145,
+                          onSeeAllTap: () => NavigationHelper.push(
+                            context,
+                            const HistoryScreen(),
+                          ),
+                          children: recentAlbums
+                              .take(10)
+                              .map(
+                                (album) => AlbumCard(
+                                  album: album,
+                                  size: isDesktop ? 180 : 145,
+                                  onTap: () => _openAlbum(context, album.id),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
+
+                      // 2. MIXES / RECOMENDACIONES DESTACADAS
+                      if (personalizedFeed.isNotEmpty)
+                        _buildMixSection(
+                          context: context,
+                          title: 'Mixes recomendados para ti',
                           songs: personalizedFeed,
                           isDesktop: isDesktop,
                           hPad: hPad,
@@ -225,8 +207,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (mixes.containsKey('Quick Picks'))
                         _buildMixSection(
                           context: context,
-                          title: AppLocalizations.of(context)!.quickPicks,
-                          icon: Icons.bolt_rounded,
+                          title: 'Selecciones rápidas',
                           songs: mixes['Quick Picks']!,
                           isDesktop: isDesktop,
                           hPad: hPad,
@@ -235,8 +216,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       if (mixes.containsKey('Discover Mix'))
                         _buildMixSection(
                           context: context,
-                          title: AppLocalizations.of(context)!.discoverMix,
-                          icon: Icons.explore_rounded,
+                          title: 'Descubrir nuevos éxitos',
                           songs: mixes['Discover Mix']!,
                           isDesktop: isDesktop,
                           hPad: hPad,
@@ -249,54 +229,23 @@ class _HomeScreenState extends State<HomeScreen> {
                         _buildMixSection(
                           context: context,
                           title: entry.key,
-                          icon: Icons.auto_awesome,
                           songs: entry.value,
                           isDesktop: isDesktop,
                           hPad: hPad,
                         ),
 
-                      for (final entry in mixes.entries.where(
-                        (e) => e.key.contains('Vibes'),
-                      ))
-                        _buildMixSection(
-                          context: context,
-                          title: entry.key,
-                          icon: Icons.nightlight_round,
-                          songs: entry.value,
-                          isDesktop: isDesktop,
-                          hPad: hPad,
-                        ),
-
-                      if (libraryProvider.recentAlbums.isNotEmpty) ...[
-                        HorizontalScrollSection(
-                          title: AppLocalizations.of(context)!.recentlyPlayed,
-                          padding: EdgeInsets.symmetric(horizontal: hPad),
-                          cardSize: isDesktop ? 180 : 150,
-                          children: libraryProvider.recentAlbums
-                              .take(10)
-                              .map(
-                                (album) => AlbumCard(
-                                  album: album,
-                                  size: isDesktop ? 180 : 150,
-                                  onTap: () => _openAlbum(context, album.id),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                        const SizedBox(height: 24),
-                      ],
-
-                      if (libraryProvider.playlists.isNotEmpty) ...[
+                      // 3. PLAYLISTS
+                      if (playlists.isNotEmpty) ...[
                         HorizontalScrollSection(
                           title: AppLocalizations.of(context)!.yourPlaylists,
                           padding: EdgeInsets.symmetric(horizontal: hPad),
-                          cardSize: isDesktop ? 180 : 150,
-                          children: libraryProvider.playlists
+                          cardSize: isDesktop ? 180 : 145,
+                          children: playlists
                               .take(10)
                               .map(
                                 (playlist) => _PlaylistCard(
                                   playlist: playlist,
-                                  size: isDesktop ? 180 : 150,
+                                  size: isDesktop ? 180 : 145,
                                   onTap: () => Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -310,83 +259,11 @@ class _HomeScreenState extends State<HomeScreen> {
                               )
                               .toList(),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 20),
                       ],
 
-                      if (!recommendationService.enabled &&
-                          libraryProvider.randomSongs.isNotEmpty) ...[
-                        _SectionTitle(
-                          title: AppLocalizations.of(context)!.madeForYou,
-                          hPad: hPad,
-                        ),
-                        if (isDesktop) _DesktopSongTableHeader(hPad: hPad),
-                        ...libraryProvider.randomSongs.take(5).map((song) {
-                          final index = libraryProvider.randomSongs.indexOf(
-                            song,
-                          );
-                          if (isDesktop) {
-                            return _DesktopSongRow(
-                              song: song,
-                              playlist: libraryProvider.randomSongs,
-                              index: index,
-                              hPad: hPad,
-                            );
-                          }
-                          return SongTile(
-                            song: song,
-                            playlist: libraryProvider.randomSongs,
-                            index: index,
-                            showAlbum: true,
-                          );
-                        }),
-                        const SizedBox(height: 24),
-                      ],
-
-                      if (libraryProvider.recentAlbums.isEmpty &&
-                          libraryProvider.playlists.isEmpty &&
-                          libraryProvider.randomSongs.isEmpty &&
-                          mixes.isEmpty) ...[
-                        const SizedBox(height: 48),
-                        Center(
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.music_note_rounded,
-                                size: 64,
-                                color: Colors.grey[600],
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                AppLocalizations.of(
-                                  context,
-                                )!
-                                    .noContentAvailable,
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                AppLocalizations.of(context)!.tryRefreshing,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              ElevatedButton.icon(
-                                onPressed: () => libraryProvider.refresh(),
-                                icon: const Icon(Icons.refresh),
-                                label: Text(
-                                  AppLocalizations.of(context)!.refresh,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      // 4. FAVORITE PLAYLISTS
+                      const FavoritePlaylistsSection(),
 
                       const SizedBox(height: 150),
                     ],
@@ -402,32 +279,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildLoadingState(bool isDesktop, double hPad) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 16),
-        Padding(
-          padding: EdgeInsets.symmetric(horizontal: hPad),
-          child: GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: isDesktop ? 3 : 2,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 3.5,
-            children: List.generate(
-              isDesktop ? 6 : 6,
-              (_) => Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey[800],
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            ),
-          ),
+        HorizontalShimmerList(
+          count: 5,
+          child: AlbumCardShimmer(size: isDesktop ? 180 : 145),
         ),
         const SizedBox(height: 24),
         HorizontalShimmerList(
           count: 5,
-          child: AlbumCardShimmer(size: isDesktop ? 180 : 150),
+          child: AlbumCardShimmer(size: isDesktop ? 180 : 145),
         ),
       ],
     );
@@ -440,48 +302,176 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildMixSection({
     required BuildContext context,
     required String title,
-    required IconData icon,
+    IconData? icon,
     required List<Song> songs,
     required bool isDesktop,
     required double hPad,
+    VoidCallback? onSeeAllTap,
   }) {
-    if (isDesktop) {
-      final topSongs = songs.take(10).toList();
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          HorizontalScrollSection(
-            title: title,
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            cardSize: 180,
-            children: topSongs.asMap().entries.map((entry) => _DesktopSongCard(
-              song: entry.value,
-              playlist: songs,
-              index: entry.key,
-              size: 180,
-            )).toList(),
-          ),
-          const SizedBox(height: 24),
-        ],
-      );
-    }
-    final top5 = songs.take(5).toList();
+    final topSongs = songs.take(15).toList();
+    final cardSize = isDesktop ? 180.0 : 145.0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(
-          title: title,
-          icon: icon,
-          hPad: hPad,
+        Padding(
+          padding: EdgeInsets.fromLTRB(hPad, 8, hPad, 12),
+          child: GestureDetector(
+            onTap: onSeeAllTap,
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: isDesktop ? 22 : 20,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (onSeeAllTap != null)
+                  const Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 18,
+                    color: Colors.grey,
+                  ),
+              ],
+            ),
+          ),
         ),
-        ...top5.asMap().entries.map((entry) => SongTile(
-          song: entry.value,
-          playlist: songs,
-          index: entry.key,
-          showAlbum: true,
-        )),
-        const SizedBox(height: 24),
+        SizedBox(
+          height: cardSize + 54,
+          child: ListView.separated(
+            padding: EdgeInsets.symmetric(horizontal: hPad),
+            scrollDirection: Axis.horizontal,
+            itemCount: topSongs.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (ctx, index) => _SongCard(
+              song: topSongs[index],
+              playlist: songs,
+              index: index,
+              size: cardSize,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
       ],
+    );
+  }
+}
+
+class _SongCard extends StatelessWidget {
+  final Song song;
+  final List<Song> playlist;
+  final int index;
+  final double size;
+
+  const _SongCard({
+    required this.song,
+    required this.playlist,
+    required this.index,
+    this.size = 145,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final coverUrl = song.coverArt != null
+        ? (isLocalFilePath(song.coverArt)
+            ? song.coverArt
+            : subsonic.getCoverArtUrl(song.coverArt!, size: 400))
+        : null;
+
+    return GestureDetector(
+      onTap: () {
+        final player = Provider.of<PlayerProvider>(context, listen: false);
+        player.playSong(song, playlist: playlist, index: index);
+      },
+      child: SizedBox(
+        width: size,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: coverUrl != null
+                    ? (isLocalFilePath(coverUrl)
+                        ? Image.file(
+                            File(coverUrl),
+                            fit: BoxFit.cover,
+                            errorBuilder: (ctx, e, _) => _placeholder(isDark),
+                          )
+                        : CachedNetworkImage(
+                            imageUrl: coverUrl,
+                            fit: BoxFit.cover,
+                            memCacheWidth: 400,
+                            memCacheHeight: 400,
+                            placeholder: (ctx, e) => _placeholder(isDark),
+                            errorWidget: (ctx, e, _) => _placeholder(isDark),
+                          ))
+                    : _placeholder(isDark),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              song.title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: isDark ? Colors.white : const Color(0xFF1C1C1E),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              song.artist ?? 'Groovy',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w400,
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _placeholder(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[200],
+      child: const Center(
+        child: Icon(
+          CupertinoIcons.music_note,
+          size: 36,
+          color: Colors.white24,
+        ),
+      ),
     );
   }
 }

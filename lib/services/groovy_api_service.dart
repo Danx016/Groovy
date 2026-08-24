@@ -359,4 +359,31 @@ class GroovyApiService {
       debugPrint('[GroovyApiService] recordHistory note: $e');
     }
   }
+
+  Future<List<Song>> getHistory(String token, {int limit = 50}) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/library/history?limit=$limit');
+      final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final list = (data['history'] as List<dynamic>?) ?? [];
+        return list.map((item) {
+          final m = item as Map<String, dynamic>;
+          return Song(
+            id: m['id']?.toString() ?? '',
+            title: m['title']?.toString() ?? 'Sin título',
+            artist: m['artist']?.toString(),
+            album: m['album']?.toString(),
+            coverArt: m['coverArt']?.toString(),
+            duration: m['duration'] is int
+                ? m['duration'] as int
+                : int.tryParse(m['duration']?.toString() ?? '0') ?? 0,
+          );
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('[GroovyApiService] getHistory error: $e');
+    }
+    return [];
+  }
 }

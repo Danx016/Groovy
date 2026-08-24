@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../l10n/app_localizations.dart';
+import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings/settings_section_card.dart';
 import '../utils/context_extensions.dart';
@@ -29,7 +30,7 @@ class SettingsAboutTab extends StatelessWidget {
               icon: CupertinoIcons.info,
               iconColor: Theme.of(context).colorScheme.primary,
               title: AppLocalizations.of(context)!.aboutVersion,
-              subtitle: '1.0.0',
+              subtitle: UpdateService.currentVersion,
             ),
             _buildDivider(context),
             _buildInfoTile(
@@ -71,27 +72,6 @@ class SettingsAboutTab extends StatelessWidget {
                       : AppTheme.lightSecondaryText,
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-        SettingsSectionCard(
-          title: 'TECNOLOGÍA',
-          children: [
-            _buildInfoTile(
-              context,
-              icon: CupertinoIcons.cloud,
-              iconColor: const Color(0xFF3861FB),
-              title: 'Base de Datos',
-              subtitle: 'MySQL 8.0',
-            ),
-            _buildDivider(context),
-            _buildInfoTile(
-              context,
-              icon: CupertinoIcons.bolt,
-              iconColor: const Color(0xFFFF9500),
-              title: 'Framework',
-              subtitle: 'Flutter',
             ),
           ],
         ),

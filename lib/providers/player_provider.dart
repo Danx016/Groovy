@@ -22,6 +22,7 @@ import '../services/ytdlp_service.dart';
 import '../services/lrclib_service.dart';
 
 import '../services/storage_service.dart';
+import '../services/groovy_api_service.dart';
 import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
 import '../services/jukebox_service.dart';
@@ -1689,6 +1690,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           completed: false,
         );
       }
+
+      StorageService().getUserToken().then((token) {
+        if (token != null && token.isNotEmpty) {
+          GroovyApiService().recordHistory(token, song);
+        }
+      }).catchError((_) {});
 
       _updateAndroidAuto();
     } catch (e) {
