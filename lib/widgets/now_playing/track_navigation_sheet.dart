@@ -1,11 +1,14 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/song.dart';
+import '../../models/artist.dart';
+import '../../providers/library_provider.dart';
 import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
-import '../../utils/navigation_helper.dart';
 import '../../services/subsonic_service.dart';
+import '../../widgets/album_artwork.dart';
 
 class TrackNavigationBottomSheet extends StatefulWidget {
   final Song? song;
@@ -22,6 +25,7 @@ class TrackNavigationBottomSheet extends StatefulWidget {
       context: context,
       backgroundColor: Colors.transparent,
       useRootNavigator: true,
+      isScrollControlled: true,
       builder: (context) => TrackNavigationBottomSheet(
         song: song,
         coverProvider: coverProvider,
@@ -44,15 +48,38 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
   Future<void> _fetchArtistImage() async {
     final song = widget.song;
-    if (song?.artistId == null || song!.artistId!.isEmpty) return;
+    if (song == null) return;
 
     try {
+      final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
       final subsonic = Provider.of<SubsonicService>(context, listen: false);
-      final artistInfo = await subsonic.getArtistInfo(song.artistId!);
-      if (artistInfo?.mediumImageUrl != null && mounted) {
-        setState(() {
-          _artistImageUrl = artistInfo!.mediumImageUrl;
-        });
+
+      // 1. Try artistId from song
+      String? targetArtistId = song.artistId;
+
+      // 2. If null, search in library artists
+      if (targetArtistId == null || targetArtistId.isEmpty) {
+        final artistName = song.artist ?? '';
+        for (final a in libraryProvider.artists) {
+          if (a.name.toLowerCase() == artistName.toLowerCase()) {
+            targetArtistId = a.id;
+            if (a.coverArt != null && mounted) {
+              setState(() {
+                _artistImageUrl = subsonic.getCoverArtUrl(a.coverArt!, size: 200);
+              });
+            }
+            break;
+          }
+        }
+      }
+
+      if (targetArtistId != null && targetArtistId.isNotEmpty) {
+        final artistInfo = await subsonic.getArtistInfo(targetArtistId);
+        if (artistInfo?.mediumImageUrl != null && mounted) {
+          setState(() {
+            _artistImageUrl = artistInfo!.mediumImageUrl;
+          });
+        }
       }
     } catch (_) {}
   }
@@ -61,21 +88,39 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final song = widget.song;
+    final libraryProvider = Provider.of<LibraryProvider>(context);
     final subsonic = Provider.of<SubsonicService>(context, listen: false);
 
     final artistName = song?.artist ?? 'Artista';
     final albumName = song?.album ?? 'Álbum';
 
+    // Find artist from library if available
+    Artist? matchedArtist;
+    for (final a in libraryProvider.artists) {
+      if ((song?.artistId != null && a.id == song!.artistId) ||
+          (a.name.toLowerCase() == artistName.toLowerCase())) {
+        matchedArtist = a;
+        break;
+      }
+    }
+
+    final effectiveArtistId = song?.artistId ?? matchedArtist?.id ?? artistName;
+    final effectiveAlbumId = song?.albumId ?? song?.album;
+
     final coverUrl = (song?.coverArt != null)
         ? subsonic.getCoverArtUrl(song!.coverArt, size: 150)
         : null;
 
+    final artistFallbackCover = matchedArtist?.coverArt != null
+        ? subsonic.getCoverArtUrl(matchedArtist!.coverArt!, size: 150)
+        : coverUrl;
+
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        color: isDark ? const Color(0xFF222224) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      padding: const EdgeInsets.only(top: 12, bottom: 28),
+      padding: const EdgeInsets.only(top: 12, bottom: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -92,7 +137,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
           ),
           const SizedBox(height: 12),
 
-          // 1. Ir al artista
+          // 1. Ir al artista (Apple Music style)
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             leading: SizedBox(
@@ -103,9 +148,9 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
                     ? CachedNetworkImage(
                         imageUrl: _artistImageUrl!,
                         fit: BoxFit.cover,
-                        errorWidget: (_, __, ___) => _defaultArtistAvatar(isDark),
+                        errorWidget: (_, __, ___) => _buildArtistAvatarImage(artistFallbackCover, isDark),
                       )
-                    : _defaultArtistAvatar(isDark),
+                    : _buildArtistAvatarImage(artistFallbackCover, isDark),
               ),
             ),
             title: Text(
@@ -126,17 +171,19 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
               ),
             ),
             onTap: () {
-              Navigator.of(context).pop();
-              final artId = song?.artistId;
-              if (artId != null && artId.isNotEmpty) {
-                NavigationHelper.push(context, ArtistScreen(artistId: artId));
-              } else if (artistName.isNotEmpty) {
-                NavigationHelper.push(context, ArtistScreen(artistId: artistName));
+              final nav = Navigator.of(context, rootNavigator: true);
+              nav.pop(); // Close sheet
+              if (effectiveArtistId.isNotEmpty) {
+                nav.push(
+                  MaterialPageRoute(
+                    builder: (_) => ArtistScreen(artistId: effectiveArtistId),
+                  ),
+                );
               }
             },
           ),
 
-          // 2. Ir al álbum
+          // 2. Ir al álbum (Apple Music style)
           ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             leading: Container(
@@ -183,16 +230,31 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
               ),
             ),
             onTap: () {
-              Navigator.of(context).pop();
-              final albId = song?.albumId ?? song?.album;
-              if (albId != null && albId.isNotEmpty) {
-                NavigationHelper.push(context, AlbumScreen(albumId: albId));
+              final nav = Navigator.of(context, rootNavigator: true);
+              nav.pop(); // Close sheet
+              if (effectiveAlbumId != null && effectiveAlbumId.isNotEmpty) {
+                nav.push(
+                  MaterialPageRoute(
+                    builder: (_) => AlbumScreen(albumId: effectiveAlbumId),
+                  ),
+                );
               }
             },
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildArtistAvatarImage(String? fallbackUrl, bool isDark) {
+    if (fallbackUrl != null && fallbackUrl.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: fallbackUrl,
+        fit: BoxFit.cover,
+        errorWidget: (_, __, ___) => _defaultArtistAvatar(isDark),
+      );
+    }
+    return _defaultArtistAvatar(isDark);
   }
 
   Widget _defaultArtistAvatar(bool isDark) {
