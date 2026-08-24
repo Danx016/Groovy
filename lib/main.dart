@@ -18,6 +18,7 @@ import 'services/transcoding_service.dart';
 import 'services/local_music_service.dart';
 import 'services/analytics_service.dart';
 import 'services/favorite_playlists_service.dart';
+import 'services/recent_searches_service.dart';
 import 'widgets/privacy_policy_dialog.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
@@ -226,6 +227,11 @@ void main() async {
     debugPrint('Failed to initialize favorite playlists service: $e');
   });
 
+  // Initialize recent searches service
+  RecentSearchesService().initialize().catchError((e) {
+    debugPrint('Failed to initialize recent searches service: $e');
+  });
+
   // Initialize analytics service (privacy-first, anonymous)
   final analyticsService = AnalyticsService();
   analyticsService.initialize().catchError((e) {
@@ -273,6 +279,9 @@ void main() async {
       Provider<SubsonicService>.value(value: subsonicService),
       ChangeNotifierProvider<RecommendationService>.value(
         value: recommendationService,
+      ),
+      ChangeNotifierProvider<RecentSearchesService>.value(
+        value: RecentSearchesService(),
       ),
       ChangeNotifierProvider<TranscodingService>.value(
         value: transcodingService,

@@ -2,10 +2,13 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
+import '../models/models.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/subsonic_service.dart';
+import '../services/recent_searches_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
@@ -159,6 +162,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final recentSearches = Provider.of<RecentSearchesService>(context);
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
@@ -170,17 +174,23 @@ class _SearchScreenState extends State<SearchScreen> {
                 pinned: true,
                 floating: true,
                 expandedHeight: 120,
+                elevation: 0,
+                backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
                 flexibleSpace: FlexibleSpaceBar(
                   title: FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.bottomLeft,
                     child: Text(
-                      AppLocalizations.of(context)!.searchTitle,
-                      style: theme.appBarTheme.titleTextStyle?.copyWith(fontSize: 24) ??
-                          const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                      'Buscar',
+                      style: TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w800,
+                        color: isDark ? Colors.white : Colors.black,
+                        letterSpacing: -0.5,
+                      ),
                     ),
                   ),
-                  titlePadding: const EdgeInsets.only(left: 16, right: 16, bottom: 60),
+                  titlePadding: const EdgeInsets.only(left: 16, right: 16, bottom: 58),
                 ),
                 bottom: PreferredSize(
                   preferredSize: const Size.fromHeight(56),
@@ -189,13 +199,20 @@ class _SearchScreenState extends State<SearchScreen> {
                     child: CupertinoSearchTextField(
                       controller: _searchController,
                       focusNode: _focusNode,
-                      placeholder: AppLocalizations.of(
-                        context,
-                      )!.searchPlaceholder,
-                      style: theme.textTheme.bodyLarge,
+                      placeholder: 'Artistas, canciones, letras y...',
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                        fontSize: 16,
+                      ),
+                      prefixIcon: const Icon(
+                        CupertinoIcons.search,
+                        color: AppTheme.appleMusicRed,
+                        size: 20,
+                      ),
                       backgroundColor: isDark
-                          ? AppTheme.darkCard
-                          : AppTheme.lightBackground,
+                          ? const Color(0xFF2C2C2E)
+                          : const Color(0xFFF2F2F7),
+                      borderRadius: BorderRadius.circular(12),
                       onChanged: _onSearchChanged,
                       onSubmitted: (value) {
                         setState(() => _showSuggestions = false);
@@ -211,10 +228,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     children: [
                       const SizedBox(height: 24),
                       Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           AppLocalizations.of(context)!.albums,
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 20,
                             fontWeight: FontWeight.bold,
                           ),
@@ -228,18 +245,6 @@ class _SearchScreenState extends State<SearchScreen> {
                         child: const AlbumCardShimmer(size: 150),
                       ),
                       const SizedBox(height: 24),
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          AppLocalizations.of(context)!.songs,
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
                       ...List.generate(5, (_) => const SongTileShimmer()),
                     ],
                   ),
@@ -273,8 +278,13 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
                 )
-              else
+              else ...[
+                if (recentSearches.items.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: _buildRecentSearchesSection(context, recentSearches, isDark),
+                  ),
                 SliverToBoxAdapter(child: _buildBrowseCategories()),
+              ],
             ],
           ),
           
@@ -286,6 +296,187 @@ class _SearchScreenState extends State<SearchScreen> {
               child: _buildAutocompleteOverlay(isDark),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildRecentSearchesSection(
+    BuildContext context,
+    RecentSearchesService recentSearches,
+    bool isDark,
+  ) {
+    final items = recentSearches.items;
+    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 18, 16, 8),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'Búsquedas recientes',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: -0.4,
+                  color: isDark ? Colors.white : Colors.black,
+                ),
+              ),
+              TextButton(
+                onPressed: () => recentSearches.clear(),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Borrar',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.appleMusicRed,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          itemCount: items.length,
+          separatorBuilder: (ctx, i) => Divider(
+            height: 1,
+            thickness: 0.5,
+            indent: 68,
+            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+          ),
+          itemBuilder: (ctx, index) {
+            final item = items[index];
+            final coverUrl = item.imageUrl != null
+                ? (isLocalFilePath(item.imageUrl)
+                    ? item.imageUrl!
+                    : subsonic.getCoverArtUrl(item.imageUrl!, size: 150))
+                : null;
+
+            Widget leadingWidget;
+            if (item.type == RecentSearchType.artist) {
+              leadingWidget = ClipOval(
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: coverUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: coverUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(color: Colors.grey[800]),
+                          errorWidget: (_, __, ___) => _defaultArtistAvatar(isDark),
+                        )
+                      : _defaultArtistAvatar(isDark),
+                ),
+              );
+            } else {
+              leadingWidget = ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: SizedBox(
+                  width: 52,
+                  height: 52,
+                  child: coverUrl != null
+                      ? CachedNetworkImage(
+                          imageUrl: coverUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (_, __) => Container(color: Colors.grey[800]),
+                          errorWidget: (_, __, ___) => _defaultCover(isDark),
+                        )
+                      : _defaultCover(isDark),
+                ),
+              );
+            }
+
+            return ListTile(
+              contentPadding: const EdgeInsets.symmetric(vertical: 4),
+              leading: leadingWidget,
+              title: Text(
+                item.title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white : const Color(0xFF1C1C1E),
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 2),
+                  Text(
+                    item.subtitle ?? (item.type == RecentSearchType.artist ? 'Artista' : 'Música'),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  if (item.extra != null && item.extra!.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      'Letra: "${item.extra}"',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[500] : Colors.grey[700],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ],
+              ),
+              trailing: item.type == RecentSearchType.song
+                  ? const Icon(
+                      CupertinoIcons.ellipsis_vertical,
+                      size: 18,
+                      color: Colors.grey,
+                    )
+                  : null,
+              onTap: () {
+                if (item.type == RecentSearchType.artist) {
+                  NavigationHelper.push(context, ArtistScreen(artistId: item.id));
+                } else if (item.type == RecentSearchType.album) {
+                  NavigationHelper.push(context, AlbumScreen(albumId: item.id));
+                } else if (item.type == RecentSearchType.song && item.song != null) {
+                  player.playSongWithRadio(item.song!);
+                }
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 24),
+      ],
+    );
+  }
+
+  Widget _defaultArtistAvatar(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+      child: const Center(
+        child: Icon(CupertinoIcons.person_fill, color: Colors.white38, size: 26),
+      ),
+    );
+  }
+
+  Widget _defaultCover(bool isDark) {
+    return Container(
+      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+      child: const Center(
+        child: Icon(CupertinoIcons.music_note, color: Colors.white38, size: 26),
       ),
     );
   }
@@ -303,10 +494,13 @@ class _SearchScreenState extends State<SearchScreen> {
               .map(
                 (artist) => ArtistTile(
                   artist: artist,
-                  onTap: () => NavigationHelper.push(
-                    context,
-                    ArtistScreen(artistId: artist.id),
-                  ),
+                  onTap: () {
+                    RecentSearchesService().addArtist(artist);
+                    NavigationHelper.push(
+                      context,
+                      ArtistScreen(artistId: artist.id),
+                    );
+                  },
                 ),
               ),
           const SizedBox(height: 16),
@@ -321,10 +515,13 @@ class _SearchScreenState extends State<SearchScreen> {
                   (album) => AlbumCard(
                     album: album,
                     size: 150,
-                    onTap: () => NavigationHelper.push(
-                      context,
-                      AlbumScreen(albumId: album.id),
-                    ),
+                    onTap: () {
+                      RecentSearchesService().addAlbum(album);
+                      NavigationHelper.push(
+                        context,
+                        AlbumScreen(albumId: album.id),
+                      );
+                    },
                   ),
                 )
                 .toList(),
@@ -352,6 +549,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 showArtist: true,
                 showAlbum: true,
                 onTap: () {
+                  RecentSearchesService().addSong(song);
                   final player = Provider.of<PlayerProvider>(context, listen: false);
                   player.playSongWithRadio(song);
                 },
@@ -377,6 +575,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 showArtist: true,
                 showAlbum: true,
                 onTap: () {
+                  RecentSearchesService().addSong(song);
                   final player = Provider.of<PlayerProvider>(context, listen: false);
                   player.playSongWithRadio(song);
                 },
