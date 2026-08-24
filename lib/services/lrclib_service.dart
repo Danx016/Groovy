@@ -193,9 +193,27 @@ class LrcLibService {
             }
           }
         }
-      } catch (e) {
-        debugPrint('[LRCLIB] Search query "$query" error: $e');
-      }
+    // 3. Fallback: Lyrics.ovh for plain lyrics if not found on LRCLIB
+    if (cleanedArtist != null && cleanedArtist.isNotEmpty && cleanedTitle.isNotEmpty) {
+      try {
+        final ovhResp = await Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 4),
+          ),
+        ).get(
+          'https://api.lyrics.ovh/v1/${Uri.encodeComponent(cleanedArtist)}/${Uri.encodeComponent(cleanedTitle)}',
+        );
+        if (ovhResp.statusCode == 200 && ovhResp.data is Map) {
+          final lyrics = ovhResp.data['lyrics'] as String?;
+          if (lyrics != null && lyrics.trim().isNotEmpty) {
+            final res = {'value': lyrics.trim()};
+            _cache[cacheKey] = res;
+            debugPrint('[LyricsOVH] Fallback plain lyrics found for "$cleanedArtist - $cleanedTitle"');
+            return res;
+          }
+        }
+      } catch (_) {}
     }
 
     return null;

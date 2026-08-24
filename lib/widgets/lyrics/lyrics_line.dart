@@ -9,7 +9,7 @@ class LyricsLineWidget extends StatelessWidget {
   final LyricLineState state;
   final Duration currentTime;
   final VoidCallback onTap;
-  final int distance; // Distance from current line (0 for current, 1 for next/prev, etc.)
+  final int distance;
 
   const LyricsLineWidget({
     super.key,
@@ -24,8 +24,9 @@ class LyricsLineWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 24.0),
+        padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 28.0),
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 300),
           switchInCurve: Curves.easeOut,
@@ -45,15 +46,16 @@ class LyricsLineWidget extends StatelessWidget {
           child: Text(
             line.text,
             style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white.withValues(alpha: 0.32),
+              fontSize: 28,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.6,
+              height: 1.3,
+              color: Colors.white.withValues(alpha: 0.35),
             ),
           ),
         );
       case LyricLineState.future:
-        // Calculate blur based on distance
-        final double sigma = (distance * 0.8).clamp(0.0, 3.0);
+        final double sigma = (distance * 0.7).clamp(0.0, 2.5);
         return SizedBox(
           key: const ValueKey('future'),
           width: double.infinity,
@@ -62,9 +64,11 @@ class LyricsLineWidget extends StatelessWidget {
             child: Text(
               line.text,
               style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white.withValues(alpha: 0.22),
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.6,
+                height: 1.3,
+                color: Colors.white.withValues(alpha: 0.28),
               ),
             ),
           ),
@@ -74,9 +78,9 @@ class LyricsLineWidget extends StatelessWidget {
           key: const ValueKey('current'),
           width: double.infinity,
           child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 1.0, end: 1.06),
+            tween: Tween(begin: 1.0, end: 1.04),
             duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutBack,
+            curve: Curves.easeOutCubic,
             builder: (context, scale, child) {
               return Transform.scale(
                 scale: scale,
@@ -96,36 +100,42 @@ class LyricsLineWidget extends StatelessWidget {
     return Text(
       line.text,
       style: const TextStyle(
-        fontSize: 24,
-        fontWeight: FontWeight.w800, // Slightly bolder for current
+        fontSize: 32,
+        fontWeight: FontWeight.w900,
+        letterSpacing: -0.7,
         color: Colors.white,
-        height: 1.4,
+        height: 1.28,
+        shadows: [
+          Shadow(
+            color: Colors.black38,
+            blurRadius: 16,
+            offset: Offset(0, 4),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildWordByWord() {
-    // Advanced word-by-word reveal (karaoke style)
     return RichText(
       text: TextSpan(
         children: line.words!.map((word) {
           double progress = 0.0;
           if (currentTime >= word.startTime && currentTime <= word.endTime) {
-             final duration = word.endTime.inMilliseconds - word.startTime.inMilliseconds;
-             final elapsed = currentTime.inMilliseconds - word.startTime.inMilliseconds;
-             progress = (elapsed / duration).clamp(0.0, 1.0);
+            final duration = word.endTime.inMilliseconds - word.startTime.inMilliseconds;
+            final elapsed = currentTime.inMilliseconds - word.startTime.inMilliseconds;
+            progress = (elapsed / (duration > 0 ? duration : 1)).clamp(0.0, 1.0);
           } else if (currentTime > word.endTime) {
             progress = 1.0;
           }
 
-          // Use a ShaderMask to "fill" the word from left to right
           return WidgetSpan(
             child: ShaderMask(
               shaderCallback: (bounds) {
                 return LinearGradient(
                   colors: [
                     Colors.white,
-                    Colors.white.withValues(alpha: 0.4),
+                    Colors.white.withValues(alpha: 0.35),
                   ],
                   stops: [progress, progress],
                 ).createShader(bounds);
@@ -133,10 +143,11 @@ class LyricsLineWidget extends StatelessWidget {
               child: Text(
                 '${word.text} ',
                 style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.7,
                   color: Colors.white,
-                  height: 1.4,
+                  height: 1.28,
                 ),
               ),
             ),

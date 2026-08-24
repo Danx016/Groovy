@@ -169,9 +169,9 @@ class _LyricsListViewState extends State<LyricsListView> {
     if (key.currentContext != null) {
       Scrollable.ensureVisible(
         key.currentContext!,
-        duration: const Duration(milliseconds: 600),
+        duration: const Duration(milliseconds: 650),
         curve: Curves.easeOutCubic,
-        alignment: 0.28,
+        alignment: 0.22,
       );
     }
   }
@@ -224,10 +224,10 @@ class _LyricsListViewState extends State<LyricsListView> {
       child: SingleChildScrollView(
         controller: _scrollController,
         padding: EdgeInsets.only(
-          top: 20,
-          bottom: MediaQuery.of(context).size.height * 0.40,
-          left: 4,
-          right: 4,
+          top: 85,
+          bottom: MediaQuery.of(context).size.height * 0.45,
+          left: 0,
+          right: 0,
         ),
         child: Column(
           children: List.generate(_items.length, (index) {
