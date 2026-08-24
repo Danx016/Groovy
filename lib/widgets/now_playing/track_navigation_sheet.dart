@@ -8,7 +8,7 @@ import '../../providers/library_provider.dart';
 import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
 import '../../services/subsonic_service.dart';
-import '../../widgets/album_artwork.dart';
+import '../../services/theme_service.dart';
 
 class TrackNavigationBottomSheet extends StatefulWidget {
   final Song? song;
@@ -86,7 +86,11 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final themeService = Provider.of<ThemeService>(context, listen: false);
+    final platformDark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+    final isDark = themeService.themeMode == ThemeMode.dark ||
+        (themeService.themeMode == ThemeMode.system && platformDark);
+
     final song = widget.song;
     final libraryProvider = Provider.of<LibraryProvider>(context);
     final subsonic = Provider.of<SubsonicService>(context, listen: false);
@@ -117,7 +121,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF222224) : Colors.white,
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       padding: const EdgeInsets.only(top: 12, bottom: 32),

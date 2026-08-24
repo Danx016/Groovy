@@ -271,28 +271,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ),
               ),
 
-              // 2. Drag Handle (Top)
-              Align(
-                alignment: Alignment.topCenter,
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).pop(),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 24),
-                    margin: EdgeInsets.only(top: widget.topPadding > 0 ? widget.topPadding + 6 : 12),
-                    child: Container(
-                      width: 36,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.38),
-                        borderRadius: BorderRadius.circular(2.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-
-              // 3. Header (Lyrics header when on page 1)
+              // 2. Header (Lyrics header when on page 1)
               Align(
                 alignment: Alignment.topCenter,
                 child: Padding(

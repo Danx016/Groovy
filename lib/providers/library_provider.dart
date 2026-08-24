@@ -580,8 +580,8 @@ class LibraryProvider extends ChangeNotifier {
 
   void _preloadCoverArt() {
     Future.microtask(() async {
-      final allAlbums = [..._recentAlbums, ..._randomAlbums];
-      for (final album in allAlbums.take(20)) {
+      final allAlbums = [..._recentAlbums, ..._randomAlbums, ..._frequentAlbums, ..._newestAlbums];
+      for (final album in allAlbums.take(50)) {
         if (album.coverArt != null) {
           try {
             final url = _subsonicService.getCoverArtUrl(
@@ -589,7 +589,7 @@ class LibraryProvider extends ChangeNotifier {
               size: 300,
             );
             if (url.isNotEmpty) {
-              _subsonicService.getCoverArtUrl(album.coverArt, size: 300);
+              CachedNetworkImageProvider(url).resolve(ImageConfiguration.empty);
             }
           } catch (_) {}
         }
