@@ -408,13 +408,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               // 3. Star (Favorite) Button
               Consumer<LibraryProvider>(
                 builder: (context, lib, _) {
-                  final isFav = currentSong != null
-                      ? (lib.isFavorite(currentSong.id) || (currentSong.starred ?? false))
-                      : isStarred;
+                  final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
                   return GestureDetector(
-                    onTap: () {
+                    onTap: () async {
                       if (currentSong != null) {
-                        lib.toggleStarSong(currentSong);
+                        await lib.toggleStarSong(currentSong);
                       }
                     },
                     child: Container(
