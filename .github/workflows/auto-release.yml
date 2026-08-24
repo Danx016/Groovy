@@ -45,8 +45,32 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
+      - name: Decode Android Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        run: |
+          echo "Decoding keystore from base64..."
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/musly-release.keystore
+          
+          # Create key.properties
+          cat > android/key.properties <<EOF
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          storeFile=musly-release.keystore
+          EOF
+          
+          echo "✅ Keystore configured for signing"
+
       - name: Build Release APK
-        run: flutter build apk --release
+        env:
+          COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
+          COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
+        run: |
+          flutter build apk --release \
+            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
+            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" || flutter build apk --release
 
       - name: Prepare APK Asset
         run: |
