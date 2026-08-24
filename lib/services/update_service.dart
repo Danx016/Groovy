@@ -56,16 +56,22 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static const String currentVersion = '1.0.26';
+  static const String currentVersion = '1.0.27';
   static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
 
   static const String _apiUrl =
       'https://api.github.com/repos/Danx016/Groovy/releases/latest';
 
+  // Global background download state notifiers
+  static final ValueNotifier<bool> isDownloadingNotifier = ValueNotifier<bool>(false);
+  static final ValueNotifier<double> downloadProgressNotifier = ValueNotifier<double>(0.0);
+  static final ValueNotifier<String?> downloadErrorNotifier = ValueNotifier<String?>(null);
+  static final ValueNotifier<ReleaseInfo?> availableUpdateNotifier = ValueNotifier<ReleaseInfo?>(null);
+
   static final _dio = Dio(
     BaseOptions(
-      connectTimeout: const Duration(seconds: 15),
-      receiveTimeout: const Duration(seconds: 60),
+      connectTimeout: const Duration(seconds: 20),
+      receiveTimeout: const Duration(seconds: 180),
       headers: {
         'Accept': 'application/vnd.github+json',
         'X-GitHub-Api-Version': '2022-11-28',
@@ -81,6 +87,7 @@ class UpdateService {
 
       final release = ReleaseInfo.fromJson(data);
       if (_isNewer(release.version, currentVersion)) {
+        availableUpdateNotifier.value = release;
         return release;
       }
       return null;
@@ -90,11 +97,15 @@ class UpdateService {
     }
   }
 
-  static Future<void> downloadAndInstallApk({
-    required String downloadUrl,
-    required void Function(double progress) onProgress,
-    required void Function(String error) onError,
-  }) async {
+  static Future<void> startDownload(ReleaseInfo release) async {
+    final apkUrl = release.apkDownloadUrl;
+    if (apkUrl == null) return;
+    if (isDownloadingNotifier.value) return;
+
+    isDownloadingNotifier.value = true;
+    downloadProgressNotifier.value = 0.0;
+    downloadErrorNotifier.value = null;
+
     try {
       final dir = await getTemporaryDirectory();
       final filePath = '${dir.path}/app-update.apk';
@@ -106,18 +117,44 @@ class UpdateService {
       }
 
       await _dio.download(
-        downloadUrl,
+        apkUrl,
         filePath,
         onReceiveProgress: (received, total) {
           if (total > 0) {
-            onProgress(received / total);
+            final p = (received / total).clamp(0.0, 1.0);
+            downloadProgressNotifier.value = p;
           }
         },
       );
 
+      isDownloadingNotifier.value = false;
+      downloadProgressNotifier.value = 1.0;
+
       if (!kIsWeb && Platform.isAndroid) {
         await _channel.invokeMethod('installApk', {'filePath': filePath});
       }
+    } catch (e) {
+      isDownloadingNotifier.value = false;
+      downloadErrorNotifier.value = e.toString();
+      debugPrint('Update download error: $e');
+    }
+  }
+
+  static Future<void> downloadAndInstallApk({
+    required String downloadUrl,
+    required void Function(double progress) onProgress,
+    required void Function(String error) onError,
+  }) async {
+    try {
+      final release = availableUpdateNotifier.value ??
+          ReleaseInfo(
+            version: '',
+            tagName: '',
+            htmlUrl: '',
+            body: '',
+            assets: [ReleaseAsset(name: 'app-release.apk', browserDownloadUrl: downloadUrl)],
+          );
+      await startDownload(release);
     } catch (e) {
       onError(e.toString());
     }
@@ -170,7 +207,7 @@ class UpdateService {
         .trim();
 
     if (cleaned.isEmpty) {
-      return '• Mejoras en la reproducción y estabilidad\n• Sincronización precisa de letras multi-fuente\n• Interfaz renovada y optimizaciones de rendimiento';
+      return '• Mejoras en la reproducción y estabilidad\n• Sincronización precisa de letras multi-fuente\n• Interfaz renovada y optimizaciones de rendimiento a 120 Hz';
     }
     return cleaned;
   }
