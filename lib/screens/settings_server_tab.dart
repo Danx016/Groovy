@@ -100,27 +100,6 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
         ),
         const SizedBox(height: 24),
 
-        // Cloud Storage / Database Status
-        SettingsSectionCard(
-          title: 'Servicios en la Nube',
-          children: [
-            _buildInfoTile(
-              icon: CupertinoIcons.circle_grid_hex,
-              iconColor: const Color(0xFF3861FB),
-              title: 'Base de Datos',
-              subtitle: 'MySQL 8.0 (Groovy Cloud Server)',
-            ),
-            const SettingsDivider(),
-            _buildInfoTile(
-              icon: CupertinoIcons.cloud_upload,
-              iconColor: const Color(0xFF1DB954),
-              title: 'Sincronización Automática',
-              subtitle: 'Favoritos, listas de reproducción e historial',
-            ),
-          ],
-        ),
-        const SizedBox(height: 24),
-
         // Logout
         SettingsSectionCard(
           title: 'Sesión',
@@ -179,36 +158,6 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
         ),
         const SizedBox(height: 40),
       ],
-    );
-  }
-
-  Widget _buildInfoTile({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-  }) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: iconColor.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(icon, color: iconColor, size: 18),
-      ),
-      title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
     );
   }
 }

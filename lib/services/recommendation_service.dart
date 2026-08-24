@@ -79,11 +79,14 @@ class RecommendationService extends ChangeNotifier {
     final recentArtist = _recentlyPlayed.isNotEmpty
         ? (_profiles[_recentlyPlayed.first]?.artist ?? '')
         : '';
-    final targetArtist = recentArtist.isNotEmpty
+    var targetArtist = recentArtist.isNotEmpty
         ? recentArtist
         : (topArtists.isNotEmpty ? topArtists.first : '');
 
-    if (targetArtist.isEmpty) return;
+    if (targetArtist.isEmpty) {
+      targetArtist = 'éxitos top música';
+    }
+
     if (!force &&
         targetArtist.toLowerCase() == _lastStudiedArtist.toLowerCase() &&
         _dynamicRecommendations.isNotEmpty) {
@@ -95,7 +98,10 @@ class RecommendationService extends ChangeNotifier {
 
     try {
       final yt = YoutubeService();
-      final res = await yt.search('$targetArtist mix exitos', songCount: 20);
+      final query = (targetArtist == 'éxitos top música' || targetArtist.contains('éxitos'))
+          ? targetArtist
+          : '$targetArtist mix exitos';
+      final res = await yt.search(query, songCount: 20);
       if (res.songs.isNotEmpty) {
         _dynamicRecommendations = res.songs;
         notifyListeners();
@@ -105,6 +111,37 @@ class RecommendationService extends ChangeNotifier {
     } finally {
       _isFetchingStudied = false;
     }
+  }
+
+  Future<void> seedFromHistory(List<Song> songs) async {
+    if (songs.isEmpty) return;
+    for (final song in songs) {
+      final id = song.id;
+      if (!_profiles.containsKey(id)) {
+        _profiles[id] = SongProfile(
+          songId: id,
+          title: song.title,
+          artist: song.artist,
+          artistId: song.artistId,
+          albumId: song.albumId,
+          genre: song.genre,
+          duration: song.duration,
+        )..addPlay(durationPlayed: song.duration ?? 60, completed: true, hour: 12);
+      }
+      _recentlyPlayed.remove(id);
+      _recentlyPlayed.insert(0, id);
+      if (song.artist != null && song.artist!.isNotEmpty) {
+        _artistAffinity[song.artist!] = (_artistAffinity[song.artist!] ?? 0) + 2.0;
+      }
+    }
+    if (_recentlyPlayed.length > 500) {
+      _recentlyPlayed = _recentlyPlayed.sublist(0, 500);
+    }
+    _rebuildRecentIndex();
+    _maxArtistAffinity = null;
+    _scheduleSave();
+    await refreshStudiedRecommendations(force: true);
+    notifyListeners();
   }
 
   Future<void> initialize() async {

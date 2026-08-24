@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import '../models/models.dart';
 import '../models/server_config.dart';
 import '../services/services.dart';
 import '../services/groovy_api_service.dart';
+import '../services/library_database_service.dart';
+import '../services/recommendation_service.dart';
 
 enum AuthState {
   unknown,
@@ -48,8 +51,9 @@ class AuthProvider extends ChangeNotifier {
         _state = AuthState.authenticated;
         notifyListeners();
 
-        // Refresh user profile in background from MySQL database
+        // Refresh user profile and cloud data in background
         _refreshUserProfile();
+        syncUserDataFromCloud();
       } else {
         _state = AuthState.unauthenticated;
         notifyListeners();
@@ -75,6 +79,26 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> syncUserDataFromCloud() async {
+    if (_token == null || _token!.isEmpty) return;
+    try {
+      final historySongs = await _apiService.getHistory(_token!, limit: 100);
+      final favoriteSongs = await _apiService.getFavorites(_token!);
+
+      final db = LibraryDatabaseService();
+      final allToSave = <Song>[...historySongs, ...favoriteSongs];
+      if (allToSave.isNotEmpty) {
+        await db.insertSongsBatch(allToSave);
+      }
+
+      if (historySongs.isNotEmpty) {
+        await RecommendationService().seedFromHistory(historySongs);
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Sync cloud error: $e');
+    }
+  }
+
   Future<bool> registerUser({
     required String name,
     required String email,
@@ -97,6 +121,7 @@ class AuthProvider extends ChangeNotifier {
 
       _state = AuthState.authenticated;
       notifyListeners();
+      syncUserDataFromCloud();
       return true;
     } else {
       _error = response.error ?? 'Error al registrar usuario.';
@@ -126,6 +151,7 @@ class AuthProvider extends ChangeNotifier {
 
       _state = AuthState.authenticated;
       notifyListeners();
+      syncUserDataFromCloud();
       return true;
     } else {
       _error = response.error ?? 'Correo o contraseña incorrectos.';
