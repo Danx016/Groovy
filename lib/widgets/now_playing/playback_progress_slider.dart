@@ -46,8 +46,6 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
     final progress = (currentDuration / safeMax).clamp(0.0, 1.0);
     final remainingDuration = widget.duration - Duration(milliseconds: currentDuration.toInt());
 
-    final badgeText = widget.qualityBadge ?? 'LOSSLESS';
-
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -109,38 +107,6 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
                 ),
               ),
             ),
-
-            // Apple Music Lossless / Audio Quality Badge
-            if (badgeText.isNotEmpty)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(5),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.graphic_eq_rounded,
-                      size: 11,
-                      color: Colors.white.withValues(alpha: 0.8),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      badgeText,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              const SizedBox.shrink(),
 
             // Remaining duration
             SizedBox(

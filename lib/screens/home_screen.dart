@@ -16,6 +16,8 @@ import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import 'playlist_screen.dart';
 import 'history_screen.dart';
+import 'settings_screen.dart';
+import 'account_screen.dart';
 import '../l10n/app_localizations.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -81,16 +83,65 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             actions: [
-              IconButton(
+              PopupMenuButton<String>(
                 icon: const Icon(
                   CupertinoIcons.ellipsis_vertical,
                   color: AppTheme.appleMusicRed,
                   size: 22,
                 ),
-                tooltip: 'Historial de reproducción',
-                onPressed: () {
-                  NavigationHelper.push(context, const HistoryScreen());
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                color: isDark ? const Color(0xFF252525) : Colors.white,
+                elevation: 6,
+                offset: const Offset(0, 48),
+                onSelected: (value) {
+                  if (value == 'settings') {
+                    NavigationHelper.push(context, const SettingsScreen());
+                  } else if (value == 'account') {
+                    NavigationHelper.push(context, const AccountScreen());
+                  } else if (value == 'history') {
+                    NavigationHelper.push(context, const HistoryScreen());
+                  }
                 },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'settings',
+                    height: 44,
+                    child: Text(
+                      'Configuración',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'account',
+                    height: 44,
+                    child: Text(
+                      'Cuenta',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'history',
+                    height: 44,
+                    child: Text(
+                      'Historial de reproducción',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                        color: isDark ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               if (isDesktop) const SizedBox(width: 8),
             ],
