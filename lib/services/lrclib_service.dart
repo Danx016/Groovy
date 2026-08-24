@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 
-/// Service that searches LRCLIB (https://lrclib.net) for synced and plain lyrics.
+/// Multi-source lyrics aggregator and parser.
 ///
-/// Features:
-/// - Robust multi-candidate artist and title extraction (handles "Artist - Track", uploader noise, etc.)
-/// - Multi-tier search: exact `/get` -> fuzzy `/search` across title & artist variations
-/// - In-memory lyrics caching
-/// - Outputs Subsonic and Musly compatible structured and plain lyrics formats
+/// Integrates:
+/// 1. LRCLIB (https://lrclib.net) - High precision synced LRC timestamps.
+/// 2. Netease Cloud Music API - Massive database of timed lyrics (LRC).
+/// 3. Kugou Music API - Synced lyrics.
+/// 4. Lyrics.ovh - Plain lyrics fallback.
 class LrcLibService {
   static final LrcLibService _instance = LrcLibService._internal();
   factory LrcLibService() => _instance;
@@ -17,15 +17,15 @@ class LrcLibService {
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: 'https://lrclib.net/api',
-      connectTimeout: const Duration(seconds: 6),
-      receiveTimeout: const Duration(seconds: 6),
+      connectTimeout: const Duration(seconds: 5),
+      receiveTimeout: const Duration(seconds: 5),
       headers: {
         'User-Agent': 'Groovy/1.0 (https://github.com/Danx016/Groovy)',
       },
     ),
   );
 
-  // In-memory cache for lyrics: "artist|title" -> response map
+  // In-memory cache: "artist|title" -> response map
   final Map<String, Map<String, dynamic>> _cache = {};
 
   static final List<RegExp> _noiseRegexes = [
@@ -44,11 +44,10 @@ class LrcLibService {
   static final RegExp _officialRegex = RegExp(r'\s*Official$', caseSensitive: false);
   static final RegExp _featRegex = RegExp(r'(?:feat\.|ft\.|featuring).*$', caseSensitive: false);
 
-  /// Normalizes and cleans YouTube track titles by stripping common fluff.
+  /// Cleans track titles by removing parentheses noise and tags.
   static String cleanTitle(String rawTitle) {
     var title = rawTitle;
 
-    // If formatted as "Artist - Track", extract the track portion
     if (title.contains(' - ')) {
       final parts = title.split(' - ');
       if (parts.length >= 2) {
@@ -69,7 +68,7 @@ class LrcLibService {
     return title.isNotEmpty ? title : rawTitle;
   }
 
-  /// Cleans artist names (e.g. removes " - Topic" from YouTube Music channel names).
+  /// Cleans artist names.
   static String cleanArtist(String rawArtist) {
     var artist = rawArtist;
     artist = artist.replaceAll(_topicRegex, '');
@@ -79,10 +78,7 @@ class LrcLibService {
     return artist.trim().isNotEmpty ? artist.trim() : rawArtist;
   }
 
-  /// Searches LRCLIB for a track matching [title] and optional [artist].
-  ///
-  /// Returns a map compatible with Subsonic `getLyrics` and `getLyricsBySongId`:
-  ///   `{ 'value': '<raw lrc or plain text>', 'structuredLyrics': [ ... ] }`
+  /// Searches for lyrics with multi-provider fallback.
   Future<Map<String, dynamic>?> searchLyrics({
     String? artist,
     required String title,
@@ -109,7 +105,9 @@ class LrcLibService {
       }
     }
 
-    // 1. Direct /api/get candidates
+    // ==========================================
+    // 1. SOURCE: LRCLIB (Exact match)
+    // ==========================================
     final getPairs = <MapEntry<String, String>>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
       getPairs.add(MapEntry(extractedArtist, extractedTrack));
@@ -139,7 +137,9 @@ class LrcLibService {
       } catch (_) {}
     }
 
-    // 2. Query variations for /api/search
+    // ==========================================
+    // 2. SOURCE: LRCLIB (Search query)
+    // ==========================================
     final searchQueries = <String>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
       searchQueries.add('$extractedArtist $extractedTrack'.trim());
@@ -150,7 +150,6 @@ class LrcLibService {
     if (cleanedTitle.isNotEmpty && !searchQueries.contains(cleanedTitle)) {
       searchQueries.add(cleanedTitle);
     }
-    // Raw title stripped of parenthesis noise
     final simpleRaw = title.replaceAll(RegExp(r'[\(\[\{].*?[\)\]\}]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
     if (simpleRaw.isNotEmpty && !searchQueries.contains(simpleRaw)) {
       searchQueries.add(simpleRaw);
@@ -161,15 +160,12 @@ class LrcLibService {
       try {
         final searchResp = await _dio.get(
           '/search',
-          queryParameters: {
-            'q': query,
-          },
+          queryParameters: {'q': query},
         );
 
         if (searchResp.statusCode == 200 && searchResp.data is List) {
           final list = searchResp.data as List;
           if (list.isNotEmpty) {
-            // Find item with synced lyrics first, or plain lyrics
             Map<String, dynamic>? bestMatch;
             for (final item in list) {
               if (item is Map<String, dynamic>) {
@@ -193,7 +189,133 @@ class LrcLibService {
             }
           }
         }
-    // 3. Fallback: Lyrics.ovh for plain lyrics if not found on LRCLIB
+      } catch (_) {}
+    }
+
+    // ==========================================
+    // 3. SOURCE: Netease Cloud Music (Synced LRC)
+    // ==========================================
+    try {
+      final neteaseQuery = cleanedArtist != null ? '$cleanedArtist $cleanedTitle' : cleanedTitle;
+      final neteaseClient = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+          headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+        ),
+      );
+
+      final searchRes = await neteaseClient.get(
+        'https://music.163.com/api/search/get/web',
+        queryParameters: {
+          'csrf_token': '',
+          'type': 1,
+          'offset': 0,
+          'total': 'true',
+          'limit': 5,
+          's': neteaseQuery,
+        },
+      );
+
+      if (searchRes.statusCode == 200 && searchRes.data != null) {
+        final data = searchRes.data is String ? jsonDecode(searchRes.data) : searchRes.data;
+        final songs = data['result']?['songs'] as List?;
+        if (songs != null && songs.isNotEmpty) {
+          final songId = songs.first['id'];
+          if (songId != null) {
+            final lyricRes = await neteaseClient.get(
+              'https://music.163.com/api/song/lyric',
+              queryParameters: {
+                'os': 'pc',
+                'id': songId,
+                'lv': -1,
+                'kv': -1,
+                'tv': -1,
+              },
+            );
+
+            if (lyricRes.statusCode == 200 && lyricRes.data != null) {
+              final lyricData = lyricRes.data is String ? jsonDecode(lyricRes.data) : lyricRes.data;
+              final lrc = lyricData['lrc']?['lyric'] as String?;
+              if (lrc != null && lrc.trim().isNotEmpty) {
+                final structured = _buildStructuredLyrics(lrc);
+                _cache[cacheKey] = structured;
+                debugPrint('[Netease] Synced lyrics found for "$neteaseQuery"');
+                return structured;
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // ==========================================
+    // 4. SOURCE: Kugou Music (Synced LRC)
+    // ==========================================
+    try {
+      final kugouQuery = cleanedArtist != null ? '$cleanedArtist - $cleanedTitle' : cleanedTitle;
+      final kugouClient = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 4),
+          receiveTimeout: const Duration(seconds: 4),
+          headers: {'User-Agent': 'Mozilla/5.0'},
+        ),
+      );
+
+      final kugouSearch = await kugouClient.get(
+        'http://krcs.kugou.com/search',
+        queryParameters: {
+          'ver': 1,
+          'man': 'yes',
+          'client': 'mobi',
+          'keyword': kugouQuery,
+          'duration': (durationSeconds ?? 0) * 1000,
+          'hash': '',
+        },
+      );
+
+      if (kugouSearch.statusCode == 200 && kugouSearch.data != null) {
+        final data = kugouSearch.data is String ? jsonDecode(kugouSearch.data) : kugouSearch.data;
+        final candidates = data['candidates'] as List?;
+        if (candidates != null && candidates.isNotEmpty) {
+          final first = candidates.first;
+          final id = first['id'];
+          final accesskey = first['accesskey'];
+
+          if (id != null && accesskey != null) {
+            final downloadRes = await kugouClient.get(
+              'http://lyrics.kugou.com/download',
+              queryParameters: {
+                'ver': 1,
+                'client': 'pc',
+                'id': id,
+                'accesskey': accesskey,
+                'fmt': 'lrc',
+                'charset': 'utf8',
+              },
+            );
+
+            if (downloadRes.statusCode == 200 && downloadRes.data != null) {
+              final dlData = downloadRes.data is String ? jsonDecode(downloadRes.data) : downloadRes.data;
+              final b64Content = dlData['content'] as String?;
+              if (b64Content != null && b64Content.isNotEmpty) {
+                final decoded = utf8.decode(base64.decode(b64Content));
+                if (decoded.trim().isNotEmpty) {
+                  final structured = _buildStructuredLyrics(decoded);
+                  _cache[cacheKey] = structured;
+                  debugPrint('[Kugou] Synced lyrics found for "$kugouQuery"');
+                  return structured;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (_) {}
+
+    // ==========================================
+    // 5. SOURCE: Lyrics.ovh (Plain text fallback)
+    // ==========================================
     if (cleanedArtist != null && cleanedArtist.isNotEmpty && cleanedTitle.isNotEmpty) {
       try {
         final ovhResp = await Dio(
@@ -220,13 +342,11 @@ class LrcLibService {
   }
 
   Map<String, dynamic>? _parseLrcLibResponse(Map<String, dynamic> data) {
-    // Try synced lyrics first
     final synced = data['syncedLyrics'] as String?;
     if (synced != null && synced.isNotEmpty) {
       return _buildStructuredLyrics(synced);
     }
 
-    // Fallback to plain lyrics
     final plain = data['plainLyrics'] as String?;
     if (plain != null && plain.isNotEmpty) {
       return {'value': plain};

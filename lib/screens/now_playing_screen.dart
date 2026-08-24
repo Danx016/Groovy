@@ -354,14 +354,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
-                    child: _currentImageProvider != null
-                        ? Image(image: _currentImageProvider!, fit: BoxFit.cover)
-                        : (widget.image != null
-                            ? Image(image: widget.image!, fit: BoxFit.cover)
-                            : Container(
-                                color: Colors.grey[800],
-                                child: const Icon(Icons.music_note, color: Colors.white),
-                              )),
+                    child: Image(
+                      image: _currentImageProvider ?? widget.image,
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
