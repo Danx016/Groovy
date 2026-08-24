@@ -9,6 +9,7 @@ import 'lyrics_screen.dart';
 import '../models/lyric_line.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
+import '../providers/library_provider.dart';
 import '../models/song.dart';
 import '../services/palette_service.dart';
 import '../services/subsonic_service.dart';
@@ -405,28 +406,35 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
 
               // 3. Star (Favorite) Button
-              GestureDetector(
-                onTap: () {
-                  if (currentSong != null) {
-                    provider.toggleStar(currentSong);
-                  }
-                },
-                child: Container(
-                  width: 38,
-                  height: 38,
-                  margin: const EdgeInsets.only(right: 10),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.16),
-                  ),
-                  child: Center(
-                    child: Icon(
-                      isStarred ? Icons.star_rounded : Icons.star_border_rounded,
-                      color: isStarred ? Colors.amber : Colors.white,
-                      size: 22,
+              Consumer<LibraryProvider>(
+                builder: (context, lib, _) {
+                  final isFav = currentSong != null
+                      ? (lib.isFavorite(currentSong.id) || (currentSong.starred ?? false))
+                      : isStarred;
+                  return GestureDetector(
+                    onTap: () {
+                      if (currentSong != null) {
+                        lib.toggleStarSong(currentSong);
+                      }
+                    },
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      margin: const EdgeInsets.only(right: 10),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withValues(alpha: 0.16),
+                      ),
+                      child: Center(
+                        child: Icon(
+                          isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                          color: isFav ? Colors.amber : Colors.white,
+                          size: 22,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
 
               // 4. More Options Button
