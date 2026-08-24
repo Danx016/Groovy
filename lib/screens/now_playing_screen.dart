@@ -455,9 +455,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         return SafeArea(
           child: Column(
             children: [
-              const SizedBox(height: 60), // Space for lyrics header
+              const SizedBox(height: 54), // Space below lyrics header
 
-              // Scrollable Lyrics View
+              // Full Screen Scrollable Lyrics View
               Expanded(
                 child: _fetchedLyrics.isNotEmpty
                     ? StreamBuilder<Duration>(
@@ -487,47 +487,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       ),
               ),
 
-              // Scrubber Progress Slider & Audio Quality Badge
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                child: StreamBuilder<Duration>(
-                  stream: provider.positionStream,
-                  initialData: provider.position,
-                  builder: (context, snapshot) {
-                    return PlaybackProgressSlider(
-                      position: snapshot.data ?? Duration.zero,
-                      duration: provider.duration,
-                      accentColor: Colors.white,
-                      qualityBadge: qualityBadge,
-                      onChanged: (val) {
-                        provider.seek(val);
-                      },
-                    );
-                  },
-                ),
-              ),
-
-              const SizedBox(height: 12),
-
-              // 3-Button Iconic Playback Controls
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                child: PlaybackControls(
-                  isPlaying: provider.isPlaying,
-                  isShuffleEnabled: provider.shuffleEnabled,
-                  isRepeatEnabled: provider.repeatMode != RepeatMode.off,
-                  accentColor: accentColor,
-                  onPlayPause: () => provider.togglePlayPause(),
-                  onNext: () => provider.skipNext(),
-                  onPrevious: () => provider.skipPrevious(),
-                  onShuffleToggle: () => provider.toggleShuffle(),
-                  onRepeatToggle: () => provider.toggleRepeat(),
-                ),
-              ),
-
-              const SizedBox(height: 10),
-
-              // Bottom Actions (Lyrics active chip, Cast, Queue)
+              // Bottom Actions Bar (Lyrics Active, Cast, Queue)
               NowPlayingBottomActions(
                 isLyricsActive: _currentPage == 1,
                 isQueueActive: _currentPage == 2,
