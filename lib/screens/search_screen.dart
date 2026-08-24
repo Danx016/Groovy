@@ -102,7 +102,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onSearchChanged(String value) {
     _debounceTimer?.cancel();
 
-    if (value.isEmpty) {
+    if (value.trim().isEmpty) {
       setState(() {
         _searchResult = null;
         _autocompleteSuggestions = null;
@@ -112,7 +112,22 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    _debounceTimer = Timer(const Duration(milliseconds: 450), () {
+    final libraryProvider = Provider.of<LibraryProvider>(
+      context,
+      listen: false,
+    );
+
+    // Instant 0ms local results (locked 120fps typing)
+    final instantLocal = libraryProvider.searchLocal(value);
+    if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
+      setState(() {
+        _searchResult = instantLocal;
+        _query = value;
+      });
+    }
+
+    // Fast 180ms debounce for server results
+    _debounceTimer = Timer(const Duration(milliseconds: 180), () {
       if (_liveSearch) {
         _search(value);
       } else {
@@ -142,7 +157,7 @@ class _SearchScreenState extends State<SearchScreen> {
         context,
         listen: false,
       );
-      final result = await libraryProvider.search(query);
+      final result = await libraryProvider.search(query, includeOnline: false);
       if (mounted && _query == query) {
         setState(() {
           _searchResult = result;

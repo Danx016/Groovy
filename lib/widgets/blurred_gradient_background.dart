@@ -18,20 +18,14 @@ class BlurredGradientBackground extends StatefulWidget {
 class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 12),
+      duration: const Duration(seconds: 14),
     )..repeat(reverse: true);
-    
-    _animation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeInOut,
-    );
   }
 
   @override
@@ -42,7 +36,6 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
 
   @override
   Widget build(BuildContext context) {
-    // If no colors provided, use a rich warm fallback
     final safeColors = widget.colors.isNotEmpty 
       ? List<Color>.from(widget.colors)
       : [const Color(0xFF7A5C38), const Color(0xFF9E7B4C), const Color(0xFF4A3520)];
@@ -51,108 +44,21 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
       safeColors.add(safeColors.last.withValues(alpha: 0.85));
     }
 
-    final c1 = safeColors[0];
-    final c2 = safeColors[1];
-    final c3 = safeColors[2];
-    final c4 = safeColors[3];
-
     return Stack(
       children: [
-        // 1. Base vibrant gradient (never pitch black)
-        Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  c1.withValues(alpha: 0.95),
-                  c2.withValues(alpha: 0.85),
-                  c3.withValues(alpha: 0.90),
-                  c4.withValues(alpha: 0.95),
-                ],
-                stops: const [0.0, 0.35, 0.70, 1.0],
-              ),
-            ),
-          ),
-        ),
-        
-        // 2. Animated fluid radiant blobs
+        // 1. Hardware accelerated custom painted gradient background
         Positioned.fill(
           child: RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: _animation,
-              builder: (context, child) {
-                final value = _animation.value;
-                final screenWidth = MediaQuery.of(context).size.width;
-                final screenHeight = MediaQuery.of(context).size.height;
-
-                return Stack(
-                  children: [
-                    // Blob 1 (Top / Center moving)
-                    Positioned(
-                      top: -150 + (120 * value),
-                      left: -100 + (80 * math.sin(value * math.pi)),
-                      width: screenWidth * 1.5,
-                      height: screenWidth * 1.5,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              c2.withValues(alpha: 0.9),
-                              c2.withValues(alpha: 0.0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    
-                    // Blob 2 (Bottom / Right moving)
-                    Positioned(
-                      bottom: -200 + (140 * (1 - value)),
-                      right: -120 + (100 * math.cos(value * math.pi)),
-                      width: screenWidth * 1.6,
-                      height: screenWidth * 1.6,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              c1.withValues(alpha: 0.85),
-                              c1.withValues(alpha: 0.0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    
-                    // Blob 3 (Center pulsating)
-                    Positioned(
-                      top: screenHeight * 0.3 + (80 * math.sin(value * math.pi * 2)),
-                      left: screenWidth * 0.1 + (60 * math.cos(value * math.pi * 2)),
-                      width: screenWidth * 1.3,
-                      height: screenWidth * 1.3,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: RadialGradient(
-                            colors: [
-                              c3.withValues(alpha: 0.8),
-                              c3.withValues(alpha: 0.0),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
+            child: CustomPaint(
+              painter: _AppleMusicMeshPainter(
+                animation: _controller,
+                colors: safeColors,
+              ),
             ),
           ),
         ),
 
-        // 3. Subtle overlay for Apple Music readability without destroying the vibrant glow
+        // 2. Subtle contrast overlay for crystal-clear readability
         Positioned.fill(
           child: Container(
             decoration: BoxDecoration(
@@ -160,21 +66,104 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  Colors.black.withValues(alpha: 0.10),
-                  Colors.black.withValues(alpha: 0.05),
-                  Colors.black.withValues(alpha: 0.25),
+                  Colors.black.withValues(alpha: 0.08),
+                  Colors.transparent,
+                  Colors.black.withValues(alpha: 0.22),
                 ],
-                stops: const [0.0, 0.5, 1.0],
+                stops: const [0.0, 0.4, 1.0],
               ),
             ),
           ),
         ),
 
-        // 4. Content
+        // 3. Child content isolated in its own render layer
         RepaintBoundary(
           child: widget.child,
         ),
       ],
     );
+  }
+}
+
+class _AppleMusicMeshPainter extends CustomPainter {
+  final Animation<double> animation;
+  final List<Color> colors;
+
+  _AppleMusicMeshPainter({
+    required this.animation,
+    required this.colors,
+  }) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final t = animation.value;
+    final w = size.width;
+    final h = size.height;
+
+    // 1. Draw base linear gradient
+    final basePaint = Paint()
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          colors[0].withValues(alpha: 0.95),
+          colors[1].withValues(alpha: 0.88),
+          colors[2].withValues(alpha: 0.92),
+          colors[3].withValues(alpha: 0.95),
+        ],
+        stops: const [0.0, 0.35, 0.70, 1.0],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), basePaint);
+
+    // 2. Draw animated fluid radial blob 1 (Top / Center)
+    final blob1Center = Offset(
+      w * 0.3 + (w * 0.2 * math.sin(t * math.pi)),
+      h * 0.15 + (h * 0.1 * math.cos(t * math.pi)),
+    );
+    final blob1Radius = w * 0.9;
+    final blob1Paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          colors[1].withValues(alpha: 0.85),
+          colors[1].withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromCircle(center: blob1Center, radius: blob1Radius));
+    canvas.drawCircle(blob1Center, blob1Radius, blob1Paint);
+
+    // 3. Draw animated fluid radial blob 2 (Bottom / Right)
+    final blob2Center = Offset(
+      w * 0.75 - (w * 0.15 * math.cos(t * math.pi)),
+      h * 0.75 - (h * 0.1 * math.sin(t * math.pi)),
+    );
+    final blob2Radius = w * 1.0;
+    final blob2Paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          colors[0].withValues(alpha: 0.80),
+          colors[0].withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromCircle(center: blob2Center, radius: blob2Radius));
+    canvas.drawCircle(blob2Center, blob2Radius, blob2Paint);
+
+    // 4. Draw animated pulsating blob 3 (Middle / Left)
+    final blob3Center = Offset(
+      w * 0.25 + (w * 0.1 * math.sin(t * math.pi * 2)),
+      h * 0.50 + (h * 0.15 * math.cos(t * math.pi * 2)),
+    );
+    final blob3Radius = w * 0.75;
+    final blob3Paint = Paint()
+      ..shader = RadialGradient(
+        colors: [
+          colors[2].withValues(alpha: 0.75),
+          colors[2].withValues(alpha: 0.0),
+        ],
+      ).createShader(Rect.fromCircle(center: blob3Center, radius: blob3Radius));
+    canvas.drawCircle(blob3Center, blob3Radius, blob3Paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _AppleMusicMeshPainter oldDelegate) {
+    return true;
   }
 }

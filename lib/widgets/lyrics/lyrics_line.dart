@@ -25,9 +25,8 @@ class LyricsLineWidget extends StatelessWidget {
     final isCurrent = state == LyricLineState.current;
     final isPast = state == LyricLineState.past;
 
-    final targetOpacity = isCurrent ? 1.0 : (isPast ? 0.40 : 0.32);
+    final targetOpacity = isCurrent ? 1.0 : (isPast ? 0.42 : 0.35);
     final targetScale = isCurrent ? 1.0 : 0.94;
-    final double sigma = isCurrent ? 0.0 : (distance * 0.4).clamp(0.0, 1.8);
 
     return GestureDetector(
       onTap: onTap,
@@ -36,19 +35,14 @@ class LyricsLineWidget extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 28.0),
         child: AnimatedScale(
           scale: targetScale,
-          duration: const Duration(milliseconds: 380),
+          duration: const Duration(milliseconds: 320),
           curve: Curves.easeOutCubic,
           alignment: Alignment.centerLeft,
           child: AnimatedOpacity(
             opacity: targetOpacity,
-            duration: const Duration(milliseconds: 380),
+            duration: const Duration(milliseconds: 320),
             curve: Curves.easeOutCubic,
-            child: sigma > 0.1
-                ? ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                    child: _buildText(isCurrent),
-                  )
-                : _buildText(isCurrent),
+            child: _buildText(isCurrent),
           ),
         ),
       ),
