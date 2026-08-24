@@ -158,6 +158,68 @@ class GroovyApiService {
     }
   }
 
+  Future<bool> checkEmailExists(String email) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/auth/check-email');
+      final res = await http.post(
+        uri,
+        headers: _headers(),
+        body: jsonEncode({'email': email.trim().toLowerCase()}),
+      ).timeout(const Duration(seconds: 8));
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        return data['exists'] == true;
+      }
+      // If endpoint returns 404 or specific status
+      if (res.statusCode == 404) return false;
+      return true; // Graceful fallback if endpoint is not separately implemented on older backends
+    } catch (e) {
+      debugPrint('[GroovyApiService] checkEmailExists: $e');
+      return true; // Allow attempt
+    }
+  }
+
+  Future<AuthResponse> resetPassword({
+    required String email,
+    required String newPassword,
+    String? code,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/auth/reset-password');
+      final res = await http.post(
+        uri,
+        headers: _headers(),
+        body: jsonEncode({
+          'email': email.trim().toLowerCase(),
+          'password': newPassword,
+          'newPassword': newPassword,
+          if (code != null) 'code': code,
+        }),
+      ).timeout(const Duration(seconds: 12));
+
+      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      if (res.statusCode >= 200 && res.statusCode < 300 && (data['success'] == true || data['message'] != null)) {
+        return AuthResponse(
+          success: true,
+          token: data['token'] as String?,
+          user: data['user'] != null ? GroovyUser.fromJson(data['user'] as Map<String, dynamic>) : null,
+        );
+      } else {
+        return AuthResponse(
+          success: false,
+          error: data['error'] as String? ?? 'No se pudo restablecer la contraseña (${res.statusCode})',
+        );
+      }
+    } catch (e) {
+      debugPrint('[GroovyApiService] resetPassword error: $e');
+      return AuthResponse(
+        success: false,
+        error: 'No se pudo conectar con el servidor Groovy.',
+      );
+    }
+  }
+
   Future<GroovyUser?> getMe(String token) async {
     try {
       final uri = Uri.parse('$_baseUrl/auth/me');

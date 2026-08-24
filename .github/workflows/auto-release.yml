@@ -84,7 +84,17 @@ jobs:
         with:
           tag_name: v${{ env.VERSION }}
           name: Groovy v${{ env.VERSION }}
-          generate_release_notes: true
+          body: |
+            ## 🎵 Groovy v${{ env.VERSION }}
+
+            ### ✨ Novedades y Mejoras:
+            - 🛡️ **Validación Estricta de Letras**: Coincidencia exacta de artista y título evitando letras de otras canciones.
+            - 🎨 **Interfaz de Letras Apple Music**: Toca la carátula o título para abrir el Álbum y el artista para abrir su perfil.
+            - 📋 **Cola de Reproducción Dedicada**: Corrección de saltos a la letra al interactuar con la lista de reproducción.
+            - 🔔 **Reproductor en Pantalla de Bloqueo Permanente**: Soporte y permisos completos para Android 13+ y control multimedia continuo.
+            - ⚡ **Optimización y Rendimiento**: Cargas de audio más rápidas y pre-buffering fluido en segundo plano.
+            - 🔑 **Recuperación de Contraseña**: Flujo de validación con código OTP de 6 dígitos enviado por correo con diseño Groovy.
+            - 🌐 **100% en Español**: Nombre de marca unificado a Groovy y localización en español.
           make_latest: true
           files: |
             release-assets/app-release.apk

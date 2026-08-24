@@ -10,16 +10,16 @@ class JellyfinService {
   String _baseUrl = '';
   String? _token;
   String? _userId;
-  String _deviceId = 'musly-app';
+  String _deviceId = 'groovy-app';
   bool _allowSelfSigned = false;
 
-  static const _clientName = 'Musly';
+  static const _clientName = 'Groovy';
   static const _clientVersion = '1.0.0';
 
   String get _authHeader {
     final parts = [
       'Client="$_clientName"',
-      'Device="Musly"',
+      'Device="Groovy"',
       'DeviceId="$_deviceId"',
       'Version="$_clientVersion"',
       if (_token != null) 'Token="$_token"',

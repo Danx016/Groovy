@@ -347,6 +347,16 @@ class StorageService {
     await _safeSecureDelete(_userTokenKey);
   }
 
+  Future<bool> getDiscordRpcEnabled() async {
+    final prefs = await _prefs;
+    return prefs.getBool('discord_rpc_enabled') ?? true;
+  }
+
+  Future<void> saveDiscordRpcEnabled(bool enabled) async {
+    final prefs = await _prefs;
+    await prefs.setBool('discord_rpc_enabled', enabled);
+  }
+
   Future<void> clearAll() async {
     final prefs = await _prefs;
     await prefs.clear();
