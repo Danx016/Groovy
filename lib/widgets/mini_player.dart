@@ -155,25 +155,7 @@ class MiniPlayer extends StatelessWidget {
                   ),
                 ),
               ),
-              child: Column(
-                children: [
-                  if (!isPlayingRadio)
-                    Selector<PlayerProvider, double>(
-                      selector: (ctx, p) => p.progress,
-                      builder: (ctx, progress, __) => LinearProgressIndicator(
-                        value: progress,
-                        backgroundColor: Colors.transparent,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Theme.of(context).colorScheme.primary,
-                        ),
-                        minHeight: 2,
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 2),
-                  Expanded(child: row),
-                ],
-              ),
+              child: row,
             ),
           ),
         );

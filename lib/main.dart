@@ -386,9 +386,6 @@ class _AuthWrapperState extends State<AuthWrapper> {
       return const LoginScreen();
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _showPrivacyPolicyIfNeeded();
-    });
     return const MainScreen();
   }
 }

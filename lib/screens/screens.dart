@@ -12,5 +12,6 @@ export 'favorites_screen.dart';
 export 'liked_albums_screen.dart';
 export 'playlist_screen.dart';
 export 'settings_screen.dart';
+export 'account_screen.dart';
 export 'fantasy_screen.dart';
 export 'downloads_screen.dart';
