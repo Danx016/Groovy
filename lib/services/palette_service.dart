@@ -12,16 +12,21 @@ class PaletteService {
     }
 
     try {
-      final scheme = await ColorScheme.fromImageProvider(
+      final lightScheme = await ColorScheme.fromImageProvider(
+        provider: imageProvider,
+        brightness: Brightness.light,
+      );
+      final darkScheme = await ColorScheme.fromImageProvider(
         provider: imageProvider,
         brightness: Brightness.dark,
       );
 
       final List<Color> colors = [
-        scheme.primary,
-        scheme.tertiary,
-        scheme.secondary,
-        scheme.primaryContainer,
+        lightScheme.primary,
+        lightScheme.tertiary,
+        lightScheme.secondary,
+        darkScheme.primary,
+        darkScheme.secondaryContainer,
       ];
 
       _colorCache[imageId] = colors;
@@ -29,9 +34,9 @@ class PaletteService {
     } catch (e) {
       // Fallback colors on error
       return [
-        const Color(0xFF202020),
-        const Color(0xFF404040),
-        const Color(0xFF606060),
+        const Color(0xFF6B4226),
+        const Color(0xFF8B5A2B),
+        const Color(0xFF3D2314),
       ];
     }
   }
