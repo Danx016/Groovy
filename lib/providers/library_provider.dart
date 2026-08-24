@@ -835,7 +835,9 @@ class LibraryProvider extends ChangeNotifier {
     );
   }
 
-  Future<SearchResult> search(String query) async {
+  SearchResult searchLocal(String query) => _searchLocal(query);
+
+  Future<SearchResult> search(String query, {bool includeOnline = false}) async {
     SearchResult serverOrLocalResult;
     if (_localOnlyMode) {
       serverOrLocalResult = _searchLocal(query);
@@ -847,8 +849,12 @@ class LibraryProvider extends ChangeNotifier {
       }
     }
 
+    if (!includeOnline) {
+      return serverOrLocalResult;
+    }
+
     try {
-      final ytResults = await YoutubeService().search(query, songCount: 20);
+      final ytResults = await YoutubeService().search(query, songCount: 15);
 
       final existingIds = serverOrLocalResult.songs.map((s) => s.id).toSet();
       final extraSongs = ytResults.songs

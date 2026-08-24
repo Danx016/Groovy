@@ -35,19 +35,23 @@ class MainActivity : AudioServiceFragmentActivity() {
     private fun setHighRefreshRate() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                display?.supportedModes?.maxByOrNull { it.refreshRate }?.let { mode ->
-                    window.attributes = window.attributes.apply {
-                        preferredDisplayModeId = mode.modeId
-                    }
+                val currentDisplay = this.display ?: (getSystemService(android.content.Context.DISPLAY_SERVICE) as? android.hardware.display.DisplayManager)?.getDisplay(android.view.Display.DEFAULT_DISPLAY)
+                val modes = currentDisplay?.supportedModes ?: emptyArray()
+                val maxMode = modes.maxByOrNull { it.refreshRate }
+                if (maxMode != null) {
+                    val params = window.attributes
+                    params.preferredDisplayModeId = maxMode.modeId
+                    params.preferredRefreshRate = maxMode.refreshRate
+                    window.attributes = params
                 }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 @Suppress("DEPRECATION")
                 val modes = windowManager.defaultDisplay.supportedModes
                 val maxMode = modes.maxByOrNull { it.refreshRate }
-                maxMode?.let { mode ->
-                    window.attributes = window.attributes.apply {
-                        preferredDisplayModeId = mode.modeId
-                    }
+                if (maxMode != null) {
+                    val params = window.attributes
+                    params.preferredDisplayModeId = maxMode.modeId
+                    window.attributes = params
                 }
             }
         } catch (e: Exception) {
