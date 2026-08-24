@@ -123,355 +123,281 @@ class _MainScreenState extends State<MainScreen> {
 
     showDialog<void>(
       context: context,
-      barrierDismissible: false,
+      barrierDismissible: true,
       builder: (ctx) {
-        bool isDownloading = false;
-        double progress = 0.0;
-        String? errorMessage;
-
-        return StatefulBuilder(
-          builder: (dialogCtx, setDialogState) => Dialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(28),
-            ),
-            backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
-            elevation: 24,
-            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 420, maxHeight: 580),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.1)
-                      : Colors.black.withValues(alpha: 0.06),
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  // Sleek Top Header
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-                    child: Column(
-                      children: [
-                        // Glowing Icon Badge
-                        Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFFFF334B), Color(0xFFE50914)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFFE50914).withValues(alpha: 0.4),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.sparkles,
-                            color: Colors.white,
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Text(
-                          l10n.updateAvailable,
-                          style: TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Hay una nueva versión de Groovy lista para ti',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: isDark ? Colors.white60 : Colors.black54,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 14),
-
-                        // Version Transition Pill
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                          decoration: BoxDecoration(
+        return ValueListenableBuilder<bool>(
+          valueListenable: UpdateService.isDownloadingNotifier,
+          builder: (dialogCtx, isDownloading, _) {
+            return ValueListenableBuilder<double>(
+              valueListenable: UpdateService.downloadProgressNotifier,
+              builder: (dialogCtx, progress, _) {
+                return ValueListenableBuilder<String?>(
+                  valueListenable: UpdateService.downloadErrorNotifier,
+                  builder: (dialogCtx, errorMessage, _) {
+                    return Dialog(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+                      elevation: 24,
+                      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                      child: Container(
+                        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 580),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          border: Border.all(
                             color: isDark
-                                ? Colors.white.withValues(alpha: 0.07)
-                                : Colors.black.withValues(alpha: 0.05),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'v${UpdateService.currentVersion}',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white60 : Colors.black54,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Icon(
-                                CupertinoIcons.arrow_right,
-                                size: 12,
-                                color: isDark ? Colors.white38 : Colors.black38,
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFF1DB954).withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: Text(
-                                  'v${release.version}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF1DB954),
-                                  ),
-                                ),
-                              ),
-                            ],
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : Colors.black.withValues(alpha: 0.06),
+                            width: 1,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
-
-                  // Changelog Box
-                  if (changelog.isNotEmpty && !isDownloading)
-                    Flexible(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? const Color(0xFF222226)
-                                : const Color(0xFFF4F4F6),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.white.withValues(alpha: 0.05)
-                                  : Colors.black.withValues(alpha: 0.04),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Row(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Sleek Top Header
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
+                              child: Column(
                                 children: [
-                                  Icon(
-                                    CupertinoIcons.doc_text_fill,
-                                    size: 14,
-                                    color: isDark ? Colors.white70 : Colors.black54,
+                                  // Glowing Icon Badge
+                                  Container(
+                                    width: 64,
+                                    height: 64,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: const LinearGradient(
+                                        colors: [Color(0xFFFF334B), Color(0xFFE50914)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFE50914).withValues(alpha: 0.4),
+                                          blurRadius: 20,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      CupertinoIcons.sparkles,
+                                      color: Colors.white,
+                                      size: 30,
+                                    ),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(height: 18),
                                   Text(
-                                    'Novedades y mejoras',
+                                    l10n.updateAvailable,
                                     style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: 0.3,
-                                      color: isDark ? Colors.white70 : Colors.black87,
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.5,
+                                      color: isDark ? Colors.white : Colors.black87,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Hay una nueva versión de Groovy lista para ti',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isDark ? Colors.white60 : Colors.black54,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 14),
+
+                                  // Version Transition Pill
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white.withValues(alpha: 0.08)
+                                          : Colors.black.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          'v${UpdateService.currentVersion}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark ? Colors.white54 : Colors.black54,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Icon(
+                                          Icons.arrow_forward_rounded,
+                                          size: 14,
+                                          color: isDark ? Colors.white38 : Colors.black38,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          'v${release.version}',
+                                          style: const TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFF1DB954),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: 8),
-                              Flexible(
-                                child: Scrollbar(
-                                  thumbVisibility: true,
-                                  child: SingleChildScrollView(
-                                    child: Text(
-                                      changelog,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        height: 1.45,
-                                        color: isDark ? Colors.white70 : Colors.black87,
-                                      ),
+                            ),
+
+                            // Changelog Section
+                            Flexible(
+                              child: Container(
+                                margin: const EdgeInsets.symmetric(horizontal: 20),
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: isDark
+                                      ? Colors.black.withValues(alpha: 0.3)
+                                      : const Color(0xFFF4F4F5),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: SingleChildScrollView(
+                                  physics: const BouncingScrollPhysics(),
+                                  child: Text(
+                                    changelog,
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.5,
+                                      color: isDark ? Colors.white70 : Colors.black87,
                                     ),
                                   ),
                                 ),
                               ),
-                            ],
-                          ),
+                            ),
+
+                            // Progress Bar Section
+                            if (isDownloading)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: LinearProgressIndicator(
+                                        value: progress > 0 ? progress : null,
+                                        backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                                        valueColor: const AlwaysStoppedAnimation<Color>(
+                                          Color(0xFFE50914),
+                                        ),
+                                        minHeight: 10,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Descargando en segundo plano...',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: isDark ? Colors.white70 : Colors.black87,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${(progress * 100).toInt()}%',
+                                          style: const TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                            color: Color(0xFFE50914),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                            if (errorMessage != null)
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                                child: Text(
+                                  errorMessage,
+                                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                                  textAlign: TextAlign.center,
+                                ),
+                              ),
+
+                            // Bottom Action Buttons
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                              child: Row(
+                                children: [
+                                  if (!isDownloading)
+                                    Expanded(
+                                      child: TextButton(
+                                        onPressed: () => Navigator.of(ctx).pop(),
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(vertical: 14),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(16),
+                                          ),
+                                          foregroundColor:
+                                              isDark ? Colors.white60 : Colors.black54,
+                                        ),
+                                        child: Text(
+                                          l10n.remindLater,
+                                          style: const TextStyle(fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                    ),
+                                  if (!isDownloading) const SizedBox(width: 12),
+                                  Expanded(
+                                    flex: isDownloading ? 1 : 2,
+                                    child: ElevatedButton.icon(
+                                      onPressed: isDownloading
+                                          ? () => Navigator.of(ctx).pop()
+                                          : () {
+                                              UpdateService.startDownload(release);
+                                            },
+                                      icon: Icon(
+                                        isDownloading
+                                            ? CupertinoIcons.check_mark_circled
+                                            : CupertinoIcons.arrow_down_to_line_alt,
+                                        size: 18,
+                                      ),
+                                      label: Text(
+                                        isDownloading
+                                            ? 'Continuar en segundo plano'
+                                            : 'Actualizar ahora',
+                                        style: const TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: const Color(0xFFE50914),
+                                        foregroundColor: Colors.white,
+                                        elevation: 0,
+                                        padding: const EdgeInsets.symmetric(vertical: 14),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(16),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-
-                  // Live Downloading Progress View
-                  if (isDownloading)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
-                              value: progress > 0 ? progress : null,
-                              backgroundColor: isDark ? Colors.white12 : Colors.black12,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                Color(0xFFE50914),
-                              ),
-                              minHeight: 10,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Descargando...',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white70 : Colors.black87,
-                                ),
-                              ),
-                              Text(
-                                '${(progress * 100).toInt()}%',
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFE50914),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-
-                  if (errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                      child: Text(
-                        errorMessage!,
-                        style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                  // Bottom Action Buttons
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                    child: Row(
-                      children: [
-                        if (!isDownloading)
-                          Expanded(
-                            child: TextButton(
-                              onPressed: () => Navigator.of(ctx).pop(),
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                foregroundColor:
-                                    isDark ? Colors.white60 : Colors.black54,
-                              ),
-                              child: Text(
-                                l10n.remindLater,
-                                style: const TextStyle(fontWeight: FontWeight.w600),
-                              ),
-                            ),
-                          ),
-                        if (!isDownloading) const SizedBox(width: 12),
-                        Expanded(
-                          flex: isDownloading ? 1 : 2,
-                          child: ElevatedButton.icon(
-                            onPressed: isDownloading
-                                ? null
-                                : () async {
-                                    if (Platform.isAndroid && apkUrl != null) {
-                                      setDialogState(() {
-                                        isDownloading = true;
-                                        errorMessage = null;
-                                        progress = 0.0;
-                                      });
-                                      await UpdateService.downloadAndInstallApk(
-                                        downloadUrl: apkUrl,
-                                        onProgress: (p) {
-                                          setDialogState(() {
-                                            progress = p;
-                                          });
-                                        },
-                                        onError: (err) async {
-                                          setDialogState(() {
-                                            isDownloading = false;
-                                            errorMessage = 'Error: $err';
-                                          });
-                                          final uri = Uri.parse(release.htmlUrl);
-                                          if (await canLaunchUrl(uri)) {
-                                            await launchUrl(
-                                              uri,
-                                              mode: LaunchMode.externalApplication,
-                                            );
-                                          }
-                                        },
-                                      );
-                                    } else {
-                                      Navigator.of(ctx).pop();
-                                      final uri = Uri.parse(release.htmlUrl);
-                                      if (await canLaunchUrl(uri)) {
-                                        await launchUrl(
-                                          uri,
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                      }
-                                    }
-                                  },
-                            icon: Icon(
-                              isDownloading
-                                  ? CupertinoIcons.hourglass
-                                  : CupertinoIcons.arrow_down_to_line_alt,
-                              size: 18,
-                            ),
-                            label: Text(
-                              isDownloading
-                                  ? 'Descargando...'
-                                  : 'Actualizar ahora',
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              backgroundColor: const Color(0xFFE50914),
-                              foregroundColor: Colors.white,
-                              elevation: 4,
-                              shadowColor: const Color(0xFFE50914).withValues(alpha: 0.4),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+                    );
+                  },
+                );
+              },
+            );
+          },
         );
       },
     );
