@@ -108,6 +108,36 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
               ),
             ),
 
+            // Center Lossless / Audio Quality Badge
+            if (widget.qualityBadge != null && widget.qualityBadge!.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.graphic_eq_rounded,
+                      size: 13,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      widget.qualityBadge!,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                        color: Colors.white.withValues(alpha: 0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
             // Remaining duration
             SizedBox(
               width: 55,

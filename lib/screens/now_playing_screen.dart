@@ -56,6 +56,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   bool _isLoadingLyrics = true;
   Song? _lastSong;
   ImageProvider? _currentImageProvider;
+  bool _showLyricsControls = true;
 
   @override
   void initState() {
@@ -457,34 +458,95 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             children: [
               const SizedBox(height: 54), // Space below lyrics header
 
-              // Full Screen Scrollable Lyrics View
+              // Scrollable Lyrics View
               Expanded(
-                child: _fetchedLyrics.isNotEmpty
-                    ? StreamBuilder<Duration>(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    setState(() {
+                      _showLyricsControls = !_showLyricsControls;
+                    });
+                  },
+                  child: _fetchedLyrics.isNotEmpty
+                      ? StreamBuilder<Duration>(
+                          stream: provider.positionStream,
+                          initialData: provider.position,
+                          builder: (context, snapshot) {
+                            return LyricsListView(
+                              lyrics: _fetchedLyrics,
+                              currentTime: snapshot.data ?? Duration.zero,
+                              onSeek: (duration) {
+                                provider.seek(duration);
+                              },
+                            );
+                          },
+                        )
+                      : Center(
+                          child: _isLoadingLyrics
+                              ? const CircularProgressIndicator(color: Colors.white)
+                              : const Text(
+                                  "Letra no disponible",
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                        ),
+                ),
+              ),
+
+              // Animated Scrubber + Playback Controls (Apple Music Image 1 <-> Image 2)
+              AnimatedCrossFade(
+                firstChild: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Scrubber Progress Slider with centered Lossless badge
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                      child: StreamBuilder<Duration>(
                         stream: provider.positionStream,
                         initialData: provider.position,
                         builder: (context, snapshot) {
-                          return LyricsListView(
-                            lyrics: _fetchedLyrics,
-                            currentTime: snapshot.data ?? Duration.zero,
-                            onSeek: (duration) {
-                              provider.seek(duration);
+                          return PlaybackProgressSlider(
+                            position: snapshot.data ?? Duration.zero,
+                            duration: provider.duration,
+                            accentColor: Colors.white,
+                            qualityBadge: qualityBadge,
+                            onChanged: (val) {
+                              provider.seek(val);
                             },
                           );
                         },
-                      )
-                    : Center(
-                        child: _isLoadingLyrics
-                            ? const CircularProgressIndicator(color: Colors.white)
-                            : const Text(
-                                "Letra no disponible",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
                       ),
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // 3-Button Iconic Playback Controls (⏮ ⏸ ⏭)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                      child: PlaybackControls(
+                        isPlaying: provider.isPlaying,
+                        isShuffleEnabled: provider.shuffleEnabled,
+                        isRepeatEnabled: provider.repeatMode != RepeatMode.off,
+                        accentColor: accentColor,
+                        onPlayPause: () => provider.togglePlayPause(),
+                        onNext: () => provider.skipNext(),
+                        onPrevious: () => provider.skipPrevious(),
+                        onShuffleToggle: () => provider.toggleShuffle(),
+                        onRepeatToggle: () => provider.toggleRepeat(),
+                      ),
+                    ),
+
+                    const SizedBox(height: 4),
+                  ],
+                ),
+                secondChild: const SizedBox(width: double.infinity, height: 0),
+                crossFadeState: _showLyricsControls
+                    ? CrossFadeState.showFirst
+                    : CrossFadeState.showSecond,
+                duration: const Duration(milliseconds: 280),
               ),
 
               // Bottom Actions Bar (Lyrics Active, Cast, Queue)
