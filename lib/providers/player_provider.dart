@@ -1604,7 +1604,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         } else if (_gaplessEnabled) {
           // Build ConcatenatingAudioSource for gapless playback
           try {
-            await _buildAndSetConcatenatingSource(initialIndex: _currentIndex);
+            await _buildAndSetConcatenatingSource(
+              initialIndex: _currentIndex,
+              initialPosition: Duration.zero,
+            );
           } catch (e) {
             // Android 16 / Media3 first-play workaround
             if (!_hasPlayedOnce) {
@@ -1613,7 +1616,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               );
               await Future.delayed(const Duration(milliseconds: 100));
               await _buildAndSetConcatenatingSource(
-                  initialIndex: _currentIndex);
+                initialIndex: _currentIndex,
+                initialPosition: Duration.zero,
+              );
               _hasPlayedOnce = true;
             } else {
               rethrow;
@@ -1646,7 +1651,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // server transcodes and doesn't support HTTP range requests (#170).
           if (song.isLocal == true ||
               _offlineService.getLocalPath(song.id) != null) {
-            await _audioPlayer.setUrl(playUrl);
+            await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
           } else {
             final cacheDir = await getTemporaryDirectory();
             final cacheFile = File(
@@ -1660,8 +1665,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 cacheFile: cacheFile,
                 tag: song.id,
               ),
+              initialPosition: Duration.zero,
             );
           }
+          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         }
@@ -2376,12 +2383,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> _buildAndSetConcatenatingSource(
-      {required int initialIndex}) async {
+      {required int initialIndex, Duration? initialPosition}) async {
     final children = await Future.wait(_queue.map(_buildAudioSourceForSong));
     _concatenatingSource = ConcatenatingAudioSource(children: children);
     await _audioPlayer.setAudioSource(
       _concatenatingSource!,
       initialIndex: initialIndex,
+      initialPosition: initialPosition ?? Duration.zero,
       preload: true,
     );
   }

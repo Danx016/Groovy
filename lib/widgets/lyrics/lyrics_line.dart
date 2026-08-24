@@ -22,96 +22,61 @@ class LyricsLineWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCurrent = state == LyricLineState.current;
+    final isPast = state == LyricLineState.past;
+
+    final targetOpacity = isCurrent ? 1.0 : (isPast ? 0.40 : 0.32);
+    final targetScale = isCurrent ? 1.0 : 0.94;
+    final double sigma = isCurrent ? 0.0 : (distance * 0.4).clamp(0.0, 1.8);
+
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 28.0),
-        child: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeOut,
-          switchOutCurve: Curves.easeIn,
-          child: _buildContent(context),
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 28.0),
+        child: AnimatedScale(
+          scale: targetScale,
+          duration: const Duration(milliseconds: 380),
+          curve: Curves.easeOutCubic,
+          alignment: Alignment.centerLeft,
+          child: AnimatedOpacity(
+            opacity: targetOpacity,
+            duration: const Duration(milliseconds: 380),
+            curve: Curves.easeOutCubic,
+            child: sigma > 0.1
+                ? ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+                    child: _buildText(isCurrent),
+                  )
+                : _buildText(isCurrent),
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildContent(BuildContext context) {
-    switch (state) {
-      case LyricLineState.past:
-        return SizedBox(
-          key: const ValueKey('past'),
-          width: double.infinity,
-          child: Text(
-            line.text,
-            style: TextStyle(
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.6,
-              height: 1.3,
-              color: Colors.white.withValues(alpha: 0.35),
-            ),
-          ),
-        );
-      case LyricLineState.future:
-        final double sigma = (distance * 0.7).clamp(0.0, 2.5);
-        return SizedBox(
-          key: const ValueKey('future'),
-          width: double.infinity,
-          child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-            child: Text(
-              line.text,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.6,
-                height: 1.3,
-                color: Colors.white.withValues(alpha: 0.28),
-              ),
-            ),
-          ),
-        );
-      case LyricLineState.current:
-        return SizedBox(
-          key: const ValueKey('current'),
-          width: double.infinity,
-          child: TweenAnimationBuilder<double>(
-            tween: Tween(begin: 1.0, end: 1.04),
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            builder: (context, scale, child) {
-              return Transform.scale(
-                scale: scale,
-                alignment: Alignment.centerLeft,
-                child: child,
-              );
-            },
-            child: line.hasWords 
-                ? _buildWordByWord() 
-                : _buildLineLevel(),
-          ),
-        );
+  Widget _buildText(bool isCurrent) {
+    if (isCurrent && line.hasWords) {
+      return _buildWordByWord();
     }
-  }
 
-  Widget _buildLineLevel() {
     return Text(
       line.text,
-      style: const TextStyle(
-        fontSize: 32,
-        fontWeight: FontWeight.w900,
-        letterSpacing: -0.7,
+      style: TextStyle(
+        fontSize: isCurrent ? 32 : 28,
+        fontWeight: isCurrent ? FontWeight.w900 : FontWeight.w800,
+        letterSpacing: -0.6,
         color: Colors.white,
-        height: 1.28,
-        shadows: [
-          Shadow(
-            color: Colors.black38,
-            blurRadius: 16,
-            offset: Offset(0, 4),
-          ),
-        ],
+        height: 1.25,
+        shadows: isCurrent
+            ? [
+                const Shadow(
+                  color: Colors.black45,
+                  blurRadius: 18,
+                  offset: Offset(0, 4),
+                ),
+              ]
+            : null,
       ),
     );
   }
@@ -147,7 +112,7 @@ class LyricsLineWidget extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                   letterSpacing: -0.7,
                   color: Colors.white,
-                  height: 1.28,
+                  height: 1.25,
                 ),
               ),
             ),
@@ -157,3 +122,4 @@ class LyricsLineWidget extends StatelessWidget {
     );
   }
 }
+
