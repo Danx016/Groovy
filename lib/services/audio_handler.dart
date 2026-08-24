@@ -578,6 +578,7 @@ Future<MuslyAudioHandler> initAudioService() async {
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.devid.musly.channel.audio',
         androidNotificationChannelName: 'Groovy',
+        androidNotificationChannelDescription: 'Groovy Music Playback',
         // With androidStopForegroundOnPause=false the service never leaves
         // the foreground, so androidNotificationOngoing would have no
         // effect (audio_service asserts against combining the two).

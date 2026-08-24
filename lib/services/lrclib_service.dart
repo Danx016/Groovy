@@ -2,13 +2,10 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:dio/dio.dart';
 
-/// Multi-source lyrics aggregator and parser.
+/// Multi-source lyrics aggregator with strict metadata verification.
 ///
-/// Integrates:
-/// 1. LRCLIB (https://lrclib.net) - High precision synced LRC timestamps.
-/// 2. Netease Cloud Music API - Massive database of timed lyrics (LRC).
-/// 3. Kugou Music API - Synced lyrics.
-/// 4. Lyrics.ovh - Plain lyrics fallback.
+/// Ensures lyrics strictly match the playing song's artist and title to prevent
+/// returning lyrics for different songs with identical titles.
 class LrcLibService {
   static final LrcLibService _instance = LrcLibService._internal();
   factory LrcLibService() => _instance;
@@ -78,6 +75,63 @@ class LrcLibService {
     return artist.trim().isNotEmpty ? artist.trim() : rawArtist;
   }
 
+  /// Validates that a candidate result strictly matches the expected artist & title.
+  static bool _isCandidateValid(
+    String resultTitle,
+    String? resultArtist,
+    String expectedTitle,
+    String? expectedArtist,
+    int? resultDuration,
+    int? expectedDuration,
+  ) {
+    final rTitle = cleanTitle(resultTitle).toLowerCase();
+    final eTitle = cleanTitle(expectedTitle).toLowerCase();
+
+    // 1. Title verification
+    if (!rTitle.contains(eTitle) && !eTitle.contains(rTitle)) {
+      return false;
+    }
+
+    // 2. Artist verification (Strict: must match main artist or sub-words)
+    if (expectedArtist != null && expectedArtist.trim().isNotEmpty) {
+      final rArtist = cleanArtist(resultArtist ?? '').toLowerCase();
+      final eArtist = cleanArtist(expectedArtist).toLowerCase();
+
+      if (rArtist.isEmpty) return false;
+
+      // Check direct containment
+      final directMatch = rArtist.contains(eArtist) || eArtist.contains(rArtist);
+      if (!directMatch) {
+        // Check significant words (at least 3 letters)
+        final words = eArtist
+            .split(RegExp(r'[\s,&/+\-]+'))
+            .where((w) => w.length >= 3)
+            .toList();
+
+        bool hasWordMatch = false;
+        for (final word in words) {
+          if (rArtist.contains(word)) {
+            hasWordMatch = true;
+            break;
+          }
+        }
+        if (!hasWordMatch) {
+          return false;
+        }
+      }
+    }
+
+    // 3. Duration verification if both are present
+    if (expectedDuration != null && expectedDuration > 10 && resultDuration != null && resultDuration > 10) {
+      final diff = (resultDuration - expectedDuration).abs();
+      if (diff > 25) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
   /// Searches for lyrics with multi-provider fallback.
   Future<Map<String, dynamic>?> searchLyrics({
     String? artist,
@@ -127,18 +181,25 @@ class LrcLibService {
         );
 
         if (response.statusCode == 200 && response.data != null && response.data is Map) {
-          final result = _parseLrcLibResponse(response.data as Map<String, dynamic>);
-          if (result != null) {
-            _cache[cacheKey] = result;
-            debugPrint('[LRCLIB] Exact match found for "${pair.key} - ${pair.value}"');
-            return result;
+          final resMap = response.data as Map<String, dynamic>;
+          final rTrack = resMap['trackName'] as String? ?? '';
+          final rArtist = resMap['artistName'] as String? ?? '';
+          final rDur = (resMap['duration'] as num?)?.toInt();
+
+          if (_isCandidateValid(rTrack, rArtist, pair.value, pair.key, rDur, durationSeconds)) {
+            final result = _parseLrcLibResponse(resMap);
+            if (result != null) {
+              _cache[cacheKey] = result;
+              debugPrint('[LRCLIB] Exact verified match found for "${pair.key} - ${pair.value}"');
+              return result;
+            }
           }
         }
       } catch (_) {}
     }
 
     // ==========================================
-    // 2. SOURCE: LRCLIB (Search query)
+    // 2. SOURCE: LRCLIB (Search query with strict candidate validation)
     // ==========================================
     final searchQueries = <String>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
@@ -149,10 +210,6 @@ class LrcLibService {
     }
     if (cleanedTitle.isNotEmpty && !searchQueries.contains(cleanedTitle)) {
       searchQueries.add(cleanedTitle);
-    }
-    final simpleRaw = title.replaceAll(RegExp(r'[\(\[\{].*?[\)\]\}]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
-    if (simpleRaw.isNotEmpty && !searchQueries.contains(simpleRaw)) {
-      searchQueries.add(simpleRaw);
     }
 
     for (final query in searchQueries) {
@@ -169,6 +226,14 @@ class LrcLibService {
             Map<String, dynamic>? bestMatch;
             for (final item in list) {
               if (item is Map<String, dynamic>) {
+                final rTrack = item['trackName'] as String? ?? '';
+                final rArtist = item['artistName'] as String? ?? '';
+                final rDur = (item['duration'] as num?)?.toInt();
+
+                if (!_isCandidateValid(rTrack, rArtist, cleanedTitle, cleanedArtist, rDur, durationSeconds)) {
+                  continue;
+                }
+
                 final synced = item['syncedLyrics'] as String?;
                 final plain = item['plainLyrics'] as String?;
                 if (synced != null && synced.trim().isNotEmpty) {
@@ -179,13 +244,14 @@ class LrcLibService {
                 }
               }
             }
-            bestMatch ??= list.first as Map<String, dynamic>;
 
-            final result = _parseLrcLibResponse(bestMatch);
-            if (result != null) {
-              _cache[cacheKey] = result;
-              debugPrint('[LRCLIB] Search match found for query "$query"');
-              return result;
+            if (bestMatch != null) {
+              final result = _parseLrcLibResponse(bestMatch);
+              if (result != null) {
+                _cache[cacheKey] = result;
+                debugPrint('[LRCLIB] Verified search match found for "$query"');
+                return result;
+              }
             }
           }
         }
@@ -193,128 +259,151 @@ class LrcLibService {
     }
 
     // ==========================================
-    // 3. SOURCE: Netease Cloud Music (Synced LRC)
+    // 3. SOURCE: Netease Cloud Music (Verified Synced LRC)
     // ==========================================
-    try {
-      final neteaseQuery = cleanedArtist != null ? '$cleanedArtist $cleanedTitle' : cleanedTitle;
-      final neteaseClient = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 4),
-          receiveTimeout: const Duration(seconds: 4),
-          headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
-        ),
-      );
+    if (cleanedArtist != null && cleanedArtist.isNotEmpty) {
+      try {
+        final neteaseQuery = '$cleanedArtist $cleanedTitle';
+        final neteaseClient = Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 4),
+            headers: {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'},
+          ),
+        );
 
-      final searchRes = await neteaseClient.get(
-        'https://music.163.com/api/search/get/web',
-        queryParameters: {
-          'csrf_token': '',
-          'type': 1,
-          'offset': 0,
-          'total': 'true',
-          'limit': 5,
-          's': neteaseQuery,
-        },
-      );
+        final searchRes = await neteaseClient.get(
+          'https://music.163.com/api/search/get/web',
+          queryParameters: {
+            'csrf_token': '',
+            'type': 1,
+            'offset': 0,
+            'total': 'true',
+            'limit': 5,
+            's': neteaseQuery,
+          },
+        );
 
-      if (searchRes.statusCode == 200 && searchRes.data != null) {
-        final data = searchRes.data is String ? jsonDecode(searchRes.data) : searchRes.data;
-        final songs = data['result']?['songs'] as List?;
-        if (songs != null && songs.isNotEmpty) {
-          final songId = songs.first['id'];
-          if (songId != null) {
-            final lyricRes = await neteaseClient.get(
-              'https://music.163.com/api/song/lyric',
-              queryParameters: {
-                'os': 'pc',
-                'id': songId,
-                'lv': -1,
-                'kv': -1,
-                'tv': -1,
-              },
-            );
+        if (searchRes.statusCode == 200 && searchRes.data != null) {
+          final data = searchRes.data is String ? jsonDecode(searchRes.data) : searchRes.data;
+          final songs = data['result']?['songs'] as List?;
+          if (songs != null && songs.isNotEmpty) {
+            for (final song in songs) {
+              final rTrack = song['name'] as String? ?? '';
+              final rArtists = (song['artists'] as List?)?.map((art) => art['name'] as String? ?? '').join(', ') ?? '';
+              final rDur = ((song['duration'] as num?)?.toInt() ?? 0) ~/ 1000;
 
-            if (lyricRes.statusCode == 200 && lyricRes.data != null) {
-              final lyricData = lyricRes.data is String ? jsonDecode(lyricRes.data) : lyricRes.data;
-              final lrc = lyricData['lrc']?['lyric'] as String?;
-              if (lrc != null && lrc.trim().isNotEmpty) {
-                final structured = _buildStructuredLyrics(lrc);
-                _cache[cacheKey] = structured;
-                debugPrint('[Netease] Synced lyrics found for "$neteaseQuery"');
-                return structured;
+              if (!_isCandidateValid(rTrack, rArtists, cleanedTitle, cleanedArtist, rDur > 0 ? rDur : null, durationSeconds)) {
+                continue;
               }
-            }
-          }
-        }
-      }
-    } catch (_) {}
 
-    // ==========================================
-    // 4. SOURCE: Kugou Music (Synced LRC)
-    // ==========================================
-    try {
-      final kugouQuery = cleanedArtist != null ? '$cleanedArtist - $cleanedTitle' : cleanedTitle;
-      final kugouClient = Dio(
-        BaseOptions(
-          connectTimeout: const Duration(seconds: 4),
-          receiveTimeout: const Duration(seconds: 4),
-          headers: {'User-Agent': 'Mozilla/5.0'},
-        ),
-      );
+              final songId = song['id'];
+              if (songId != null) {
+                final lyricRes = await neteaseClient.get(
+                  'https://music.163.com/api/song/lyric',
+                  queryParameters: {
+                    'os': 'pc',
+                    'id': songId,
+                    'lv': -1,
+                    'kv': -1,
+                    'tv': -1,
+                  },
+                );
 
-      final kugouSearch = await kugouClient.get(
-        'http://krcs.kugou.com/search',
-        queryParameters: {
-          'ver': 1,
-          'man': 'yes',
-          'client': 'mobi',
-          'keyword': kugouQuery,
-          'duration': (durationSeconds ?? 0) * 1000,
-          'hash': '',
-        },
-      );
-
-      if (kugouSearch.statusCode == 200 && kugouSearch.data != null) {
-        final data = kugouSearch.data is String ? jsonDecode(kugouSearch.data) : kugouSearch.data;
-        final candidates = data['candidates'] as List?;
-        if (candidates != null && candidates.isNotEmpty) {
-          final first = candidates.first;
-          final id = first['id'];
-          final accesskey = first['accesskey'];
-
-          if (id != null && accesskey != null) {
-            final downloadRes = await kugouClient.get(
-              'http://lyrics.kugou.com/download',
-              queryParameters: {
-                'ver': 1,
-                'client': 'pc',
-                'id': id,
-                'accesskey': accesskey,
-                'fmt': 'lrc',
-                'charset': 'utf8',
-              },
-            );
-
-            if (downloadRes.statusCode == 200 && downloadRes.data != null) {
-              final dlData = downloadRes.data is String ? jsonDecode(downloadRes.data) : downloadRes.data;
-              final b64Content = dlData['content'] as String?;
-              if (b64Content != null && b64Content.isNotEmpty) {
-                final decoded = utf8.decode(base64.decode(b64Content));
-                if (decoded.trim().isNotEmpty) {
-                  final structured = _buildStructuredLyrics(decoded);
-                  _cache[cacheKey] = structured;
-                  debugPrint('[Kugou] Synced lyrics found for "$kugouQuery"');
-                  return structured;
+                if (lyricRes.statusCode == 200 && lyricRes.data != null) {
+                  final lyricData = lyricRes.data is String ? jsonDecode(lyricRes.data) : lyricRes.data;
+                  final lrc = lyricData['lrc']?['lyric'] as String?;
+                  if (lrc != null && lrc.trim().isNotEmpty) {
+                    final structured = _buildStructuredLyrics(lrc);
+                    _cache[cacheKey] = structured;
+                    debugPrint('[Netease] Verified synced lyrics found for "$neteaseQuery"');
+                    return structured;
+                  }
                 }
               }
             }
           }
         }
-      }
-    } catch (_) {}
+      } catch (_) {}
+    }
 
     // ==========================================
-    // 5. SOURCE: Lyrics.ovh (Plain text fallback)
+    // 4. SOURCE: Kugou Music (Verified Synced LRC)
+    // ==========================================
+    if (cleanedArtist != null && cleanedArtist.isNotEmpty) {
+      try {
+        final kugouQuery = '$cleanedArtist - $cleanedTitle';
+        final kugouClient = Dio(
+          BaseOptions(
+            connectTimeout: const Duration(seconds: 4),
+            receiveTimeout: const Duration(seconds: 4),
+            headers: {'User-Agent': 'Mozilla/5.0'},
+          ),
+        );
+
+        final kugouSearch = await kugouClient.get(
+          'http://krcs.kugou.com/search',
+          queryParameters: {
+            'ver': 1,
+            'man': 'yes',
+            'client': 'mobi',
+            'keyword': kugouQuery,
+            'duration': (durationSeconds ?? 0) * 1000,
+            'hash': '',
+          },
+        );
+
+        if (kugouSearch.statusCode == 200 && kugouSearch.data != null) {
+          final data = kugouSearch.data is String ? jsonDecode(kugouSearch.data) : kugouSearch.data;
+          final candidates = data['candidates'] as List?;
+          if (candidates != null && candidates.isNotEmpty) {
+            for (final candidate in candidates) {
+              final rTrack = candidate['song'] as String? ?? '';
+              final rArtist = candidate['singer'] as String? ?? '';
+              final rDur = ((candidate['duration'] as num?)?.toInt() ?? 0) ~/ 1000;
+
+              if (!_isCandidateValid(rTrack, rArtist, cleanedTitle, cleanedArtist, rDur > 0 ? rDur : null, durationSeconds)) {
+                continue;
+              }
+
+              final id = candidate['id'];
+              final accesskey = candidate['accesskey'];
+
+              if (id != null && accesskey != null) {
+                final downloadRes = await kugouClient.get(
+                  'http://lyrics.kugou.com/download',
+                  queryParameters: {
+                    'ver': 1,
+                    'client': 'pc',
+                    'id': id,
+                    'accesskey': accesskey,
+                    'fmt': 'lrc',
+                    'charset': 'utf8',
+                  },
+                );
+
+                if (downloadRes.statusCode == 200 && downloadRes.data != null) {
+                  final dlData = downloadRes.data is String ? jsonDecode(downloadRes.data) : downloadRes.data;
+                  final b64Content = dlData['content'] as String?;
+                  if (b64Content != null && b64Content.isNotEmpty) {
+                    final decoded = utf8.decode(base64.decode(b64Content));
+                    if (decoded.trim().isNotEmpty) {
+                      final structured = _buildStructuredLyrics(decoded);
+                      _cache[cacheKey] = structured;
+                      debugPrint('[Kugou] Verified synced lyrics found for "$kugouQuery"');
+                      return structured;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    // ==========================================
+    // 5. SOURCE: Lyrics.ovh (Verified artist/title plain text fallback)
     // ==========================================
     if (cleanedArtist != null && cleanedArtist.isNotEmpty && cleanedTitle.isNotEmpty) {
       try {
@@ -331,7 +420,7 @@ class LrcLibService {
           if (lyrics != null && lyrics.trim().isNotEmpty) {
             final res = {'value': lyrics.trim()};
             _cache[cacheKey] = res;
-            debugPrint('[LyricsOVH] Fallback plain lyrics found for "$cleanedArtist - $cleanedTitle"');
+            debugPrint('[LyricsOVH] Fallback verified plain lyrics for "$cleanedArtist - $cleanedTitle"');
             return res;
           }
         }

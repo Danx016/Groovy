@@ -309,8 +309,8 @@ class CastButton extends StatelessWidget {
                 if (us.volume < 0) {
                   
                   return Text(
-                    'Playback is being sent to this DLNA device. '
-                    'Use Musly\'s player controls to manage playback.',
+                    'La reproducción se está enviando a este dispositivo DLNA. '
+                    'Usa los controles de Groovy para gestionar la música.',
                     style: TextStyle(
                       fontSize: 13,
                       color: isDark

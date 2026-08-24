@@ -23,6 +23,7 @@ import 'widgets/privacy_policy_dialog.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'package:dynamic_color/dynamic_color.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'theme/theme.dart';
 import 'utils/image_cache.dart';
 
@@ -244,6 +245,11 @@ void main() async {
     await PlayerUiSettingsService().initialize();
   } catch (e) {
     debugPrint('Failed to initialize player UI settings: $e');
+  }
+
+  // Request notification permissions on Android 13+ so the media lockscreen notification always displays
+  if (!kIsWeb && Platform.isAndroid) {
+    Permission.notification.request().catchError((_) => PermissionStatus.denied);
   }
 
   // Initialise the audio service BEFORE runApp so the background audio engine

@@ -18,7 +18,7 @@ class QueueView extends StatelessWidget {
         if (queue.isEmpty) {
           return const Center(
             child: Text(
-              "Nessun brano in coda",
+              "No hay canciones en la cola",
               style: TextStyle(color: Colors.white70, fontSize: 18),
             ),
           );
@@ -26,13 +26,13 @@ class QueueView extends StatelessWidget {
 
         return ListView.builder(
           padding: const EdgeInsets.only(top: 100, bottom: 40, left: 24, right: 24),
-          itemCount: queue.length + 1, // +1 for the "Up Next" header
+          itemCount: queue.length + 1, // +1 for the "A continuación" header
           itemBuilder: (context, index) {
             if (index == 0) {
               return const Padding(
                 padding: EdgeInsets.only(bottom: 24.0, left: 8.0),
                 child: Text(
-                  "Up Next",
+                  "A continuación",
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 24,
@@ -82,7 +82,7 @@ class QueueView extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
               subtitle: Text(
-                song.artist ?? 'Artista Sconosciuto',
+                song.artist ?? 'Artista desconocido',
                 style: TextStyle(
                   color: isPlaying ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.8) : (isPast ? Colors.white24 : Colors.white70),
                   fontSize: 14,

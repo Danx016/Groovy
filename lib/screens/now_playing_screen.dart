@@ -10,6 +10,9 @@ import '../models/lyric_line.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
+import 'album_screen.dart';
+import 'artist_screen.dart';
+import '../utils/navigation_helper.dart';
 import '../models/song.dart';
 import '../services/palette_service.dart';
 import '../services/subsonic_service.dart';
@@ -241,7 +244,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                 child: _isLoadingLyrics 
                                     ? const CircularProgressIndicator(color: Colors.white)
                                     : const Text(
-                                        "Testo non disponibile",
+                                        "Letra no disponible",
                                         style: TextStyle(color: Colors.white70, fontSize: 18),
                                       ),
                               ),
@@ -279,42 +282,73 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ),
                   child: _currentPage == 1 
                       ? _buildLyricsHeader(context)
-                      : Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            IconButton(
-                              icon: Icon(
-                                _currentPage == 0 ? Icons.keyboard_arrow_down_rounded : Icons.close_rounded, 
-                                color: Colors.white, 
-                                size: 32
-                              ),
-                              onPressed: () {
-                                if (_currentPage != 0) {
-                                  _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                                } else {
-                                  Navigator.of(context).pop();
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
-                              onPressed: () {
-                                showModalBottomSheet(
-                                  context: context,
-                                  backgroundColor: Colors.transparent,
-                                  isScrollControlled: true,
-                                  useRootNavigator: true,
-                                  builder: (context) => const NowPlayingMoreMenu(),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
+                      : (_currentPage == 2
+                          ? _buildQueueHeader(context)
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.keyboard_arrow_down_rounded, 
+                                    color: Colors.white, 
+                                    size: 32
+                                  ),
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
+                                  onPressed: () {
+                                    showModalBottomSheet(
+                                      context: context,
+                                      backgroundColor: Colors.transparent,
+                                      isScrollControlled: true,
+                                      useRootNavigator: true,
+                                      builder: (context) => const NowPlayingMoreMenu(),
+                                    );
+                                  },
+                                ),
+                              ],
+                            )),
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildQueueHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 32),
+            onPressed: () {
+              _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+            },
+          ),
+          const Text(
+            "A continuación",
+            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          IconButton(
+            icon: const Icon(Icons.more_horiz_rounded, color: Colors.white, size: 28),
+            onPressed: () {
+              showModalBottomSheet(
+                context: context,
+                backgroundColor: Colors.transparent,
+                isScrollControlled: true,
+                useRootNavigator: true,
+                builder: (context) => const NowPlayingMoreMenu(),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
@@ -331,14 +365,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 4.0),
           child: Row(
             children: [
-              // 1. Album Cover Art (tapping returns to main cover view)
+              // 1. Album Cover Art -> Navigate to Album
               GestureDetector(
                 onTap: () {
-                  _pageController.animateToPage(
-                    0,
-                    duration: const Duration(milliseconds: 300),
-                    curve: Curves.easeInOut,
-                  );
+                  if (currentSong?.albumId != null && currentSong!.albumId!.isNotEmpty) {
+                    NavigationHelper.push(context, AlbumScreen(albumId: currentSong.albumId!));
+                  } else {
+                    _pageController.animateToPage(
+                      0,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  }
                 },
                 child: Container(
                   width: 48,
@@ -366,19 +404,24 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
               // 2. Title & Artist
               Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    _pageController.animateToPage(
-                      0,
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Title -> Navigate to Album
+                    GestureDetector(
+                      onTap: () {
+                        if (currentSong?.albumId != null && currentSong!.albumId!.isNotEmpty) {
+                          NavigationHelper.push(context, AlbumScreen(albumId: currentSong.albumId!));
+                        } else {
+                          _pageController.animateToPage(
+                            0,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        }
+                      },
+                      child: Text(
                         title,
                         style: const TextStyle(
                           fontSize: 17,
@@ -389,8 +432,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 2),
-                      Text(
+                    ),
+                    const SizedBox(height: 2),
+                    // Artist -> Navigate to Artist
+                    GestureDetector(
+                      onTap: () {
+                        final artId = currentSong?.artistId;
+                        if (artId != null && artId.isNotEmpty) {
+                          NavigationHelper.push(context, ArtistScreen(artistId: artId));
+                        } else if (artist.isNotEmpty) {
+                          NavigationHelper.push(context, ArtistScreen(artistId: artist));
+                        }
+                      },
+                      child: Text(
                         artist,
                         style: TextStyle(
                           fontSize: 14,
@@ -400,8 +454,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
 
