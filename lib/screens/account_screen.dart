@@ -74,7 +74,7 @@ class AccountScreen extends StatelessWidget {
                 ),
                 TextButton(
                   onPressed: () {
-                    NavigationHelper.push(context, const EditProfileScreen());
+                    _showEditNameDialog(context, authProvider);
                   },
                   child: const Text(
                     'Editar',
@@ -312,5 +312,114 @@ class AccountScreen extends StatelessWidget {
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     }
+  }
+
+  void _showEditNameDialog(BuildContext context, AuthProvider authProvider) {
+    final user = authProvider.currentUser;
+    final controller = TextEditingController(text: user?.name ?? '');
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return Dialog(
+            backgroundColor: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Close button X
+                  IconButton(
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    icon: Icon(
+                      Icons.close,
+                      size: 22,
+                      color: isDark ? Colors.white70 : Colors.black54,
+                    ),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                  const SizedBox(height: 16),
+                  // Avatar + Name Input
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      UserAvatar(
+                        name: controller.text.isNotEmpty ? controller.text : (user?.name ?? 'Usuario'),
+                        avatarUrl: user?.avatarUrl,
+                        size: 52,
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextField(
+                          controller: controller,
+                          autofocus: true,
+                          cursorColor: AppTheme.appleMusicRed,
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Nombre',
+                            hintStyle: TextStyle(
+                              color: isDark ? Colors.white38 : Colors.black38,
+                              fontSize: 18,
+                              fontWeight: FontWeight.normal,
+                            ),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                            enabledBorder: const UnderlineInputBorder(
+                              borderSide: BorderSide(color: AppTheme.appleMusicRed, width: 1.5),
+                            ),
+                            focusedBorder: const UnderlineInputBorder(
+                              borderSide: BorderSide(color: AppTheme.appleMusicRed, width: 2.0),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  // Continuar button in red
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () async {
+                        final newName = controller.text.trim();
+                        if (newName.isNotEmpty) {
+                          await authProvider.updateUserProfile(
+                            name: newName,
+                            avatarUrl: user?.avatarUrl,
+                          );
+                        }
+                        if (ctx.mounted) Navigator.pop(ctx);
+                      },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        minimumSize: Size.zero,
+                      ),
+                      child: const Text(
+                        'Continuar',
+                        style: TextStyle(
+                          color: AppTheme.appleMusicRed,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 }

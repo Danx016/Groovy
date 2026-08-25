@@ -123,7 +123,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
 
     // Find the current active line: the last item whose startTime <= currentTime
-    int newIndex = 0;
+    int newIndex = -1;
     for (int i = 0; i < _items.length; i++) {
       if (widget.currentTime >= _items[i].startTime) {
         newIndex = i;
@@ -152,9 +152,9 @@ class _LyricsListViewState extends State<LyricsListView> {
     if (key.currentContext != null) {
       Scrollable.ensureVisible(
         key.currentContext!,
-        duration: const Duration(milliseconds: 450),
+        duration: const Duration(milliseconds: 400),
         curve: Curves.easeOutCubic,
-        alignment: 0.28,
+        alignment: 0.22,
       );
     }
   }
@@ -199,79 +199,96 @@ class _LyricsListViewState extends State<LyricsListView> {
       );
     }
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (scrollNotification) {
-        if (scrollNotification is UserScrollNotification) {
-          _onUserScroll();
-        }
-        return false;
+    return ShaderMask(
+      shaderCallback: (Rect bounds) {
+        return const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.transparent,
+            Colors.white,
+            Colors.white,
+            Colors.transparent,
+          ],
+          stops: [0.0, 0.07, 0.85, 1.0],
+        ).createShader(bounds);
       },
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: EdgeInsets.only(
-          top: 24,
-          bottom: MediaQuery.of(context).size.height * 0.45,
-          left: 0,
-          right: 0,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: List.generate(_items.length, (index) {
-            final item = _items[index];
-            
-            if (item.type == ItemType.interlude) {
+      blendMode: BlendMode.dstIn,
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (scrollNotification) {
+          if (scrollNotification is UserScrollNotification) {
+            _onUserScroll();
+          }
+          return false;
+        },
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          padding: EdgeInsets.only(
+            top: 20,
+            bottom: MediaQuery.of(context).size.height * 0.38,
+            left: 0,
+            right: 0,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              
+              if (item.type == ItemType.interlude) {
+                return Container(
+                  key: _keys[index],
+                  padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 14.0),
+                  child: InterludeDotsWidget(
+                    currentTime: widget.currentTime,
+                    targetTime: item.endTime,
+                  ),
+                );
+              }
+
+              final line = item.line!;
+              final lyricIndex = item.lyricIndex!;
+              
+              LyricLineState state = LyricLineState.future;
+              if (_currentLyricIndex != -1) {
+                if (lyricIndex < _currentLyricIndex) {
+                  state = LyricLineState.past;
+                } else if (lyricIndex == _currentLyricIndex) {
+                  state = LyricLineState.current;
+                }
+              } else {
+                if (item.endTime <= widget.currentTime) {
+                  state = LyricLineState.past;
+                }
+              }
+
+              final distance = _currentLyricIndex != -1 
+                  ? (lyricIndex - _currentLyricIndex).abs() 
+                  : 3;
+
               return Container(
                 key: _keys[index],
-                padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 12.0),
-                child: InterludeDotsWidget(
-                  currentTime: widget.currentTime,
-                  targetTime: item.endTime,
+                child: RepaintBoundary(
+                  child: LyricsLineWidget(
+                    line: line,
+                    state: state,
+                    currentTime: widget.currentTime,
+                    distance: distance,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      widget.onSeek(line.startTime);
+                      
+                      setState(() => _isManualScrolling = false);
+                      _resumeAutoScrollTimer?.cancel();
+                    },
+                  ),
                 ),
               );
-            }
-
-            final line = item.line!;
-            final lyricIndex = item.lyricIndex!;
-            
-            LyricLineState state = LyricLineState.future;
-            if (_currentLyricIndex != -1) {
-              if (lyricIndex < _currentLyricIndex) {
-                state = LyricLineState.past;
-              } else if (lyricIndex == _currentLyricIndex) {
-                state = LyricLineState.current;
-              }
-            } else {
-              if (item.endTime <= widget.currentTime) {
-                state = LyricLineState.past;
-              }
-            }
-
-            final distance = _currentLyricIndex != -1 
-                ? (lyricIndex - _currentLyricIndex).abs() 
-                : 3;
-
-            return Container(
-              key: _keys[index],
-              child: RepaintBoundary(
-                child: LyricsLineWidget(
-                  line: line,
-                  state: state,
-                  currentTime: widget.currentTime,
-                  distance: distance,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    widget.onSeek(line.startTime);
-                    
-                    setState(() => _isManualScrolling = false);
-                    _resumeAutoScrollTimer?.cancel();
-                  },
-                ),
-              ),
-            );
-          }),
+            }),
+          ),
         ),
       ),
     );
   }
 }
+

@@ -554,7 +554,8 @@ class _SearchScreenState extends State<SearchScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemExtent: 68.0,
-            cacheExtent: 300,
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: true,
             itemCount: result.songs.length,
             itemBuilder: (context, index) {
               final song = result.songs[index];
@@ -580,7 +581,8 @@ class _SearchScreenState extends State<SearchScreen> {
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
             itemExtent: 68.0,
-            cacheExtent: 300,
+            addAutomaticKeepAlives: false,
+            addRepaintBoundaries: true,
             itemCount: result.youtubeVideos!.length,
             itemBuilder: (context, index) {
               final song = result.youtubeVideos![index];

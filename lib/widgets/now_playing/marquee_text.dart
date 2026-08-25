@@ -11,8 +11,8 @@ class MarqueeText extends StatefulWidget {
     super.key,
     required this.text,
     this.style,
-    this.pauseDuration = 2.0,
-    this.scrollVelocity = 30.0,
+    this.pauseDuration = 3.5,
+    this.scrollVelocity = 28.0,
   });
 
   @override
@@ -23,8 +23,7 @@ class _MarqueeTextState extends State<MarqueeText> {
   late ScrollController _scrollController;
   Timer? _timer;
   bool _needsScroll = false;
-  double _textWidth = 0;
-  double _containerWidth = 0;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -43,65 +42,84 @@ class _MarqueeTextState extends State<MarqueeText> {
   }
 
   void _checkNeedScroll() {
-    if (!mounted) return;
+    if (!mounted || _isDisposed) return;
     
-    // Check text width
     final TextPainter textPainter = TextPainter(
       text: TextSpan(text: widget.text, style: widget.style),
       maxLines: 1,
       textDirection: TextDirection.ltr,
     )..layout(minWidth: 0, maxWidth: double.infinity);
     
-    _textWidth = textPainter.width;
+    final textWidth = textPainter.width;
     
-    // Check container width
     if (context.size != null) {
-      _containerWidth = context.size!.width;
+      final containerWidth = context.size!.width;
+      final shouldScroll = textWidth > (containerWidth + 4);
       
-      setState(() {
-        _needsScroll = _textWidth > _containerWidth;
-      });
+      if (shouldScroll != _needsScroll) {
+        setState(() {
+          _needsScroll = shouldScroll;
+        });
+      }
       
-      if (_needsScroll) {
-        _startScroll();
+      if (shouldScroll) {
+        _startScrollCycle();
+      } else {
+        _stopScroll();
       }
     }
   }
 
-  void _startScroll() {
-    _stopScroll(); // Stop any existing scroll
+  void _startScrollCycle() {
+    _stopScroll();
     
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0.0);
     }
 
-    _timer = Timer(Duration(milliseconds: (widget.pauseDuration * 1000).toInt()), _scroll);
+    _timer = Timer(Duration(milliseconds: (widget.pauseDuration * 1000).toInt()), _runScrollCycle);
   }
 
-  void _scroll() async {
-    if (!mounted || !_scrollController.hasClients || !_needsScroll) return;
+  void _runScrollCycle() async {
+    if (!mounted || _isDisposed || !_scrollController.hasClients || !_needsScroll) return;
 
-    final maxScrollExtent = _scrollController.position.maxScrollExtent;
-    final durationInSeconds = maxScrollExtent / widget.scrollVelocity;
+    final maxScroll = _scrollController.position.maxScrollExtent;
+    if (maxScroll <= 0) return;
 
-    await _scrollController.animateTo(
-      maxScrollExtent,
-      duration: Duration(milliseconds: (durationInSeconds * 1000).toInt()),
-      curve: Curves.linear,
-    );
+    final durationSeconds = (maxScroll / widget.scrollVelocity).clamp(1.5, 20.0);
 
-    if (!mounted) return;
-
-    // Pause at the end
-    await Future.delayed(Duration(milliseconds: (widget.pauseDuration * 1000).toInt()));
-    
-    if (!mounted) return;
-
-    // Jump back to start and repeat
-    if (_scrollController.hasClients) {
-      _scrollController.jumpTo(0.0);
-      _startScroll();
+    // 1. Scroll to end
+    try {
+      await _scrollController.animateTo(
+        maxScroll,
+        duration: Duration(milliseconds: (durationSeconds * 1000).toInt()),
+        curve: Curves.easeInOutSine,
+      );
+    } catch (_) {
+      return;
     }
+
+    if (!mounted || _isDisposed) return;
+
+    // 2. Pause at the end
+    await Future.delayed(const Duration(milliseconds: 2600));
+    if (!mounted || _isDisposed || !_scrollController.hasClients) return;
+
+    // 3. Smooth scroll back to start
+    try {
+      await _scrollController.animateTo(
+        0.0,
+        duration: Duration(milliseconds: ((durationSeconds * 0.7) * 1000).toInt()),
+        curve: Curves.easeInOutSine,
+      );
+    } catch (_) {
+      return;
+    }
+
+    if (!mounted || _isDisposed) return;
+
+    // 4. Repeat cycle after initial pause
+    _timer = Timer(Duration(milliseconds: (widget.pauseDuration * 1000).toInt()), _runScrollCycle);
   }
 
   void _stopScroll() {
@@ -113,6 +131,7 @@ class _MarqueeTextState extends State<MarqueeText> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     _timer?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -122,28 +141,39 @@ class _MarqueeTextState extends State<MarqueeText> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Only checking width on layout changes if needed, 
-        // but PostFrameCallback already handles text/style changes.
-        return SingleChildScrollView(
+        Widget content = SingleChildScrollView(
           controller: _scrollController,
           scrollDirection: Axis.horizontal,
-          physics: const NeverScrollableScrollPhysics(), // User shouldn't scroll manually
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                widget.text,
-                style: widget.style,
-                maxLines: 1,
-              ),
-              // Add a spacer at the end to ensure smooth loop back if we wanted a true infinite marquee,
-              // but Apple Music often scrolls to the end, pauses, and resets.
-              if (_needsScroll)
-                const SizedBox(width: 40), // Gap before text ends
-            ],
+          physics: const NeverScrollableScrollPhysics(),
+          child: Text(
+            widget.text,
+            style: widget.style,
+            maxLines: 1,
           ),
         );
-      }
+
+        if (_needsScroll) {
+          content = ShaderMask(
+            shaderCallback: (Rect bounds) {
+              return const LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  Colors.white,
+                  Colors.white,
+                  Colors.transparent,
+                ],
+                stops: [0.0, 0.90, 1.0],
+              ).createShader(bounds);
+            },
+            blendMode: BlendMode.dstIn,
+            child: content,
+          );
+        }
+
+        return content;
+      },
     );
   }
 }
+
