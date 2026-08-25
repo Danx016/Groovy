@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import '../providers/providers.dart';
 import '../services/local_music_service.dart';
 import '../services/recommendation_service.dart';
@@ -57,8 +57,7 @@ class _MainScreenState extends State<MainScreen> {
       setState(() => _currentIndex = index);
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       final libraryProvider = Provider.of<LibraryProvider>(
         context,
         listen: false,
@@ -71,6 +70,16 @@ class _MainScreenState extends State<MainScreen> {
         context,
         listen: false,
       );
+      final localMusicService = Provider.of<LocalMusicService>(
+        context,
+        listen: false,
+      );
+
+      if (!kIsWeb && Platform.isAndroid) {
+        try {
+          await FlutterDisplayMode.setHighRefreshRate();
+        } catch (_) {}
+      }
 
       playerProvider.setLibraryProvider(libraryProvider);
       playerProvider.setRecommendationService(recommendationService);
@@ -83,11 +92,6 @@ class _MainScreenState extends State<MainScreen> {
           ),
         );
       };
-
-      final localMusicService = Provider.of<LocalMusicService>(
-        context,
-        listen: false,
-      );
 
       libraryProvider.setLocalMusicService(
         localMusicService,

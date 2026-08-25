@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide RepeatMode;
+import 'package:flutter/services.dart';
 import '../widgets/blurred_gradient_background.dart';
 import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
@@ -22,6 +23,7 @@ import '../widgets/now_playing/queue_view.dart';
 import '../widgets/now_playing/now_playing_more_menu.dart';
 import '../widgets/now_playing/track_navigation_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../services/lrclib_service.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final ImageProvider image;
@@ -94,9 +96,32 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     _extractColors();
   }
 
+  List<LyricLine> _extractParsedLines(Map<String, dynamic> raw) {
+    if (raw['structuredLyrics'] != null) {
+      final structured = raw['structuredLyrics'] as List?;
+      if (structured != null && structured.isNotEmpty) {
+        final lines = structured.first['line'] as List?;
+        if (lines != null) {
+          return lines.map((l) {
+            return LyricLine(
+              startTime: Duration(milliseconds: l['start'] as int),
+              text: l['value'] as String,
+            );
+          }).toList();
+        }
+      }
+    }
+    if (raw['value'] != null) {
+      final lrcText = raw['value'] as String;
+      return LrcParser.parseLrc(lrcText);
+    }
+    return [];
+  }
+
   Future<void> _fetchLyrics() async {
     if (_lastSong == null) return;
     final songId = _lastSong!.id;
+    final song = _lastSong!;
 
     // Instant cache check: if already fetched, show immediately without spinner
     if (_lyricsCache.containsKey(songId)) {
@@ -117,50 +142,63 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       final subsonic = Provider.of<SubsonicService>(context, listen: false);
       final offlineService = OfflineService();
       
-      Map<String, dynamic>? rawLyrics;
-      
-      if (offlineService.isOfflineMode || _lastSong!.isLocal || offlineService.isSongDownloaded(songId)) {
-        rawLyrics = await offlineService.getLocalLyrics(songId);
+      List<LyricLine> parsed = [];
+
+      // 1. Offline / Local check
+      if (offlineService.isOfflineMode || song.isLocal || offlineService.isSongDownloaded(songId)) {
+        final raw = await offlineService.getLocalLyrics(songId);
+        if (raw != null) {
+          parsed = _extractParsedLines(raw);
+        }
       }
       
-      if (rawLyrics == null && !offlineService.isOfflineMode) {
-        rawLyrics = await Future.any([
-          subsonic.getLyricsBySongId(songId),
+      // 2. Online fetch: Try OpenSubsonic and LRCLIB in parallel, prioritizing synchronized lyrics
+      if (parsed.isEmpty && !offlineService.isOfflineMode) {
+        final results = await Future.wait([
+          subsonic.getLyricsBySongId(songId).catchError((_) => null),
+          LrcLibService().searchLyrics(
+            artist: song.artist,
+            title: song.title,
+            durationSeconds: song.duration,
+          ).catchError((_) => null),
           subsonic.getLyrics(
-            artist: _lastSong!.artist, 
-            title: _lastSong!.title,
-            duration: _lastSong!.duration,
-          ),
+            artist: song.artist,
+            title: song.title,
+            duration: song.duration,
+          ).catchError((_) => null),
         ]).timeout(
-          const Duration(seconds: 6),
-          onTimeout: () => null,
+          const Duration(seconds: 7),
+          onTimeout: () => [null, null, null],
         );
+
+        final openSubsonicRes = results[0];
+        final lrcLibRes = results[1];
+        final legacySubsonicRes = results[2];
+
+        List<LyricLine> candidate1 = openSubsonicRes != null ? _extractParsedLines(openSubsonicRes) : [];
+        List<LyricLine> candidate2 = lrcLibRes != null ? _extractParsedLines(lrcLibRes) : [];
+        List<LyricLine> candidate3 = legacySubsonicRes != null ? _extractParsedLines(legacySubsonicRes) : [];
+
+        bool isSynced(List<LyricLine> lines) => lines.any((l) => l.startTime > Duration.zero);
+
+        if (isSynced(candidate1)) {
+          parsed = candidate1;
+        } else if (isSynced(candidate2)) {
+          parsed = candidate2;
+        } else if (isSynced(candidate3)) {
+          parsed = candidate3;
+        } else if (candidate1.isNotEmpty) {
+          parsed = candidate1;
+        } else if (candidate2.isNotEmpty) {
+          parsed = candidate2;
+        } else {
+          parsed = candidate3;
+        }
       }
       
       // If user switched songs while loading, discard this result
       if (!mounted || _lastSong?.id != songId) return;
 
-      List<LyricLine> parsed = [];
-      if (rawLyrics != null) {
-        if (rawLyrics['value'] != null) {
-          final lrcText = rawLyrics['value'] as String;
-          parsed = LrcParser.parseLrc(lrcText);
-        } else if (rawLyrics['structuredLyrics'] != null) {
-          final structured = rawLyrics['structuredLyrics'] as List?;
-          if (structured != null && structured.isNotEmpty) {
-            final lines = structured.first['line'] as List?;
-            if (lines != null) {
-              parsed = lines.map((l) {
-                return LyricLine(
-                  startTime: Duration(milliseconds: l['start'] as int),
-                  text: l['value'] as String,
-                );
-              }).toList();
-            }
-          }
-        }
-      }
-      
       _lyricsCache[songId] = parsed;
 
       if (mounted && _lastSong?.id == songId) {
@@ -219,23 +257,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   Widget build(BuildContext context) {
     // The accent color can be derived from the extracted colors, or white
     final accentColor = _bgColors.isNotEmpty ? _bgColors.first : Colors.white;
-    final playerProvider = Provider.of<PlayerProvider>(context);
-    final songForBadge = playerProvider.currentSong ?? widget.song;
-    String qualityBadge = 'Lossless';
-    if (songForBadge?.hasDolbyAtmos == true) {
-      qualityBadge = 'Dolby Atmos';
-    } else if (songForBadge?.suffix != null) {
-      final s = songForBadge!.suffix!.toUpperCase();
-      if (s == 'FLAC' || s == 'ALAC' || s == 'WAV') {
-        qualityBadge = 'Lossless';
-      } else if (s == 'DSD' || s == 'DSF' || ((songForBadge.bitRate ?? 0) > 1411)) {
-        qualityBadge = 'Hi-Res Lossless';
-      } else {
-        qualityBadge = s;
-      }
-    }
-
-    return Theme(
+    return Theme(
       // Force dark mode for Now Playing as per Apple Music
       data: ThemeData.dark(),
       child: Scaffold(
@@ -258,14 +280,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         });
                       },
                       children: [
-                        // Page 0: Main Cover Art View
-                        _buildMainView(accentColor, qualityBadge),
-                        
-                        // Page 1: Apple Music Lyrics View
-                        _buildLyricsPageView(accentColor, qualityBadge),
-                        
-                        // Page 2: Queue View
-                        _buildQueuePageView(accentColor, qualityBadge),
+                        _buildMainView(accentColor),
+                        _buildLyricsPageView(accentColor),
+                        _buildQueuePageView(accentColor),
                       ],
                     ),
                   ),
@@ -277,9 +294,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 alignment: Alignment.topCenter,
                 child: Padding(
                   padding: EdgeInsets.only(
-                    top: widget.topPadding > 0 ? widget.topPadding + 14 : 20, 
+                    top: widget.topPadding > 0 ? widget.topPadding + 6 : 14, 
                     left: 8.0, 
-                    right: 8.0
+                    right: 8.0,
                   ),
                   child: _currentPage == 1 
                       ? _buildLyricsHeader(context)
@@ -292,8 +309,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       ),
     );
   }
-
-
 
   Widget _buildLyricsHeader(BuildContext context) {
     return Consumer<PlayerProvider>(
@@ -321,13 +336,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   }
                 },
                 child: Container(
-                  width: 44,
-                  height: 44,
+                  width: 48,
+                  height: 48,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.4),
+                        color: Colors.black.withValues(alpha: 0.35),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
@@ -362,7 +377,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       Text(
                         title,
                         style: const TextStyle(
-                          fontSize: 16,
+                          fontSize: 17,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                           letterSpacing: -0.3,
@@ -374,9 +389,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       Text(
                         artist,
                         style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w400,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
                           color: Colors.white.withValues(alpha: 0.65),
+                          letterSpacing: -0.2,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -390,34 +406,24 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               Consumer<LibraryProvider>(
                 builder: (context, lib, _) {
                   final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
-                  return GestureDetector(
+                  return _CircleActionButton(
+                    margin: const EdgeInsets.only(right: 8),
                     onTap: () async {
                       if (currentSong != null) {
                         await lib.toggleStarSong(currentSong);
                       }
                     },
-                    child: Container(
-                      width: 36,
-                      height: 36,
-                      margin: const EdgeInsets.only(right: 8),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0.14),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          isFav ? Icons.star_rounded : Icons.star_border_rounded,
-                          color: isFav ? const Color(0xFFFFD600) : Colors.white,
-                          size: 20,
-                        ),
-                      ),
+                    icon: Icon(
+                      isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: isFav ? const Color(0xFFFFD600) : Colors.white,
+                      size: 20,
                     ),
                   );
                 },
               ),
 
               // 4. More Options Button
-              GestureDetector(
+              _CircleActionButton(
                 onTap: () {
                   showModalBottomSheet(
                     context: context,
@@ -427,20 +433,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     builder: (context) => const NowPlayingMoreMenu(),
                   );
                 },
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: 0.14),
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.more_horiz_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                  ),
+                icon: const Icon(
+                  Icons.more_horiz_rounded,
+                  color: Colors.white,
+                  size: 20,
                 ),
               ),
             ],
@@ -450,7 +446,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Widget _buildLyricsPageView(Color accentColor, String qualityBadge) {
+  Widget _buildLyricsPageView(Color accentColor) {
     return Consumer<PlayerProvider>(
       builder: (context, provider, child) {
         return SafeArea(
@@ -512,7 +508,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                             position: snapshot.data ?? Duration.zero,
                             duration: provider.duration,
                             accentColor: Colors.white,
-                            qualityBadge: qualityBadge,
                             onChanged: (val) {
                               provider.seek(val);
                             },
@@ -578,7 +573,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Widget _buildQueuePageView(Color accentColor, String qualityBadge) {
+  Widget _buildQueuePageView(Color accentColor) {
     return Consumer<PlayerProvider>(
       builder: (context, provider, child) {
         return SafeArea(
@@ -602,7 +597,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       position: snapshot.data ?? Duration.zero,
                       duration: provider.duration,
                       accentColor: Colors.white,
-                      qualityBadge: qualityBadge,
                       onChanged: (val) {
                         provider.seek(val);
                       },
@@ -661,29 +655,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
 
-  Widget _buildMainView(Color accentColor, [String? qualityBadgeParam]) {
+  Widget _buildMainView(Color accentColor) {
     return Consumer<PlayerProvider>(
       builder: (context, provider, child) {
         final currentSong = provider.currentSong ?? widget.song;
         final title = currentSong?.title ?? widget.title;
         final artist = currentSong?.artist ?? widget.artist;
         final isStarred = currentSong?.starred ?? false;
-
-        String qualityBadge = qualityBadgeParam ?? 'Lossless';
-        if (qualityBadgeParam == null) {
-          if (currentSong?.hasDolbyAtmos == true) {
-            qualityBadge = 'Dolby Atmos';
-          } else if (currentSong?.suffix != null) {
-            final s = currentSong!.suffix!.toUpperCase();
-            if (s == 'FLAC' || s == 'ALAC' || s == 'WAV') {
-              qualityBadge = 'Lossless';
-            } else if (s == 'DSD' || s == 'DSF' || ((currentSong.bitRate ?? 0) > 1411)) {
-              qualityBadge = 'Hi-Res Lossless';
-            } else {
-              qualityBadge = s;
-            }
-          }
-        }
 
         return SafeArea(
           child: LayoutBuilder(
@@ -766,33 +744,23 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                 Consumer<LibraryProvider>(
                                   builder: (context, lib, _) {
                                     final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
-                                    return GestureDetector(
+                                    return _CircleActionButton(
                                       onTap: () async {
                                         if (currentSong != null) {
                                           await lib.toggleStarSong(currentSong);
                                         }
                                       },
-                                      child: Container(
-                                        width: 36,
-                                        height: 36,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          color: Colors.white.withValues(alpha: 0.14),
-                                        ),
-                                        child: Center(
-                                          child: Icon(
-                                            isFav ? Icons.star_rounded : Icons.star_border_rounded,
-                                            color: isFav ? const Color(0xFFFFD600) : Colors.white,
-                                            size: 20,
-                                          ),
-                                        ),
+                                      icon: Icon(
+                                        isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                                        color: isFav ? const Color(0xFFFFD600) : Colors.white,
+                                        size: 20,
                                       ),
                                     );
                                   },
                                 ),
                                 const SizedBox(width: 8),
                                 // More Options Button
-                                GestureDetector(
+                                _CircleActionButton(
                                   onTap: () {
                                     showModalBottomSheet(
                                       context: context,
@@ -802,20 +770,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                       builder: (context) => const NowPlayingMoreMenu(),
                                     );
                                   },
-                                  child: Container(
-                                    width: 36,
-                                    height: 36,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      color: Colors.white.withValues(alpha: 0.14),
-                                    ),
-                                    child: const Center(
-                                      child: Icon(
-                                        Icons.more_horiz_rounded,
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ),
+                                  icon: const Icon(
+                                    Icons.more_horiz_rounded,
+                                    color: Colors.white,
+                                    size: 20,
                                   ),
                                 ),
                               ],
@@ -831,7 +789,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                   position: snapshot.data ?? Duration.zero,
                                   duration: provider.duration,
                                   accentColor: Colors.white,
-                                  qualityBadge: qualityBadge,
                                   onChanged: (val) {
                                     provider.seek(val);
                                   },
@@ -886,7 +843,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               final isCompact = constraints.maxHeight < 680;
               return Column(
                 children: [
-                  SizedBox(height: isCompact ? 16 : 28), // Space for top drag handle
+                  // Apple Music top drag pull indicator pill
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 5,
+                      margin: EdgeInsets.only(
+                        top: isCompact ? 10 : 14,
+                        bottom: isCompact ? 4 : 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.32),
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                  ),
                   
                   // Album Art
                   Expanded(
@@ -937,7 +908,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                     fontSize: isCompact ? 20 : 22,
                                     fontWeight: FontWeight.w700,
                                     color: Colors.white,
-                                    letterSpacing: -0.3,
+                                    letterSpacing: -0.4,
                                   ),
                                 ),
                                 const SizedBox(height: 3),
@@ -949,6 +920,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                     fontSize: isCompact ? 15 : 17,
                                     fontWeight: FontWeight.w500,
                                     color: Colors.white.withValues(alpha: 0.65),
+                                    letterSpacing: -0.2,
                                   ),
                                 ),
                               ],
@@ -960,33 +932,23 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         Consumer<LibraryProvider>(
                           builder: (context, lib, _) {
                             final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
-                            return GestureDetector(
+                            return _CircleActionButton(
                               onTap: () async {
                                 if (currentSong != null) {
                                   await lib.toggleStarSong(currentSong);
                                 }
                               },
-                              child: Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: Colors.white.withValues(alpha: 0.14),
-                                ),
-                                child: Center(
-                                  child: Icon(
-                                    isFav ? Icons.star_rounded : Icons.star_border_rounded,
-                                    color: isFav ? const Color(0xFFFFD600) : Colors.white,
-                                    size: 20,
-                                  ),
-                                ),
+                              icon: Icon(
+                                isFav ? Icons.star_rounded : Icons.star_border_rounded,
+                                color: isFav ? const Color(0xFFFFD600) : Colors.white,
+                                size: 20,
                               ),
                             );
                           },
                         ),
                         const SizedBox(width: 8),
                         // More Options Button
-                        GestureDetector(
+                        _CircleActionButton(
                           onTap: () {
                             showModalBottomSheet(
                               context: context,
@@ -996,20 +958,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                               builder: (context) => const NowPlayingMoreMenu(),
                             );
                           },
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.14),
-                            ),
-                            child: const Center(
-                              child: Icon(
-                                Icons.more_horiz_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
-                            ),
+                          icon: const Icon(
+                            Icons.more_horiz_rounded,
+                            color: Colors.white,
+                            size: 20,
                           ),
                         ),
                       ],
@@ -1027,7 +979,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                           position: snapshot.data ?? Duration.zero,
                           duration: provider.duration,
                           accentColor: Colors.white,
-                          qualityBadge: qualityBadge,
                           onChanged: (val) {
                             provider.seek(val);
                           },
@@ -1087,4 +1038,57 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 }
+
+class _CircleActionButton extends StatefulWidget {
+  final Widget icon;
+  final VoidCallback onTap;
+  final EdgeInsets? margin;
+
+  const _CircleActionButton({
+    required this.icon,
+    required this.onTap,
+    this.margin,
+  });
+
+  @override
+  State<_CircleActionButton> createState() => _CircleActionButtonState();
+}
+
+class _CircleActionButtonState extends State<_CircleActionButton> {
+  bool _isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTapDown: (_) {
+        setState(() => _isPressed = true);
+        HapticFeedback.lightImpact();
+      },
+      onTapUp: (_) {
+        setState(() => _isPressed = false);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _isPressed = false),
+      child: AnimatedScale(
+        scale: _isPressed ? 0.82 : 1.0,
+        duration: const Duration(milliseconds: 120),
+        curve: _isPressed ? Curves.easeOutCubic : Curves.easeOutBack,
+        child: Container(
+          width: 36,
+          height: 36,
+          margin: widget.margin,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: Colors.white.withValues(alpha: 0.12),
+          ),
+          child: Center(
+            child: widget.icon,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 

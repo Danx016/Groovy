@@ -40,18 +40,18 @@ class PlaybackControls extends StatelessWidget {
             onTap: onShuffleToggle,
           ),
           _MainControlButton(
-            icon: Icons.skip_previous_rounded,
-            size: 44,
+            icon: Icons.fast_rewind_rounded,
+            size: 46,
             onTap: onPrevious,
           ),
           _PlayPauseButton(
             isPlaying: isPlaying,
             onTap: onPlayPause,
-            size: 68,
+            size: 70,
           ),
           _MainControlButton(
-            icon: Icons.skip_next_rounded,
-            size: 44,
+            icon: Icons.fast_forward_rounded,
+            size: 46,
             onTap: onNext,
           ),
           _SecondaryControlButton(
@@ -69,18 +69,18 @@ class PlaybackControls extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
         _MainControlButton(
-          icon: Icons.skip_previous_rounded,
-          size: 44,
+          icon: Icons.fast_rewind_rounded,
+          size: 48,
           onTap: onPrevious,
         ),
         _PlayPauseButton(
           isPlaying: isPlaying,
           onTap: onPlayPause,
-          size: 68,
+          size: 72,
         ),
         _MainControlButton(
-          icon: Icons.skip_next_rounded,
-          size: 44,
+          icon: Icons.fast_forward_rounded,
+          size: 48,
           onTap: onNext,
         ),
       ],
@@ -96,7 +96,7 @@ class _PlayPauseButton extends StatefulWidget {
   const _PlayPauseButton({
     required this.isPlaying,
     required this.onTap,
-    this.size = 68,
+    this.size = 72,
   });
 
   @override
@@ -109,9 +109,10 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
         setState(() => _isPressed = true);
-        HapticFeedback.lightImpact();
+        HapticFeedback.mediumImpact();
       },
       onTapUp: (_) {
         setState(() => _isPressed = false);
@@ -119,17 +120,27 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> {
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.88 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
+        scale: _isPressed ? 0.78 : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: _isPressed ? Curves.easeOutCubic : Curves.easeOutBack,
         child: SizedBox(
-          width: widget.size,
-          height: widget.size,
+          width: widget.size + 12,
+          height: widget.size + 12,
           child: Center(
-            child: Icon(
-              widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-              size: widget.size,
-              color: Colors.white,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 220),
+              transitionBuilder: (child, animation) {
+                return ScaleTransition(
+                  scale: animation,
+                  child: FadeTransition(opacity: animation, child: child),
+                );
+              },
+              child: Icon(
+                widget.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                key: ValueKey<bool>(widget.isPlaying),
+                size: widget.size,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -146,7 +157,7 @@ class _MainControlButton extends StatefulWidget {
   const _MainControlButton({
     required this.icon,
     required this.onTap,
-    this.size = 44,
+    this.size = 48,
   });
 
   @override
@@ -159,9 +170,10 @@ class _MainControlButtonState extends State<_MainControlButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTapDown: (_) {
         setState(() => _isPressed = true);
-        HapticFeedback.lightImpact();
+        HapticFeedback.mediumImpact();
       },
       onTapUp: (_) {
         setState(() => _isPressed = false);
@@ -169,12 +181,12 @@ class _MainControlButtonState extends State<_MainControlButton> {
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedScale(
-        scale: _isPressed ? 0.82 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeOut,
+        scale: _isPressed ? 0.76 : 1.0,
+        duration: const Duration(milliseconds: 140),
+        curve: _isPressed ? Curves.easeOutCubic : Curves.easeOutBack,
         child: SizedBox(
-          width: 56,
-          height: 56,
+          width: 64,
+          height: 64,
           child: Center(
             child: Icon(
               widget.icon,
@@ -233,4 +245,5 @@ class _SecondaryControlButton extends StatelessWidget {
     );
   }
 }
+
 

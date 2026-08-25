@@ -16,154 +16,223 @@ class BlurredGradientBackground extends StatefulWidget {
 }
 
 class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+    with TickerProviderStateMixin {
+  late AnimationController _motionController;
+  late AnimationController _colorController;
+  List<Color> _oldColors = [];
+  List<Color> _targetColors = [];
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _motionController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 14),
-    )..repeat(reverse: true);
+      duration: const Duration(seconds: 18),
+    )..repeat();
+
+    _targetColors = _normalizeColors(widget.colors);
+    _oldColors = List<Color>.from(_targetColors);
+
+    _colorController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 750),
+    );
+  }
+
+  List<Color> _normalizeColors(List<Color> raw) {
+    if (raw.isEmpty) {
+      return [
+        const Color(0xFFC76020),
+        const Color(0xFFE88A38),
+        const Color(0xFF8B3A12),
+        const Color(0xFF4A1E0B),
+      ];
+    }
+    final list = List<Color>.from(raw);
+    while (list.length < 4) {
+      list.add(list.last);
+    }
+    return list;
+  }
+
+  @override
+  void didUpdateWidget(covariant BlurredGradientBackground oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.colors != oldWidget.colors) {
+      _oldColors = _getCurrentInterpolatedColors();
+      _targetColors = _normalizeColors(widget.colors);
+      _colorController.forward(from: 0.0);
+    }
+  }
+
+  List<Color> _getCurrentInterpolatedColors() {
+    final t = _colorController.value;
+    final count = math.min(_oldColors.length, _targetColors.length);
+    final result = <Color>[];
+    for (int i = 0; i < count; i++) {
+      result.add(Color.lerp(_oldColors[i], _targetColors[i], t) ?? _targetColors[i]);
+    }
+    return result.isEmpty ? _targetColors : result;
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _motionController.dispose();
+    _colorController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final safeColors = widget.colors.isNotEmpty 
-      ? List<Color>.from(widget.colors)
-      : [const Color(0xFF7A5C38), const Color(0xFF9E7B4C), const Color(0xFF4A3520)];
-      
-    while (safeColors.length < 4) {
-      safeColors.add(safeColors.last.withValues(alpha: 0.85));
-    }
-
-    return Stack(
-      children: [
-        // 1. Hardware accelerated custom painted gradient background
-        Positioned.fill(
-          child: RepaintBoundary(
-            child: CustomPaint(
-              painter: _AppleMusicMeshPainter(
-                animation: _controller,
-                colors: safeColors,
+    return AnimatedBuilder(
+      animation: Listenable.merge([_motionController, _colorController]),
+      builder: (context, _) {
+        final activeColors = _getCurrentInterpolatedColors();
+        return Stack(
+          children: [
+            // 1. Hardware accelerated fluid animated mesh gradient
+            Positioned.fill(
+              child: RepaintBoundary(
+                child: CustomPaint(
+                  painter: _AppleMusicMeshPainter(
+                    time: _motionController.value,
+                    colors: activeColors,
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
 
-        // 2. Subtle contrast overlay for crystal-clear readability
-        Positioned.fill(
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: 0.08),
-                  Colors.transparent,
-                  Colors.black.withValues(alpha: 0.22),
-                ],
-                stops: const [0.0, 0.4, 1.0],
+            // 2. Ultra-subtle Apple Music contrast overlay for perfect text readability
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withValues(alpha: 0.04),
+                      Colors.transparent,
+                      Colors.black.withValues(alpha: 0.20),
+                    ],
+                    stops: const [0.0, 0.45, 1.0],
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
 
-        // 3. Child content isolated in its own render layer
-        RepaintBoundary(
-          child: widget.child,
-        ),
-      ],
+            // 3. Child content isolated in its own render layer
+            RepaintBoundary(
+              child: widget.child,
+            ),
+          ],
+        );
+      },
     );
   }
 }
 
 class _AppleMusicMeshPainter extends CustomPainter {
-  final Animation<double> animation;
+  final double time; // 0.0 to 1.0 continuous loop
   final List<Color> colors;
 
   _AppleMusicMeshPainter({
-    required this.animation,
+    required this.time,
     required this.colors,
-  }) : super(repaint: animation);
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
-    final t = animation.value;
     final w = size.width;
     final h = size.height;
+    if (w <= 0 || h <= 0) return;
 
-    // 1. Draw base linear gradient
+    final c0 = colors[0]; // Primary Dominant tone (Artwork ambient anchor)
+    final c1 = colors.length > 1 ? colors[1] : colors[0]; // Secondary Warm / Body tone
+    final c2 = colors.length > 2 ? colors[2] : colors[0]; // Accent Contrast tone (e.g. Cobalt Blue or Cyan)
+    final c3 = colors.length > 3 ? colors[3] : colors[1]; // Vibrant Highlight (e.g. Golden / Amber pulse)
+    final c4 = colors.length > 4 ? colors[4] : colors[0]; // Deep Ambient Depth
+
+    final angle = time * 2 * math.pi;
+
+    // 1. Base luminous ambient gradient anchored by dominant tone c0
+    final baseGradient = LinearGradient(
+      begin: Alignment(
+        0.3 * math.cos(angle * 0.7),
+        -1.0 + 0.15 * math.sin(angle * 0.8),
+      ),
+      end: Alignment(
+        -0.3 * math.cos(angle * 0.8),
+        1.0 - 0.15 * math.sin(angle * 0.7),
+      ),
+      colors: [
+        c0.withValues(alpha: 0.95),
+        c0.withValues(alpha: 0.90),
+        c1.withValues(alpha: 0.88),
+        c4.withValues(alpha: 0.92),
+      ],
+      stops: const [0.0, 0.40, 0.75, 1.0],
+    );
+
     final basePaint = Paint()
-      ..shader = LinearGradient(
-        begin: Alignment.topCenter,
-        end: Alignment.bottomCenter,
-        colors: [
-          colors[0].withValues(alpha: 0.95),
-          colors[1].withValues(alpha: 0.88),
-          colors[2].withValues(alpha: 0.92),
-          colors[3].withValues(alpha: 0.95),
-        ],
-        stops: const [0.0, 0.35, 0.70, 1.0],
-      ).createShader(Rect.fromLTWH(0, 0, w, h));
-
+      ..shader = baseGradient.createShader(Rect.fromLTWH(0, 0, w, h));
     canvas.drawRect(Rect.fromLTWH(0, 0, w, h), basePaint);
 
-    // 2. Draw animated fluid radial blob 1 (Top / Center)
-    final blob1Center = Offset(
-      w * 0.3 + (w * 0.2 * math.sin(t * math.pi)),
-      h * 0.15 + (h * 0.1 * math.cos(t * math.pi)),
-    );
-    final blob1Radius = w * 0.9;
-    final blob1Paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          colors[1].withValues(alpha: 0.85),
-          colors[1].withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: blob1Center, radius: blob1Radius));
-    canvas.drawCircle(blob1Center, blob1Radius, blob1Paint);
+    // Helper to paint a diffused luminous radial blob
+    void drawBlob({
+      required double centerX,
+      required double centerY,
+      required double radius,
+      required Color color,
+      double peakAlpha = 0.90,
+    }) {
+      final paint = Paint()
+        ..shader = RadialGradient(
+          colors: [
+            color.withValues(alpha: peakAlpha),
+            color.withValues(alpha: peakAlpha * 0.65),
+            color.withValues(alpha: peakAlpha * 0.20),
+            color.withValues(alpha: 0.0),
+          ],
+          stops: const [0.0, 0.38, 0.72, 1.0],
+        ).createShader(Rect.fromCircle(center: Offset(centerX, centerY), radius: radius));
+      canvas.drawCircle(Offset(centerX, centerY), radius, paint);
+    }
 
-    // 3. Draw animated fluid radial blob 2 (Bottom / Right)
-    final blob2Center = Offset(
-      w * 0.75 - (w * 0.15 * math.cos(t * math.pi)),
-      h * 0.75 - (h * 0.1 * math.sin(t * math.pi)),
-    );
-    final blob2Radius = w * 1.0;
-    final blob2Paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          colors[0].withValues(alpha: 0.80),
-          colors[0].withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: blob2Center, radius: blob2Radius));
-    canvas.drawCircle(blob2Center, blob2Radius, blob2Paint);
+    // 2. Node 1: Top-Left Dominant Luminous Swell
+    final n1X = w * 0.25 + (w * 0.18 * math.sin(angle * 0.9));
+    final n1Y = h * 0.22 + (h * 0.14 * math.cos(angle * 1.1));
+    final n1R = w * 1.25 + (w * 0.12 * math.sin(angle * 0.8));
+    drawBlob(centerX: n1X, centerY: n1Y, radius: n1R, color: c0, peakAlpha: 0.92);
 
-    // 4. Draw animated pulsating blob 3 (Middle / Left)
-    final blob3Center = Offset(
-      w * 0.25 + (w * 0.1 * math.sin(t * math.pi * 2)),
-      h * 0.50 + (h * 0.15 * math.cos(t * math.pi * 2)),
-    );
-    final blob3Radius = w * 0.75;
-    final blob3Paint = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          colors[2].withValues(alpha: 0.75),
-          colors[2].withValues(alpha: 0.0),
-        ],
-      ).createShader(Rect.fromCircle(center: blob3Center, radius: blob3Radius));
-    canvas.drawCircle(blob3Center, blob3Radius, blob3Paint);
+    // 3. Node 2: Top-Right Accent Contrast Floating Light (e.g. Cobalt Blue or Contrast)
+    final n2X = w * 0.82 + (w * 0.16 * math.cos(angle * 0.8));
+    final n2Y = h * 0.25 + (h * 0.16 * math.sin(angle * 1.3));
+    final n2R = w * 1.10 + (w * 0.10 * math.cos(angle * 0.7));
+    drawBlob(centerX: n2X, centerY: n2Y, radius: n2R, color: c2, peakAlpha: 0.85);
+
+    // 4. Node 3: Bottom-Right Fiery Body Warmth
+    final n3X = w * 0.80 + (w * 0.18 * math.sin(angle * 1.2));
+    final n3Y = h * 0.78 + (h * 0.15 * math.cos(angle * 0.9));
+    final n3R = w * 1.35 + (w * 0.15 * math.sin(angle * 1.0));
+    drawBlob(centerX: n3X, centerY: n3Y, radius: n3R, color: c1, peakAlpha: 0.92);
+
+    // 5. Node 4: Bottom-Left Ambient Glow
+    final n4X = w * 0.18 + (w * 0.15 * math.cos(angle * 1.4));
+    final n4Y = h * 0.75 + (h * 0.16 * math.sin(angle * 1.0));
+    final n4R = w * 1.15 + (w * 0.12 * math.cos(angle * 1.2));
+    drawBlob(centerX: n4X, centerY: n4Y, radius: n4R, color: c4, peakAlpha: 0.88);
+
+    // 6. Node 5: Center Vibrant Pulse Highlight
+    final n5X = w * 0.50 + (w * 0.12 * math.sin(angle * 1.6));
+    final n5Y = h * 0.45 + (h * 0.12 * math.cos(angle * 1.5));
+    final n5R = w * 1.05 + (w * 0.10 * math.sin(angle * 1.4));
+    drawBlob(centerX: n5X, centerY: n5Y, radius: n5R, color: c3, peakAlpha: 0.75);
   }
 
   @override
   bool shouldRepaint(covariant _AppleMusicMeshPainter oldDelegate) {
-    return true;
+    return oldDelegate.time != time || oldDelegate.colors != colors;
   }
 }
+
+
