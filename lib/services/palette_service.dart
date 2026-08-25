@@ -20,37 +20,41 @@ class PaletteService {
         size: const Size(96, 96),
       ).timeout(const Duration(seconds: 4));
 
-      Color boostVibrancy(Color c, {double minSat = 0.72, double minLight = 0.32, double maxLight = 0.48}) {
+      Color calibrateAppleMusic(Color c, {double maxSat = 0.58, double minLight = 0.18, double maxLight = 0.36}) {
         final hsl = HSLColor.fromColor(c);
-        // Strongly amplify saturation to eliminate muddy grayish tones
-        final boostedSat = (hsl.saturation * 1.65).clamp(minSat, 1.0);
-        // Calibrate lightness into rich, glowing sweet-spot
-        double adjustedLight = hsl.lightness;
-        if (adjustedLight < minLight) adjustedLight = minLight;
-        if (adjustedLight > maxLight) adjustedLight = maxLight;
-        return hsl.withSaturation(boostedSat).withLightness(adjustedLight).toColor();
+        // Keep natural saturation, gently cap high neon saturation
+        final sat = hsl.saturation.clamp(0.24, maxSat);
+        // Calibrate lightness to Apple Music's deep, ambient sweet-spot
+        final light = hsl.lightness.clamp(minLight, maxLight);
+        return hsl.withSaturation(sat).withLightness(light).toColor();
       }
 
       // 1. Determine the true dominant ambient color
       Color? dominant;
-      if (palette.dominantColor != null && palette.dominantColor!.color.computeLuminance() > 0.05) {
+      if (palette.mutedColor != null) {
+        dominant = palette.mutedColor!.color;
+      } else if (palette.darkMutedColor != null) {
+        dominant = palette.darkMutedColor!.color;
+      } else if (palette.dominantColor != null) {
         dominant = palette.dominantColor!.color;
+      } else if (palette.darkVibrantColor != null) {
+        dominant = palette.darkVibrantColor!.color;
       } else if (palette.vibrantColor != null) {
         dominant = palette.vibrantColor!.color;
       } else if (palette.paletteColors.isNotEmpty) {
         dominant = palette.paletteColors.first.color;
       }
-      dominant ??= const Color(0xFFC04822); // Warm fallback
-      final c0 = boostVibrancy(dominant, minSat: 0.75, minLight: 0.34, maxLight: 0.46);
+      dominant ??= const Color(0xFF5C3A2E); // Deep warm sienna fallback
+      final c0 = calibrateAppleMusic(dominant, maxSat: 0.52, minLight: 0.20, maxLight: 0.32);
 
       // 2. Collect candidate swatches
       final candidates = <Color>[];
-      if (palette.vibrantColor != null) candidates.add(palette.vibrantColor!.color);
-      if (palette.lightVibrantColor != null) candidates.add(palette.lightVibrantColor!.color);
-      if (palette.darkVibrantColor != null) candidates.add(palette.darkVibrantColor!.color);
-      if (palette.mutedColor != null) candidates.add(palette.mutedColor!.color);
-      if (palette.lightMutedColor != null) candidates.add(palette.lightMutedColor!.color);
       if (palette.darkMutedColor != null) candidates.add(palette.darkMutedColor!.color);
+      if (palette.mutedColor != null) candidates.add(palette.mutedColor!.color);
+      if (palette.darkVibrantColor != null) candidates.add(palette.darkVibrantColor!.color);
+      if (palette.vibrantColor != null) candidates.add(palette.vibrantColor!.color);
+      if (palette.lightMutedColor != null) candidates.add(palette.lightMutedColor!.color);
+      if (palette.lightVibrantColor != null) candidates.add(palette.lightVibrantColor!.color);
 
       for (final pc in palette.paletteColors) {
         if (!candidates.contains(pc.color)) {
@@ -58,53 +62,53 @@ class PaletteService {
         }
       }
 
-      // 3. Find contrasting secondary and accent colors
+      // 3. Find harmonic secondary, accent and depth colors
       final domHsl = HSLColor.fromColor(c0);
       Color? secondaryWarm;
       Color? accentCool;
-      Color? vibrantHighlight;
+      Color? subtleHighlight;
 
       for (final raw in candidates) {
         final hsl = HSLColor.fromColor(raw);
-        if (hsl.saturation < 0.12 && (hsl.lightness < 0.10 || hsl.lightness > 0.90)) continue;
+        if (hsl.lightness < 0.08 || hsl.lightness > 0.92) continue;
 
         final hueDiff = (hsl.hue - domHsl.hue).abs();
         final normalizedDiff = hueDiff > 180 ? 360 - hueDiff : hueDiff;
 
-        if (normalizedDiff > 50 && accentCool == null) {
-          accentCool = boostVibrancy(raw, minSat: 0.80, minLight: 0.38, maxLight: 0.50);
-        } else if (normalizedDiff <= 50 && secondaryWarm == null && _colorDistance(raw, c0) > 30) {
-          secondaryWarm = boostVibrancy(raw, minSat: 0.78, minLight: 0.36, maxLight: 0.48);
-        } else if (vibrantHighlight == null && _colorDistance(raw, c0) > 40) {
-          vibrantHighlight = boostVibrancy(raw, minSat: 0.85, minLight: 0.42, maxLight: 0.54);
+        if (normalizedDiff > 45 && accentCool == null) {
+          accentCool = calibrateAppleMusic(raw, maxSat: 0.50, minLight: 0.22, maxLight: 0.38);
+        } else if (normalizedDiff <= 45 && secondaryWarm == null && _colorDistance(raw, c0) > 25) {
+          secondaryWarm = calibrateAppleMusic(raw, maxSat: 0.55, minLight: 0.22, maxLight: 0.35);
+        } else if (subtleHighlight == null && _colorDistance(raw, c0) > 35) {
+          subtleHighlight = calibrateAppleMusic(raw, maxSat: 0.50, minLight: 0.26, maxLight: 0.40);
         }
       }
 
       // Synthesize missing harmonic colors if artwork is monochromatic
-      secondaryWarm ??= domHsl.withHue((domHsl.hue + 25) % 360).withSaturation(0.85).withLightness(0.44).toColor();
-      accentCool ??= domHsl.withHue((domHsl.hue + 180) % 360).withSaturation(0.80).withLightness(0.40).toColor();
-      vibrantHighlight ??= domHsl.withHue((domHsl.hue + 45) % 360).withSaturation(0.90).withLightness(0.50).toColor();
+      secondaryWarm ??= domHsl.withHue((domHsl.hue + 20) % 360).withSaturation((domHsl.saturation * 1.1).clamp(0.28, 0.55)).withLightness(0.28).toColor();
+      accentCool ??= domHsl.withHue((domHsl.hue + 160) % 360).withSaturation(0.40).withLightness(0.24).toColor();
+      subtleHighlight ??= domHsl.withHue((domHsl.hue + 35) % 360).withSaturation(0.48).withLightness(0.34).toColor();
 
-      // Deep ambient shadow tone
-      final deepBase = domHsl.withSaturation(0.85).withLightness(0.20).toColor();
+      // Deep rich ambient base tone
+      final deepBase = domHsl.withSaturation((domHsl.saturation * 0.9).clamp(0.20, 0.45)).withLightness(0.14).toColor();
 
       final List<Color> result = [
-        c0,               // Primary Dominant (e.g. Diomedes rich terracotta/crimson)
-        secondaryWarm,    // Secondary Warm Body (e.g. amber / fiery orange)
-        accentCool,       // Contrasting Accent (e.g. blue / cyan / gold)
-        vibrantHighlight, // High-energy floating highlight
-        deepBase,         // Deep rich ambient depth
+        c0,               // Primary Dominant Base (Apple Music ambient anchor)
+        secondaryWarm,    // Secondary Warm Body (rich harmonic body)
+        accentCool,       // Accent Contrast (subtle cool depth)
+        subtleHighlight,  // Soft Luminous Highlight
+        deepBase,         // Deep Ambient Foundation
       ];
 
       _colorCache[imageId] = result;
       return result;
     } catch (e) {
       return [
-        const Color(0xFFB8401C),
-        const Color(0xFFE26B28),
-        const Color(0xFF2A68C8),
-        const Color(0xFFFF9500),
-        const Color(0xFF5A1A0C),
+        const Color(0xFF5A3628),
+        const Color(0xFF7A4A38),
+        const Color(0xFF384A5C),
+        const Color(0xFF885642),
+        const Color(0xFF2C1A14),
       ];
     }
   }
