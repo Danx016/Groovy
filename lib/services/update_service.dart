@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 class ReleaseAsset {
   final String name;
@@ -56,7 +57,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static const String currentVersion = '1.0.29';
+  static String currentVersion = '1.0.34';
   static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
 
   static const String _apiUrl =
@@ -79,8 +80,16 @@ class UpdateService {
     ),
   );
 
+  static Future<void> initVersion() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      currentVersion = info.version;
+    } catch (_) {}
+  }
+
   static Future<ReleaseInfo?> checkForUpdate() async {
     try {
+      await initVersion();
       final response = await _dio.get<Map<String, dynamic>>(_apiUrl);
       final data = response.data;
       if (data == null) return null;
