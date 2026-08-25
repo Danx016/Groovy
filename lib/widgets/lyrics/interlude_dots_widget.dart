@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-class InterludeDotsWidget extends StatefulWidget {
+class InterludeDotsWidget extends StatelessWidget {
   final Duration currentTime;
   final Duration targetTime;
 
@@ -11,94 +11,83 @@ class InterludeDotsWidget extends StatefulWidget {
   });
 
   @override
-  State<InterludeDotsWidget> createState() => _InterludeDotsWidgetState();
-}
-
-class _InterludeDotsWidgetState extends State<InterludeDotsWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final timeLeft = widget.targetTime - widget.currentTime;
-    final msLeft = timeLeft.inMilliseconds;
+    final totalMs = targetTime.inMilliseconds;
+    final currentMs = currentTime.inMilliseconds;
+    final msLeft = totalMs - currentMs;
 
-    // Disappear logic 3..2..1 before the vocal starts
-    int visibleDots = 3;
-    if (msLeft <= 1000) {
-      visibleDots = 0;
-    } else if (msLeft <= 2000) {
-      visibleDots = 1;
-    } else if (msLeft <= 3000) {
-      visibleDots = 2;
+    // If already past target time, collapse
+    if (msLeft <= 0) {
+      return const SizedBox(width: double.infinity, height: 0);
     }
 
+    // 1. Countdown phase (last 3 seconds before vocals start)
+    // 3 dots -> 2 dots -> 1 dot -> 0 dots
+    int visibleCount = 3;
+    if (msLeft <= 750) {
+      visibleCount = 0;
+    } else if (msLeft <= 1750) {
+      visibleCount = 1;
+    } else if (msLeft <= 2750) {
+      visibleCount = 2;
+    }
+
+    // 2. Progressive illumination phase (prior to final 3 seconds)
+    // As the song intro plays, dots smoothly illuminate 1 -> 2 -> 3
+    final fillWindowMs = (totalMs - 2750).clamp(1000, 30000);
+    final fillProgress = (currentMs / fillWindowMs).clamp(0.0, 1.0);
+
     return AnimatedSize(
-      duration: const Duration(milliseconds: 500),
-      curve: Curves.easeInOut,
-      child: visibleDots == 0
-          ? const SizedBox(width: double.infinity, height: 0) // Shrink completely
-          : Container(
-              height: 40,
-              alignment: Alignment.centerLeft,
-              child: AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: List.generate(3, (index) {
-                      // Staggered sine wave calculation
-                      // Each dot has a different phase offset
-                      final phase = index * 0.33; // 0, 0.33, 0.66
-                      final progress = (_pulseController.value + phase) % 1.0;
-                      
-                      // Sine wave for smooth pulsing (0 -> 1 -> 0)
-                      final sineValue = (0.5 - (0.5 * (1.0 - progress * 2.0).abs())) * 2.0;
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic,
+      child: Container(
+        height: 36,
+        alignment: Alignment.centerLeft,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: List.generate(3, (index) {
+            final isVisible = index < visibleCount;
+            
+            // Progressive fill threshold for each dot: [0..0.33], [0.33..0.66], [0.66..1.0]
+            final dotStart = index * 0.333;
+            final dotEnd = (index + 1) * 0.333;
+            final dotFill = ((fillProgress - dotStart) / (dotEnd - dotStart)).clamp(0.0, 1.0);
 
-                      final isVisible = index < visibleDots;
-                      // Animiamo in scala da 0.7 (min) a 1.5 (max)
-                      final scale = isVisible ? 0.7 + (0.8 * sineValue) : 0.0;
-                      final color = Color.lerp(
-                        Colors.white.withValues(alpha: 0.3),
-                        Colors.white,
-                        sineValue,
-                      );
+            // Interpolate opacity gently from 0.22 (unlit) to 0.95 (fully illuminated)
+            final opacity = isVisible ? (0.22 + (0.73 * dotFill)) : 0.0;
+            final scale = isVisible ? (0.85 + (0.25 * dotFill)) : 0.0;
 
-                      return AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        margin: const EdgeInsets.only(right: 14.0),
-                        width: isVisible ? 10 : 0,
-                        height: isVisible ? 10 : 0,
-                        child: Transform.scale(
-                          scale: scale,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: color,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  );
-                },
+            return AnimatedContainer(
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
+              margin: const EdgeInsets.only(right: 14.0),
+              width: isVisible ? 11 : 0,
+              height: isVisible ? 11 : 0,
+              child: AnimatedScale(
+                scale: scale,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: opacity),
+                    shape: BoxShape.circle,
+                    boxShadow: dotFill > 0.6 && isVisible
+                        ? [
+                            BoxShadow(
+                              color: Colors.white.withValues(alpha: 0.30 * dotFill),
+                              blurRadius: 8,
+                              spreadRadius: 1,
+                            )
+                          ]
+                        : null,
+                  ),
+                ),
               ),
-            ),
+            );
+          }),
+        ),
+      ),
     );
   }
 }
