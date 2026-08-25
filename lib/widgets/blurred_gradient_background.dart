@@ -84,49 +84,53 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_motionController, _colorController]),
-      builder: (context, _) {
-        final activeColors = _getCurrentInterpolatedColors();
-        return Stack(
-          children: [
-            // 1. Hardware accelerated fluid animated mesh gradient
-            Positioned.fill(
-              child: RepaintBoundary(
-                child: CustomPaint(
+    return Stack(
+      children: [
+        // 1. Hardware accelerated fluid animated mesh gradient (isolated in render layer)
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: AnimatedBuilder(
+              animation: Listenable.merge([_motionController, _colorController]),
+              builder: (context, _) {
+                final activeColors = _getCurrentInterpolatedColors();
+                return CustomPaint(
                   painter: _AppleMusicMeshPainter(
                     time: _motionController.value,
                     colors: activeColors,
                   ),
+                );
+              },
+            ),
+          ),
+        ),
+
+        // 2. Ultra-subtle Apple Music contrast overlay for perfect text readability
+        Positioned.fill(
+          child: IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.black.withValues(alpha: 0.04),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.20),
+                  ],
+                  stops: const [0.0, 0.45, 1.0],
                 ),
               ),
             ),
+          ),
+        ),
 
-            // 2. Ultra-subtle Apple Music contrast overlay for perfect text readability
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.04),
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.20),
-                    ],
-                    stops: const [0.0, 0.45, 1.0],
-                  ),
-                ),
-              ),
-            ),
-
-            // 3. Child content isolated in its own render layer
-            RepaintBoundary(
-              child: widget.child,
-            ),
-          ],
-        );
-      },
+        // 3. Child content isolated in its own render layer — NEVER rebuilt on background motion ticks!
+        Positioned.fill(
+          child: RepaintBoundary(
+            child: widget.child,
+          ),
+        ),
+      ],
     );
   }
 }

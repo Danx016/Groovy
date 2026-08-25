@@ -112,22 +112,22 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    final libraryProvider = Provider.of<LibraryProvider>(
-      context,
-      listen: false,
-    );
+    _debounceTimer = Timer(const Duration(milliseconds: 140), () {
+      final libraryProvider = Provider.of<LibraryProvider>(
+        context,
+        listen: false,
+      );
 
-    // Instant 0ms local results (locked 120fps typing)
-    final instantLocal = libraryProvider.searchLocal(value);
-    if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
-      setState(() {
-        _searchResult = instantLocal;
-        _query = value;
-      });
-    }
+      final instantLocal = libraryProvider.searchLocal(value);
+      if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
+        if (mounted && _searchController.text.trim() == value.trim()) {
+          setState(() {
+            _searchResult = instantLocal;
+            _query = value;
+          });
+        }
+      }
 
-    // Fast 180ms debounce for server results
-    _debounceTimer = Timer(const Duration(milliseconds: 180), () {
       if (_liveSearch) {
         _search(value);
       } else {
