@@ -70,7 +70,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _isRenderingRemotely = false;
 
   String? _resolvedArtworkUrl;
-  String? _lastPreloadedSongId;
 
   RadioStation? _currentRadioStation;
   bool _isPlayingRadio = false;
@@ -2447,53 +2446,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Error preparing current song after restore: $e');
     }
-  }
-
-  void _checkAndPreloadNextSong(Duration position) {
-    if (_isRenderingRemotely || _queue.isEmpty || _currentIndex < 0) return;
-    if (_duration <= Duration.zero) return;
-
-    final progress = position.inMilliseconds / _duration.inMilliseconds;
-    final remaining = _duration - position;
-
-    // Trigger preload at 70% of current song or when 25s remain
-    if (progress >= 0.70 || remaining.inSeconds <= 25) {
-      final nextIndex = _currentIndex + 1;
-      if (nextIndex < _queue.length) {
-        final nextSong = _queue[nextIndex];
-        if (_lastPreloadedSongId != nextSong.id) {
-          _lastPreloadedSongId = nextSong.id;
-          _preloadSong(nextSong).catchError((e) {
-            debugPrint('[Player] Preload error for "${nextSong.title}": $e');
-          });
-        }
-      }
-    }
-  }
-
-  Future<void> _preloadSong(Song song) async {
-    if (song.isLocal || _offlineService.isSongDownloaded(song.id)) return;
-    try {
-      final cacheDir = await getTemporaryDirectory();
-      final cacheFile = File('${cacheDir.path}/groovy_stream_${song.id.hashCode}.tmp');
-      
-      // If already cached or partially cached, skip
-      if (await cacheFile.exists() && await cacheFile.length() > 200000) return;
-
-      final url = _subsonicService.getStreamUrl(song.id);
-      final uri = Uri.parse(url);
-      final client = HttpClient();
-      client.connectionTimeout = const Duration(seconds: 4);
-      final request = await client.getUrl(uri);
-      // Pre-warm TCP connection and pre-fetch initial 256KB of audio
-      request.headers.add('Range', 'bytes=0-262144');
-      final response = await request.close().timeout(const Duration(seconds: 4));
-      if (response.statusCode == 200 || response.statusCode == 206) {
-        final sink = cacheFile.openWrite(mode: FileMode.writeOnlyAppend);
-        await response.pipe(sink);
-        debugPrint('[Player] ⚡ Pre-buffered initial audio chunks for next track: "${song.title}"');
-      }
-    } catch (_) {}
   }
 
   Future<void> _onCurrentIndexChanged(int newIndex) async {
