@@ -145,14 +145,14 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine() {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 620)}) {
     if (_isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     final key = _keys[_currentIndex];
     if (key.currentContext != null) {
       Scrollable.ensureVisible(
         key.currentContext!,
-        duration: const Duration(milliseconds: 400),
+        duration: duration,
         curve: Curves.easeOutCubic,
         alignment: 0.22,
       );
@@ -263,8 +263,13 @@ class _LyricsListViewState extends State<LyricsListView> {
                     HapticFeedback.selectionClick();
                     widget.onSeek(line.startTime);
                     
-                    setState(() => _isManualScrolling = false);
+                    setState(() {
+                      _isManualScrolling = false;
+                      _currentIndex = index;
+                      _currentLyricIndex = lyricIndex;
+                    });
                     _resumeAutoScrollTimer?.cancel();
+                    _scrollToCurrentLine(duration: const Duration(milliseconds: 550));
                   },
                 ),
               ),

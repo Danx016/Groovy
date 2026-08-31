@@ -4,26 +4,45 @@ import 'package:flutter/services.dart';
 class PlaybackProgressSlider extends StatefulWidget {
   final Duration position;
   final Duration duration;
+  final Duration bufferedPosition;
+  final bool isBuffering;
   final ValueChanged<Duration> onChanged;
   final Color accentColor;
-  final String? qualityBadge;
 
   const PlaybackProgressSlider({
     super.key,
     required this.position,
     required this.duration,
+    this.bufferedPosition = Duration.zero,
+    this.isBuffering = false,
     required this.onChanged,
     required this.accentColor,
-    this.qualityBadge,
   });
 
   @override
   State<PlaybackProgressSlider> createState() => _PlaybackProgressSliderState();
 }
 
-class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
+class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
+    with SingleTickerProviderStateMixin {
   bool _isDragging = false;
   double _dragValue = 0.0;
+  late AnimationController _shimmerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
+  }
 
   String _formatDuration(Duration duration) {
     if (duration.isNegative) duration = Duration.zero;
@@ -45,6 +64,7 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
         
     final safeMax = maxDuration > 0 ? maxDuration : 1.0;
     final progress = (currentDuration / safeMax).clamp(0.0, 1.0);
+    final bufferedProgress = (widget.bufferedPosition.inMilliseconds / safeMax).clamp(0.0, 1.0);
     final remainingMillis = (safeMax - currentDuration).clamp(0.0, safeMax);
     final remainingDuration = Duration(milliseconds: remainingMillis.toInt());
 
@@ -83,29 +103,38 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
           child: Container(
             height: 28, // Tappable hit target
             alignment: Alignment.center,
-            child: CustomPaint(
-              size: const Size(double.infinity, 28),
-              painter: _SliderPainter(
-                progress: progress,
-                isDragging: _isDragging,
-                activeColor: Colors.white.withValues(alpha: 0.95),
-                inactiveColor: Colors.white.withValues(alpha: 0.18),
-              ),
+            child: AnimatedBuilder(
+              animation: _shimmerController,
+              builder: (context, _) {
+                return CustomPaint(
+                  size: const Size(double.infinity, 28),
+                  painter: _SliderPainter(
+                    progress: progress,
+                    bufferedProgress: bufferedProgress,
+                    isBuffering: widget.isBuffering,
+                    shimmerPhase: _shimmerController.value,
+                    isDragging: _isDragging,
+                    activeColor: Colors.white.withValues(alpha: 0.95),
+                    bufferedColor: Colors.white.withValues(alpha: 0.35),
+                    inactiveColor: Colors.white.withValues(alpha: 0.18),
+                  ),
+                );
+              },
             ),
           ),
         ),
-        const SizedBox(height: 1),
+        const SizedBox(height: 2),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Elapsed position
             SizedBox(
-              width: 60,
+              width: 55,
               child: Text(
                 _formatDuration(Duration(milliseconds: currentDuration.toInt())),
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.60),
+                  color: Colors.white.withValues(alpha: 0.55),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -116,12 +145,12 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
 
             // Negative remaining duration (-M:SS)
             SizedBox(
-              width: 60,
+              width: 55,
               child: Text(
                 "-${_formatDuration(remainingDuration)}",
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.60),
+                  color: Colors.white.withValues(alpha: 0.55),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -138,14 +167,22 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider> {
 
 class _SliderPainter extends CustomPainter {
   final double progress;
+  final double bufferedProgress;
+  final bool isBuffering;
+  final double shimmerPhase;
   final bool isDragging;
   final Color activeColor;
+  final Color bufferedColor;
   final Color inactiveColor;
 
   _SliderPainter({
     required this.progress,
+    required this.bufferedProgress,
+    required this.isBuffering,
+    required this.shimmerPhase,
     required this.isDragging,
     required this.activeColor,
+    required this.bufferedColor,
     required this.inactiveColor,
   });
 
@@ -154,25 +191,56 @@ class _SliderPainter extends CustomPainter {
     final trackHeight = isDragging ? 6.5 : 4.5;
     final trackRadius = Radius.circular(trackHeight / 2);
     final centerY = size.height / 2;
-    
-    // Inactive track
+
+    // 1. Inactive background track
     final inactivePaint = Paint()
       ..color = inactiveColor
       ..style = PaintingStyle.fill;
-    
-    final inactiveRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, centerY - trackHeight / 2, size.width, trackHeight),
-      trackRadius,
-    );
-    canvas.drawRRect(inactiveRect, inactivePaint);
-    
-    // Active track
+
+    final trackRect = Rect.fromLTWH(0, centerY - trackHeight / 2, size.width, trackHeight);
+    final inactiveRRect = RRect.fromRectAndRadius(trackRect, trackRadius);
+    canvas.drawRRect(inactiveRRect, inactivePaint);
+
+    // 2. Buffered range track (Apple Music audio cache ahead)
+    final bufferedWidth = (size.width * bufferedProgress).clamp(0.0, size.width);
+    if (bufferedWidth > 0) {
+      final bufferedPaint = Paint()
+        ..color = bufferedColor
+        ..style = PaintingStyle.fill;
+
+      final bufferedRRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, centerY - trackHeight / 2, bufferedWidth, trackHeight),
+        trackRadius,
+      );
+      canvas.drawRRect(bufferedRRect, bufferedPaint);
+    }
+
+    // 3. Apple Music Loading / Buffering Shimmer Wave
+    if (isBuffering) {
+      final shimmerPaint = Paint()
+        ..shader = LinearGradient(
+          begin: Alignment(-1.5 + shimmerPhase * 3.0, 0.0),
+          end: Alignment(-0.5 + shimmerPhase * 3.0, 0.0),
+          colors: [
+            Colors.transparent,
+            Colors.white.withValues(alpha: 0.55),
+            Colors.white.withValues(alpha: 0.90),
+            Colors.white.withValues(alpha: 0.55),
+            Colors.transparent,
+          ],
+          stops: const [0.0, 0.35, 0.50, 0.65, 1.0],
+        ).createShader(trackRect);
+
+      canvas.drawRRect(inactiveRRect, shimmerPaint);
+    }
+
+    // 4. Played Active progress track
     final activeWidth = (size.width * progress).clamp(0.0, size.width);
     if (activeWidth > 0) {
       final activePaint = Paint()
         ..color = activeColor
         ..style = PaintingStyle.fill;
-        
+
       final activeRect = RRect.fromRectAndRadius(
         Rect.fromLTWH(0, centerY - trackHeight / 2, activeWidth, trackHeight),
         trackRadius,
@@ -180,13 +248,13 @@ class _SliderPainter extends CustomPainter {
       canvas.drawRRect(activeRect, activePaint);
     }
 
-    // Interactive Thumb (visible when dragging)
+    // 5. Interactive Thumb Knob (visible and expanding when dragging)
     if (isDragging) {
       final thumbRadius = trackHeight + 3.0;
-      
-      // Shadow behind thumb
+
+      // Soft shadow behind thumb
       final shadowPaint = Paint()
-        ..color = Colors.black.withValues(alpha: 0.3)
+        ..color = Colors.black.withValues(alpha: 0.35)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
       canvas.drawCircle(Offset(activeWidth, centerY + 1), thumbRadius, shadowPaint);
 
@@ -198,10 +266,12 @@ class _SliderPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SliderPainter oldDelegate) {
     return oldDelegate.progress != progress ||
-           oldDelegate.isDragging != isDragging ||
-           oldDelegate.activeColor != activeColor ||
-           oldDelegate.inactiveColor != inactiveColor;
+        oldDelegate.bufferedProgress != bufferedProgress ||
+        oldDelegate.isBuffering != isBuffering ||
+        oldDelegate.shimmerPhase != shimmerPhase ||
+        oldDelegate.isDragging != isDragging ||
+        oldDelegate.activeColor != activeColor ||
+        oldDelegate.bufferedColor != bufferedColor ||
+        oldDelegate.inactiveColor != inactiveColor;
   }
 }
-
-

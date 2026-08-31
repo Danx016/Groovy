@@ -63,6 +63,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _duration = Duration.zero;
   Song? _currentSong;
   double _volume = 1.0;
+  int _playGeneration = 0;
 
   /// True only while audio is actually being rendered on a remote device.
   /// Distinct from isConnected: if the user plays a radio station while a
@@ -884,6 +885,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final _positionController = StreamController<Duration>.broadcast();
   Stream<Duration> get positionStream => _positionController.stream;
 
+  Stream<Duration> get bufferedPositionStream => _audioPlayer.bufferedPositionStream;
+  Duration get bufferedPosition => _audioPlayer.bufferedPosition;
+  bool get isBuffering =>
+      _isLoading ||
+      _audioPlayer.processingState == ProcessingState.buffering ||
+      _audioPlayer.processingState == ProcessingState.loading;
+  Stream<bool> get isBufferingStream => _audioPlayer.processingStateStream
+      .map((s) => s == ProcessingState.buffering || s == ProcessingState.loading);
+
   // Subscriptions stored so they can be cancelled before dispose closes the
   // StreamController, preventing a late just_audio tick from calling add() on
   // a closed controller.
@@ -1454,6 +1464,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     debugPrint(
         '[Player] ▶ playSong: "${song.title}" by ${song.artist ?? 'unknown'} (id=${song.id} local=${song.isLocal})');
+    final currentGen = ++_playGeneration;
     _isLoading = true;
     notifyListeners();
 
@@ -1580,9 +1591,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (youtubeSource != null) {
           // YouTube: single StreamAudioSource, no gapless
+          if (currentGen != _playGeneration) return;
           _concatenatingSource = null;
           await _audioPlayer.setAudioSource(youtubeSource);
+          if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
+          if (currentGen != _playGeneration) return;
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_subsonicService.isYoutube) {
           // All songs are YouTube — can't build ConcatenatingAudioSource easily
@@ -1598,8 +1612,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               playUrl = await _subsonicService.resolveStreamUrlAsync(song);
             }
           }
+          if (currentGen != _playGeneration) return;
           await _audioPlayer.setUrl(playUrl);
+          if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
+          if (currentGen != _playGeneration) return;
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_gaplessEnabled) {
           // Build ConcatenatingAudioSource for gapless playback
@@ -1615,6 +1632,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 'First playback failed (Android 16 Media3 issue), retrying: $e',
               );
               await Future.delayed(const Duration(milliseconds: 100));
+              if (currentGen != _playGeneration) return;
               await _buildAndSetConcatenatingSource(
                 initialIndex: _currentIndex,
                 initialPosition: Duration.zero,
@@ -1624,7 +1642,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               rethrow;
             }
           }
+          if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
+          if (currentGen != _playGeneration) return;
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else {
           // Gapless disabled — single-song mode
@@ -2009,10 +2029,23 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         do {
           next = Random().nextInt(_queue.length);
         } while (next == _currentIndex);
+        _currentIndex = next;
+        _currentSong = _queue[next];
+        _position = Duration.zero;
+        notifyListeners();
         await _audioPlayer.seek(Duration.zero, index: next);
       } else if (_currentIndex < _queue.length - 1) {
-        await _audioPlayer.seek(Duration.zero, index: _currentIndex + 1);
+        final next = _currentIndex + 1;
+        _currentIndex = next;
+        _currentSong = _queue[next];
+        _position = Duration.zero;
+        notifyListeners();
+        await _audioPlayer.seek(Duration.zero, index: next);
       } else if (_repeatMode == RepeatMode.all) {
+        _currentIndex = 0;
+        _currentSong = _queue[0];
+        _position = Duration.zero;
+        notifyListeners();
         await _audioPlayer.seek(Duration.zero, index: 0);
       }
       return;
@@ -2098,14 +2131,28 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         final prevId = _shuffleHistory.removeLast();
         final prev = _queue.indexWhere((s) => s.id == prevId);
         if (prev != -1) {
+          _currentIndex = prev;
+          _currentSong = _queue[prev];
+          _position = Duration.zero;
+          notifyListeners();
           await _audioPlayer.seek(Duration.zero, index: prev);
           return;
         }
       }
       if (_currentIndex > 0) {
-        await _audioPlayer.seek(Duration.zero, index: _currentIndex - 1);
+        final prev = _currentIndex - 1;
+        _currentIndex = prev;
+        _currentSong = _queue[prev];
+        _position = Duration.zero;
+        notifyListeners();
+        await _audioPlayer.seek(Duration.zero, index: prev);
       } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
-        await _audioPlayer.seek(Duration.zero, index: _queue.length - 1);
+        final prev = _queue.length - 1;
+        _currentIndex = prev;
+        _currentSong = _queue[prev];
+        _position = Duration.zero;
+        notifyListeners();
+        await _audioPlayer.seek(Duration.zero, index: prev);
       } else {
         await seek(Duration.zero);
       }
@@ -2132,6 +2179,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipToIndex(int index) async {
     if (index >= 0 && index < _queue.length) {
+      _currentIndex = index;
+      _currentSong = _queue[index];
+      _position = Duration.zero;
+      notifyListeners();
       if (_concatenatingSource != null && !_isRenderingRemotely) {
         await _audioPlayer.seek(Duration.zero, index: index);
       } else {

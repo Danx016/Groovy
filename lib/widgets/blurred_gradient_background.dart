@@ -1,13 +1,16 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 
 class BlurredGradientBackground extends StatefulWidget {
   final List<Color> colors;
+  final ImageProvider? image;
   final Widget child;
 
   const BlurredGradientBackground({
     super.key,
     required this.colors,
+    this.image,
     required this.child,
   });
 
@@ -27,7 +30,7 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
     super.initState();
     _motionController = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 18),
+      duration: const Duration(seconds: 10),
     )..repeat();
 
     _targetColors = _normalizeColors(widget.colors);
@@ -35,21 +38,22 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
 
     _colorController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 750),
+      duration: const Duration(milliseconds: 800),
     );
   }
 
   List<Color> _normalizeColors(List<Color> raw) {
     if (raw.isEmpty) {
       return [
-        const Color(0xFFC76020),
-        const Color(0xFFE88A38),
-        const Color(0xFF8B3A12),
-        const Color(0xFF4A1E0B),
+        const Color(0xFFE64A19),
+        const Color(0xFFFF7043),
+        const Color(0xFF7B1FA2),
+        const Color(0xFFFFAB91),
+        const Color(0xFF100604),
       ];
     }
     final list = List<Color>.from(raw);
-    while (list.length < 4) {
+    while (list.length < 5) {
       list.add(list.last);
     }
     return list;
@@ -66,7 +70,11 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
   }
 
   List<Color> _getCurrentInterpolatedColors() {
-    final t = _colorController.value;
+    final t = CurvedAnimation(
+      parent: _colorController,
+      curve: Curves.easeInOutCubic,
+    ).value;
+
     final count = math.min(_oldColors.length, _targetColors.length);
     final result = <Color>[];
     for (int i = 0; i < count; i++) {
@@ -85,26 +93,60 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
   @override
   Widget build(BuildContext context) {
     return Stack(
+      fit: StackFit.expand,
       children: [
-        // 1. Hardware accelerated fluid animated mesh gradient (isolated in render layer)
+        // 1. Dark Foundation
+        const ColoredBox(color: Colors.black),
+
+        // 2. Blurred Artwork Ambient Anchor (Matches Apple Music's authentic tonal palette)
+        if (widget.image != null)
+          Positioned.fill(
+            child: RepaintBoundary(
+              child: Transform.scale(
+                scale: 1.4,
+                child: ImageFiltered(
+                  imageFilter: ui.ImageFilter.blur(
+                    sigmaX: 70,
+                    sigmaY: 70,
+                    tileMode: TileMode.clamp,
+                  ),
+                  child: Image(
+                    image: widget.image!,
+                    fit: BoxFit.cover,
+                    opacity: const AlwaysStoppedAnimation(0.58),
+                    gaplessPlayback: true,
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // 3. Fluid Animated Mesh Light Orbs (Diffusion Blended)
         Positioned.fill(
           child: RepaintBoundary(
-            child: AnimatedBuilder(
-              animation: Listenable.merge([_motionController, _colorController]),
-              builder: (context, _) {
-                final activeColors = _getCurrentInterpolatedColors();
-                return CustomPaint(
-                  painter: _AppleMusicMeshPainter(
-                    time: _motionController.value,
-                    colors: activeColors,
-                  ),
-                );
-              },
+            child: ImageFiltered(
+              imageFilter: ui.ImageFilter.blur(
+                sigmaX: 55,
+                sigmaY: 55,
+                tileMode: TileMode.clamp,
+              ),
+              child: AnimatedBuilder(
+                animation: Listenable.merge([_motionController, _colorController]),
+                builder: (context, _) {
+                  final activeColors = _getCurrentInterpolatedColors();
+                  return CustomPaint(
+                    painter: _AppleMusicMeshPainter(
+                      time: _motionController.value,
+                      colors: activeColors,
+                    ),
+                  );
+                },
+              ),
             ),
           ),
         ),
 
-        // 2. Ultra-subtle Apple Music contrast overlay for perfect text readability
+        // 4. Apple Music Atmospheric Vignette & Contrast Overlay
         Positioned.fill(
           child: IgnorePointer(
             child: DecoratedBox(
@@ -113,18 +155,19 @@ class _BlurredGradientBackgroundState extends State<BlurredGradientBackground>
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.04),
+                    Colors.black.withValues(alpha: 0.12),
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.20),
+                    Colors.black.withValues(alpha: 0.28),
+                    Colors.black.withValues(alpha: 0.52),
                   ],
-                  stops: const [0.0, 0.45, 1.0],
+                  stops: const [0.0, 0.35, 0.72, 1.0],
                 ),
               ),
             ),
           ),
         ),
 
-        // 3. Child content isolated in its own render layer — NEVER rebuilt on background motion ticks!
+        // 5. Child Content (Lyrics, Cover, Controls)
         Positioned.fill(
           child: RepaintBoundary(
             child: widget.child,
@@ -150,91 +193,68 @@ class _AppleMusicMeshPainter extends CustomPainter {
     final h = size.height;
     if (w <= 0 || h <= 0) return;
 
-    final c0 = colors[0]; // Primary Dominant tone (Artwork ambient anchor)
-    final c1 = colors.length > 1 ? colors[1] : colors[0]; // Secondary Warm tone
-    final c2 = colors.length > 2 ? colors[2] : colors[0]; // Accent Contrast tone
-    final c3 = colors.length > 3 ? colors[3] : colors[1]; // Subtle Highlight tone
-    final c4 = colors.length > 4 ? colors[4] : colors[0]; // Deep Ambient Depth
+    final c0 = colors[0]; // Primary Dominant Vibrant Tone
+    final c1 = colors.length > 1 ? colors[1] : colors[0]; // Warm Harmonic Secondary
+    final c2 = colors.length > 2 ? colors[2] : colors[0]; // Dynamic Contrast Accent
+    final c3 = colors.length > 3 ? colors[3] : colors[1]; // Luminous Highlight
+    final c4 = colors.length > 4 ? colors[4] : colors[0]; // Deep Base
 
-    // Pure 2*pi angle with exact integer harmonics for a 100% mathematically seamless loop
-    final a1 = time * 2.0 * math.pi;     // 1x fundamental cycle
-    final a2 = time * 4.0 * math.pi;     // 2x harmonic cycle
-    final a3 = time * 6.0 * math.pi;     // 3x harmonic cycle
+    // Harmonic trigonometric angles for liquid flow
+    final a1 = time * 2.0 * math.pi;
+    final a2 = time * 4.0 * math.pi + 1.2;
+    final a3 = time * 3.0 * math.pi + 2.4;
+    final a4 = time * 2.0 * math.pi + 3.8;
 
-    // 1. Deep Atmospheric Foundation Gradient
-    final baseGradient = LinearGradient(
-      begin: Alignment(
-        0.35 * math.cos(a1),
-        -1.0 + 0.20 * math.sin(a1),
-      ),
-      end: Alignment(
-        -0.35 * math.cos(a1),
-        1.0 - 0.20 * math.sin(a1),
-      ),
-      colors: [
-        c0.withValues(alpha: 0.95),
-        c1.withValues(alpha: 0.90),
-        c4.withValues(alpha: 0.92),
-        c4.withValues(alpha: 0.98),
-      ],
-      stops: const [0.0, 0.35, 0.70, 1.0],
-    );
-
-    final basePaint = Paint()
-      ..shader = baseGradient.createShader(Rect.fromLTWH(0, 0, w, h));
-    canvas.drawRect(Rect.fromLTWH(0, 0, w, h), basePaint);
-
-    // Helper to paint a diffused luminous radial blob with multi-stop Gaussian falloff
-    void drawBlob({
+    // Helper to draw a glowing liquid chromatic orb
+    void drawOrb({
       required double centerX,
       required double centerY,
       required double radius,
       required Color color,
-      double peakAlpha = 0.85,
+      double peakAlpha = 0.90,
     }) {
       final paint = Paint()
         ..shader = RadialGradient(
           colors: [
             color.withValues(alpha: peakAlpha),
             color.withValues(alpha: peakAlpha * 0.70),
-            color.withValues(alpha: peakAlpha * 0.35),
-            color.withValues(alpha: peakAlpha * 0.10),
+            color.withValues(alpha: peakAlpha * 0.30),
             color.withValues(alpha: 0.0),
           ],
-          stops: const [0.0, 0.30, 0.60, 0.82, 1.0],
+          stops: const [0.0, 0.35, 0.70, 1.0],
         ).createShader(Rect.fromCircle(center: Offset(centerX, centerY), radius: radius));
       canvas.drawCircle(Offset(centerX, centerY), radius, paint);
     }
 
-    // 2. Node 1: Top-Left to Center-Right Organic Flow
-    final n1X = w * 0.30 + (w * 0.25 * math.sin(a1)) + (w * 0.08 * math.cos(a2));
-    final n1Y = h * 0.25 + (h * 0.18 * math.cos(a1)) + (h * 0.06 * math.sin(a2));
-    final n1R = w * 1.30 + (w * 0.15 * math.sin(a1));
-    drawBlob(centerX: n1X, centerY: n1Y, radius: n1R, color: c0, peakAlpha: 0.88);
+    // 1. Orb 1: Vibrant Key Color (Drifts across top-left, center & top-right)
+    final n1X = w * 0.35 + (w * 0.32 * math.sin(a1)) + (w * 0.10 * math.cos(a2));
+    final n1Y = h * 0.28 + (h * 0.22 * math.cos(a1)) + (h * 0.08 * math.sin(a2));
+    final n1R = w * 1.35 + (w * 0.18 * math.sin(a1));
+    drawOrb(centerX: n1X, centerY: n1Y, radius: n1R, color: c0, peakAlpha: 0.92);
 
-    // 3. Node 2: Top-Right to Bottom-Center Accent Drift (Cool/Accent depth)
-    final n2X = w * 0.75 + (w * 0.22 * math.cos(a1)) - (w * 0.07 * math.sin(a2));
-    final n2Y = h * 0.30 + (h * 0.20 * math.sin(a1)) + (h * 0.08 * math.cos(a2));
-    final n2R = w * 1.15 + (w * 0.12 * math.cos(a1));
-    drawBlob(centerX: n2X, centerY: n2Y, radius: n2R, color: c2, peakAlpha: 0.78);
+    // 2. Orb 2: Warm Secondary (Swirling across bottom-right & center)
+    final n2X = w * 0.65 - (w * 0.30 * math.cos(a1)) + (w * 0.10 * math.sin(a3));
+    final n2Y = h * 0.65 - (h * 0.24 * math.sin(a1)) + (h * 0.08 * math.cos(a3));
+    final n2R = w * 1.40 + (w * 0.15 * math.cos(a2));
+    drawOrb(centerX: n2X, centerY: n2Y, radius: n2R, color: c1, peakAlpha: 0.90);
 
-    // 4. Node 3: Bottom-Right to Top-Center Warm Flow
-    final n3X = w * 0.70 - (w * 0.26 * math.sin(a1)) + (w * 0.06 * math.sin(a3));
-    final n3Y = h * 0.75 - (h * 0.22 * math.cos(a1)) + (h * 0.05 * math.cos(a2));
-    final n3R = w * 1.35 + (w * 0.16 * math.cos(a1));
-    drawBlob(centerX: n3X, centerY: n3Y, radius: n3R, color: c1, peakAlpha: 0.88);
+    // 3. Orb 3: Contrast Accent (Sweeping top-right to bottom-center)
+    final n3X = w * 0.72 + (w * 0.24 * math.sin(a3)) - (w * 0.10 * math.cos(a1));
+    final n3Y = h * 0.26 + (h * 0.22 * math.cos(a3)) + (h * 0.08 * math.sin(a1));
+    final n3R = w * 1.25 + (w * 0.14 * math.sin(a3));
+    drawOrb(centerX: n3X, centerY: n3Y, radius: n3R, color: c2, peakAlpha: 0.85);
 
-    // 5. Node 4: Bottom-Left to Center Ambient Depth
-    final n4X = w * 0.22 + (w * 0.20 * math.cos(a1)) + (w * 0.08 * math.sin(a2));
-    final n4Y = h * 0.70 + (h * 0.18 * math.sin(a1)) - (h * 0.06 * math.cos(a3));
-    final n4R = w * 1.20 + (w * 0.14 * math.sin(a2));
-    drawBlob(centerX: n4X, centerY: n4Y, radius: n4R, color: c4, peakAlpha: 0.82);
+    // 4. Orb 4: Luminous Center Highlight (Pulsing radiant core)
+    final n4X = w * 0.50 + (w * 0.18 * math.sin(a2));
+    final n4Y = h * 0.48 + (h * 0.16 * math.cos(a4));
+    final n4R = w * 1.10 + (w * 0.16 * math.sin(a1));
+    drawOrb(centerX: n4X, centerY: n4Y, radius: n4R, color: c3, peakAlpha: 0.80);
 
-    // 6. Node 5: Center Fluid Highlight Pulse
-    final n5X = w * 0.50 + (w * 0.15 * math.sin(a2));
-    final n5Y = h * 0.48 + (h * 0.14 * math.cos(a2));
-    final n5R = w * 1.05 + (w * 0.12 * math.cos(a1));
-    drawBlob(centerX: n5X, centerY: n5Y, radius: n5R, color: c3, peakAlpha: 0.65);
+    // 5. Orb 5: Deep Chromatic Foundation (Bottom-left ambient anchor)
+    final n5X = w * 0.22 + (w * 0.18 * math.cos(a4));
+    final n5Y = h * 0.78 + (h * 0.15 * math.sin(a1));
+    final n5R = w * 1.35 + (w * 0.12 * math.cos(a3));
+    drawOrb(centerX: n5X, centerY: n5Y, radius: n5R, color: c4, peakAlpha: 0.88);
   }
 
   @override
@@ -242,5 +262,6 @@ class _AppleMusicMeshPainter extends CustomPainter {
     return oldDelegate.time != time || oldDelegate.colors != colors;
   }
 }
+
 
 
