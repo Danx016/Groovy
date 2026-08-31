@@ -24,25 +24,28 @@ class LyricsLineWidget extends StatelessWidget {
     final isCurrent = state == LyricLineState.current;
     final isPast = state == LyricLineState.past;
 
-    // Apple Music opacity & scale hierarchy
-    final double targetOpacity = isCurrent 
-        ? 1.0 
-        : (isPast ? 0.38 : (distance <= 1 ? 0.38 : 0.28));
-    final double targetScale = isCurrent ? 1.0 : 0.93;
+    // Authentic Apple Music opacity hierarchy
+    final double targetOpacity = isCurrent
+        ? 1.0
+        : (distance == 1
+            ? 0.35
+            : (isPast ? 0.24 : 0.16));
+
+    final double targetScale = isCurrent ? 1.0 : 0.91;
 
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 28.0),
+        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 28.0),
         child: AnimatedScale(
           scale: targetScale,
-          duration: const Duration(milliseconds: 350),
+          duration: const Duration(milliseconds: 550),
           curve: Curves.easeOutCubic,
           alignment: Alignment.centerLeft,
           child: AnimatedOpacity(
             opacity: targetOpacity,
-            duration: const Duration(milliseconds: 350),
+            duration: const Duration(milliseconds: 550),
             curve: Curves.easeOutCubic,
             child: _buildText(isCurrent),
           ),
@@ -59,11 +62,20 @@ class LyricsLineWidget extends StatelessWidget {
     return Text(
       line.text,
       style: TextStyle(
-        fontSize: isCurrent ? 32 : 27,
-        fontWeight: isCurrent ? FontWeight.w800 : FontWeight.w700,
-        letterSpacing: isCurrent ? -0.5 : -0.4,
+        fontSize: isCurrent ? 34 : 32,
+        fontWeight: FontWeight.w800,
+        letterSpacing: isCurrent ? -0.8 : -0.6,
         color: Colors.white,
-        height: 1.22,
+        height: 1.18,
+        shadows: isCurrent
+            ? const [
+                Shadow(
+                  color: Colors.black26,
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
     );
   }
@@ -102,11 +114,18 @@ class LyricsLineWidget extends StatelessWidget {
               child: Text(
                 '${word.text} ',
                 style: const TextStyle(
-                  fontSize: 32,
+                  fontSize: 34,
                   fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
+                  letterSpacing: -0.8,
                   color: Colors.white,
-                  height: 1.22,
+                  height: 1.18,
+                  shadows: [
+                    Shadow(
+                      color: Colors.black26,
+                      blurRadius: 10,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -116,4 +135,5 @@ class LyricsLineWidget extends StatelessWidget {
     );
   }
 }
+
 

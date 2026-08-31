@@ -17,20 +17,20 @@ class AlbumArtView extends StatelessWidget {
     return Hero(
       tag: tag,
       child: AnimatedScale(
-        scale: isPlaying ? 1.0 : 0.82,
-        duration: const Duration(milliseconds: 450),
+        scale: isPlaying ? 1.0 : 0.84,
+        duration: const Duration(milliseconds: 400),
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 450),
+          duration: const Duration(milliseconds: 400),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14.0),
+            borderRadius: BorderRadius.circular(12.0),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isPlaying ? 0.48 : 0.22),
-                blurRadius: isPlaying ? 38.0 : 16.0,
-                spreadRadius: isPlaying ? 2.0 : 0.0,
-                offset: Offset(0, isPlaying ? 18.0 : 8.0),
+                color: Colors.black.withValues(alpha: isPlaying ? 0.45 : 0.20),
+                blurRadius: isPlaying ? 32.0 : 16.0,
+                spreadRadius: 0.0,
+                offset: Offset(0, isPlaying ? 16.0 : 8.0),
               ),
             ],
             image: DecorationImage(
