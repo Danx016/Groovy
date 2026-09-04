@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import '../widgets/blurred_gradient_background.dart';
@@ -73,20 +74,35 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     _fetchLyrics();
   }
 
+  PlayerProvider? _playerProvider;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final provider = Provider.of<PlayerProvider>(context);
-    if (provider.currentSong != null && _lastSong?.id != provider.currentSong?.id) {
-      _lastSong = provider.currentSong;
+    final provider = Provider.of<PlayerProvider>(context, listen: false);
+    if (_playerProvider != provider) {
+      _playerProvider?.removeListener(_onPlayerChanged);
+      _playerProvider = provider;
+      _playerProvider?.addListener(_onPlayerChanged);
+      _onPlayerChanged();
+    }
+  }
+
+  void _onPlayerChanged() {
+    if (!mounted || _playerProvider == null) return;
+    final currentSong = _playerProvider!.currentSong;
+    if (currentSong != null && _lastSong?.id != currentSong.id) {
+      _lastSong = currentSong;
       _updateImageProviderAndColors();
       
-      // Debounce lyrics fetch so rapid skipping doesn't spawn parallel requests
       _lyricsDebounceTimer?.cancel();
-      if (_lyricsCache.containsKey(_lastSong!.id)) {
-        _fetchedLyrics = _lyricsCache[_lastSong!.id]!;
-        _isLoadingLyrics = false;
+      if (_lyricsCache.containsKey(currentSong.id)) {
+        setState(() {
+          _fetchedLyrics = _lyricsCache[currentSong.id]!;
+          _isLoadingLyrics = false;
+        });
       } else {
+        setState(() => _isLoadingLyrics = true);
         _lyricsDebounceTimer = Timer(const Duration(milliseconds: 150), () {
           if (mounted) _fetchLyrics();
         });
@@ -117,20 +133,45 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     if (raw['structuredLyrics'] != null) {
       final structured = raw['structuredLyrics'] as List?;
       if (structured != null && structured.isNotEmpty) {
-        final lines = structured.first['line'] as List?;
-        if (lines != null) {
-          return lines.map((l) {
-            return LyricLine(
-              startTime: Duration(milliseconds: l['start'] as int),
-              text: l['value'] as String,
-            );
-          }).toList();
+        final firstStruct = structured.first;
+        if (firstStruct is Map) {
+          final lines = firstStruct['line'] as List?;
+          if (lines != null) {
+            final res = <LyricLine>[];
+            for (final l in lines) {
+              if (l is Map) {
+                final startVal = l['start'];
+                final startMs = (startVal is num)
+                    ? startVal.toInt()
+                    : (int.tryParse(startVal?.toString() ?? '') ?? 0);
+                final val = l['value']?.toString() ?? '';
+                if (val.isNotEmpty) {
+                  res.add(LyricLine(
+                    startTime: Duration(milliseconds: startMs),
+                    text: val,
+                  ));
+                }
+              }
+            }
+            if (res.isNotEmpty) return res;
+          }
         }
       }
     }
-    if (raw['value'] != null) {
+    if (raw['syncedLyrics'] != null && raw['syncedLyrics'] is String) {
+      final lrcText = raw['syncedLyrics'] as String;
+      final parsed = LrcParser.parseLrc(lrcText);
+      if (parsed.isNotEmpty) return parsed;
+    }
+    if (raw['value'] != null && raw['value'] is String) {
       final lrcText = raw['value'] as String;
-      return LrcParser.parseLrc(lrcText);
+      final parsed = LrcParser.parseLrc(lrcText);
+      if (parsed.isNotEmpty) return parsed;
+    }
+    if (raw['plainLyrics'] != null && raw['plainLyrics'] is String) {
+      final text = raw['plainLyrics'] as String;
+      final parsed = LrcParser.parseLrc(text);
+      if (parsed.isNotEmpty) return parsed;
     }
     return [];
   }
@@ -252,6 +293,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   @override
   void dispose() {
+    _playerProvider?.removeListener(_onPlayerChanged);
     _colorDebounceTimer?.cancel();
     _lyricsDebounceTimer?.cancel();
     _pageController.dispose();
@@ -319,15 +361,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   Widget _buildPortraitLayout(BuildContext context, Color accentColor, BoxConstraints constraints) {
     final isCompact = constraints.maxHeight < 680;
+    final statusBarHeight = MediaQuery.of(context).viewPadding.top;
+    final effectiveTopPadding = math.max(statusBarHeight, 38.0) + 8.0;
 
     return Column(
       children: [
         // 1. Smooth Universal Header (Crossfades between Drag Pill and Track Info Header)
         Padding(
           padding: EdgeInsets.only(
-            top: widget.topPadding > 0 ? widget.topPadding * 0.3 : 6,
-            left: 16.0,
-            right: 16.0,
+            top: _currentPage == 0 ? (widget.topPadding > 0 ? widget.topPadding * 0.3 : 10.0) : effectiveTopPadding,
+            left: 20.0,
+            right: 20.0,
+            bottom: 4.0,
           ),
           child: AnimatedCrossFade(
             firstChild: _buildDragHandle(isCompact),
@@ -350,9 +395,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               });
             },
             children: [
-              _buildCoverPage(context, isCompact),
-              _buildLyricsPage(),
-              _buildQueuePage(),
+              _KeepAlivePage(child: _buildCoverPage(context, isCompact)),
+              _KeepAlivePage(child: _buildLyricsPage()),
+              _KeepAlivePage(child: _buildQueuePage()),
             ],
           ),
         ),
@@ -368,9 +413,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildTrackMiniHeader(BuildContext context) {
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, child) {
-        final currentSong = provider.currentSong ?? widget.song;
+    return Selector<PlayerProvider, (Song?, bool)>(
+      selector: (_, p) => (p.currentSong, p.currentSong?.starred ?? false),
+      builder: (context, data, child) {
+        final provider = Provider.of<PlayerProvider>(context, listen: false);
+        final currentSong = data.$1 ?? widget.song;
         final title = currentSong?.title ?? widget.title;
         final artist = currentSong?.artist ?? widget.artist;
         final isStarred = currentSong?.starred ?? false;
@@ -474,8 +521,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     },
                     icon: Icon(
                       isFav ? Icons.star_rounded : Icons.star_outline_rounded,
-                      color: isFav ? const Color(0xFFFFD600) : Colors.white,
-                      size: 20,
+                      color: isFav ? const Color(0xFFFFD60A) : Colors.white.withValues(alpha: 0.90),
+                      size: 21,
                     ),
                   );
                 },
@@ -492,10 +539,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     builder: (context) => const NowPlayingMoreMenu(),
                   );
                 },
-                icon: const Icon(
+                icon: Icon(
                   Icons.more_vert_rounded,
-                  color: Colors.white,
-                  size: 20,
+                  color: Colors.white.withValues(alpha: 0.90),
+                  size: 21,
                 ),
               ),
             ],
@@ -506,12 +553,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildCoverPage(BuildContext context, bool isCompact) {
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, child) {
-        final currentSong = provider.currentSong ?? widget.song;
+    return Selector<PlayerProvider, (Song?, bool, bool)>(
+      selector: (_, p) => (p.currentSong, p.currentSong?.starred ?? false, p.isPlaying),
+      builder: (context, data, child) {
+        final provider = Provider.of<PlayerProvider>(context, listen: false);
+        final currentSong = data.$1 ?? widget.song;
         final title = currentSong?.title ?? widget.title;
         final artist = currentSong?.artist ?? widget.artist;
-        final isStarred = currentSong?.starred ?? false;
+        final isStarred = data.$2;
+        final isPlaying = data.$3;
 
         return Column(
           children: [
@@ -520,15 +570,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: 32.0,
-                    vertical: isCompact ? 8.0 : 14.0,
+                    horizontal: 36.0,
+                    vertical: isCompact ? 2.0 : 8.0,
                   ),
                   child: AspectRatio(
                     aspectRatio: 1.0,
                     child: AlbumArtView(
                       image: _currentImageProvider ?? widget.image,
                       tag: currentSong?.id ?? widget.heroTag,
-                      isPlaying: provider.isPlaying,
+                      isPlaying: isPlaying,
                     ),
                   ),
                 ),
@@ -537,9 +587,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
             // Song Info (Title, Artist, Favorite, More)
             Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: 28.0,
-                vertical: isCompact ? 8.0 : 14.0,
+              padding: const EdgeInsets.symmetric(
+                horizontal: 32.0,
+                vertical: 6.0,
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -598,8 +648,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         },
                         icon: Icon(
                           isFav ? Icons.star_rounded : Icons.star_outline_rounded,
-                          color: isFav ? const Color(0xFFFFD600) : Colors.white,
-                          size: 20,
+                          color: isFav ? const Color(0xFFFFD60A) : Colors.white.withValues(alpha: 0.90),
+                          size: 21,
                         ),
                       );
                     },
@@ -616,10 +666,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         builder: (context) => const NowPlayingMoreMenu(),
                       );
                     },
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.more_vert_rounded,
-                      color: Colors.white,
-                      size: 20,
+                      color: Colors.white.withValues(alpha: 0.90),
+                      size: 21,
                     ),
                   ),
                 ],
@@ -642,17 +692,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             });
           },
           child: _fetchedLyrics.isNotEmpty
-              ? StreamBuilder<Duration>(
-                  stream: provider.positionStream,
-                  initialData: provider.position,
-                  builder: (context, snapshot) {
-                    return LyricsListView(
-                      lyrics: _fetchedLyrics,
-                      currentTime: snapshot.data ?? Duration.zero,
-                      onSeek: (duration) {
-                        provider.seek(duration);
-                      },
-                    );
+              ? LyricsListView(
+                  lyrics: _fetchedLyrics,
+                  positionStream: provider.positionStream,
+                  initialPosition: provider.position,
+                  onSeek: (duration) {
+                    provider.seek(duration);
                   },
                 )
               : Center(
@@ -677,8 +722,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildBottomSection(Color accentColor, bool isCompact) {
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, child) {
+    return Selector<PlayerProvider, (bool, bool, RepeatMode, Duration)>(
+      selector: (_, p) => (p.isPlaying, p.shuffleEnabled, p.repeatMode, p.duration),
+      builder: (context, data, child) {
+        final provider = Provider.of<PlayerProvider>(context, listen: false);
+        final isPlaying = data.$1;
+        final shuffleEnabled = data.$2;
+        final repeatMode = data.$3;
+        final duration = data.$4;
         final hideControlsInLyrics = _currentPage == 1 && !_showLyricsControls;
 
         return AnimatedCrossFade(
@@ -688,32 +739,17 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               // 1. Scrubber Progress Slider
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                child: StreamBuilder<Duration>(
-                  stream: provider.positionStream,
-                  initialData: provider.position,
-                  builder: (context, snapshot) {
-                    return StreamBuilder<Duration>(
-                      stream: provider.bufferedPositionStream,
-                      initialData: provider.bufferedPosition,
-                      builder: (context, bufSnap) {
-                        return StreamBuilder<bool>(
-                          stream: provider.isBufferingStream,
-                          initialData: provider.isBuffering,
-                          builder: (context, buffSnap) {
-                            return PlaybackProgressSlider(
-                              position: snapshot.data ?? Duration.zero,
-                              duration: provider.duration,
-                              bufferedPosition: bufSnap.data ?? Duration.zero,
-                              isBuffering: buffSnap.data ?? false,
-                              accentColor: Colors.white,
-                              onChanged: (val) {
-                                provider.seek(val);
-                              },
-                            );
-                          },
-                        );
-                      },
-                    );
+                child: PlaybackProgressSlider(
+                  position: provider.position,
+                  duration: duration,
+                  bufferedPosition: provider.bufferedPosition,
+                  isBuffering: provider.isBuffering,
+                  positionStream: provider.positionStream,
+                  bufferedPositionStream: provider.bufferedPositionStream,
+                  isBufferingStream: provider.isBufferingStream,
+                  accentColor: Colors.white,
+                  onChanged: (val) {
+                    provider.seek(val);
                   },
                 ),
               ),
@@ -724,9 +760,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 28.0),
                 child: PlaybackControls(
-                  isPlaying: provider.isPlaying,
-                  isShuffleEnabled: provider.shuffleEnabled,
-                  isRepeatEnabled: provider.repeatMode != RepeatMode.off,
+                  isPlaying: isPlaying,
+                  isShuffleEnabled: shuffleEnabled,
+                  isRepeatEnabled: repeatMode != RepeatMode.off,
                   accentColor: accentColor,
                   onPlayPause: () => provider.togglePlayPause(),
                   onNext: () => provider.skipNext(),
@@ -759,7 +795,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 },
               ),
 
-              SizedBox(height: isCompact ? 4 : 8),
+              SizedBox(height: isCompact ? 8 : 16),
             ],
           ),
           secondChild: Column(
@@ -1042,3 +1078,24 @@ class _CircleActionButtonState extends State<_CircleActionButton> {
     );
   }
 }
+
+class _KeepAlivePage extends StatefulWidget {
+  final Widget child;
+  const _KeepAlivePage({required this.child});
+
+  @override
+  State<_KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
+  }
+}
+

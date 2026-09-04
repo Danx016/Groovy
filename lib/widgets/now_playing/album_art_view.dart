@@ -17,25 +17,27 @@ class AlbumArtView extends StatelessWidget {
     return Hero(
       tag: tag,
       child: AnimatedScale(
-        scale: isPlaying ? 1.0 : 0.84,
-        duration: const Duration(milliseconds: 400),
+        scale: isPlaying ? 1.0 : 0.85,
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOutCubic,
+        child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12.0),
+            borderRadius: BorderRadius.circular(14.0),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isPlaying ? 0.45 : 0.20),
-                blurRadius: isPlaying ? 32.0 : 16.0,
+                color: Colors.black.withValues(alpha: isPlaying ? 0.40 : 0.20),
+                blurRadius: isPlaying ? 28.0 : 14.0,
                 spreadRadius: 0.0,
-                offset: Offset(0, isPlaying ? 16.0 : 8.0),
+                offset: Offset(0, isPlaying ? 14.0 : 6.0),
               ),
             ],
-            image: DecorationImage(
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14.0),
+            child: Image(
               image: image,
               fit: BoxFit.cover,
+              gaplessPlayback: true,
             ),
           ),
         ),
@@ -43,5 +45,3 @@ class AlbumArtView extends StatelessWidget {
     );
   }
 }
-
-
