@@ -63,7 +63,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _duration = Duration.zero;
   Song? _currentSong;
   double _volume = 1.0;
-  int _playGeneration = 0;
 
   /// True only while audio is actually being rendered on a remote device.
   /// Distinct from isConnected: if the user plays a radio station while a
@@ -878,6 +877,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   RadioStation? get currentRadioStation => _currentRadioStation;
   bool get isPlayingRadio => _isPlayingRadio;
 
+  void clearUpcomingQueue() {
+    if (_queue.isEmpty || _currentIndex < 0) return;
+    if (_currentIndex < _queue.length - 1) {
+      _queue = _queue.sublist(0, _currentIndex + 1);
+      _saveQueueState();
+      notifyListeners();
+    }
+  }
+
   // Unified position stream: fed by the local audio player in normal mode, or
   // by UPnP/Cast polling in remote-playback mode.  The UI subscribes to this
   // instead of directly to _audioPlayer.positionStream so that the progress
@@ -1464,34 +1472,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     debugPrint(
         '[Player] ▶ playSong: "${song.title}" by ${song.artist ?? 'unknown'} (id=${song.id} local=${song.isLocal})');
-    final currentGen = ++_playGeneration;
     _isLoading = true;
     notifyListeners();
 
     try {
       if (playlist != null) {
-        bool isSameQueue = _queue.length == playlist.length;
-        if (isSameQueue) {
-          for (int i = 0; i < _queue.length; i++) {
-            if (_queue[i].id != playlist[i].id) {
-              isSameQueue = false;
-              break;
-            }
-          }
-        }
-
-        if (isSameQueue && _concatenatingSource != null && !_isRenderingRemotely) {
-          final targetIndex =
-              startIndex ?? playlist.indexWhere((s) => s.id == song.id);
-          if (targetIndex != -1 && targetIndex != _currentIndex) {
-            await _audioPlayer.seek(Duration.zero, index: targetIndex);
-            return;
-          } else if (targetIndex == _currentIndex && !_isPlaying) {
-            await play();
-            return;
-          }
-        }
-
         _queue = List.from(playlist);
         _currentIndex =
             startIndex ?? playlist.indexWhere((s) => s.id == song.id);
@@ -1591,12 +1576,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (youtubeSource != null) {
           // YouTube: single StreamAudioSource, no gapless
-          if (currentGen != _playGeneration) return;
           _concatenatingSource = null;
-          await _audioPlayer.setAudioSource(youtubeSource);
-          if (currentGen != _playGeneration) return;
+          await _audioPlayer.setAudioSource(youtubeSource, initialPosition: Duration.zero);
+          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
-          if (currentGen != _playGeneration) return;
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_subsonicService.isYoutube) {
           // All songs are YouTube — can't build ConcatenatingAudioSource easily
@@ -1612,11 +1595,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               playUrl = await _subsonicService.resolveStreamUrlAsync(song);
             }
           }
-          if (currentGen != _playGeneration) return;
-          await _audioPlayer.setUrl(playUrl);
-          if (currentGen != _playGeneration) return;
+          await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
+          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
-          if (currentGen != _playGeneration) return;
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_gaplessEnabled) {
           // Build ConcatenatingAudioSource for gapless playback
@@ -1632,7 +1613,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 'First playback failed (Android 16 Media3 issue), retrying: $e',
               );
               await Future.delayed(const Duration(milliseconds: 100));
-              if (currentGen != _playGeneration) return;
               await _buildAndSetConcatenatingSource(
                 initialIndex: _currentIndex,
                 initialPosition: Duration.zero,
@@ -1642,9 +1622,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               rethrow;
             }
           }
-          if (currentGen != _playGeneration) return;
+          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
-          if (currentGen != _playGeneration) return;
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else {
           // Gapless disabled — single-song mode
@@ -2021,38 +2000,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _addAutoDjSongs();
     }
 
-    if (_concatenatingSource != null) {
-      if (_shuffleEnabled && _queue.length > 1) {
-        _shuffleHistory.add(_currentSong!.id);
-        if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
-        int next;
-        do {
-          next = Random().nextInt(_queue.length);
-        } while (next == _currentIndex);
-        _currentIndex = next;
-        _currentSong = _queue[next];
-        _position = Duration.zero;
-        notifyListeners();
-        await _audioPlayer.seek(Duration.zero, index: next);
-      } else if (_currentIndex < _queue.length - 1) {
-        final next = _currentIndex + 1;
-        _currentIndex = next;
-        _currentSong = _queue[next];
-        _position = Duration.zero;
-        notifyListeners();
-        await _audioPlayer.seek(Duration.zero, index: next);
-      } else if (_repeatMode == RepeatMode.all) {
-        _currentIndex = 0;
-        _currentSong = _queue[0];
-        _position = Duration.zero;
-        notifyListeners();
-        await _audioPlayer.seek(Duration.zero, index: 0);
-      }
-      return;
-    }
-
     if (_shuffleEnabled && _queue.length > 1) {
-      _shuffleHistory.add(_currentSong!.id);
+      _shuffleHistory.add(_currentSong?.id ?? '');
       if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
       int next;
       do {
@@ -2096,17 +2045,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       if (songsToAdd.isNotEmpty) {
         _queue.addAll(songsToAdd);
-        if (_concatenatingSource != null) {
-          for (final song in songsToAdd) {
-            try {
-              final source = await _buildAudioSourceForSong(song);
-              _concatenatingSource!.add(source);
-            } catch (e) {
-              debugPrint(
-                  'Error adding AutoDJ song to concatenating source: $e');
-            }
-          }
-        }
         notifyListeners();
         _saveQueueState();
         debugPrint('Auto DJ added ${songsToAdd.length} songs to queue');
@@ -2126,44 +2064,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    if (_concatenatingSource != null) {
-      if (_shuffleEnabled && _shuffleHistory.isNotEmpty) {
-        final prevId = _shuffleHistory.removeLast();
-        final prev = _queue.indexWhere((s) => s.id == prevId);
-        if (prev != -1) {
-          _currentIndex = prev;
-          _currentSong = _queue[prev];
-          _position = Duration.zero;
-          notifyListeners();
-          await _audioPlayer.seek(Duration.zero, index: prev);
-          return;
-        }
-      }
-      if (_currentIndex > 0) {
-        final prev = _currentIndex - 1;
-        _currentIndex = prev;
-        _currentSong = _queue[prev];
-        _position = Duration.zero;
-        notifyListeners();
-        await _audioPlayer.seek(Duration.zero, index: prev);
-      } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
-        final prev = _queue.length - 1;
-        _currentIndex = prev;
-        _currentSong = _queue[prev];
-        _position = Duration.zero;
-        notifyListeners();
-        await _audioPlayer.seek(Duration.zero, index: prev);
-      } else {
-        await seek(Duration.zero);
-      }
-      return;
-    }
+    if (_queue.isEmpty) return;
 
     if (_shuffleEnabled && _shuffleHistory.isNotEmpty) {
       final prevId = _shuffleHistory.removeLast();
       final prev = _queue.indexWhere((s) => s.id == prevId);
-      if (prev != -1) await skipToIndex(prev);
-    } else if (_currentIndex > 0) {
+      if (prev != -1) {
+        await skipToIndex(prev);
+        return;
+      }
+    }
+    if (_currentIndex > 0) {
       await skipToIndex(_currentIndex - 1);
     } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
       if (_queue.length == 1) {
@@ -2179,15 +2090,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipToIndex(int index) async {
     if (index >= 0 && index < _queue.length) {
-      _currentIndex = index;
-      _currentSong = _queue[index];
-      _position = Duration.zero;
-      notifyListeners();
-      if (_concatenatingSource != null && !_isRenderingRemotely) {
-        await _audioPlayer.seek(Duration.zero, index: index);
-      } else {
-        await playSong(_queue[index], playlist: _queue, startIndex: index);
-      }
+      await playSong(_queue[index], playlist: _queue, startIndex: index);
     }
   }
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,6 +8,9 @@ class PlaybackProgressSlider extends StatefulWidget {
   final Duration duration;
   final Duration bufferedPosition;
   final bool isBuffering;
+  final Stream<Duration>? positionStream;
+  final Stream<Duration>? bufferedPositionStream;
+  final Stream<bool>? isBufferingStream;
   final ValueChanged<Duration> onChanged;
   final Color accentColor;
 
@@ -15,6 +20,9 @@ class PlaybackProgressSlider extends StatefulWidget {
     required this.duration,
     this.bufferedPosition = Duration.zero,
     this.isBuffering = false,
+    this.positionStream,
+    this.bufferedPositionStream,
+    this.isBufferingStream,
     required this.onChanged,
     required this.accentColor,
   });
@@ -28,18 +36,95 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
   bool _isDragging = false;
   double _dragValue = 0.0;
   late AnimationController _shimmerController;
+  late Duration _currentPosition;
+  late Duration _currentBufferedPosition;
+  late bool _currentIsBuffering;
+
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<Duration>? _bufSub;
+  StreamSubscription<bool>? _bufferingSub;
+  int _lastUpdateMillis = 0;
 
   @override
   void initState() {
     super.initState();
+    _currentPosition = widget.position;
+    _currentBufferedPosition = widget.bufferedPosition;
+    _currentIsBuffering = widget.isBuffering;
+
     _shimmerController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1400),
-    )..repeat();
+    );
+    if (_currentIsBuffering) {
+      _shimmerController.repeat();
+    }
+
+    _subscribeStreams();
+  }
+
+  void _subscribeStreams() {
+    _posSub?.cancel();
+    _bufSub?.cancel();
+    _bufferingSub?.cancel();
+
+    if (widget.positionStream != null) {
+      _posSub = widget.positionStream!.listen((pos) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        // Throttle UI position rebuilds to 4 times a second (250ms) for 0% CPU overhead
+        if (!_isDragging && (now - _lastUpdateMillis >= 250 || pos == Duration.zero)) {
+          _lastUpdateMillis = now;
+          if (mounted) {
+            setState(() {
+              _currentPosition = pos;
+            });
+          }
+        }
+      });
+    }
+
+    if (widget.bufferedPositionStream != null) {
+      _bufSub = widget.bufferedPositionStream!.listen((buf) {
+        if (mounted && buf != _currentBufferedPosition) {
+          setState(() {
+            _currentBufferedPosition = buf;
+          });
+        }
+      });
+    }
+
+    if (widget.isBufferingStream != null) {
+      _bufferingSub = widget.isBufferingStream!.listen((buffering) {
+        if (mounted && buffering != _currentIsBuffering) {
+          setState(() {
+            _currentIsBuffering = buffering;
+          });
+          if (buffering) {
+            _shimmerController.repeat();
+          } else {
+            _shimmerController.stop();
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(PlaybackProgressSlider oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.positionStream == null && widget.position != oldWidget.position && !_isDragging) {
+      _currentPosition = widget.position;
+    }
+    if (widget.positionStream != oldWidget.positionStream) {
+      _subscribeStreams();
+    }
   }
 
   @override
   void dispose() {
+    _posSub?.cancel();
+    _bufSub?.cancel();
+    _bufferingSub?.cancel();
     _shimmerController.dispose();
     super.dispose();
   }
@@ -60,11 +145,11 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
     final maxDuration = widget.duration.inMilliseconds.toDouble();
     final currentDuration = _isDragging 
         ? _dragValue 
-        : widget.position.inMilliseconds.toDouble();
+        : _currentPosition.inMilliseconds.toDouble();
         
     final safeMax = maxDuration > 0 ? maxDuration : 1.0;
     final progress = (currentDuration / safeMax).clamp(0.0, 1.0);
-    final bufferedProgress = (widget.bufferedPosition.inMilliseconds / safeMax).clamp(0.0, 1.0);
+    final bufferedProgress = (_currentBufferedPosition.inMilliseconds / safeMax).clamp(0.0, 1.0);
     final remainingMillis = (safeMax - currentDuration).clamp(0.0, safeMax);
     final remainingDuration = Duration(milliseconds: remainingMillis.toInt());
 
@@ -101,26 +186,40 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
             widget.onChanged(Duration(milliseconds: tapValue.toInt()));
           },
           child: Container(
-            height: 28, // Tappable hit target
+            height: 24, // Touch target
             alignment: Alignment.center,
-            child: AnimatedBuilder(
-              animation: _shimmerController,
-              builder: (context, _) {
-                return CustomPaint(
-                  size: const Size(double.infinity, 28),
-                  painter: _SliderPainter(
-                    progress: progress,
-                    bufferedProgress: bufferedProgress,
-                    isBuffering: widget.isBuffering,
-                    shimmerPhase: _shimmerController.value,
-                    isDragging: _isDragging,
-                    activeColor: Colors.white.withValues(alpha: 0.95),
-                    bufferedColor: Colors.white.withValues(alpha: 0.35),
-                    inactiveColor: Colors.white.withValues(alpha: 0.18),
+            child: _currentIsBuffering
+                ? AnimatedBuilder(
+                    animation: _shimmerController,
+                    builder: (context, _) {
+                      return CustomPaint(
+                        size: const Size(double.infinity, 24),
+                        painter: _AppleMusicSliderPainter(
+                          progress: progress,
+                          bufferedProgress: bufferedProgress,
+                          isBuffering: true,
+                          shimmerPhase: _shimmerController.value,
+                          isDragging: _isDragging,
+                          activeColor: Colors.white.withValues(alpha: 0.95),
+                          bufferedColor: Colors.white.withValues(alpha: 0.35),
+                          inactiveColor: Colors.white.withValues(alpha: 0.22),
+                        ),
+                      );
+                    },
+                  )
+                : CustomPaint(
+                    size: const Size(double.infinity, 24),
+                    painter: _AppleMusicSliderPainter(
+                      progress: progress,
+                      bufferedProgress: bufferedProgress,
+                      isBuffering: false,
+                      shimmerPhase: 0.0,
+                      isDragging: _isDragging,
+                      activeColor: Colors.white.withValues(alpha: 0.95),
+                      bufferedColor: Colors.white.withValues(alpha: 0.35),
+                      inactiveColor: Colors.white.withValues(alpha: 0.22),
+                    ),
                   ),
-                );
-              },
-            ),
           ),
         ),
         const SizedBox(height: 2),
@@ -128,13 +227,13 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Elapsed position
+            // Elapsed position (e.g. 0:03)
             SizedBox(
               width: 55,
               child: Text(
                 _formatDuration(Duration(milliseconds: currentDuration.toInt())),
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: Colors.white.withValues(alpha: 0.60),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -143,14 +242,42 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
               ),
             ),
 
-            // Negative remaining duration (-M:SS)
+            // Apple Music Lossless Badge
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CustomPaint(
+                    size: const Size(12, 9),
+                    painter: _LosslessWaveformPainter(color: Colors.white.withValues(alpha: 0.88)),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Lossless',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withValues(alpha: 0.90),
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Negative remaining duration (-4:10)
             SizedBox(
               width: 55,
               child: Text(
                 "-${_formatDuration(remainingDuration)}",
                 textAlign: TextAlign.right,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.55),
+                  color: Colors.white.withValues(alpha: 0.60),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                   fontFeatures: const [FontFeature.tabularFigures()],
@@ -165,7 +292,34 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
   }
 }
 
-class _SliderPainter extends CustomPainter {
+class _LosslessWaveformPainter extends CustomPainter {
+  final Color color;
+
+  _LosslessWaveformPainter({required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round;
+
+    final path = Path();
+    path.moveTo(0, size.height * 0.5);
+    path.lineTo(size.width * 0.25, size.height * 0.15);
+    path.lineTo(size.width * 0.50, size.height * 0.85);
+    path.lineTo(size.width * 0.75, size.height * 0.25);
+    path.lineTo(size.width, size.height * 0.5);
+
+    canvas.drawPath(path, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant _LosslessWaveformPainter oldDelegate) => false;
+}
+
+class _AppleMusicSliderPainter extends CustomPainter {
   final double progress;
   final double bufferedProgress;
   final bool isBuffering;
@@ -175,7 +329,7 @@ class _SliderPainter extends CustomPainter {
   final Color bufferedColor;
   final Color inactiveColor;
 
-  _SliderPainter({
+  _AppleMusicSliderPainter({
     required this.progress,
     required this.bufferedProgress,
     required this.isBuffering,
@@ -188,90 +342,92 @@ class _SliderPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final trackHeight = isDragging ? 6.5 : 4.5;
-    final trackRadius = Radius.circular(trackHeight / 2);
-    final centerY = size.height / 2;
+    final trackHeight = isDragging ? 7.0 : 4.0;
+    final trackY = (size.height - trackHeight) / 2.0;
+    final r = trackHeight / 2.0;
+    final radius = Radius.circular(r);
 
-    // 1. Inactive background track
-    final inactivePaint = Paint()
-      ..color = inactiveColor
-      ..style = PaintingStyle.fill;
-
-    final trackRect = Rect.fromLTWH(0, centerY - trackHeight / 2, size.width, trackHeight);
-    final inactiveRRect = RRect.fromRectAndRadius(trackRect, trackRadius);
+    // 1. Inactive Background Track
+    final inactivePaint = Paint()..color = inactiveColor;
+    final inactiveRRect = RRect.fromRectAndRadius(
+      Rect.fromLTWH(0, trackY, size.width, trackHeight),
+      radius,
+    );
     canvas.drawRRect(inactiveRRect, inactivePaint);
 
-    // 2. Buffered range track (Apple Music audio cache ahead)
-    final bufferedWidth = (size.width * bufferedProgress).clamp(0.0, size.width);
-    if (bufferedWidth > 0) {
-      final bufferedPaint = Paint()
-        ..color = bufferedColor
-        ..style = PaintingStyle.fill;
-
+    // 2. Buffered Track
+    if (bufferedProgress > 0.0) {
+      final bufferedWidth = (size.width * bufferedProgress).clamp(0.0, size.width);
+      final bufferedPaint = Paint()..color = bufferedColor;
       final bufferedRRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, centerY - trackHeight / 2, bufferedWidth, trackHeight),
-        trackRadius,
+        Rect.fromLTWH(0, trackY, bufferedWidth, trackHeight),
+        radius,
       );
       canvas.drawRRect(bufferedRRect, bufferedPaint);
     }
 
-    // 3. Apple Music Loading / Buffering Shimmer Wave
+    // 3. Active Playback Track
+    final activeWidth = (size.width * progress).clamp(0.0, size.width);
+    if (activeWidth > 0.0) {
+      final activePaint = Paint()..color = activeColor;
+      final activeRRect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(0, trackY, activeWidth, trackHeight),
+        radius,
+      );
+      canvas.drawRRect(activeRRect, activePaint);
+    }
+
+    // 4. Shimmer wave if buffering
     if (isBuffering) {
       final shimmerPaint = Paint()
         ..shader = LinearGradient(
-          begin: Alignment(-1.5 + shimmerPhase * 3.0, 0.0),
-          end: Alignment(-0.5 + shimmerPhase * 3.0, 0.0),
+          begin: Alignment.centerLeft,
+          end: Alignment.centerRight,
           colors: [
             Colors.transparent,
-            Colors.white.withValues(alpha: 0.55),
-            Colors.white.withValues(alpha: 0.90),
-            Colors.white.withValues(alpha: 0.55),
+            Colors.white.withValues(alpha: 0.60),
             Colors.transparent,
           ],
-          stops: const [0.0, 0.35, 0.50, 0.65, 1.0],
-        ).createShader(trackRect);
-
+          stops: const [0.0, 0.5, 1.0],
+        ).createShader(
+          Rect.fromLTWH(
+            (shimmerPhase * size.width * 1.5) - (size.width * 0.3),
+            trackY,
+            size.width * 0.3,
+            trackHeight,
+          ),
+        );
       canvas.drawRRect(inactiveRRect, shimmerPaint);
     }
 
-    // 4. Played Active progress track
-    final activeWidth = (size.width * progress).clamp(0.0, size.width);
-    if (activeWidth > 0) {
-      final activePaint = Paint()
-        ..color = activeColor
+    // 5. Apple Music Scrubbing Indicator / Pill
+    if (isDragging) {
+      final thumbX = activeWidth.clamp(r, size.width - r);
+      final thumbPaint = Paint()
+        ..color = Colors.white
         ..style = PaintingStyle.fill;
 
-      final activeRect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(0, centerY - trackHeight / 2, activeWidth, trackHeight),
-        trackRadius,
+      // Glow shadow
+      canvas.drawCircle(
+        Offset(thumbX, size.height / 2.0),
+        7.0,
+        Paint()
+          ..color = Colors.black.withValues(alpha: 0.35)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4),
       );
-      canvas.drawRRect(activeRect, activePaint);
-    }
 
-    // 5. Interactive Thumb Knob (visible and expanding when dragging)
-    if (isDragging) {
-      final thumbRadius = trackHeight + 3.0;
-
-      // Soft shadow behind thumb
-      final shadowPaint = Paint()
-        ..color = Colors.black.withValues(alpha: 0.35)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
-      canvas.drawCircle(Offset(activeWidth, centerY + 1), thumbRadius, shadowPaint);
-
-      final thumbPaint = Paint()..color = Colors.white;
-      canvas.drawCircle(Offset(activeWidth, centerY), thumbRadius, thumbPaint);
+      // Solid white thumb
+      canvas.drawCircle(Offset(thumbX, size.height / 2.0), 6.0, thumbPaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _SliderPainter oldDelegate) {
+  bool shouldRepaint(covariant _AppleMusicSliderPainter oldDelegate) {
     return oldDelegate.progress != progress ||
         oldDelegate.bufferedProgress != bufferedProgress ||
         oldDelegate.isBuffering != isBuffering ||
         oldDelegate.shimmerPhase != shimmerPhase ||
         oldDelegate.isDragging != isDragging ||
-        oldDelegate.activeColor != activeColor ||
-        oldDelegate.bufferedColor != bufferedColor ||
-        oldDelegate.inactiveColor != inactiveColor;
+        oldDelegate.activeColor != activeColor;
   }
 }

@@ -26,13 +26,15 @@ class LyricsItem {
 
 class LyricsListView extends StatefulWidget {
   final List<LyricLine> lyrics;
-  final Duration currentTime;
+  final Stream<Duration> positionStream;
+  final Duration initialPosition;
   final Function(Duration) onSeek;
 
   const LyricsListView({
     super.key,
     required this.lyrics,
-    required this.currentTime,
+    required this.positionStream,
+    required this.initialPosition,
     required this.onSeek,
   });
 
@@ -48,13 +50,25 @@ class _LyricsListViewState extends State<LyricsListView> {
   int _currentLyricIndex = -1;
   bool _isManualScrolling = false;
   Timer? _resumeAutoScrollTimer;
+  StreamSubscription<Duration>? _posSub;
+  Duration _currentPosition = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _scrollController = ScrollController();
+    _currentPosition = widget.initialPosition;
     _buildItems();
-    _updateCurrentIndex();
+    _updateIndexForPosition(_currentPosition);
+    _subscribeToPosition();
+  }
+
+  void _subscribeToPosition() {
+    _posSub?.cancel();
+    _posSub = widget.positionStream.listen((pos) {
+      _currentPosition = pos;
+      _updateIndexForPosition(pos);
+    });
   }
 
   @override
@@ -63,10 +77,11 @@ class _LyricsListViewState extends State<LyricsListView> {
     
     if (oldWidget.lyrics != widget.lyrics) {
       _buildItems();
+      _updateIndexForPosition(_currentPosition);
     }
     
-    if (oldWidget.currentTime != widget.currentTime) {
-      _updateCurrentIndex();
+    if (oldWidget.positionStream != widget.positionStream) {
+      _subscribeToPosition();
     }
   }
 
@@ -77,8 +92,8 @@ class _LyricsListViewState extends State<LyricsListView> {
       return;
     }
 
-    // Optional intro interlude if music starts after 6 seconds
-    if (widget.lyrics[0].startTime > const Duration(seconds: 6)) {
+    // Optional intro interlude if music starts after 4 seconds
+    if (widget.lyrics[0].startTime > const Duration(seconds: 4)) {
       _items.add(LyricsItem(
         type: ItemType.interlude,
         startTime: Duration.zero,
@@ -92,7 +107,6 @@ class _LyricsListViewState extends State<LyricsListView> {
           ? widget.lyrics[i + 1].startTime 
           : const Duration(hours: 24);
 
-      // Line remains active from its startTime until the next line starts
       _items.add(LyricsItem(
         type: ItemType.lyric,
         line: line,
@@ -105,10 +119,9 @@ class _LyricsListViewState extends State<LyricsListView> {
     _keys = List.generate(_items.length, (_) => GlobalKey());
   }
 
-  void _updateCurrentIndex() {
+  void _updateIndexForPosition(Duration pos) {
     if (_items.isEmpty) return;
 
-    // Check if unsynced (all lines have startTime == 0)
     final isUnsynced = _items.length > 1 && 
         _items.every((item) => item.startTime == Duration.zero);
 
@@ -122,16 +135,17 @@ class _LyricsListViewState extends State<LyricsListView> {
       return;
     }
 
-    // Find the current active line: the last item whose startTime <= currentTime
     int newIndex = -1;
     for (int i = 0; i < _items.length; i++) {
-      if (widget.currentTime >= _items[i].startTime) {
+      if (pos >= _items[i].startTime) {
         newIndex = i;
       } else {
         break;
       }
     }
 
+    // ONLY rebuild when the active line actually changes!
+    // This saves 50 unnecessary rebuilds per second.
     if (newIndex != _currentIndex) {
       setState(() {
         _currentIndex = newIndex;
@@ -141,20 +155,23 @@ class _LyricsListViewState extends State<LyricsListView> {
           _currentLyricIndex = -1;
         }
       });
-      _scrollToCurrentLine();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentLine();
+      });
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 620)}) {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 450)}) {
     if (_isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     final key = _keys[_currentIndex];
-    if (key.currentContext != null) {
+    final keyContext = key.currentContext;
+    if (keyContext != null) {
       Scrollable.ensureVisible(
-        key.currentContext!,
+        keyContext,
         duration: duration,
         curve: Curves.easeOutCubic,
-        alignment: 0.22,
+        alignment: 0.24,
       );
     }
   }
@@ -179,6 +196,7 @@ class _LyricsListViewState extends State<LyricsListView> {
 
   @override
   void dispose() {
+    _posSub?.cancel();
     _scrollController.dispose();
     _resumeAutoScrollTimer?.cancel();
     super.dispose();
@@ -199,6 +217,9 @@ class _LyricsListViewState extends State<LyricsListView> {
       );
     }
 
+    final isUnsynced = _items.length > 1 && 
+        _items.every((item) => item.startTime == Duration.zero);
+
     return NotificationListener<ScrollNotification>(
       onNotification: (scrollNotification) {
         if (scrollNotification is UserScrollNotification) {
@@ -211,9 +232,7 @@ class _LyricsListViewState extends State<LyricsListView> {
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         padding: EdgeInsets.only(
           top: 20,
-          bottom: MediaQuery.of(context).size.height * 0.38,
-          left: 0,
-          right: 0,
+          bottom: MediaQuery.of(context).size.height * 0.42,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -223,9 +242,9 @@ class _LyricsListViewState extends State<LyricsListView> {
             if (item.type == ItemType.interlude) {
               return Container(
                 key: _keys[index],
-                padding: const EdgeInsets.symmetric(horizontal: 28.0, vertical: 14.0),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
                 child: InterludeDotsWidget(
-                  currentTime: widget.currentTime,
+                  currentTime: _currentPosition,
                   targetTime: item.endTime,
                 ),
               );
@@ -242,7 +261,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                 state = LyricLineState.current;
               }
             } else {
-              if (item.endTime <= widget.currentTime) {
+              if (item.endTime <= _currentPosition) {
                 state = LyricLineState.past;
               }
             }
@@ -257,8 +276,8 @@ class _LyricsListViewState extends State<LyricsListView> {
                 child: LyricsLineWidget(
                   line: line,
                   state: state,
-                  currentTime: widget.currentTime,
                   distance: distance,
+                  isUnsynced: isUnsynced,
                   onTap: () {
                     HapticFeedback.selectionClick();
                     widget.onSeek(line.startTime);
@@ -269,7 +288,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                       _currentLyricIndex = lyricIndex;
                     });
                     _resumeAutoScrollTimer?.cancel();
-                    _scrollToCurrentLine(duration: const Duration(milliseconds: 550));
+                    _scrollToCurrentLine(duration: const Duration(milliseconds: 450));
                   },
                 ),
               ),
@@ -280,4 +299,3 @@ class _LyricsListViewState extends State<LyricsListView> {
     );
   }
 }
-

@@ -46,6 +46,8 @@ class MainActivity : AudioServiceFragmentActivity() {
                 if (maxMode != null) {
                     val params = window.attributes
                     params.preferredDisplayModeId = maxMode.modeId
+                    @Suppress("DEPRECATION")
+                    params.preferredRefreshRate = maxMode.refreshRate
                     window.attributes = params
                 }
             }
