@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../cast_button.dart';
 
@@ -27,14 +28,14 @@ class NowPlayingBottomActions extends StatelessWidget {
         children: [
           // 1. Apple Music Lyrics Button (Speech bubble with quotes)
           _ActionButton(
-            customIcon: CustomPaint(
-              size: const Size(22, 22),
-              painter: _LyricsIconPainter(
-                color: isLyricsActive
-                    ? Colors.white
-                    : Colors.white.withValues(alpha: 0.60),
-                isFilled: isLyricsActive,
-              ),
+            customIcon: Icon(
+              isLyricsActive
+                  ? CupertinoIcons.quote_bubble_fill
+                  : CupertinoIcons.quote_bubble,
+              size: 22,
+              color: isLyricsActive
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.60),
             ),
             isActive: isLyricsActive,
             onTap: onLyricsTap,
@@ -121,78 +122,6 @@ class _ActionButtonState extends State<_ActionButton> {
       ),
     );
   }
-}
-
-class _LyricsIconPainter extends CustomPainter {
-  final Color color;
-  final bool isFilled;
-
-  _LyricsIconPainter({required this.color, this.isFilled = false});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = isFilled ? PaintingStyle.fill : PaintingStyle.stroke
-      ..strokeWidth = 1.8
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
-    final w = size.width;
-    final h = size.height;
-
-    // Speech bubble rounded rect
-    final rect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(2.5, 3.0, w - 5.0, h - 7.5),
-      const Radius.circular(5.0),
-    );
-
-    // Tail at bottom left
-    final tailPath = Path()
-      ..moveTo(6.5, h - 4.5)
-      ..lineTo(3.5, h - 1.5)
-      ..lineTo(10.5, h - 4.5);
-
-    if (isFilled) {
-      canvas.drawRRect(rect, paint);
-      final tailFill = Path()
-        ..moveTo(6.0, h - 5.0)
-        ..lineTo(3.5, h - 1.5)
-        ..lineTo(10.5, h - 5.0)
-        ..close();
-      canvas.drawPath(tailFill, paint);
-    } else {
-      canvas.drawRRect(rect, paint);
-      canvas.drawPath(tailPath, paint);
-    }
-
-    // Two small quotation marks inside
-    final quotePaint = Paint()
-      ..color = isFilled ? Colors.black87 : color
-      ..style = PaintingStyle.fill;
-
-    // Left quote
-    canvas.drawCircle(Offset(w * 0.40, h * 0.42), 1.4, quotePaint);
-    final leftTail = Path()
-      ..moveTo(w * 0.40 + 1.1, h * 0.42)
-      ..lineTo(w * 0.40 - 0.4, h * 0.42 + 2.3)
-      ..lineTo(w * 0.40 - 1.1, h * 0.42)
-      ..close();
-    canvas.drawPath(leftTail, quotePaint);
-
-    // Right quote
-    canvas.drawCircle(Offset(w * 0.60, h * 0.42), 1.4, quotePaint);
-    final rightTail = Path()
-      ..moveTo(w * 0.60 + 1.1, h * 0.42)
-      ..lineTo(w * 0.60 - 0.4, h * 0.42 + 2.3)
-      ..lineTo(w * 0.60 - 1.1, h * 0.42)
-      ..close();
-    canvas.drawPath(rightTail, quotePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _LyricsIconPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.isFilled != isFilled;
 }
 
 class _QueueListIconPainter extends CustomPainter {

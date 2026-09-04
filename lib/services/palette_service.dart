@@ -9,8 +9,18 @@ class PaletteService {
     return _colorCache[imageId];
   }
 
+  /// Default Apple Music dark atmospheric palette (never muddy orange)
+  static const List<Color> defaultPalette = [
+    Color(0xFF16161E),
+    Color(0xFF1E1E28),
+    Color(0xFF121218),
+    Color(0xFF242434),
+    Color(0xFF09090D),
+  ];
+
   /// Extracts rich, authentic Apple Music ambient color palettes.
-  /// Generates deep, warm, radiant tones that dynamically animate across the background.
+  /// Accurately preserves dark covers without muddy color shifts,
+  /// and expands the color spectrum for multi-colored artwork.
   static Future<List<Color>> extractColors(
       ImageProvider imageProvider, String imageId) async {
     if (_colorCache.containsKey(imageId)) {
@@ -20,114 +30,202 @@ class PaletteService {
     try {
       final palette = await PaletteGenerator.fromImageProvider(
         imageProvider,
-        maximumColorCount: 16,
-        size: const Size(48, 48),
-      ).timeout(const Duration(milliseconds: 1500));
+        maximumColorCount: 48,
+        size: const Size(112, 112),
+      ).timeout(const Duration(seconds: 4));
 
-      Color calibrateTone(Color c, {double minSat = 0.30, double maxSat = 0.70, double minLight = 0.26, double maxLight = 0.48}) {
-        final hsl = HSLColor.fromColor(c);
-        final sat = hsl.saturation.clamp(minSat, maxSat);
-        final light = hsl.lightness.clamp(minLight, maxLight);
-        return hsl.withSaturation(sat).withLightness(light).toColor();
+      // Calculate population-weighted average lightness and saturation
+      double totalWeightedLightness = 0.0;
+      double totalWeightedSaturation = 0.0;
+      int totalPopulation = 0;
+
+      for (final p in palette.paletteColors) {
+        final hsl = HSLColor.fromColor(p.color);
+        totalWeightedLightness += hsl.lightness * p.population;
+        totalWeightedSaturation += hsl.saturation * p.population;
+        totalPopulation += p.population;
       }
 
-      Color calibrateHighlight(Color c, {double minSat = 0.40, double maxSat = 0.80, double minLight = 0.45, double maxLight = 0.60}) {
+      final avgLightness = totalPopulation > 0
+          ? (totalWeightedLightness / totalPopulation)
+          : 0.5;
+      final avgSaturation = totalPopulation > 0
+          ? (totalWeightedSaturation / totalPopulation)
+          : 0.5;
+
+      // Detect dark / nocturnal / monochrome artwork
+      final isDarkArtwork = avgLightness < 0.20 ||
+          (palette.dominantColor != null &&
+              HSLColor.fromColor(palette.dominantColor!.color).lightness < 0.14 &&
+              HSLColor.fromColor(palette.dominantColor!.color).saturation < 0.35);
+      final isMonochrome = avgSaturation < 0.12;
+
+      // Safe tone calibration functions that respect dark art and expand vibrant art
+      Color calibrateDominant(Color c) {
         final hsl = HSLColor.fromColor(c);
-        final sat = hsl.saturation.clamp(minSat, maxSat);
-        final light = hsl.lightness.clamp(minLight, maxLight);
-        return hsl.withSaturation(sat).withLightness(light).toColor();
+        if (isDarkArtwork) {
+          final s = hsl.saturation.clamp(0.0, 0.30);
+          final l = hsl.lightness.clamp(0.07, 0.16);
+          return hsl.withSaturation(s).withLightness(l).toColor();
+        } else if (isMonochrome) {
+          return hsl
+              .withSaturation(0.0)
+              .withLightness(hsl.lightness.clamp(0.15, 0.35))
+              .toColor();
+        } else {
+          final s = hsl.saturation.clamp(0.35, 0.85);
+          final l = hsl.lightness.clamp(0.24, 0.44);
+          return hsl.withSaturation(s).withLightness(l).toColor();
+        }
       }
 
-      Color calibrateDeep(Color c, {double minSat = 0.25, double maxSat = 0.55, double light = 0.12}) {
+      Color calibrateHighlight(Color c) {
         final hsl = HSLColor.fromColor(c);
-        final sat = hsl.saturation.clamp(minSat, maxSat);
-        return hsl.withSaturation(sat).withLightness(light).toColor();
+        if (isDarkArtwork) {
+          final s = hsl.saturation.clamp(0.0, 0.45);
+          final l = hsl.lightness.clamp(0.16, 0.28);
+          return hsl.withSaturation(s).withLightness(l).toColor();
+        } else if (isMonochrome) {
+          return hsl
+              .withSaturation(0.0)
+              .withLightness(hsl.lightness.clamp(0.30, 0.55))
+              .toColor();
+        } else {
+          final s = hsl.saturation.clamp(0.40, 0.90);
+          final l = hsl.lightness.clamp(0.38, 0.58);
+          return hsl.withSaturation(s).withLightness(l).toColor();
+        }
       }
 
-      // 1. Determine primary dominant tone
-      Color? dominant;
-      if (palette.vibrantColor != null) {
-        dominant = palette.vibrantColor!.color;
+      Color calibrateDeep(Color c) {
+        final hsl = HSLColor.fromColor(c);
+        final s = isDarkArtwork || isMonochrome
+            ? hsl.saturation.clamp(0.0, 0.20)
+            : hsl.saturation.clamp(0.20, 0.60);
+        final l = isDarkArtwork ? 0.05 : 0.09;
+        return hsl.withSaturation(s).withLightness(l).toColor();
+      }
+
+      // 1. Determine dominant anchor
+      Color dominantTone;
+      if (isDarkArtwork && palette.dominantColor != null) {
+        dominantTone = palette.dominantColor!.color;
+      } else if (palette.dominantColor != null &&
+          (palette.vibrantColor == null ||
+              palette.dominantColor!.population >
+                  (palette.vibrantColor!.population * 2))) {
+        dominantTone = palette.dominantColor!.color;
+      } else if (palette.vibrantColor != null) {
+        dominantTone = palette.vibrantColor!.color;
       } else if (palette.dominantColor != null) {
-        dominant = palette.dominantColor!.color;
+        dominantTone = palette.dominantColor!.color;
       } else if (palette.lightVibrantColor != null) {
-        dominant = palette.lightVibrantColor!.color;
+        dominantTone = palette.lightVibrantColor!.color;
       } else if (palette.mutedColor != null) {
-        dominant = palette.mutedColor!.color;
-      } else if (palette.darkVibrantColor != null) {
-        dominant = palette.darkVibrantColor!.color;
+        dominantTone = palette.mutedColor!.color;
       } else if (palette.paletteColors.isNotEmpty) {
-        dominant = palette.paletteColors.first.color;
+        dominantTone = palette.paletteColors.first.color;
+      } else {
+        dominantTone = const Color(0xFF16161E);
       }
-      dominant ??= const Color(0xFFB86B35); // Warm amber default
 
-      final c0 = calibrateTone(dominant, minSat: 0.35, maxSat: 0.75, minLight: 0.28, maxLight: 0.48);
+      final c0 = calibrateDominant(dominantTone);
       final domHsl = HSLColor.fromColor(c0);
 
-      // 2. Candidate swatches
-      final candidates = <Color>[];
-      if (palette.lightVibrantColor != null) candidates.add(palette.lightVibrantColor!.color);
-      if (palette.vibrantColor != null) candidates.add(palette.vibrantColor!.color);
-      if (palette.dominantColor != null) candidates.add(palette.dominantColor!.color);
-      if (palette.mutedColor != null) candidates.add(palette.mutedColor!.color);
-      if (palette.lightMutedColor != null) candidates.add(palette.lightMutedColor!.color);
+      // 2. Collect unique, distinct swatches from the cover
+      final distinctColors = <Color>[];
+      final sortedSwatches = List<PaletteColor>.from(palette.paletteColors)
+        ..sort((a, b) {
+          final scoreA =
+              a.population * (0.4 + HSLColor.fromColor(a.color).saturation);
+          final scoreB =
+              b.population * (0.4 + HSLColor.fromColor(b.color).saturation);
+          return scoreB.compareTo(scoreA);
+        });
 
-      for (final pc in palette.paletteColors) {
-        if (!candidates.contains(pc.color)) {
-          candidates.add(pc.color);
+      for (final swatch in sortedSwatches) {
+        final color = swatch.color;
+        final hsl = HSLColor.fromColor(color);
+        if (hsl.lightness > 0.95) continue;
+        if (!isDarkArtwork && hsl.lightness < 0.04) continue;
+
+        final isDistinct =
+            distinctColors.every((existing) => _colorDistance(existing, color) > 36);
+        if (isDistinct && _colorDistance(dominantTone, color) > 30) {
+          distinctColors.add(color);
+        }
+        if (distinctColors.length >= 4) break;
+      }
+
+      // Check standard target swatches if they add new distinct hues
+      final targetSwatches = [
+        palette.vibrantColor?.color,
+        palette.lightVibrantColor?.color,
+        palette.darkVibrantColor?.color,
+        palette.mutedColor?.color,
+        palette.lightMutedColor?.color,
+      ].whereType<Color>();
+
+      for (final target in targetSwatches) {
+        if (distinctColors.length >= 4) break;
+        if (_colorDistance(dominantTone, target) > 32 &&
+            distinctColors.every((c) => _colorDistance(c, target) > 36)) {
+          distinctColors.add(target);
         }
       }
 
-      Color? secondaryWarm;
-      Color? accentCool;
-      Color? luminousHighlight;
+      // 3. Assign 5 harmonic tones
+      Color secondary;
+      Color accent;
+      Color highlight;
 
-      for (final raw in candidates) {
-        final hsl = HSLColor.fromColor(raw);
-        if (hsl.lightness < 0.06 || hsl.lightness > 0.94) continue;
-
-        final hueDiff = (hsl.hue - domHsl.hue).abs();
-        final normalizedDiff = hueDiff > 180 ? 360 - hueDiff : hueDiff;
-
-        if (normalizedDiff > 30 && accentCool == null) {
-          accentCool = calibrateTone(raw, minSat: 0.30, maxSat: 0.65, minLight: 0.26, maxLight: 0.44);
-        } else if (normalizedDiff <= 30 && secondaryWarm == null && _colorDistance(raw, c0) > 20) {
-          secondaryWarm = calibrateTone(raw, minSat: 0.35, maxSat: 0.70, minLight: 0.30, maxLight: 0.46);
-        } else if (luminousHighlight == null && _colorDistance(raw, c0) > 25) {
-          luminousHighlight = calibrateHighlight(raw, minSat: 0.40, maxSat: 0.80, minLight: 0.45, maxLight: 0.60);
-        }
+      if (distinctColors.isNotEmpty) {
+        secondary = calibrateDominant(distinctColors[0]);
+      } else {
+        secondary = domHsl
+            .withLightness((domHsl.lightness * 0.85).clamp(0.08, 0.40))
+            .toColor();
       }
 
-      secondaryWarm ??= domHsl.withHue((domHsl.hue + 22) % 360).withSaturation((domHsl.saturation * 1.05).clamp(0.35, 0.70)).withLightness(0.36).toColor();
-      accentCool ??= domHsl.withHue((domHsl.hue + 45) % 360).withSaturation(0.45).withLightness(0.30).toColor();
-      luminousHighlight ??= domHsl.withHue((domHsl.hue + 12) % 360).withSaturation(0.60).withLightness(0.50).toColor();
+      if (distinctColors.length > 1) {
+        accent = calibrateDominant(distinctColors[1]);
+      } else if (distinctColors.isNotEmpty) {
+        accent = calibrateHighlight(distinctColors[0]);
+      } else {
+        accent = domHsl
+            .withSaturation((domHsl.saturation * 1.1).clamp(0.0, 0.90))
+            .toColor();
+      }
 
-      final deepBase = calibrateDeep(c0, minSat: 0.30, maxSat: 0.60, light: 0.12);
+      if (distinctColors.length > 2) {
+        highlight = calibrateHighlight(distinctColors[2]);
+      } else if (distinctColors.isNotEmpty) {
+        highlight = calibrateHighlight(distinctColors[0]);
+      } else {
+        highlight = calibrateHighlight(c0);
+      }
+
+      final deepBase = calibrateDeep(c0);
 
       final List<Color> result = [
-        c0,                 // 0: Primary Ambient Key Tone
-        secondaryWarm,      // 1: Harmonic Warm Tone
-        accentCool,         // 2: Dynamic Accent
-        luminousHighlight,  // 3: Radiant Sunlight Glow Highlight
-        deepBase,           // 4: Deep Atmospheric Foundation
+        c0,         // 0: Primary ambient anchor
+        secondary,  // 1: Harmonic secondary tone from artwork
+        accent,     // 2: Dynamic accent from artwork
+        highlight,  // 3: Luminous glow highlight
+        deepBase,   // 4: Deep atmospheric foundation
       ];
 
       _colorCache[imageId] = result;
       return result;
     } catch (e) {
-      return [
-        const Color(0xFFB86B35),
-        const Color(0xFF8B4513),
-        const Color(0xFFD27D2D),
-        const Color(0xFFE89A4B),
-        const Color(0xFF3B1E08),
-      ];
+      return defaultPalette;
     }
   }
 
   static double _colorDistance(Color a, Color b) {
-    return (a.r - b.r).abs() * 255 +
-        (a.g - b.g).abs() * 255 +
-        (a.b - b.b).abs() * 255;
+    final dr = (a.r - b.r).abs() * 255;
+    final dg = (a.g - b.g).abs() * 255;
+    final db = (a.b - b.b).abs() * 255;
+    return dr + dg + db;
   }
 }

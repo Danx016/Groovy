@@ -12,6 +12,7 @@ import 'playlists_screen.dart';
 import 'settings_screen.dart';
 import 'account_screen.dart';
 import '../l10n/app_localizations.dart';
+import '../models/models.dart';
 import '../widgets/album_artwork.dart';
 
 class LibraryScreen extends StatefulWidget {
@@ -22,6 +23,18 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
+      await libraryProvider.ensureLibraryLoaded();
+      await libraryProvider.loadPlaylists();
+      await libraryProvider.loadArtists();
+      await libraryProvider.loadRecentAlbums();
+    });
+  }
+
   void _navigate(BuildContext context, Widget screen) {
     NavigationHelper.push(context, screen);
   }
@@ -240,27 +253,121 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
 
-          // 5. Grid of Recently Added Albums
+          // 5. Grid of Recently Added Albums / Songs
           Consumer<LibraryProvider>(
             builder: (context, libraryProvider, _) {
-              final albums = libraryProvider.isLocalOnlyMode
-                  ? libraryProvider.cachedAllAlbums
-                  : (libraryProvider.recentAlbums.isNotEmpty
-                      ? libraryProvider.recentAlbums
-                      : libraryProvider.cachedAllAlbums);
+              List<Album> albums = List<Album>.from(
+                libraryProvider.isLocalOnlyMode
+                    ? libraryProvider.cachedAllAlbums
+                    : (libraryProvider.recentAlbums.isNotEmpty
+                        ? libraryProvider.recentAlbums
+                        : libraryProvider.cachedAllAlbums),
+              );
 
-              if (albums.isEmpty) {
+              // Sort by created descending so the newest items are first
+              albums.sort((a, b) {
+                final aDate = a.created ?? DateTime.fromMillisecondsSinceEpoch(0);
+                final bDate = b.created ?? DateTime.fromMillisecondsSinceEpoch(0);
+                return bDate.compareTo(aDate);
+              });
+
+              if (albums.isEmpty && libraryProvider.cachedAllSongs.isEmpty) {
                 return SliverToBoxAdapter(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 48),
+                    padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
                     child: Center(
-                      child: Text(
-                        'No hay álbumes recientes',
-                        style: TextStyle(
-                          color: isDark ? Colors.white54 : Colors.black45,
-                          fontSize: 15,
-                        ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            CupertinoIcons.music_albums,
+                            size: 48,
+                            color: isDark ? Colors.white24 : Colors.black26,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'No hay música en tu biblioteca',
+                            style: TextStyle(
+                              color: isDark ? Colors.white70 : Colors.black87,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Agrega canciones, álbumes o playlists usando el menú (···) de cualquier canción.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: isDark ? Colors.white38 : Colors.black45,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
                       ),
+                    ),
+                  ),
+                );
+              }
+
+              if (albums.isEmpty && libraryProvider.cachedAllSongs.isNotEmpty) {
+                final songs = libraryProvider.cachedAllSongs.take(20).toList();
+                return SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  sliver: SliverGrid(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 18.0,
+                      crossAxisSpacing: 16.0,
+                      childAspectRatio: 0.78,
+                    ),
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final song = songs[index];
+                        return GestureDetector(
+                          onTap: () {
+                            final player = Provider.of<PlayerProvider>(context, listen: false);
+                            player.playSong(song);
+                          },
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: AlbumArtwork(
+                                    coverArt: song.coverArt,
+                                    size: double.infinity,
+                                    borderRadius: 10,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                song.title,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  letterSpacing: -0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                song.artist ?? 'Artista desconocido',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: isDark ? Colors.white60 : Colors.black54,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                      childCount: songs.length,
                     ),
                   ),
                 );

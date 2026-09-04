@@ -1,111 +1,105 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server.dart';
 
-/// Service that securely sends email verification OTP codes using SMTP over SSL.
+/// Servicio para el envío seguro de códigos de verificación OTP por correo electrónico.
+/// Soporta tanto **Oracle Cloud Infrastructure (OCI) Email Delivery** (STARTTLS / Puerto 587)
+/// como **Gmail SMTP** como respaldo (Fallback).
 class EmailVerificationService {
-  static const String smtpHost = 'smtp.gmail.com';
-  static const int smtpPort = 465;
-  static const String smtpUser = 'danilorodelo355@gmail.com';
-  static const String smtpPass = 'gszsvbqujjebrlgk'; // App password
+  // ===========================================================================
+  // CONFIGURACIÓN DE ORACLE CLOUD EMAIL DELIVERY (OCI)
+  // ===========================================================================
+  // 1. Host SMTP: smtp.email.<region>.oci.oraclecloud.com
+  //    Para la región de Colombia (Bogotá): smtp.email.sa-bogota-1.oci.oraclecloud.com
+  //    Otras comunes: sa-santiago-1, us-ashburn-1, us-phoenix-1, etc.
+  static const String ociSmtpHost = 'smtp.email.sa-bogota-1.oci.oraclecloud.com';
+  static const int ociSmtpPort = 587; // Puerto estándar para OCI con STARTTLS
 
-  // Generates a cryptographically-secure 6-digit OTP code
+  // 2. Usuario SMTP generado en la consola de Oracle Cloud:
+  //    (Perfil -> Configuración de usuario -> Credenciales SMTP -> Generar)
+  //    Tiene un formato similar a: ocid1.user.oc1..aaaaaaa...
+  static const String ociSmtpUser = '';
+
+  // 3. Contraseña SMTP generada en Oracle Cloud (no es tu clave personal de Oracle):
+  static const String ociSmtpPass = '';
+
+  // 4. Remitente Aprobado (Approved Sender) configurado en OCI Email Delivery:
+  //    Ej: 'noreply@tudominio.com' o el correo verificado en la consola.
+  static const String ociSenderEmail = 'noreply@groovy.app';
+
+  // ===========================================================================
+  // CONFIGURACIÓN DE RESPALDO (GMAIL SMTP)
+  // ===========================================================================
+  static const String gmailUser = 'danilorodelo355@gmail.com';
+  static const String gmailPass = 'gszsvbqujjebrlgk'; // App password de Google
+
+  /// Genera un código OTP criptográficamente seguro de 6 dígitos
   static String generateOtp() {
     final rnd = Random.secure();
     final code = 100000 + rnd.nextInt(900000);
     return code.toString();
   }
 
-  /// Sends a 6-digit recovery code to [recipientEmail] via Gmail SMTP over SSL (Port 465).
+  /// Envía el código de recuperación por correo electrónico.
+  /// Intenta primero con Oracle Cloud Email Delivery (si está configurado)
+  /// y recurre automáticamente a Gmail en caso de error o si aún no hay credenciales OCI.
   static Future<bool> sendRecoveryEmail({
     required String recipientEmail,
     required String code,
   }) async {
-    SecureSocket? socket;
-    StreamSubscription? subscription;
-    try {
-      debugPrint('[EmailVerification] Connecting to $smtpHost:$smtpPort for $recipientEmail...');
-      socket = await SecureSocket.connect(
-        smtpHost,
-        smtpPort,
-        timeout: const Duration(seconds: 12),
-        onBadCertificate: (cert) => true,
-      );
+    final cleanRecipient = recipientEmail.trim().toLowerCase();
+    final htmlContent = _buildHtmlEmail(recipientEmail: cleanRecipient, code: code);
 
-      final completer = Completer<bool>();
-      int step = 0;
-      final cleanPass = smtpPass.replaceAll(' ', '');
-      final authPlain = base64.encode(utf8.encode('\u0000$smtpUser\u0000$cleanPass'));
-
-      void send(String cmd) {
-        socket?.write('$cmd\r\n');
-      }
-
-      subscription = socket.listen(
-        (List<int> bytes) {
-          final response = utf8.decode(bytes);
-          debugPrint('[SMTP] <<< ${response.trim()}');
-
-          if (step == 0 && response.startsWith('220')) {
-            step = 1;
-            send('EHLO groovy.app');
-          } else if (step == 1 && response.startsWith('250')) {
-            step = 2;
-            send('AUTH PLAIN $authPlain');
-          } else if (step == 2 && response.startsWith('235')) {
-            step = 3;
-            send('MAIL FROM:<$smtpUser>');
-          } else if (step == 3 && response.startsWith('250')) {
-            step = 4;
-            send('RCPT TO:<$recipientEmail>');
-          } else if (step == 4 && response.startsWith('250')) {
-            step = 5;
-            send('DATA');
-          } else if (step == 5 && response.startsWith('354')) {
-            step = 6;
-            final emailBody = _buildHtmlEmail(recipientEmail: recipientEmail, code: code);
-            send(emailBody);
-          } else if (step == 6 && response.startsWith('250')) {
-            step = 7;
-            send('QUIT');
-            if (!completer.isCompleted) completer.complete(true);
-          } else if (response.startsWith('5') || response.startsWith('4')) {
-            debugPrint('[SMTP Error] Unexpected response: $response');
-            if (!completer.isCompleted) completer.complete(false);
-          }
-        },
-        onError: (err) {
-          debugPrint('[SMTP Stream Error] $err');
-          if (!completer.isCompleted) completer.complete(false);
-        },
-        onDone: () {
-          if (!completer.isCompleted) completer.complete(step >= 6);
-        },
-      );
-
-      final result = await completer.future.timeout(
-        const Duration(seconds: 15),
-        onTimeout: () {
-          debugPrint('[SMTP] Timeout sending email');
-          return false;
-        },
-      );
-
-      await subscription.cancel();
-      await socket.close();
-      return result;
-    } catch (e) {
-      debugPrint('[EmailVerification] Error: $e');
+    // 1. Intentar con Oracle Cloud Email Delivery si las credenciales están configuradas
+    final hasOciConfig = ociSmtpUser.trim().isNotEmpty && ociSmtpPass.trim().isNotEmpty;
+    if (hasOciConfig) {
       try {
-        await subscription?.cancel();
-        await socket?.close();
-      } catch (_) {}
+        debugPrint('[EmailVerification] Intentando envío vía Oracle Cloud Email Delivery ($ociSmtpHost:$ociSmtpPort)...');
+        final ociServer = SmtpServer(
+          ociSmtpHost,
+          port: ociSmtpPort,
+          ssl: false,
+          allowInsecure: true,
+          username: ociSmtpUser.trim(),
+          password: ociSmtpPass.trim(),
+        );
+
+        final ociMessage = Message()
+          ..from = Address(ociSenderEmail, 'Groovy')
+          ..recipients.add(cleanRecipient)
+          ..subject = 'Tu código de seguridad de Groovy: $code'
+          ..html = htmlContent;
+
+        await send(ociMessage, ociServer).timeout(const Duration(seconds: 15));
+        debugPrint('[EmailVerification] ¡Correo enviado con éxito vía Oracle Cloud!');
+        return true;
+      } catch (ociError) {
+        debugPrint('[EmailVerification] Falló el envío con Oracle Cloud: $ociError. Intentando con respaldo Gmail...');
+      }
+    }
+
+    // 2. Respaldo: Enviar vía Gmail SMTP
+    try {
+      debugPrint('[EmailVerification] Enviando correo vía Gmail SMTP ($gmailUser)...');
+      final gmailServer = gmail(gmailUser, gmailPass.replaceAll(' ', ''));
+
+      final gmailMessage = Message()
+        ..from = Address(gmailUser, 'Groovy')
+        ..recipients.add(cleanRecipient)
+        ..subject = 'Tu código de seguridad de Groovy: $code'
+        ..html = htmlContent;
+
+      await send(gmailMessage, gmailServer).timeout(const Duration(seconds: 15));
+      debugPrint('[EmailVerification] ¡Correo enviado con éxito vía Gmail!');
+      return true;
+    } catch (gmailError) {
+      debugPrint('[EmailVerification] Error enviando con Gmail SMTP: $gmailError');
       return false;
     }
   }
 
+  /// Construye la plantilla visual HTML del correo electrónico
   static String _buildHtmlEmail({
     required String recipientEmail,
     required String code,
@@ -119,15 +113,7 @@ class EmailVerificationService {
       </td>
     ''').join('');
 
-    return [
-      'From: "Groovy" <$smtpUser>',
-      'To: <$recipientEmail>',
-      'Subject: =?UTF-8?B?${base64.encode(utf8.encode('Tu código de seguridad de Groovy: $code'))}?=',
-      'MIME-Version: 1.0',
-      'Content-Type: text/html; charset=UTF-8',
-      'Content-Transfer-Encoding: 8bit',
-      '',
-      '''<!DOCTYPE html>
+    return '''<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
@@ -213,9 +199,6 @@ class EmailVerificationService {
     </tr>
   </table>
 </body>
-</html>
-''',
-      '.',
-    ].join('\r\n');
+</html>''';
   }
 }

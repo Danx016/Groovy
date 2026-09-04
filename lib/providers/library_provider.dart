@@ -9,7 +9,6 @@ import '../services/services.dart';
 import '../services/audio_handler.dart';
 import '../services/local_music_service.dart';
 import '../services/groovy_api_service.dart';
-import '../services/storage_service.dart';
 
 class LibraryProvider extends ChangeNotifier {
   final SubsonicService _subsonicService;
@@ -292,30 +291,100 @@ class LibraryProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      final playlistsJson = prefs.getString(_playlistsCacheKey);
-      if (playlistsJson != null) {
-        final List<dynamic> playlistsList = json.decode(playlistsJson);
-        _cachedPlaylists = playlistsList
-            .map((p) => Playlist.fromJson(p as Map<String, dynamic>))
-            .toList();
-        _playlists = _cachedPlaylists;
-      }
-
-      final artistsJson = prefs.getString(_artistsCacheKey);
-      if (artistsJson != null) {
-        final List<dynamic> artistsList = json.decode(artistsJson);
-        _artists = artistsList
-            .map((a) => Artist.fromJson(a as Map<String, dynamic>))
-            .toList();
-      }
-
-      if (loadFullLibrary) {
-        try {
-          _cachedAllAlbums = await _db.getAllAlbums();
-          _cachedAllSongs = await _db.getAllSongs();
-        } catch (e) {
-          debugPrint('Error loading library from DB: $e');
+      // 1. Load playlists from DB (fallback to SharedPreferences)
+      try {
+        final dbPlaylists = await _db.getAllPlaylists();
+        if (dbPlaylists.isNotEmpty) {
+          _cachedPlaylists = dbPlaylists;
+          _playlists = _cachedPlaylists;
+        } else {
+          final playlistsJson = prefs.getString(_playlistsCacheKey);
+          if (playlistsJson != null) {
+            final List<dynamic> playlistsList = json.decode(playlistsJson);
+            _cachedPlaylists = playlistsList
+                .map((p) => Playlist.fromJson(p as Map<String, dynamic>))
+                .toList();
+            _playlists = _cachedPlaylists;
+          }
         }
+      } catch (e) {
+        debugPrint('Error loading playlists from DB: $e');
+      }
+
+      // 2. Load artists from DB (fallback to SharedPreferences)
+      try {
+        final dbArtists = await _db.getAllArtists();
+        if (dbArtists.isNotEmpty) {
+          _artists = dbArtists;
+        } else {
+          final artistsJson = prefs.getString(_artistsCacheKey);
+          if (artistsJson != null) {
+            final List<dynamic> artistsList = json.decode(artistsJson);
+            _artists = artistsList
+                .map((a) => Artist.fromJson(a as Map<String, dynamic>))
+                .toList();
+          }
+        }
+      } catch (e) {
+        debugPrint('Error loading artists from DB: $e');
+      }
+
+      // 3. Always load all albums and songs from DB
+      try {
+        _cachedAllAlbums = await _db.getAllAlbums();
+        _cachedAllSongs = await _db.getAllSongs();
+
+        // If artists list is still empty but we have songs, populate artists
+        if (_artists.isEmpty && _cachedAllSongs.isNotEmpty) {
+          final seen = <String>{};
+          for (final s in _cachedAllSongs) {
+            if (s.artist != null && s.artist!.trim().isNotEmpty && seen.add(s.artist!.trim().toLowerCase())) {
+              final a = Artist(
+                id: s.artistId ?? 'artist_${s.artist!.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+                name: s.artist!.trim(),
+                coverArt: s.coverArt,
+                albumCount: 1,
+              );
+              _artists.add(a);
+              _db.insertOrUpdateArtist(a).catchError((_) {});
+            }
+          }
+        }
+
+        // If albums list is still empty but we have songs, populate albums
+        if (_cachedAllAlbums.isEmpty && _cachedAllSongs.isNotEmpty) {
+          final seen = <String>{};
+          for (final s in _cachedAllSongs) {
+            final albName = (s.album != null && s.album!.trim().isNotEmpty) ? s.album!.trim() : s.title.trim();
+            if (seen.add(albName.toLowerCase())) {
+              final alb = Album(
+                id: s.albumId ?? 'album_${albName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+                name: albName,
+                artist: s.artist,
+                artistId: s.artistId,
+                coverArt: s.coverArt,
+                songCount: 1,
+                year: s.year,
+                created: s.created ?? DateTime.now(),
+              );
+              _cachedAllAlbums.add(alb);
+              _db.insertOrUpdateAlbum(alb).catchError((_) {});
+            }
+          }
+        }
+
+        // Ensure _recentAlbums contains the most recently created albums
+        if (_cachedAllAlbums.isNotEmpty) {
+          final sortedAlbums = List<Album>.from(_cachedAllAlbums);
+          sortedAlbums.sort((a, b) {
+            final aDate = a.created ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final bDate = b.created ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return bDate.compareTo(aDate);
+          });
+          _recentAlbums = sortedAlbums.take(20).toList();
+        }
+      } catch (e) {
+        debugPrint('Error loading library from DB: $e');
       }
 
       final lastUpdate = prefs.getInt(_lastUpdateKey);
@@ -611,12 +680,41 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadArtists() async {
-    if (_serverOfflineMode) return;
     try {
-      _artists = await _subsonicService.getArtists();
+      List<Artist> serverArtists = [];
+      if (!_serverOfflineMode) {
+        try {
+          serverArtists = await _subsonicService.getArtists();
+        } catch (_) {}
+      }
+      final localArtists = await _db.getAllArtists();
+
+      final map = <String, Artist>{};
+      for (final a in serverArtists) {
+        map[a.id] = a;
+      }
+      for (final a in localArtists) {
+        map[a.id] = a;
+      }
+
+      if (map.isEmpty && _cachedAllSongs.isNotEmpty) {
+        for (final s in _cachedAllSongs) {
+          if (s.artist != null && s.artist!.trim().isNotEmpty) {
+            final aName = s.artist!.trim();
+            final aId = s.artistId ?? 'artist_${aName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+            if (!map.containsKey(aId)) {
+              final art = Artist(id: aId, name: aName, coverArt: s.coverArt, albumCount: 1);
+              map[aId] = art;
+              _db.insertOrUpdateArtist(art).catchError((_) {});
+            }
+          }
+        }
+      }
+
+      _artists = map.values.toList();
+      _artists.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       notifyListeners();
-      _audioHandler
-          .notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdArtists]);
+      _audioHandler.notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdArtists]);
       _saveCachedData();
     } catch (e) {
       debugPrint('Error loading artists: $e');
@@ -624,21 +722,28 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadRecentAlbums() async {
-    if (_serverOfflineMode) return;
     try {
-      final fetched = await _subsonicService.getAlbumList(
-        type: 'recent',
-        size: 20,
-      );
-      // Only replace the list when the server actually returned results.
-      // On Navidrome, type=recent returns [] if nothing has been played
-      // recently, which would wipe the cached albums shown in the UI.
+      List<Album> fetched = [];
+      if (!_serverOfflineMode) {
+        try {
+          fetched = await _subsonicService.getAlbumList(type: 'recent', size: 20);
+        } catch (_) {}
+      }
+
       if (fetched.isNotEmpty) {
         _recentAlbums = fetched;
+      } else {
+        final albums = List<Album>.from(_cachedAllAlbums);
+        albums.sort((a, b) {
+          final aDate = a.created ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bDate = b.created ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bDate.compareTo(aDate);
+        });
+        _recentAlbums = albums.take(20).toList();
       }
+
       notifyListeners();
-      _audioHandler
-          .notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdAlbums]);
+      _audioHandler.notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdAlbums]);
     } catch (e) {
       debugPrint('Error loading recent albums: $e');
     }
@@ -684,28 +789,24 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadPlaylists() async {
-    if (_serverOfflineMode) return;
     try {
-      final newPlaylists = await _subsonicService.getPlaylists();
+      List<Playlist> serverPlaylists = [];
+      if (!_serverOfflineMode) {
+        try {
+          serverPlaylists = await _subsonicService.getPlaylists();
+        } catch (_) {}
+      }
+      final localPlaylists = await _db.getAllPlaylists();
 
-      final List<Playlist> mergedPlaylists = [];
-
-      for (final newPlaylist in newPlaylists) {
-        final cachedIndex = _cachedPlaylists.indexWhere(
-          (p) => p.id == newPlaylist.id,
-        );
-        if (cachedIndex != -1) {
-          final cachedFn = _cachedPlaylists[cachedIndex];
-
-          if (cachedFn.songs != null && cachedFn.songs!.isNotEmpty) {
-            mergedPlaylists.add(newPlaylist.copyWith(songs: cachedFn.songs));
-            continue;
-          }
-        }
-        mergedPlaylists.add(newPlaylist);
+      final map = <String, Playlist>{};
+      for (final p in serverPlaylists) {
+        map[p.id] = p;
+      }
+      for (final p in localPlaylists) {
+        map[p.id] = p;
       }
 
-      _playlists = mergedPlaylists;
+      _playlists = map.values.toList();
       _cachedPlaylists = _playlists;
       _saveCachedData();
       notifyListeners();
@@ -758,11 +859,17 @@ class LibraryProvider extends ChangeNotifier {
       return _localMusicService!.getAlbumsByArtist(artistId);
     }
     try {
-      return await _subsonicService.getArtistAlbums(artistId);
+      final albums = await _subsonicService.getArtistAlbums(artistId);
+      if (albums.isNotEmpty) return albums;
     } catch (e) {
       debugPrint('Error loading artist albums: $e');
-      return [];
     }
+
+    final localAlbums = _cachedAllAlbums.where((a) => a.artistId == artistId || (a.artist != null && a.artist!.toLowerCase() == artistId.toLowerCase())).toList();
+    if (localAlbums.isNotEmpty) return localAlbums;
+
+    final dbAlbums = await _db.getAllAlbums();
+    return dbAlbums.where((a) => a.artistId == artistId || (a.artist != null && a.artist!.toLowerCase() == artistId.toLowerCase())).toList();
   }
 
   Future<List<Song>> getAlbumSongs(String albumId) async {
@@ -770,11 +877,17 @@ class LibraryProvider extends ChangeNotifier {
       return _localMusicService!.getSongsByAlbum(albumId);
     }
     try {
-      return await _subsonicService.getAlbumSongs(albumId);
+      final songs = await _subsonicService.getAlbumSongs(albumId);
+      if (songs.isNotEmpty) return songs;
     } catch (e) {
       debugPrint('Error loading album songs: $e');
-      return [];
     }
+
+    final localSongs = _cachedAllSongs.where((s) => s.albumId == albumId || (s.album != null && s.album!.toLowerCase() == albumId.toLowerCase())).toList();
+    if (localSongs.isNotEmpty) return localSongs;
+
+    final dbSongs = await _db.getAllSongs();
+    return dbSongs.where((s) => s.albumId == albumId || (s.album != null && s.album!.toLowerCase() == albumId.toLowerCase())).toList();
   }
 
   Future<Playlist> getPlaylist(String playlistId) async {
@@ -821,12 +934,26 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> createPlaylist(String name, {List<String>? songIds}) async {
-    await _subsonicService.createPlaylist(name: name, songIds: songIds);
+    try {
+      await _subsonicService.createPlaylist(name: name, songIds: songIds);
+    } catch (_) {}
+    final newId = 'pl_${DateTime.now().millisecondsSinceEpoch}';
+    final playlist = Playlist(
+      id: newId,
+      name: name,
+      songCount: songIds?.length ?? 0,
+      created: DateTime.now(),
+      changed: DateTime.now(),
+    );
+    await _db.insertOrUpdatePlaylist(playlist);
     await loadPlaylists();
   }
 
   Future<void> deletePlaylist(String playlistId) async {
-    await _subsonicService.deletePlaylist(playlistId);
+    try {
+      await _subsonicService.deletePlaylist(playlistId);
+    } catch (_) {}
+    await _db.deletePlaylist(playlistId);
     await loadPlaylists();
   }
 
@@ -909,26 +1036,30 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> addSongToLibrary(Song song) async {
-    final index = _cachedAllSongs.indexWhere((s) => s.id == song.id);
+    final songToAdd = (song.created != null)
+        ? song
+        : song.copyWith(created: DateTime.now());
+
+    final index = _cachedAllSongs.indexWhere((s) => s.id == songToAdd.id);
     if (index != -1) {
-      _cachedAllSongs[index] = song;
+      _cachedAllSongs[index] = songToAdd;
     } else {
-      _cachedAllSongs.insert(0, song);
+      _cachedAllSongs.insert(0, songToAdd);
     }
-    await _db.insertOrUpdateSong(song);
+    await _db.insertOrUpdateSong(songToAdd);
 
     // Ensure artist exists in library
-    if (song.artist != null && song.artist!.trim().isNotEmpty) {
-      final artistName = song.artist!.trim();
-      final artistId = song.artistId ?? 'artist_${artistName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+    if (songToAdd.artist != null && songToAdd.artist!.trim().isNotEmpty) {
+      final artistName = songToAdd.artist!.trim();
+      final artistId = songToAdd.artistId ?? 'artist_${artistName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
       final existingArtistIndex = _artists.indexWhere(
-        (a) => a.name.trim().toLowerCase() == artistName.toLowerCase(),
+        (a) => a.id == artistId || a.name.trim().toLowerCase() == artistName.toLowerCase(),
       );
       if (existingArtistIndex == -1) {
         final newArtist = Artist(
           id: artistId,
           name: artistName,
-          coverArt: song.coverArt,
+          coverArt: songToAdd.coverArt,
           albumCount: 1,
         );
         _artists.insert(0, newArtist);
@@ -937,24 +1068,64 @@ class LibraryProvider extends ChangeNotifier {
     }
 
     // Ensure album exists in library
-    if (song.album != null && song.album!.trim().isNotEmpty) {
-      final albumName = song.album!.trim();
-      final albumId = song.albumId ?? 'album_${albumName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
-      final existingAlbumIndex = _cachedAllAlbums.indexWhere(
-        (a) => a.name.trim().toLowerCase() == albumName.toLowerCase(),
+    final albumName = (songToAdd.album != null && songToAdd.album!.trim().isNotEmpty)
+        ? songToAdd.album!.trim()
+        : '${songToAdd.title.trim()} - Single';
+    final albumId = songToAdd.albumId ?? 'album_${albumName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+    final existingAlbumIndex = _cachedAllAlbums.indexWhere(
+      (a) => a.id == albumId || a.name.trim().toLowerCase() == albumName.toLowerCase(),
+    );
+    final Album targetAlbum;
+    if (existingAlbumIndex == -1) {
+      final newAlbum = Album(
+        id: albumId,
+        name: albumName,
+        artist: songToAdd.artist,
+        artistId: songToAdd.artistId,
+        coverArt: songToAdd.coverArt,
+        songCount: 1,
+        year: songToAdd.year,
+        created: DateTime.now(),
       );
-      if (existingAlbumIndex == -1) {
-        final newAlbum = Album(
-          id: albumId,
-          name: albumName,
-          artist: song.artist,
-          artistId: song.artistId,
-          coverArt: song.coverArt,
-          songCount: 1,
-          year: song.year,
-        );
-        _cachedAllAlbums.insert(0, newAlbum);
-        await _db.insertOrUpdateAlbum(newAlbum);
+      _cachedAllAlbums.insert(0, newAlbum);
+      await _db.insertOrUpdateAlbum(newAlbum);
+      targetAlbum = newAlbum;
+    } else {
+      targetAlbum = _cachedAllAlbums[existingAlbumIndex];
+    }
+
+    _recentAlbums.removeWhere((a) => a.id == targetAlbum.id);
+    _recentAlbums.insert(0, targetAlbum);
+
+    notifyListeners();
+  }
+
+  Future<void> removeSongFromLibrary(Song song) async {
+    _cachedAllSongs.removeWhere((s) => s.id == song.id);
+    await _db.deleteSong(song.id);
+
+    // If no other song has this album, remove album
+    final otherWithAlbum = _cachedAllSongs.any(
+      (s) => (s.albumId != null && s.albumId == song.albumId) ||
+             (s.album != null && s.album == song.album),
+    );
+    if (!otherWithAlbum) {
+      _cachedAllAlbums.removeWhere((a) => a.id == song.albumId || a.name == song.album);
+      _recentAlbums.removeWhere((a) => a.id == song.albumId || a.name == song.album);
+      if (song.albumId != null) {
+        await _db.deleteAlbum(song.albumId!);
+      }
+    }
+
+    // If no other song has this artist, remove artist
+    final otherWithArtist = _cachedAllSongs.any(
+      (s) => (s.artistId != null && s.artistId == song.artistId) ||
+             (s.artist != null && s.artist == song.artist),
+    );
+    if (!otherWithArtist) {
+      _artists.removeWhere((a) => a.id == song.artistId || a.name == song.artist);
+      if (song.artistId != null) {
+        await _db.deleteArtist(song.artistId!);
       }
     }
 

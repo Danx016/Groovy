@@ -169,14 +169,24 @@ class GroovyApiService {
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
-        return data['exists'] == true;
+        // If the server explicitly says exists is false, return false
+        if (data.containsKey('exists')) {
+          return data['exists'] == true;
+        }
+        return true;
       }
-      // If endpoint returns 404 or specific status
-      if (res.statusCode == 404) return false;
-      return true; // Graceful fallback if endpoint is not separately implemented on older backends
+      
+      // If endpoint returns 404 (endpoint not implemented on backend),
+      // DO NOT block the user with 'usuario no encontrado'.
+      // Allow the OTP recovery email flow to proceed.
+      if (res.statusCode == 404) {
+        debugPrint('[GroovyApiService] checkEmailExists: route /auth/check-email returned 404. Proceeding with recovery flow.');
+        return true;
+      }
+      return true; // Graceful fallback
     } catch (e) {
       debugPrint('[GroovyApiService] checkEmailExists: $e');
-      return true; // Allow attempt
+      return true; // Allow attempt on network error
     }
   }
 
@@ -197,6 +207,13 @@ class GroovyApiService {
           if (code != null) 'code': code,
         }),
       ).timeout(const Duration(seconds: 12));
+
+      if (res.statusCode == 404) {
+        return AuthResponse(
+          success: false,
+          error: 'El servidor en la nube aún no tiene habilitada la ruta de cambio de contraseña (/api/auth/reset-password).',
+        );
+      }
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
       if (res.statusCode >= 200 && res.statusCode < 300 && (data['success'] == true || data['message'] != null)) {

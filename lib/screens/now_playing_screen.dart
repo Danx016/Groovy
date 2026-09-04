@@ -88,11 +88,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       } catch (_) {}
     }
 
-    // 3. Defer heavy palette extraction until after the bottom sheet entry animation finishes (360ms)
+    // 3. Extract palette immediately (runs async, caches instantly)
     if (_bgColors.isEmpty) {
-      Future.delayed(const Duration(milliseconds: 360), () {
-        if (mounted) _extractColors();
-      });
+      _extractColors();
     }
 
     // 4. Defer network lyrics fetch slightly (160ms) to ensure 120Hz smooth entry
@@ -565,7 +563,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     backgroundColor: Colors.transparent,
                     isScrollControlled: true,
                     useRootNavigator: true,
-                    builder: (context) => const NowPlayingMoreMenu(),
+                    builder: (context) => NowPlayingMoreMenu(
+                      song: currentSong,
+                      imageProvider: _currentImageProvider ?? widget.image,
+                      onNavigateToLyrics: () => _pageController.animateToPage(
+                        1,
+                        duration: const Duration(milliseconds: 300),
+                        curve: Curves.easeInOut,
+                      ),
+                    ),
                   );
                 },
                 icon: Icon(
@@ -692,7 +698,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         backgroundColor: Colors.transparent,
                         isScrollControlled: true,
                         useRootNavigator: true,
-                        builder: (context) => const NowPlayingMoreMenu(),
+                        builder: (context) => NowPlayingMoreMenu(
+                          song: currentSong,
+                          imageProvider: _currentImageProvider ?? widget.image,
+                          onNavigateToLyrics: () => _pageController.animateToPage(
+                            1,
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          ),
+                        ),
                       );
                     },
                     icon: Icon(
@@ -724,6 +738,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               lyrics: _fetchedLyrics,
               positionStream: provider.positionStream,
               initialPosition: provider.position,
+              isActive: _currentPage == 1,
               onSeek: (duration) {
                 provider.seek(duration);
               },
@@ -964,7 +979,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                               backgroundColor: Colors.transparent,
                               isScrollControlled: true,
                               useRootNavigator: true,
-                              builder: (context) => const NowPlayingMoreMenu(),
+                              builder: (context) => NowPlayingMoreMenu(
+                                song: currentSong,
+                                imageProvider: _currentImageProvider ?? widget.image,
+                                onNavigateToLyrics: () => _pageController.animateToPage(
+                                  1,
+                                  duration: const Duration(milliseconds: 300),
+                                  curve: Curves.easeInOut,
+                                ),
+                              ),
                             );
                           },
                           icon: const Icon(

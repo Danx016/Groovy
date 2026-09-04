@@ -8,20 +8,56 @@ import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'playlist_screen.dart';
 
-class PlaylistsScreen extends StatelessWidget {
+class PlaylistsScreen extends StatefulWidget {
   const PlaylistsScreen({super.key});
+
+  @override
+  State<PlaylistsScreen> createState() => _PlaylistsScreenState();
+}
+
+class _PlaylistsScreenState extends State<PlaylistsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<LibraryProvider>(context, listen: false).loadPlaylists();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final libraryProvider = Provider.of<LibraryProvider>(context);
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       appBar: AppBar(
-        title: const Text('Playlists'),
+        backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(
+            CupertinoIcons.arrow_left,
+            color: AppTheme.appleMusicRed,
+            size: 24,
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Playlists',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 20,
+            color: isDark ? Colors.white : Colors.black87,
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(CupertinoIcons.add),
+            icon: const Icon(
+              CupertinoIcons.add,
+              color: AppTheme.appleMusicRed,
+              size: 24,
+            ),
             onPressed: () => _showCreatePlaylistDialog(context),
           ),
         ],
@@ -61,7 +97,6 @@ class PlaylistsScreen extends StatelessWidget {
           : ListView.builder(
               padding: const EdgeInsets.only(bottom: 150),
               itemExtent: 72.0,
-              cacheExtent: 300,
               itemCount: libraryProvider.playlists.length,
               itemBuilder: (context, index) {
                 final playlist = libraryProvider.playlists[index];

@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/artist.dart';
 import '../providers/library_provider.dart';
-import '../services/subsonic_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/album_artwork.dart';
@@ -21,6 +20,14 @@ class _ArtistsScreenState extends State<ArtistsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<LibraryProvider>(context, listen: false).loadArtists();
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -30,7 +37,6 @@ class _ArtistsScreenState extends State<ArtistsScreen> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final libraryProvider = Provider.of<LibraryProvider>(context);
-    final subsonicService = Provider.of<SubsonicService>(context, listen: false);
 
     List<Artist> artists = libraryProvider.artists;
     if (_searchQuery.isNotEmpty) {
