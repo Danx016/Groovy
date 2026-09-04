@@ -49,6 +49,12 @@ class MainActivity : AudioServiceFragmentActivity() {
                     @Suppress("DEPRECATION")
                     params.preferredRefreshRate = maxMode.refreshRate
                     window.attributes = params
+
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        try {
+                            window.decorView.setFrameRate(maxMode.refreshRate, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
+                        } catch (_: Throwable) {}
+                    }
                 }
             }
         } catch (e: Exception) {

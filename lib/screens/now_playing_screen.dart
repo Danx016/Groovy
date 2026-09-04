@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
+import 'package:flutter_displaymode/flutter_displaymode.dart';
 import '../widgets/blurred_gradient_background.dart';
 import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
@@ -70,8 +73,34 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     _fetchedLyrics = widget.lyrics;
     _currentImageProvider = widget.image;
     _lastSong = widget.song;
-    _extractColors();
-    _fetchLyrics();
+
+    // 1. Instant synchronous color lookup from cache
+    final songId = widget.song?.id ?? widget.heroTag;
+    final cached = PaletteService.getCachedColors(songId);
+    if (cached != null) {
+      _bgColors = cached;
+    }
+
+    // 2. Lock 120Hz display refresh rate on Android
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        FlutterDisplayMode.setHighRefreshRate();
+      } catch (_) {}
+    }
+
+    // 3. Defer heavy palette extraction until after the bottom sheet entry animation finishes (360ms)
+    if (_bgColors.isEmpty) {
+      Future.delayed(const Duration(milliseconds: 360), () {
+        if (mounted) _extractColors();
+      });
+    }
+
+    // 4. Defer network lyrics fetch slightly (160ms) to ensure 120Hz smooth entry
+    if (_fetchedLyrics.isEmpty) {
+      Future.delayed(const Duration(milliseconds: 160), () {
+        if (mounted) _fetchLyrics();
+      });
+    }
   }
 
   PlayerProvider? _playerProvider;
@@ -682,38 +711,35 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildLyricsPage() {
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, child) {
-        return GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () {
-            setState(() {
-              _showLyricsControls = !_showLyricsControls;
-            });
-          },
-          child: _fetchedLyrics.isNotEmpty
-              ? LyricsListView(
-                  lyrics: _fetchedLyrics,
-                  positionStream: provider.positionStream,
-                  initialPosition: provider.position,
-                  onSeek: (duration) {
-                    provider.seek(duration);
-                  },
-                )
-              : Center(
-                  child: _isLoadingLyrics
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          "Letra no disponible",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                ),
-        );
+    final provider = context.read<PlayerProvider>();
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        setState(() {
+          _showLyricsControls = !_showLyricsControls;
+        });
       },
+      child: _fetchedLyrics.isNotEmpty
+          ? LyricsListView(
+              lyrics: _fetchedLyrics,
+              positionStream: provider.positionStream,
+              initialPosition: provider.position,
+              onSeek: (duration) {
+                provider.seek(duration);
+              },
+            )
+          : Center(
+              child: _isLoadingLyrics
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text(
+                      "Letra no disponible",
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+            ),
     );
   }
 

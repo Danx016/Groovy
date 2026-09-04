@@ -24,14 +24,14 @@ class LyricsLineWidget extends StatelessWidget {
     final isCurrent = state == LyricLineState.current;
     final isPast = state == LyricLineState.past;
 
-    // Authentic Apple Music Opacity Hierarchy (Direct Single-Pass Render)
+    // Authentic Apple Music Opacity Hierarchy
     final double targetOpacity = isUnsynced
-        ? 0.92
+        ? 0.95
         : (isCurrent
             ? 1.0
             : (distance == 1
-                ? 0.42
-                : (isPast ? 0.24 : 0.18)));
+                ? 0.48
+                : (isPast ? 0.24 : 0.16)));
 
     final isHighlighted = isCurrent || isUnsynced;
 
@@ -39,49 +39,37 @@ class LyricsLineWidget extends StatelessWidget {
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 24.0),
-        child: AnimatedDefaultTextStyle(
-          duration: const Duration(milliseconds: 300),
+        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 24.0),
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 200),
           curve: Curves.easeOutCubic,
-          style: TextStyle(
-            fontSize: isHighlighted ? 33 : 30,
-            fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
-            letterSpacing: isHighlighted ? -0.8 : -0.5,
-            color: Colors.white.withValues(alpha: targetOpacity),
-            height: 1.24,
-            fontFamilyFallback: const [
-              '-apple-system',
-              'BlinkMacSystemFont',
-              'SF Pro Display',
-              'SF Pro Text',
-              'Inter',
-              'Roboto',
-              'sans-serif',
-            ],
-            shadows: isCurrent
-                ? [
-                    Shadow(
-                      color: Colors.black.withValues(alpha: 0.40),
-                      blurRadius: 14,
-                      offset: const Offset(0, 3),
-                    ),
-                    Shadow(
-                      color: Colors.white.withValues(alpha: 0.20),
-                      blurRadius: 18,
-                      offset: Offset.zero,
-                    ),
-                  ]
-                : (isUnsynced
-                    ? [
-                        Shadow(
-                          color: Colors.black.withValues(alpha: 0.35),
-                          blurRadius: 10,
-                          offset: const Offset(0, 2),
-                        ),
-                      ]
-                    : null),
+          opacity: targetOpacity,
+          child: Text(
+            line.text,
+            style: TextStyle(
+              fontSize: 32,
+              fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
+              letterSpacing: -0.6,
+              color: Colors.white,
+              height: 1.25,
+              fontFamilyFallback: const [
+                '-apple-system',
+                'BlinkMacSystemFont',
+                'SF Pro Display',
+                'Roboto',
+                'sans-serif',
+              ],
+              shadows: isCurrent
+                  ? const [
+                      Shadow(
+                        color: Colors.black45,
+                        blurRadius: 6,
+                        offset: Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
           ),
-          child: Text(line.text),
         ),
       ),
     );

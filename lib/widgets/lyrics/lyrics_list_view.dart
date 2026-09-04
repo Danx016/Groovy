@@ -220,59 +220,59 @@ class _LyricsListViewState extends State<LyricsListView> {
     final isUnsynced = _items.length > 1 && 
         _items.every((item) => item.startTime == Duration.zero);
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: (scrollNotification) {
-        if (scrollNotification is UserScrollNotification) {
-          _onUserScroll();
-        }
-        return false;
-      },
-      child: SingleChildScrollView(
-        controller: _scrollController,
-        physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-        padding: EdgeInsets.only(
-          top: 20,
-          bottom: MediaQuery.of(context).size.height * 0.42,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: List.generate(_items.length, (index) {
-            final item = _items[index];
-            
-            if (item.type == ItemType.interlude) {
+    return RepaintBoundary(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (scrollNotification) {
+          if (scrollNotification is UserScrollNotification) {
+            _onUserScroll();
+          }
+          return false;
+        },
+        child: SingleChildScrollView(
+          controller: _scrollController,
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          padding: EdgeInsets.only(
+            top: 20,
+            bottom: MediaQuery.of(context).size.height * 0.42,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: List.generate(_items.length, (index) {
+              final item = _items[index];
+              
+              if (item.type == ItemType.interlude) {
+                return Container(
+                  key: _keys[index],
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                  child: InterludeDotsWidget(
+                    currentTime: _currentPosition,
+                    targetTime: item.endTime,
+                  ),
+                );
+              }
+
+              final line = item.line!;
+              final lyricIndex = item.lyricIndex!;
+              
+              LyricLineState state = LyricLineState.future;
+              if (_currentLyricIndex != -1) {
+                if (lyricIndex < _currentLyricIndex) {
+                  state = LyricLineState.past;
+                } else if (lyricIndex == _currentLyricIndex) {
+                  state = LyricLineState.current;
+                }
+              } else {
+                if (item.endTime <= _currentPosition) {
+                  state = LyricLineState.past;
+                }
+              }
+
+              final distance = _currentLyricIndex != -1 
+                  ? (lyricIndex - _currentLyricIndex).abs() 
+                  : 3;
+
               return Container(
                 key: _keys[index],
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                child: InterludeDotsWidget(
-                  currentTime: _currentPosition,
-                  targetTime: item.endTime,
-                ),
-              );
-            }
-
-            final line = item.line!;
-            final lyricIndex = item.lyricIndex!;
-            
-            LyricLineState state = LyricLineState.future;
-            if (_currentLyricIndex != -1) {
-              if (lyricIndex < _currentLyricIndex) {
-                state = LyricLineState.past;
-              } else if (lyricIndex == _currentLyricIndex) {
-                state = LyricLineState.current;
-              }
-            } else {
-              if (item.endTime <= _currentPosition) {
-                state = LyricLineState.past;
-              }
-            }
-
-            final distance = _currentLyricIndex != -1 
-                ? (lyricIndex - _currentLyricIndex).abs() 
-                : 3;
-
-            return Container(
-              key: _keys[index],
-              child: RepaintBoundary(
                 child: LyricsLineWidget(
                   line: line,
                   state: state,
@@ -288,12 +288,12 @@ class _LyricsListViewState extends State<LyricsListView> {
                       _currentLyricIndex = lyricIndex;
                     });
                     _resumeAutoScrollTimer?.cancel();
-                    _scrollToCurrentLine(duration: const Duration(milliseconds: 450));
+                    _scrollToCurrentLine(duration: const Duration(milliseconds: 400));
                   },
                 ),
-              ),
-            );
-          }),
+              );
+            }),
+          ),
         ),
       ),
     );
