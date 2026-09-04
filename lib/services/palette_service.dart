@@ -4,6 +4,11 @@ import 'package:palette_generator/palette_generator.dart';
 class PaletteService {
   static final Map<String, List<Color>> _colorCache = {};
 
+  /// Instant synchronous cache access (0 ms)
+  static List<Color>? getCachedColors(String imageId) {
+    return _colorCache[imageId];
+  }
+
   /// Extracts rich, authentic Apple Music ambient color palettes.
   /// Generates deep, warm, radiant tones that dynamically animate across the background.
   static Future<List<Color>> extractColors(

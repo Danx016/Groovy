@@ -171,7 +171,7 @@ class _MarqueeTextState extends State<MarqueeText> {
           );
         }
 
-        return content;
+        return RepaintBoundary(child: content);
       },
     );
   }
