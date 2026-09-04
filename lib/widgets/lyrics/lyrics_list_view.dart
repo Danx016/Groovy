@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import '../../models/lyric_line.dart';
 import 'lyrics_line.dart';
@@ -26,16 +27,20 @@ class LyricsItem {
 
 class LyricsListView extends StatefulWidget {
   final List<LyricLine> lyrics;
-  final Stream<Duration> positionStream;
-  final Duration initialPosition;
+  final Stream<Duration>? positionStream;
+  final Duration? initialPosition;
+  final Duration? currentTime;
   final Function(Duration) onSeek;
+  final bool isActive;
 
   const LyricsListView({
     super.key,
     required this.lyrics,
-    required this.positionStream,
-    required this.initialPosition,
+    this.positionStream,
+    this.initialPosition,
+    this.currentTime,
     required this.onSeek,
+    this.isActive = true,
   });
 
   @override
@@ -57,7 +62,7 @@ class _LyricsListViewState extends State<LyricsListView> {
   void initState() {
     super.initState();
     _scrollController = ScrollController();
-    _currentPosition = widget.initialPosition;
+    _currentPosition = widget.initialPosition ?? widget.currentTime ?? Duration.zero;
     _buildItems();
     _updateIndexForPosition(_currentPosition);
     _subscribeToPosition();
@@ -65,10 +70,12 @@ class _LyricsListViewState extends State<LyricsListView> {
 
   void _subscribeToPosition() {
     _posSub?.cancel();
-    _posSub = widget.positionStream.listen((pos) {
-      _currentPosition = pos;
-      _updateIndexForPosition(pos);
-    });
+    if (widget.positionStream != null) {
+      _posSub = widget.positionStream!.listen((pos) {
+        _currentPosition = pos;
+        _updateIndexForPosition(pos);
+      });
+    }
   }
 
   @override
@@ -82,6 +89,17 @@ class _LyricsListViewState extends State<LyricsListView> {
     
     if (oldWidget.positionStream != widget.positionStream) {
       _subscribeToPosition();
+    }
+
+    if (widget.currentTime != null && widget.currentTime != oldWidget.currentTime) {
+      _currentPosition = widget.currentTime!;
+      _updateIndexForPosition(_currentPosition);
+    }
+
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentLine(duration: const Duration(milliseconds: 300));
+      });
     }
   }
 
@@ -155,24 +173,34 @@ class _LyricsListViewState extends State<LyricsListView> {
           _currentLyricIndex = -1;
         }
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentLine();
-      });
+      if (widget.isActive) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _scrollToCurrentLine();
+        });
+      }
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 450)}) {
-    if (_isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 400)}) {
+    if (!widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     final key = _keys[_currentIndex];
     final keyContext = key.currentContext;
     if (keyContext != null) {
-      Scrollable.ensureVisible(
-        keyContext,
-        duration: duration,
-        curve: Curves.easeOutCubic,
-        alignment: 0.24,
-      );
+      final renderObject = keyContext.findRenderObject();
+      if (renderObject is RenderBox && _scrollController.hasClients) {
+        final viewport = RenderAbstractViewport.of(renderObject);
+        final targetOffset = viewport.getOffsetToReveal(renderObject, 0.24).offset;
+        final clamped = targetOffset.clamp(
+          _scrollController.position.minScrollExtent,
+          _scrollController.position.maxScrollExtent,
+        );
+        _scrollController.animateTo(
+          clamped,
+          duration: duration,
+          curve: Curves.easeOutCubic,
+        );
+      }
     }
   }
 

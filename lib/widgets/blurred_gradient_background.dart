@@ -15,11 +15,11 @@ class BlurredGradientBackground extends StatelessWidget {
   List<Color> _normalizedColors(List<Color> raw) {
     if (raw.isEmpty) {
       return const [
-        Color(0xFFB86B35), // Warm Amber
-        Color(0xFF8B4513), // Saddle Brown
-        Color(0xFFD27D2D), // Ochre Terracotta
-        Color(0xFFE89A4B), // Radiant Gold
-        Color(0xFF1E120A), // Deep Base
+        Color(0xFF16161E),
+        Color(0xFF1E1E28),
+        Color(0xFF121218),
+        Color(0xFF242434),
+        Color(0xFF09090D),
       ];
     }
     final list = List<Color>.from(raw);
@@ -34,6 +34,7 @@ class BlurredGradientBackground extends StatelessWidget {
     final normColors = _normalizedColors(colors);
     final c0 = normColors[0];
     final c1 = normColors[1];
+    final c2 = normColors[2];
     final c3 = normColors[3];
     final c4 = normColors[4];
 
@@ -52,26 +53,45 @@ class BlurredGradientBackground extends StatelessWidget {
                   end: Alignment.bottomRight,
                   colors: [
                     c0.withValues(alpha: 0.95),
-                    c3.withValues(alpha: 0.78),
-                    c1.withValues(alpha: 0.72),
+                    c3.withValues(alpha: 0.80),
+                    c2.withValues(alpha: 0.75),
+                    c1.withValues(alpha: 0.70),
                     c4,
                   ],
-                  stops: const [0.0, 0.32, 0.65, 1.0],
+                  stops: const [0.0, 0.28, 0.54, 0.78, 1.0],
                 ),
               ),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.16),
-                      Colors.transparent,
-                      Colors.black.withValues(alpha: 0.28),
-                    ],
-                    stops: const [0.0, 0.28, 1.0],
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: RadialGradient(
+                        center: const Alignment(0.0, -0.25),
+                        radius: 0.95,
+                        colors: [
+                          c3.withValues(alpha: 0.35),
+                          Colors.transparent,
+                        ],
+                        stops: const [0.0, 1.0],
+                      ),
+                    ),
                   ),
-                ),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.14),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.32),
+                        ],
+                        stops: const [0.0, 0.30, 1.0],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

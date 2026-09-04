@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -242,34 +241,6 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
               ),
             ),
 
-            // Apple Music Lossless Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CustomPaint(
-                    size: const Size(12, 9),
-                    painter: _LosslessWaveformPainter(color: Colors.white.withValues(alpha: 0.88)),
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Lossless',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white.withValues(alpha: 0.90),
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
             // Negative remaining duration (-4:10)
             SizedBox(
               width: 55,
@@ -290,33 +261,6 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
       ],
     );
   }
-}
-
-class _LosslessWaveformPainter extends CustomPainter {
-  final Color color;
-
-  _LosslessWaveformPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
-      ..strokeCap = StrokeCap.round;
-
-    final path = Path();
-    path.moveTo(0, size.height * 0.5);
-    path.lineTo(size.width * 0.25, size.height * 0.15);
-    path.lineTo(size.width * 0.50, size.height * 0.85);
-    path.lineTo(size.width * 0.75, size.height * 0.25);
-    path.lineTo(size.width, size.height * 0.5);
-
-    canvas.drawPath(path, paint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _LosslessWaveformPainter oldDelegate) => false;
 }
 
 class _AppleMusicSliderPainter extends CustomPainter {

@@ -328,6 +328,21 @@ class LibraryDatabaseService {
     return playlist;
   }
 
+  Future<void> deleteSong(String songId) async {
+    final db = await database;
+    await db.delete('songs', where: 'id = ?', whereArgs: [songId]);
+  }
+
+  Future<void> deleteAlbum(String albumId) async {
+    final db = await database;
+    await db.delete('albums', where: 'id = ?', whereArgs: [albumId]);
+  }
+
+  Future<void> deleteArtist(String artistId) async {
+    final db = await database;
+    await db.delete('artists', where: 'id = ?', whereArgs: [artistId]);
+  }
+
   Future<void> deletePlaylist(String playlistId) async {
     final db = await database;
     await db.delete('playlists', where: 'id = ?', whereArgs: [playlistId]);
@@ -432,14 +447,15 @@ class LibraryDatabaseService {
     });
   }
 
-  /// Clear only server-side data, preserving local library entries.
+  /// Clear only server-side data, preserving local library entries and user favorites.
   Future<void> clearServerData() async {
     final db = await database;
     await db.transaction((txn) async {
-      await txn.delete('songs', where: 'isLocal = ?', whereArgs: [0]);
-      await txn.delete('albums', where: 'isLocal = ?', whereArgs: [0]);
-      await txn.delete('artists', where: 'isLocal = ?', whereArgs: [0]);
-      await txn.delete('playlists');
+      await txn.delete(
+        'songs',
+        where: 'isLocal = ? AND (starred = 0 OR starred IS NULL)',
+        whereArgs: [0],
+      );
     });
   }
 

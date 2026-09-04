@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../models/song.dart';
-import '../../models/playlist.dart';
 import '../../models/models.dart';
 import '../../services/subsonic_service.dart';
 import '../../providers/library_provider.dart';
@@ -153,21 +151,21 @@ class AddToMenu extends StatelessWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       useRootNavigator: true,
-      builder: (context) => _PlaylistSelectionBottomSheet(song: song),
+      builder: (context) => PlaylistSelectionBottomSheet(song: song),
     );
   }
 }
 
-class _PlaylistSelectionBottomSheet extends StatefulWidget {
+class PlaylistSelectionBottomSheet extends StatefulWidget {
   final Song song;
 
-  const _PlaylistSelectionBottomSheet({required this.song});
+  const PlaylistSelectionBottomSheet({super.key, required this.song});
 
   @override
-  State<_PlaylistSelectionBottomSheet> createState() => _PlaylistSelectionBottomSheetState();
+  State<PlaylistSelectionBottomSheet> createState() => _PlaylistSelectionBottomSheetState();
 }
 
-class _PlaylistSelectionBottomSheetState extends State<_PlaylistSelectionBottomSheet> {
+class _PlaylistSelectionBottomSheetState extends State<PlaylistSelectionBottomSheet> {
   List<Playlist>? _playlists;
   bool _isLoading = true;
 
@@ -317,6 +315,7 @@ class _PlaylistSelectionBottomSheetState extends State<_PlaylistSelectionBottomS
                         if (confirmed != true) return;
                       }
 
+                      if (!context.mounted) return;
                       try {
                         final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
                         await libraryProvider.addSongToLibrary(widget.song);
