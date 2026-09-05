@@ -5,6 +5,12 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.45] - 2026-09-04
+
+### Fixed
+- **Artist Discography Restored** — Full artist discography and albums are now prominently displayed under "Discografía" without strict song count restrictions, fetching online albums via Deezer.
+- **Clean Artist Header Title Styling** — Artist name in the header is now crisp white text with no blurry drop shadows, over an elegant dark gradient vignette for maximum clarity and contrast.
+
 ## [1.0.44] - 2026-09-04
 
 ### Added

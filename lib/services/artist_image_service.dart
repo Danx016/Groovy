@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/models.dart';
 
 /// Service to resolve and cache high-resolution artist images using
 /// Deezer Artist Search API (with iTunes Search API fallback).
@@ -182,5 +183,52 @@ class ArtistImageService {
       debugPrint('[ArtistImageService] iTunes query error for "$query": $e');
     }
     return null;
+  }
+
+  /// Query Deezer to get full artist discography (albums)
+  Future<List<Album>> getArtistAlbums(String artistName) async {
+    final query = _extractPrimaryArtist(artistName);
+    try {
+      final url = 'https://api.deezer.com/search/album?q=${Uri.encodeComponent(query)}&limit=30';
+      final response = await _dio.get(url);
+      if (response.statusCode == 200 && response.data != null) {
+        final data = response.data;
+        final list = data is Map ? data['data'] : null;
+        if (list is List && list.isNotEmpty) {
+          final result = <Album>[];
+          final seenTitles = <String>{};
+          for (final item in list) {
+            if (item is Map) {
+              final title = (item['title'] as String?)?.trim();
+              if (title == null || title.isEmpty) continue;
+              final lower = title.toLowerCase();
+              if (seenTitles.contains(lower)) continue;
+              seenTitles.add(lower);
+
+              final id = item['id']?.toString() ?? title;
+              final coverXl = item['cover_xl'] as String?;
+              final coverBig = item['cover_big'] as String?;
+              final coverMed = item['cover_medium'] as String?;
+              final cover = coverXl ?? coverBig ?? coverMed;
+              final nbTracks = item['nb_tracks'] as int?;
+
+              result.add(
+                Album(
+                  id: 'dz_album_$id',
+                  name: title,
+                  artist: artistName,
+                  coverArt: cover,
+                  songCount: nbTracks,
+                ),
+              );
+            }
+          }
+          return result;
+        }
+      }
+    } catch (e) {
+      debugPrint('[ArtistImageService] getArtistAlbums error: $e');
+    }
+    return [];
   }
 }
