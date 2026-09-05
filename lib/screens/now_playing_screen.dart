@@ -145,7 +145,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = _lastSong!.coverArt != null ? youtubeService.getCoverArtUrl(_lastSong!.coverArt, size: 600) : null;
     if (coverUrl != null) {
-      _currentImageProvider = CachedNetworkImageProvider(coverUrl);
+      _currentImageProvider = CachedNetworkImageProvider(coverUrl, maxWidth: 600, maxHeight: 600);
     } else {
       _currentImageProvider = const AssetImage('assets/default_cover.png');
     }
@@ -418,9 +418,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         final artist = currentSong?.artist ?? widget.artist;
         final isStarred = currentSong?.starred ?? false;
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4.0),
-          child: Row(
+        return RepaintBoundary(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4.0),
+            child: Row(
             children: [
               // Cover Thumbnail -> Navigate to Album or Page 0
               GestureDetector(
@@ -604,10 +605,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
             ],
           ),
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildCoverPage(BuildContext context, bool isCompact) {
     return Selector<PlayerProvider, (Song?, bool, bool)>(
@@ -620,9 +622,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         final isStarred = data.$2;
         final isPlaying = data.$3;
 
-        return Column(
-          children: [
-            // Big Album Artwork
+        return RepaintBoundary(
+          child: Column(
+            children: [
+              // Big Album Artwork
             Expanded(
               child: Center(
                 child: Padding(
@@ -743,10 +746,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
             ),
           ],
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildLyricsPage() {
     final provider = context.read<PlayerProvider>();
@@ -797,27 +801,30 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         final duration = data.$4;
         final hideControlsInLyrics = _currentPage == 1 && !_showLyricsControls;
 
-        return AnimatedCrossFade(
-          firstChild: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 1. Scrubber Progress Slider
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                child: PlaybackProgressSlider(
-                  position: provider.position,
-                  duration: duration,
-                  bufferedPosition: provider.bufferedPosition,
-                  isBuffering: provider.isBuffering,
-                  positionStream: provider.positionStream,
-                  bufferedPositionStream: provider.bufferedPositionStream,
-                  isBufferingStream: provider.isBufferingStream,
-                  accentColor: Colors.white,
-                  onChanged: (val) {
-                    provider.seek(val);
-                  },
+        return RepaintBoundary(
+          child: AnimatedCrossFade(
+            firstChild: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 1. Scrubber Progress Slider
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                  child: RepaintBoundary(
+                    child: PlaybackProgressSlider(
+                      position: provider.position,
+                      duration: duration,
+                      bufferedPosition: provider.bufferedPosition,
+                      isBuffering: provider.isBuffering,
+                      positionStream: provider.positionStream,
+                      bufferedPositionStream: provider.bufferedPositionStream,
+                      isBufferingStream: provider.isBufferingStream,
+                      accentColor: Colors.white,
+                      onChanged: (val) {
+                        provider.seek(val);
+                      },
+                    ),
+                  ),
                 ),
-              ),
 
               SizedBox(height: isCompact ? 4 : 8),
 
@@ -892,15 +899,19 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ? CrossFadeState.showSecond
               : CrossFadeState.showFirst,
           duration: const Duration(milliseconds: 250),
-        );
-      },
-    );
+        ),
+      );
+    },
+  );
   }
 
   Widget _buildLandscapeLayout(BuildContext context, Color accentColor) {
-    return Consumer<PlayerProvider>(
-      builder: (context, provider, child) {
-        final currentSong = provider.currentSong ?? widget.song;
+    return Selector<PlayerProvider, (Song?, bool)>(
+      selector: (_, p) => (p.currentSong, p.isPlaying),
+      builder: (context, data, child) {
+        final provider = Provider.of<PlayerProvider>(context, listen: false);
+        final currentSong = data.$1 ?? widget.song;
+        final isPlaying = data.$2;
         final title = currentSong?.title ?? widget.title;
         final artist = currentSong?.artist ?? widget.artist;
         final isStarred = currentSong?.starred ?? false;
@@ -918,7 +929,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     child: AlbumArtView(
                       image: _currentImageProvider ?? widget.image,
                       tag: currentSong?.id ?? widget.heroTag,
-                      isPlaying: provider.isPlaying,
+                      isPlaying: isPlaying,
                     ),
                   ),
                 ),

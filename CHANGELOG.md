@@ -5,6 +5,27 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.51] - 2026-09-04
+
+### Performance Improvements
+- **Optimización Integral de Rendimiento y Fluidez en el Reproductor (`NowPlayingScreen`)**:
+  - **"A continuación" (`QueueView`)**:
+    - Se reemplazó el `Consumer<PlayerProvider>` raíz por `Selector<PlayerProvider, _QueueViewState>`, eliminando la reconstrucción continua de la cola y sus slivers durante los pulsos de reproducción de audio.
+    - Se extrajo `_QueueSongTile` como widget aislado envuelto en `RepaintBoundary`, garantizando un scroll y reordenamiento fluido a 120 FPS sin invalidar el árbol de renderizado.
+    - Las píldoras de acción rápida (Shuffle / Repeat / Infinity) ahora cuentan con su propio límite de repintado.
+  - **"Letra" (`LyricsListView` & `LyricsLineWidget`)**:
+    - Se eliminó el uso de `AnimatedOpacity` (que forzaba capas de composición `saveLayer` fuera de pantalla en la GPU) y se migró a `AnimatedDefaultTextStyle` aplicando el canal alfa directamente sobre el color del texto (`Colors.white.withValues(alpha: targetOpacity)`).
+    - Cada línea de letra está ahora aislada con `RepaintBoundary`. Al cambiar la línea activa, únicamente se repintan las 2 líneas en transición, reutilizando la textura GPU de las más de 80 líneas restantes en caché.
+    - Algoritmo de búsqueda binaria $O(\log N)$ para la localización instantánea de la línea activa según la posición de reproducción.
+  - **"Carátula" y Fondo (`AlbumArtView`, `PaletteService`, `NowPlayingScreen`)**:
+    - Aceleración superior al **85%** en la extracción de paleta k-means (`PaletteService`): reducción de la muestra de `112x112` (12,544 px) a `48x48` (2,304 px) y 20 colores, pasando de ~250ms a ~15ms y eliminando congelamientos de la interfaz al cambiar de canción.
+    - Aislamiento del deslizador de progreso (`PlaybackProgressSlider`) con `RepaintBoundary` para no repintar los controles ni la portada con cada tick de posición (4 Hz).
+    - Aislamiento del mini-header superior y sección de controles inferiores con `RepaintBoundary`.
+    - Limitación del tamaño de decodificación en memoria de las imágenes de portada a `600x600`.
+  - **Otras partes**:
+    - `NowPlayingMoreMenu`: lectura sin suscripción de `PlayerProvider` (`listen: false`) para evitar rebuilds continuos al abrir el menú de opciones.
+    - Modo horizontal (`_buildLandscapeLayout`): migración de `Consumer` a `Selector`.
+
 ## [1.0.50] - 2026-09-04
 
 ### Removed

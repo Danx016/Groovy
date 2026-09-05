@@ -30,9 +30,9 @@ class PaletteService {
     try {
       final palette = await PaletteGenerator.fromImageProvider(
         imageProvider,
-        maximumColorCount: 48,
-        size: const Size(112, 112),
-      ).timeout(const Duration(seconds: 4));
+        maximumColorCount: 20,
+        size: const Size(48, 48),
+      ).timeout(const Duration(seconds: 3));
 
       // Calculate population-weighted average lightness and saturation
       double totalWeightedLightness = 0.0;
