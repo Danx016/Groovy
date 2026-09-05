@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/library_provider.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/bpm_analyzer_service.dart';
 import '../services/cache_settings_service.dart';
 import '../services/local_music_service.dart';
@@ -761,7 +761,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   Future<void> _downloadAllLibrary() async {
     try {
       final libraryProvider = context.read<LibraryProvider>();
-      final subsonicService = context.read<SubsonicService>();
+      final youtubeService = context.read<YoutubeService>();
 
       // Show loading indicator
       if (mounted) {
@@ -836,7 +836,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
 
       if (confirm != true || !mounted) return;
 
-      await _offlineService.startBackgroundDownload(allSongs, subsonicService);
+      await _offlineService.startBackgroundDownload(allSongs, youtubeService);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

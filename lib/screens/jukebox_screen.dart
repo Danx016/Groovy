@@ -4,7 +4,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../services/jukebox_service.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/album_artwork.dart';
 
@@ -33,8 +33,8 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
 
   void _refresh() {
     final jukebox = context.read<JukeboxService>();
-    final subsonic = context.read<SubsonicService>();
-    jukebox.refresh(subsonic);
+    final youtubeService = context.read<YoutubeService>();
+    jukebox.refresh(youtubeService);
   }
 
   @override
@@ -167,11 +167,11 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                         _ControlButton(
                           icon: CupertinoIcons.backward_fill,
                           onPressed: jukebox.isLoading
-                              ? null
+                               ? null
                               : () {
-                                  final subsonic = context
-                                      .read<SubsonicService>();
-                                  jukebox.skipPrevious(subsonic);
+                                  final youtubeService = context
+                                      .read<YoutubeService>();
+                                  jukebox.skipPrevious(youtubeService);
                                 },
                         ),
                         _ControlButton(
@@ -183,12 +183,12 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                           onPressed: jukebox.isLoading
                               ? null
                               : () {
-                                  final subsonic = context
-                                      .read<SubsonicService>();
+                                  final youtubeService = context
+                                      .read<YoutubeService>();
                                   if (status.playing) {
-                                    jukebox.pause(subsonic);
+                                    jukebox.pause(youtubeService);
                                   } else {
-                                    jukebox.play(subsonic);
+                                    jukebox.play(youtubeService);
                                   }
                                 },
                         ),
@@ -197,9 +197,9 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                           onPressed: jukebox.isLoading
                               ? null
                               : () {
-                                  final subsonic = context
-                                      .read<SubsonicService>();
-                                  jukebox.skipNext(subsonic);
+                                  final youtubeService = context
+                                      .read<YoutubeService>();
+                                  jukebox.skipNext(youtubeService);
                                 },
                         ),
                       ],
@@ -220,8 +220,8 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                             value: status.gain.clamp(0.0, 1.0),
                             activeColor: AppTheme.appleMusicRed,
                             onChanged: (v) {
-                              final subsonic = context.read<SubsonicService>();
-                              jukebox.setGain(subsonic, v);
+                              final youtubeService = context.read<YoutubeService>();
+                              jukebox.setGain(youtubeService, v);
                             },
                           ),
                         ),
@@ -242,9 +242,9 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                           onPressed: jukebox.isLoading
                               ? null
                               : () {
-                                  final subsonic = context
-                                      .read<SubsonicService>();
-                                  jukebox.shuffleQueue(subsonic);
+                                  final youtubeService = context
+                                      .read<YoutubeService>();
+                                  jukebox.shuffleQueue(youtubeService);
                                 },
                           icon: const Icon(CupertinoIcons.shuffle),
                           label: Text(l10n.shuffle),
@@ -253,9 +253,9 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                           onPressed: jukebox.isLoading
                               ? null
                               : () {
-                                  final subsonic = context
-                                      .read<SubsonicService>();
-                                  jukebox.clearQueue(subsonic);
+                                  final youtubeService = context
+                                      .read<YoutubeService>();
+                                  jukebox.clearQueue(youtubeService);
                                 },
                           icon: const Icon(CupertinoIcons.trash),
                           label: Text(l10n.jukeboxClearQueue),
@@ -331,14 +331,14 @@ class _JukeboxScreenState extends State<JukeboxScreen> {
                               )
                             : null,
                         onTap: () {
-                          final subsonic = context.read<SubsonicService>();
-                          jukebox.skip(subsonic, index);
+                          final youtubeService = context.read<YoutubeService>();
+                          jukebox.skip(youtubeService, index);
                         },
                         trailing: IconButton(
                           icon: const Icon(CupertinoIcons.trash, size: 18),
                           onPressed: () {
-                            final subsonic = context.read<SubsonicService>();
-                            jukebox.removeFromQueue(subsonic, index);
+                            final youtubeService = context.read<YoutubeService>();
+                            jukebox.removeFromQueue(youtubeService, index);
                           },
                         ),
                       );

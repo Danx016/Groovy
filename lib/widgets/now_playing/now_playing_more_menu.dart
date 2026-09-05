@@ -6,7 +6,7 @@ import '../../models/song.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../screens/song_credits_screen.dart';
-import '../../services/subsonic_service.dart';
+import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
 import 'add_to_menu.dart';
 
@@ -67,9 +67,9 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
 
     final isInLibrary = libraryProvider.cachedAllSongs.any((s) => s.id == currentSong.id);
 
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = currentSong.coverArt != null
-        ? subsonic.getCoverArtUrl(currentSong.coverArt, size: 300)
+        ? youtubeService.getCoverArtUrl(currentSong.coverArt, size: 300)
         : null;
 
     final ImageProvider effectiveImage = widget.imageProvider ??

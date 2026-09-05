@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
@@ -61,7 +61,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
   }
 
   Future<void> _loadAlbum() async {
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -82,7 +82,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
         songs = await libraryProvider.getAlbumSongs(widget.albumId);
       } else {
         try {
-          album ??= await subsonicService.getAlbum(widget.albumId);
+          album ??= await youtubeService.getAlbum(widget.albumId);
           songs = await libraryProvider.getAlbumSongs(widget.albumId);
         } catch (_) {}
       }
@@ -208,9 +208,9 @@ class _AlbumScreenState extends State<AlbumScreen> {
   Future<void> _downloadAlbum() async {
     if (_songs.isEmpty || _album == null) return;
     final offlineService = OfflineService();
-    final subsonicService = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     await offlineService.initialize();
-    offlineService.queuePlaylistDownload(_album!.id, _songs, subsonicService);
+    offlineService.queuePlaylistDownload(_album!.id, _songs, youtubeService);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

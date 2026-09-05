@@ -7,7 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
-import 'subsonic_service.dart';
+import 'youtube_service.dart';
 
 enum DownloadStatus { queued, downloading, done, failed }
 
@@ -109,7 +109,7 @@ class OfflineService {
   Map<String, List<Map<String, dynamic>>> _queuedPlaylistData = {};
 
   /// Sequential download queue: each entry is (playlistId, songs).
-  final List<({String playlistId, List<Song> songs, SubsonicService service})>
+  final List<({String playlistId, List<Song> songs, YoutubeService service})>
       _downloadQueue = [];
   bool _queueProcessorRunning = false;
   String? _activePlaylistId;
@@ -200,7 +200,7 @@ class OfflineService {
   Future<void> queuePlaylistDownload(
     String playlistId,
     List<Song> songs,
-    SubsonicService subsonicService,
+    YoutubeService musicService,
   ) async {
     if (_offlineDir == null) await initialize();
 
@@ -217,7 +217,7 @@ class OfflineService {
       return;
     }
 
-    _downloadQueue.add((playlistId: playlistId, songs: missing, service: subsonicService));
+    _downloadQueue.add((playlistId: playlistId, songs: missing, service: musicService));
     _startQueueProcessor();
   }
 
@@ -256,7 +256,7 @@ class OfflineService {
   }
 
   /// Called at startup to re-queue any playlists that were interrupted.
-  Future<void> resumeIncompleteDownloads(SubsonicService subsonicService) async {
+  Future<void> resumeIncompleteDownloads(YoutubeService musicService) async {
     if (_queuedPlaylistData.isEmpty) return;
     for (final entry in _queuedPlaylistData.entries) {
       final missing = entry.value
@@ -264,7 +264,7 @@ class OfflineService {
           .where((s) => !isSongDownloaded(s.id))
           .toList();
       if (missing.isEmpty) continue;
-      _downloadQueue.add((playlistId: entry.key, songs: missing, service: subsonicService));
+      _downloadQueue.add((playlistId: entry.key, songs: missing, service: musicService));
     }
     if (_downloadQueue.isNotEmpty) _startQueueProcessor();
   }
@@ -385,7 +385,7 @@ class OfflineService {
 
   Future<bool> downloadSong(
     Song song,
-    SubsonicService subsonicService, {
+    YoutubeService musicService, {
     Function(double progress)? onProgress,
   }) async {
     if (_offlineDir == null) await initialize();
@@ -399,7 +399,7 @@ class OfflineService {
     final filePath = _getSongPath(song.id);
     try {
       // Use /download (original file, no transcoding) so size matches song.size
-      final url = subsonicService.getDownloadUrl(song.id);
+      final url = musicService.getDownloadUrl(song.id);
 
       final dio = Dio();
       await dio.download(
@@ -426,7 +426,7 @@ class OfflineService {
 
       try {
         if (song.coverArt != null) {
-          final coverUrl = subsonicService.getCoverArtUrl(song.coverArt, size: 600);
+          final coverUrl = musicService.getCoverArtUrl(song.coverArt, size: 600);
           if (coverUrl.isNotEmpty) {
             final dioCover = Dio();
             final songCoverPath = _getCoverArtPath(song.id);
@@ -443,9 +443,9 @@ class OfflineService {
       }
       try {
         final lyricsMap = <String, dynamic>{};
-        final syncedLyrics = await subsonicService.getLyricsBySongId(song.id);
+        final syncedLyrics = await musicService.getLyricsBySongId(song.id);
         if (syncedLyrics != null) lyricsMap['lyricsList'] = syncedLyrics;
-        final plainLyrics = await subsonicService.getLyrics(
+        final plainLyrics = await musicService.getLyrics(
           artist: song.artist,
           title: song.title,
         );
@@ -464,7 +464,7 @@ class OfflineService {
 
   Future<void> downloadSongs(
     List<Song> songs,
-    SubsonicService subsonicService, {
+    YoutubeService musicService, {
     Function(int current, int total)? onProgress,
     Function(Song song, bool success)? onSongComplete,
     Function()? onComplete,
@@ -480,7 +480,7 @@ class OfflineService {
         continue;
       }
 
-      final success = await downloadSong(song, subsonicService);
+      final success = await downloadSong(song, musicService);
       onProgress?.call(i + 1, songs.length);
       onSongComplete?.call(song, success);
     }
@@ -511,7 +511,7 @@ class OfflineService {
 
   Future<void> startBackgroundDownload(
     List<Song> songs,
-    SubsonicService subsonicService, {
+    YoutubeService musicService, {
     int? parallelCount,
   }) async {
     if (_isBackgroundDownloadActive) {
@@ -571,7 +571,7 @@ class OfflineService {
           final logIdx = i + batchIdx;
           _updateLogEntry(logIdx, DownloadStatus.downloading);
 
-          final success = await downloadSong(song, subsonicService);
+          final success = await downloadSong(song, musicService);
           completedCount++;
 
           _updateLogEntry(logIdx, success ? DownloadStatus.done : DownloadStatus.failed);
@@ -607,7 +607,7 @@ class OfflineService {
       final retryFailed = <Song>[];
       for (final song in toRetry) {
         if (!_isBackgroundDownloadActive) break;
-        final success = await downloadSong(song, subsonicService);
+        final success = await downloadSong(song, musicService);
         if (!success) retryFailed.add(song);
       }
       downloadState.value = downloadState.value.copyWith(
@@ -674,14 +674,14 @@ class OfflineService {
 
   Future<void> downloadPlaylist(
     Playlist playlist,
-    SubsonicService subsonicService, {
+    YoutubeService musicService, {
     Function(int current, int total)? onProgress,
     Function()? onComplete,
   }) async {
     final songs = playlist.songs ?? [];
     await downloadSongs(
       songs,
-      subsonicService,
+      musicService,
       onProgress: onProgress,
       onComplete: onComplete,
     );
@@ -789,7 +789,7 @@ class OfflineService {
 
   int getPendingScrobbleCount() => _getPendingScrobbles().length;
 
-  Future<void> flushPendingScrobbles(SubsonicService subsonicService) async {
+  Future<void> flushPendingScrobbles(YoutubeService musicService) async {
     if (_prefs == null) await initialize();
     final pending = _getPendingScrobbles();
     if (pending.isEmpty) return;
@@ -798,7 +798,7 @@ class OfflineService {
     final remaining = <Map<String, String>>[];
     for (final scrobble in pending) {
       try {
-        await subsonicService.scrobble(
+        await musicService.scrobble(
           scrobble['id']!,
           submission: scrobble['submission'] == 'true',
         );
@@ -817,7 +817,7 @@ class OfflineService {
     }
   }
 
-  String getPlayableUrl(Song song, SubsonicService subsonicService) {
+  String getPlayableUrl(Song song, YoutubeService musicService) {
     if (song.isLocal == true && song.path != null) {
       return 'file://${song.path}';
     }
@@ -826,6 +826,6 @@ class OfflineService {
     if (localPath != null) {
       return 'file://$localPath';
     }
-    return subsonicService.getStreamUrl(song.id);
+    return musicService.getStreamUrl(song.id);
   }
 }

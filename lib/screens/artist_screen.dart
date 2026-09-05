@@ -38,7 +38,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       context,
       listen: false,
     );
-    final subsonicService = libraryProvider.subsonicService;
+    final youtubeService = libraryProvider.youtubeService;
 
     try {
       Artist? artist;
@@ -67,11 +67,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         final targetId = libraryMatch?.id ?? widget.artistId;
 
         try {
-          artist = await subsonicService.getArtist(targetId);
-          _artistInfo = await subsonicService.getArtistInfo(targetId);
+          artist = await youtubeService.getArtist(targetId);
+          _artistInfo = await youtubeService.getArtistInfo(targetId);
 
-          topSongs = await subsonicService.getArtistTopSongs(targetId);
-          albums = await subsonicService.getArtistAlbums(targetId);
+          topSongs = await youtubeService.getArtistTopSongs(targetId);
+          albums = await youtubeService.getArtistAlbums(targetId);
           if (albums.isNotEmpty) {
             final topSongIds = topSongs.map((s) => s.id).toSet();
             final seenIds = {...topSongIds};
@@ -81,7 +81,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
               final chunk =
                   albums.sublist(i, (i + chunkSize).clamp(0, albums.length));
               final results = await Future.wait(
-                  chunk.map((a) => subsonicService.getAlbumSongs(a.id)));
+                  chunk.map((a) => youtubeService.getAlbumSongs(a.id)));
               allAlbumSongs.addAll(results
                   .expand((songs) => songs)
                   .where((s) => seenIds.add(s.id)));
@@ -89,11 +89,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
             topSongs = [...topSongs, ...allAlbumSongs];
           }
         } catch (serverErr) {
-          debugPrint('Subsonic getArtist error: $serverErr');
+          debugPrint('Library getArtist error: $serverErr');
         }
       }
 
-      // If artist was not found in Subsonic or local DB, fetch online via YouTube
+      // If artist was not found in local DB, fetch online via YouTube
       if (artist == null || topSongs.isEmpty) {
         final artistName = widget.artistId;
         artist ??= Artist(
@@ -143,7 +143,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
       context,
       listen: false,
     );
-    final subsonicService = libraryProvider.subsonicService;
+    final youtubeService = libraryProvider.youtubeService;
 
     final messenger = ScaffoldMessenger.of(context);
     final loc = AppLocalizations.of(context);
@@ -155,7 +155,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             ? libraryProvider.cachedAllSongs
                 .where((s) => s.albumId == album.id)
                 .toList()
-            : await subsonicService.getAlbumSongs(album.id);
+            : await youtubeService.getAlbumSongs(album.id);
 
         songsToQueue.addAll(albumSongs);
       }
@@ -193,7 +193,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
     final offlineService = OfflineService();
     final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
-    final subsonicService = libraryProvider.subsonicService;
+    final youtubeService = libraryProvider.youtubeService;
 
     await offlineService.initialize();
     if (!mounted) return;
@@ -206,10 +206,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
           ? libraryProvider.cachedAllSongs
               .where((s) => s.albumId == album.id)
               .toList()
-          : await subsonicService.getAlbumSongs(album.id);
+          : await youtubeService.getAlbumSongs(album.id);
 
       if (albumSongs.isNotEmpty) {
-        offlineService.queuePlaylistDownload(album.id, albumSongs, subsonicService);
+        offlineService.queuePlaylistDownload(album.id, albumSongs, youtubeService);
         queuedSongs += albumSongs.length;
       }
     }

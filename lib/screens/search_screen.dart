@@ -4,10 +4,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
-import '../models/models.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/recent_searches_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
@@ -83,7 +82,7 @@ class _SearchScreenState extends State<SearchScreen> {
         context,
         listen: false,
       );
-      final result = await libraryProvider.search(query);
+      final result = await libraryProvider.search(query, includeOnline: true);
       if (mounted && _searchController.text.trim() == query.trim()) {
         setState(() {
           _autocompleteSuggestions = result;
@@ -157,7 +156,7 @@ class _SearchScreenState extends State<SearchScreen> {
         context,
         listen: false,
       );
-      final result = await libraryProvider.search(query, includeOnline: false);
+      final result = await libraryProvider.search(query, includeOnline: true);
       if (mounted && _query == query) {
         setState(() {
           _searchResult = result;
@@ -321,7 +320,7 @@ class _SearchScreenState extends State<SearchScreen> {
     bool isDark,
   ) {
     final items = recentSearches.items;
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final player = Provider.of<PlayerProvider>(context, listen: false);
 
     return Column(
@@ -377,7 +376,7 @@ class _SearchScreenState extends State<SearchScreen> {
             final coverUrl = item.imageUrl != null
                 ? (isLocalFilePath(item.imageUrl)
                     ? item.imageUrl!
-                    : subsonic.getCoverArtUrl(item.imageUrl!, size: 150))
+                    : youtubeService.getCoverArtUrl(item.imageUrl!, size: 150))
                 : null;
 
             Widget leadingWidget;

@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/player_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import '../../services/subsonic_service.dart';
+import '../../services/youtube_service.dart';
 import '../../models/song.dart';
 
 class QueueView extends StatelessWidget {
@@ -16,7 +16,7 @@ class QueueView extends StatelessWidget {
       builder: (context, provider, child) {
         final queue = provider.queue;
         final currentIndex = provider.currentIndex;
-        final subsonic = Provider.of<SubsonicService>(context, listen: false);
+        final youtubeService = Provider.of<YoutubeService>(context, listen: false);
 
         if (queue.isEmpty) {
           return const Center(
@@ -187,7 +187,7 @@ class QueueView extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(6),
                                     child: song.coverArt != null
                                         ? CachedNetworkImage(
-                                            imageUrl: subsonic.getCoverArtUrl(song.coverArt, size: 120),
+                                            imageUrl: youtubeService.getCoverArtUrl(song.coverArt, size: 120),
                                             memCacheWidth: 120,
                                             memCacheHeight: 120,
                                             width: 46,

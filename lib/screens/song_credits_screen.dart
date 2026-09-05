@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../providers/player_provider.dart';
 import '../services/song_credits_service.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 
 class SongCreditsScreen extends StatefulWidget {
   final Song song;
@@ -53,9 +53,9 @@ class _SongCreditsScreenState extends State<SongCreditsScreen> {
     final textColor = isDark ? Colors.white : const Color(0xFF1C1C1E);
     final subtitleColor = isDark ? Colors.white60 : Colors.black54;
 
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = widget.song.coverArt != null
-        ? subsonic.getCoverArtUrl(widget.song.coverArt, size: 600)
+        ? youtubeService.getCoverArtUrl(widget.song.coverArt, size: 600)
         : null;
 
     final ImageProvider effectiveImage = widget.imageProvider ??

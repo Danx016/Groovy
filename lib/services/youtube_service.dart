@@ -4,9 +4,43 @@ import 'package:just_audio/just_audio.dart';
 import 'package:uuid/uuid.dart';
 import '../models/models.dart';
 import 'library_database_service.dart';
-import 'subsonic_service.dart';
 import 'recommendation_service.dart';
 import 'ytdlp_service.dart';
+
+class PingResult {
+  final bool success;
+  final String? error;
+  final String? serverType;
+  final String? serverVersion;
+
+  PingResult({
+    required this.success,
+    this.error,
+    this.serverType,
+    this.serverVersion,
+  });
+}
+
+class SearchResult {
+  final List<Artist> artists;
+  final List<Album> albums;
+  final List<Song> songs;
+  final List<Song>? youtubeVideos;
+
+  SearchResult({
+    required this.artists,
+    required this.albums,
+    required this.songs,
+    this.youtubeVideos,
+  });
+
+  bool get isEmpty =>
+      artists.isEmpty &&
+      albums.isEmpty &&
+      songs.isEmpty &&
+      (youtubeVideos == null || youtubeVideos!.isEmpty);
+}
+
 
 /// Proxies the YouTube audio stream via Dart's HttpClient to provide matching
 /// headers (User-Agent, Range) and completely avoid HTTP 403 on ExoPlayer / Media3.
@@ -99,6 +133,47 @@ class YoutubeService {
   void dispose() {
     _ytdlp.dispose();
   }
+
+  bool get isYoutube => true;
+  bool get isJellyfin => false;
+  bool get isConfigured => true;
+  dynamic get config => null;
+
+  Future<void> configure(dynamic config) async {}
+
+  Future<AudioSource?> getYoutubeAudioSource(Song song) => buildAudioSource(song.id);
+
+  Future<String> resolveStreamUrlAsync(Song song) => resolveStreamUrl(song.id);
+
+  Future<ArtistInfo?> getArtistInfo(String id) async => null;
+
+  Future<Artist> getArtist(String id) async => Artist(id: id, name: id);
+
+  Future<List<MusicFolder>> getMusicFolders() async => [];
+
+  Future<List<Song>> getAllSongs() async => [];
+
+  Future<void> setRating(String id, int rating) async {}
+
+  String getDownloadUrl(String songId) => '';
+
+  Future<List<RadioStation>> getInternetRadioStations() async => [];
+
+  Future<Map<String, dynamic>> jukeboxControl(String action, {int? index, int? offset, List<String>? ids, double? gain}) async => {};
+  Future<Map<String, dynamic>> jukeboxGet() async => {};
+  Future<Map<String, dynamic>> jukeboxStatus() async => {};
+  Future<Map<String, dynamic>> jukeboxStart() async => {};
+  Future<Map<String, dynamic>> jukeboxStop() async => {};
+  Future<Map<String, dynamic>> jukeboxSkip(int index, {int offset = 0}) async => {};
+  Future<Map<String, dynamic>> jukeboxAdd(List<String> ids) async => {};
+  Future<Map<String, dynamic>> jukeboxClear() async => {};
+  Future<Map<String, dynamic>> jukeboxSet(List<String> ids) async => {};
+  Future<Map<String, dynamic>> jukeboxShuffle() async => {};
+  Future<Map<String, dynamic>> jukeboxRemove(int index) async => {};
+  Future<Map<String, dynamic>> jukeboxSetGain(double gain) async => {};
+
+  Future<Map<String, dynamic>?> getLyricsBySongId(String songId) async => null;
+  Future<Map<String, dynamic>?> getLyrics({String? artist, String? title, int? duration}) async => null;
 
   // ── Connectivity ──────────────────────────────────────────────────────────
 
@@ -582,13 +657,15 @@ class YoutubeService {
 
   Future<List<Song>> getSongsByGenre(
     String genre, {
-    int size = 50,
+    int? size,
+    int? count,
     int offset = 0,
   }) async {
+    final limit = count ?? size ?? 50;
     try {
-      final rawResults = await _ytdlp.search('$genre music hits', limit: size + offset);
+      final rawResults = await _ytdlp.search('$genre music hits', limit: limit + offset);
       final songs = rawResults.map(_mapDictToSong).toList();
-      return songs.skip(offset).take(size).toList();
+      return songs.skip(offset).take(limit).toList();
     } catch (e) {
       debugPrint('[YouTube] getSongsByGenre error: $e');
       return [];
@@ -597,7 +674,8 @@ class YoutubeService {
 
   Future<List<Album>> getAlbumsByGenre(
     String genre, {
-    int size = 50,
+    int? size,
+    int? count,
     int offset = 0,
   }) async =>
       [];

@@ -52,7 +52,7 @@ class _GenreScreenState extends State<GenreScreen>
         context,
         listen: false,
       );
-      final songs = await libraryProvider.subsonicService.getSongsByGenre(
+      final songs = await libraryProvider.youtubeService.getSongsByGenre(
         widget.genre,
         count: 200,
       );

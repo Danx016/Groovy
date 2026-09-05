@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/models.dart';
 import '../providers/player_provider.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
 
 class RadioScreen extends StatefulWidget {
@@ -32,11 +32,11 @@ class _RadioScreenState extends State<RadioScreen> {
     });
 
     try {
-      final subsonicService = Provider.of<SubsonicService>(
+      final youtubeService = Provider.of<YoutubeService>(
         context,
         listen: false,
       );
-      final stations = await subsonicService.getInternetRadioStations();
+      final stations = await youtubeService.getInternetRadioStations();
       if (mounted) {
         setState(() {
           _stations = stations;

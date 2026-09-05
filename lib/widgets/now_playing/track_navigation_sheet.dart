@@ -7,7 +7,7 @@ import '../../models/artist.dart';
 import '../../providers/library_provider.dart';
 import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
-import '../../services/subsonic_service.dart';
+import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
 
 class TrackNavigationBottomSheet extends StatefulWidget {
@@ -52,7 +52,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
     try {
       final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
-      final subsonic = Provider.of<SubsonicService>(context, listen: false);
+      final youtubeService = Provider.of<YoutubeService>(context, listen: false);
 
       // 1. Try artistId from song
       String? targetArtistId = song.artistId;
@@ -65,7 +65,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
             targetArtistId = a.id;
             if (a.coverArt != null && mounted) {
               setState(() {
-                _artistImageUrl = subsonic.getCoverArtUrl(a.coverArt!, size: 200);
+                _artistImageUrl = youtubeService.getCoverArtUrl(a.coverArt!, size: 200);
               });
             }
             break;
@@ -74,7 +74,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
       }
 
       if (targetArtistId != null && targetArtistId.isNotEmpty) {
-        final artistInfo = await subsonic.getArtistInfo(targetArtistId);
+        final artistInfo = await youtubeService.getArtistInfo(targetArtistId);
         if (artistInfo?.mediumImageUrl != null && mounted) {
           setState(() {
             _artistImageUrl = artistInfo!.mediumImageUrl;
@@ -93,7 +93,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
     final song = widget.song;
     final libraryProvider = Provider.of<LibraryProvider>(context);
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
 
     final artistName = song?.artist ?? 'Artista';
     final albumName = song?.album ?? 'Álbum';
@@ -112,11 +112,11 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
     final effectiveAlbumId = song?.albumId ?? song?.album;
 
     final coverUrl = (song?.coverArt != null)
-        ? subsonic.getCoverArtUrl(song!.coverArt, size: 150)
+        ? youtubeService.getCoverArtUrl(song!.coverArt, size: 150)
         : null;
 
     final artistFallbackCover = matchedArtist?.coverArt != null
-        ? subsonic.getCoverArtUrl(matchedArtist!.coverArt!, size: 150)
+        ? youtubeService.getCoverArtUrl(matchedArtist!.coverArt!, size: 150)
         : coverUrl;
 
     return Container(

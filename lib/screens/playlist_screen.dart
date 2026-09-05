@@ -3,7 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/offline_service.dart';
 import '../services/favorite_playlists_service.dart';
 import '../theme/app_theme.dart';
@@ -99,12 +99,12 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Future<void> _removeSongFromPlaylist(int index) async {
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
     try {
-      await subsonicService.updatePlaylist(
+      await youtubeService.updatePlaylist(
         playlistId: widget.playlistId,
         songIndexesToRemove: [index],
       );
@@ -155,7 +155,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   Future<void> _onSongReordered(int oldIndex, int newIndex) async {
     if (oldIndex == newIndex) return;
 
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -168,7 +168,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     });
 
     try {
-      await subsonicService.updatePlaylist(
+      await youtubeService.updatePlaylist(
         playlistId: widget.playlistId,
         songIndexesToRemove: [oldIndex],
         songIdsToAdd: [
@@ -235,7 +235,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
 
     if (confirmed != true || !mounted) return;
 
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -245,7 +245,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
       ..sort((a, b) => b.compareTo(a));
 
     try {
-      await subsonicService.updatePlaylist(
+      await youtubeService.updatePlaylist(
         playlistId: widget.playlistId,
         songIndexesToRemove: sortedIndices,
       );
@@ -304,9 +304,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     final songs = _playlist?.songs;
     if (songs == null || songs.isEmpty) return;
     final offlineService = OfflineService();
-    final subsonicService = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     await offlineService.initialize();
-    offlineService.queuePlaylistDownload(widget.playlistId, songs, subsonicService);
+    offlineService.queuePlaylistDownload(widget.playlistId, songs, youtubeService);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
