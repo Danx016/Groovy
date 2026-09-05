@@ -23,9 +23,7 @@ class AlbumArtView extends StatelessWidget {
         scale: isPlaying ? 1.0 : 0.86,
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOutCubic,
+        child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16.0),
             boxShadow: [

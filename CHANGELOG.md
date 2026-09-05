@@ -5,6 +5,14 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.52] - 2026-09-04
+
+### Fixed
+- **Corrección de Cierre Inesperado al Mover la Carátula (`NowPlayingScreen`)**:
+  - Se eliminó el `GestureDetector` global con umbral agresivo de velocidad vertical (`primaryVelocity > 300`) que envolvía todo el cuerpo de la pantalla. Este detector interceptaba cualquier interacción táctil sobre la carátula y forzaba el cierre abrupto de la pantalla/aplicación (`Navigator.pop`).
+  - Se restauró el contenedor estándar en `AlbumArtView` y la resolución de portada sin colisiones de caché.
+  - La navegación y deslizamiento entre carátula, letra y lista de espera ahora es completamente estable y fluido sin riesgo de cierre no deseado.
+
 ## [1.0.51] - 2026-09-04
 
 ### Performance Improvements
