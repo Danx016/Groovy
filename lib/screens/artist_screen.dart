@@ -123,6 +123,44 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       }
 
+      // Ensure all unique albums from topSongs are included in albums
+      final albumMap = <String, Album>{};
+      for (final a in albums) {
+        albumMap[a.name.toLowerCase().trim()] = a;
+      }
+      for (final s in topSongs) {
+        final aName = s.album?.trim();
+        if (aName != null && aName.isNotEmpty) {
+          final key = aName.toLowerCase();
+          if (!albumMap.containsKey(key)) {
+            albumMap[key] = Album(
+              id: s.albumId ?? 'album_${aName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+              name: aName,
+              artist: s.artist ?? artist?.name ?? '',
+              coverArt: s.coverArt,
+              year: s.year,
+            );
+          }
+        }
+      }
+      albums = albumMap.values.toList();
+
+      // Fetch artist full discography online via Deezer and merge
+      if (artist != null) {
+        try {
+          final onlineAlbums = await ArtistImageService()
+              .getArtistAlbums(artist.name)
+              .timeout(const Duration(seconds: 4));
+          for (final oa in onlineAlbums) {
+            final key = oa.name.toLowerCase().trim();
+            if (!albumMap.containsKey(key)) {
+              albumMap[key] = oa;
+            }
+          }
+          albums = albumMap.values.toList();
+        } catch (_) {}
+      }
+
       // Resolve high-resolution artist image if missing or empty
       String? coverArtUrl = artist?.coverArt ?? artist?.artistImageUrl;
       if (artist != null) {
@@ -294,6 +332,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           SliverAppBar(
             pinned: true,
             expandedHeight: 240,
+            backgroundColor: Colors.black,
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(7),
@@ -313,14 +352,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
               title: Text(
                 _artist!.name,
                 style: const TextStyle(
+                  color: Colors.white,
                   fontWeight: FontWeight.bold,
-                  shadows: [
-                    Shadow(
-                      offset: Offset(0, 1),
-                      blurRadius: 4.0,
-                      color: Colors.black87,
-                    ),
-                  ],
                 ),
               ),
               background: _buildHeaderBackground(context),
@@ -384,142 +417,58 @@ class _ArtistScreenState extends State<ArtistScreen> {
                     ),
                     const SizedBox(height: 24),
                   ],
-                  Builder(
-                    builder: (context) {
-                      // Categorize albums by song count
-                      final albums = _albums
-                          .where((a) => (a.songCount ?? 0) >= 7)
-                          .toList();
-                      final eps = _albums.where((a) {
-                        final count = a.songCount ?? 0;
-                        return count >= 3 && count <= 6;
-                      }).toList();
-                      final singles = _albums
-                          .where((a) => (a.songCount ?? 0) <= 2)
-                          .toList();
-
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (albums.isNotEmpty) ...[
-                            Text(
-                              AppLocalizations.of(context)!.sectionAlbums,
-                              style: theme.textTheme.headlineSmall,
+                  if (_albums.isNotEmpty) ...[
+                    Text(
+                      'Discografía',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 180,
+                        childAspectRatio: 0.72,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                      ),
+                      itemCount: _albums.length,
+                      itemBuilder: (context, index) {
+                        final album = _albums[index];
+                        return AlbumCard(
+                          album: album,
+                          size: double.infinity,
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  AlbumScreen(albumId: album.id, album: album),
                             ),
-                            const SizedBox(height: 8),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 180,
-                                childAspectRatio: 0.72,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                              ),
-                              itemCount: albums.length,
-                              itemBuilder: (context, index) {
-                                final album = albums[index];
-                                return AlbumCard(
-                                  album: album,
-                                  size: double.infinity,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          AlbumScreen(albumId: album.id, album: album),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                          if (eps.isNotEmpty) ...[
-                            Text(
-                              AppLocalizations.of(context)!.sectionEPs,
-                              style: theme.textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 180,
-                                childAspectRatio: 0.72,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                              ),
-                              itemCount: eps.length,
-                              itemBuilder: (context, index) {
-                                final album = eps[index];
-                                return AlbumCard(
-                                  album: album,
-                                  size: double.infinity,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          AlbumScreen(albumId: album.id, album: album),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-                          if (singles.isNotEmpty) ...[
-                            Text(
-                              AppLocalizations.of(context)!.sectionSingles,
-                              style: theme.textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            GridView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              gridDelegate:
-                                  const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 180,
-                                childAspectRatio: 0.72,
-                                crossAxisSpacing: 16,
-                                mainAxisSpacing: 16,
-                              ),
-                              itemCount: singles.length,
-                              itemBuilder: (context, index) {
-                                final album = singles[index];
-                                return AlbumCard(
-                                  album: album,
-                                  size: double.infinity,
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          AlbumScreen(albumId: album.id, album: album),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                          if (_artistInfo?.biography != null &&
-                              _artistInfo!.biography!.isNotEmpty) ...[
-                            const SizedBox(height: 32),
-                            Text(
-                              'About ${_artist!.name}',
-                              style: theme.textTheme.headlineSmall,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              _artistInfo!.biography!,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.textTheme.bodyMedium?.color
-                                    ?.withValues(alpha: 0.8),
-                                height: 1.5,
-                              ),
-                            ),
-                          ],
-                        ],
-                      );
-                    },
-                  ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+                  if (_artistInfo?.biography != null &&
+                      _artistInfo!.biography!.isNotEmpty) ...[
+                    const SizedBox(height: 32),
+                    Text(
+                      'About ${_artist!.name}',
+                      style: theme.textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      _artistInfo!.biography!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.textTheme.bodyMedium?.color
+                            ?.withValues(alpha: 0.8),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 100),
                 ],
               ),
@@ -532,7 +481,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
   Widget _buildHeaderBackground(BuildContext context) {
     final cover = _resolvedCoverArt ?? _artist?.coverArt ?? _artist?.artistImageUrl;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (cover != null && cover.isNotEmpty) {
       return Stack(
@@ -604,12 +552,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
               ),
             ),
           ),
-          // Bottom gradient for smooth fade into page background
+          // Bottom gradient to make white title text razor-sharp and clean
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            height: 120,
+            height: 140,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -617,10 +565,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    (isDark ? AppTheme.darkBackground : Colors.white).withValues(alpha: 0.7),
-                    (isDark ? AppTheme.darkBackground : Colors.white),
+                    Colors.black.withValues(alpha: 0.5),
+                    Colors.black.withValues(alpha: 0.85),
                   ],
-                  stops: const [0.0, 0.6, 1.0],
+                  stops: const [0.0, 0.45, 1.0],
                 ),
               ),
             ),
