@@ -37,46 +37,10 @@ class AlbumArtView extends StatelessWidget {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16.0),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Image(
-                  image: image,
-                  fit: BoxFit.cover,
-                  gaplessPlayback: true,
-                ),
-                if (isFavorite)
-                  Positioned(
-                    top: 14,
-                    right: 14,
-                    child: GestureDetector(
-                      onTap: onFavoriteToggle,
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.35),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.25),
-                            width: 1.0,
-                          ),
-                        ),
-                        child: const Icon(
-                          Icons.star_rounded,
-                          color: Color(0xFFFFD60A),
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
+            child: Image(
+              image: image,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
             ),
           ),
         ),

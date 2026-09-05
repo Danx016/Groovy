@@ -5,6 +5,13 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.50] - 2026-09-04
+
+### Removed
+- **Eliminación de la Estrella de Favoritos sobre la Carátula del Reproductor (`AlbumArtView`)**:
+  - Se retiró la insignia flotante con icono de estrella (`⭐`) que se superponía sobre la esquina superior derecha de la imagen de portada en la pantalla de reproducción.
+  - La carátula ahora se muestra limpia y completa sin elementos obstructivos, manteniéndose el botón interactivo de favoritos situado adecuadamente junto al título de la canción.
+
 ## [1.0.49] - 2026-09-04
 
 ### Fixed
