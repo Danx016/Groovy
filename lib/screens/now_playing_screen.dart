@@ -632,26 +632,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ),
                   child: AspectRatio(
                     aspectRatio: 1.0,
-                    child: Consumer<LibraryProvider>(
-                      builder: (context, lib, _) {
-                        final isFav = currentSong != null &&
-                            (lib.isSongStarred(currentSong.id) ||
-                                (currentSong.starred ?? false) ||
-                                isStarred);
-                        return AlbumArtView(
-                          image: _currentImageProvider ?? widget.image,
-                          tag: currentSong?.id ?? widget.heroTag,
-                          isPlaying: isPlaying,
-                          isFavorite: isFav,
-                          onFavoriteToggle: currentSong != null
-                              ? () async {
-                                  HapticFeedback.lightImpact();
-                                  final newFav = await lib.toggleStarSong(currentSong);
-                                  provider.updateSongStarred(currentSong.id, newFav);
-                                }
-                              : null,
-                        );
-                      },
+                    child: AlbumArtView(
+                      image: _currentImageProvider ?? widget.image,
+                      tag: currentSong?.id ?? widget.heroTag,
+                      isPlaying: isPlaying,
                     ),
                   ),
                 ),
@@ -931,26 +915,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   padding: const EdgeInsets.fromLTRB(32.0, 32.0, 16.0, 24.0),
                   child: AspectRatio(
                     aspectRatio: 1.0,
-                    child: Consumer<LibraryProvider>(
-                      builder: (context, lib, _) {
-                        final isFav = currentSong != null &&
-                            (lib.isSongStarred(currentSong.id) ||
-                                (currentSong.starred ?? false) ||
-                                isStarred);
-                        return AlbumArtView(
-                          image: _currentImageProvider ?? widget.image,
-                          tag: currentSong?.id ?? widget.heroTag,
-                          isPlaying: provider.isPlaying,
-                          isFavorite: isFav,
-                          onFavoriteToggle: currentSong != null
-                              ? () async {
-                                  HapticFeedback.lightImpact();
-                                  final newFav = await lib.toggleStarSong(currentSong);
-                                  provider.updateSongStarred(currentSong.id, newFav);
-                                }
-                              : null,
-                        );
-                      },
+                    child: AlbumArtView(
+                      image: _currentImageProvider ?? widget.image,
+                      tag: currentSong?.id ?? widget.heroTag,
+                      isPlaying: provider.isPlaying,
                     ),
                   ),
                 ),
