@@ -5,6 +5,13 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.46] - 2026-09-04
+
+### Fixed
+- **Compositores Reales en Créditos de Canción** — Extracción e integración de compositores, autores y letristas reales verificados (Sony Music, Columbia, Warner, etc.) a través del endpoint oficial de créditos (MPTC). Se eliminó completamente la asignación incorrecta del cantante como compositor en "Composición y Letra".
+- **Opción "Ver Créditos" en Menú de Canción** — Acceso directo a los créditos detallados desde el menú de 3 puntos en listas de canciones, álbumes y reproducción.
+- **Estado Vacío Elegante en Créditos** — Muestra "Información de composición no disponible" en caso de no existir metadatos oficiales de composición, garantizando que el intérprete nunca aparezca como autor o compositor.
+
 ## [1.0.45] - 2026-09-04
 
 ### Fixed

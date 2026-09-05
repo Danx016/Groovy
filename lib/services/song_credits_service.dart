@@ -110,6 +110,7 @@ class SongCreditsService {
 
     final writersMap = <String, Set<String>>{};
     final productionMap = <String, Set<String>>{};
+    final performersMap = <String, String>{};
 
     void addWriter(String name, String role) {
       final clean = name.trim();
@@ -123,6 +124,22 @@ class SongCreditsService {
       productionMap.putIfAbsent(clean, () => <String>{}).add(role.toLowerCase());
     }
 
+    void addPerformer(String name, String role) {
+      final clean = name.trim();
+      if (clean.isEmpty) return;
+      performersMap.putIfAbsent(clean, () => role);
+    }
+
+    void setReleaseDate(String dateStr) {
+      if (formattedDate.isNotEmpty) return;
+      final dt = DateTime.tryParse(dateStr);
+      if (dt != null) {
+        formattedDate = _formatSpanishDate(dt);
+      } else if (dateStr.isNotEmpty) {
+        formattedDate = dateStr;
+      }
+    }
+
     // Format local/song year or date
     if (song.year != null && song.year! > 0) {
       formattedDate = '${song.year}';
@@ -130,9 +147,20 @@ class SongCreditsService {
       formattedDate = '${song.created!.year}';
     }
 
-    // 1. Parallel search on Deezer & iTunes
+    // 1. Parallel search on YouTube (Official Track Description), Deezer & iTunes
     await Future.wait([
-      // A. iTunes Search API (release date, genre, artwork, composer)
+      // A. Official YouTube Music Track Credits (highest accuracy for Latin, Vallenato, & streaming)
+      _extractYoutubeMusicTrackCredits(
+        song,
+        cleanArtist,
+        cleanTitle,
+        addWriter,
+        addProduction,
+        addPerformer,
+        setReleaseDate,
+      ),
+
+      // B. iTunes Search API (release date, genre, artwork, composer)
       () async {
         try {
           final searchUrl =
@@ -146,7 +174,7 @@ class SongCreditsService {
             if (results != null && results.isNotEmpty) {
               final first = results.first as Map<String, dynamic>;
               final releaseDateStr = first['releaseDate'] as String?;
-              if (releaseDateStr != null) {
+              if (releaseDateStr != null && formattedDate.isEmpty) {
                 final dt = DateTime.tryParse(releaseDateStr);
                 if (dt != null) {
                   formattedDate = _formatSpanishDate(dt);
@@ -172,7 +200,7 @@ class SongCreditsService {
         }
       }(),
 
-      // B. Deezer Search API (artist image, ISRC, contributors)
+      // C. Deezer Search API (artist image, ISRC, contributors)
       () async {
         try {
           final deezerUrl =
@@ -314,15 +342,25 @@ class SongCreditsService {
       }
     }
 
-    // 6. Build Writers List (Composition & Lyrics) with REAL composers and lyricists
+    performersMap.forEach((pName, pRole) {
+      if (pName.toLowerCase() != mainArtistName.toLowerCase() &&
+          !performers.any((p) => p.name.toLowerCase() == pName.toLowerCase())) {
+        performers.add(SongCreditItem(
+          name: pName,
+          role: pRole,
+        ));
+      }
+    });
+
+    // 6. Build Writers List (Composition & Lyrics) with REAL verified composers only
     final writers = <SongCreditItem>[];
     writersMap.forEach((name, roles) {
-      final isComp = roles.contains('composer');
-      final isLyr = roles.contains('lyricist') || roles.contains('author');
+      final isComp = roles.contains('composer') || roles.contains('composer,lyricist');
+      final isLyr = roles.contains('lyricist') || roles.contains('composer,lyricist') || roles.contains('author');
       final isWrit = roles.contains('writer');
 
       String roleLabel;
-      if (isComp && isLyr) {
+      if (roles.contains('composer,lyricist') || (isComp && isLyr)) {
         roleLabel = 'Composición y letra';
       } else if (isComp) {
         roleLabel = 'Composición';
@@ -331,19 +369,14 @@ class SongCreditsService {
       } else if (isWrit) {
         roleLabel = 'Composición y letra';
       } else {
-        roleLabel = 'Autoría';
+        roleLabel = 'Composición';
       }
 
       writers.add(SongCreditItem(name: name, role: roleLabel));
     });
 
-    // Fallback if no real composer or writer found anywhere
-    if (writers.isEmpty) {
-      writers.add(SongCreditItem(
-        name: mainArtistName,
-        role: 'Autoría / Intérprete',
-      ));
-    }
+    // Note: If writers is empty, DO NOT fall back to the singer!
+    // The UI handles empty writers gracefully by indicating that composer data is not available.
 
     // 7. Build Production List
     final production = <SongCreditItem>[];
@@ -380,6 +413,179 @@ class SongCreditsService {
 
     _cache[cacheKey] = credits;
     return credits;
+  }
+
+  /// Extracts official record label metadata and real composers directly from
+  /// YouTube Music's official track credits (MPTC) endpoint.
+  static Future<void> _extractYoutubeMusicTrackCredits(
+    Song song,
+    String cleanArtist,
+    String cleanTitle,
+    void Function(String name, String role) addWriter,
+    void Function(String name, String role) addProduction,
+    void Function(String name, String role) addPerformer,
+    void Function(String date) setReleaseDate,
+  ) async {
+    final candidateVids = <String>[];
+
+    // 1. If song.id is directly an 11-char YouTube ID, test it first
+    final cleanId = song.id
+        .replaceFirst('ytmusic://', '')
+        .replaceFirst('yt_', '')
+        .trim();
+    if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+      candidateVids.add(cleanId);
+    }
+
+    // 2. Query YouTube Music search API for official audio tracks
+    try {
+      final searchRes = await _dio.post<Map<String, dynamic>>(
+        'https://music.youtube.com/youtubei/v1/search?prettyPrint=false',
+        options: Options(
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Content-Type': 'application/json',
+            'Origin': 'https://music.youtube.com',
+            'Referer': 'https://music.youtube.com/',
+          },
+        ),
+        data: {
+          'context': {
+            'client': {
+              'clientName': 'WEB_REMIX',
+              'clientVersion': '1.20240101.01.00',
+              'hl': 'es',
+              'gl': 'CO',
+            }
+          },
+          'query': '$cleanArtist $cleanTitle',
+        },
+      );
+
+      final searchData = searchRes.data ?? {};
+      final rawStr = jsonEncode(searchData);
+      final vidMatches = RegExp(r'"videoId":\s*"([a-zA-Z0-9_-]{11})"').allMatches(rawStr);
+      for (final m in vidMatches) {
+        final vid = m.group(1)!;
+        if (!candidateVids.contains(vid)) {
+          candidateVids.add(vid);
+          if (candidateVids.length >= 6) break;
+        }
+      }
+    } catch (e) {
+      debugPrint('[SongCreditsService] YouTube Music search error: $e');
+    }
+
+    // 3. For candidate video IDs, call the official MPTC browse endpoint
+    for (final vid in candidateVids) {
+      try {
+        final browseRes = await _dio.post<Map<String, dynamic>>(
+          'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false',
+          options: Options(
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Content-Type': 'application/json',
+              'Origin': 'https://music.youtube.com',
+              'Referer': 'https://music.youtube.com/',
+            },
+          ),
+          data: {
+            'context': {
+              'client': {
+                'clientName': 'WEB_REMIX',
+                'clientVersion': '1.20240101.01.00',
+                'hl': 'es',
+                'gl': 'CO',
+              }
+            },
+            'browseId': 'MPTC$vid',
+          },
+        );
+
+        if (browseRes.statusCode == 200 && browseRes.data != null) {
+          final data = browseRes.data!;
+          final actions = data['onResponseReceivedActions'] as List?;
+          if (actions == null || actions.isEmpty) continue;
+
+          final firstAction = actions[0] as Map<String, dynamic>?;
+          final popup = firstAction?['openPopupAction']?['popup'] as Map<String, dynamic>?;
+          final dialog = popup?['dismissableDialogRenderer'] as Map<String, dynamic>?;
+          if (dialog == null) continue;
+
+          final sections = dialog['sections'] as List?;
+          if (sections == null || sections.isEmpty) continue;
+
+          bool foundWriter = false;
+
+          for (final sec in sections) {
+            final sRend = (sec as Map<String, dynamic>)['dismissableDialogContentSectionRenderer'] as Map<String, dynamic>?;
+            if (sRend == null) continue;
+
+            final titleRuns = sRend['title']?['runs'] as List?;
+            final sectionTitle = titleRuns != null && titleRuns.isNotEmpty
+                ? (titleRuns[0]['text'] as String? ?? '').toLowerCase()
+                : '';
+
+            final subtitleRuns = sRend['subtitle']?['runs'] as List?;
+            if (subtitleRuns == null || subtitleRuns.isEmpty) continue;
+
+            final rawSubtitle = subtitleRuns
+                .map((r) => r['text'] as String? ?? '')
+                .join('')
+                .trim();
+
+            final names = rawSubtitle
+                .split(RegExp(r'[\n\r]+|,\s*'))
+                .map((n) => n.trim())
+                .where((n) => n.isNotEmpty && n.length > 1 && n != 'Unknown' && n != 'Desconocido')
+                .toList();
+
+            if (sectionTitle.contains('escrita') ||
+                sectionTitle.contains('written') ||
+                sectionTitle.contains('compos') ||
+                sectionTitle.contains('autor')) {
+              for (final name in names) {
+                addWriter(name, 'composer,lyricist');
+                foundWriter = true;
+              }
+            } else if (sectionTitle.contains('producida') ||
+                sectionTitle.contains('produced') ||
+                sectionTitle.contains('producc')) {
+              for (final name in names) {
+                addProduction(name, 'producer');
+              }
+            } else if (sectionTitle.contains('interpretada') ||
+                sectionTitle.contains('performed') ||
+                sectionTitle.contains('artistas')) {
+              for (final name in names) {
+                addPerformer(name, 'Intérprete asociado');
+              }
+            }
+          }
+
+          final meta = dialog['metadata']?['musicMultiRowListItemRenderer'] as Map<String, dynamic>?;
+          final secondTitleRuns = meta?['secondTitle']?['runs'] as List?;
+          if (secondTitleRuns != null) {
+            for (final r in secondTitleRuns) {
+              final text = r['text'] as String? ?? '';
+              final yearMatch = RegExp(r'\b(19\d{2}|20\d{2})\b').firstMatch(text);
+              if (yearMatch != null) {
+                setReleaseDate(yearMatch.group(0)!);
+                break;
+              }
+            }
+          }
+
+          if (foundWriter) {
+            break;
+          }
+        }
+      } catch (e) {
+        debugPrint('[SongCreditsService] MPTC browse error for $vid: $e');
+      }
+    }
   }
 
   static Future<void> _extractMusicBrainzWorkWriters(

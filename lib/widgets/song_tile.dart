@@ -19,6 +19,7 @@ import 'dolby_atmos_badge.dart';
 import 'multi_artist_widget.dart';
 import '../screens/album_screen.dart';
 import '../screens/artist_screen.dart';
+import '../screens/song_credits_screen.dart';
 
 class SongTile extends StatelessWidget {
   final Song song;
@@ -486,6 +487,19 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                         final nav = Navigator.of(context);
                         nav.pop();
                         _navigateToArtist(nav);
+                      },
+                    ),
+                    _OptionTile(
+                      icon: CupertinoIcons.info_circle,
+                      title: 'Ver créditos',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          CupertinoPageRoute(
+                            builder: (ctx) => SongCreditsScreen(song: widget.song),
+                          ),
+                        );
                       },
                     ),
                     _buildRatingTile(context),
