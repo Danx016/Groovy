@@ -222,7 +222,7 @@ class YoutubeService {
   }
 
   /// Returns a lightweight valid stream URL synchronously.
-  String getStreamUrl(String videoId) =>
+  String getStreamUrl(String videoId, {int? maxBitRate, String? format}) =>
       'https://www.youtube.com/watch?v=${videoId.replaceFirst('ytmusic://', '')}';
 
   /// Resolves the actual direct audio stream URL via yt-dlp / Python process.
