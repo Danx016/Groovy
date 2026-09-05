@@ -5,6 +5,27 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.55] - 2026-09-05
+
+### Added & Improved
+- **Acciones y Menú de Opciones en `AlbumScreen` Estilo Apple Music**:
+  - Se añadieron los botones de acción rápida en la barra superior: Estrella de Favoritos (`Icons.star_rounded` / `Icons.star_outline_rounded`) y menú de 3 puntos (`Icons.more_vert_rounded`).
+  - Nuevo modal inferior interactivo de opciones del álbum: "Agregar a la cola", "Descargar álbum / Eliminar descargas", "Reproducir álbum", "Reproducción aleatoria", "Ir al artista" y "Agregar a favoritos".
+
+### Fixed
+- **Sanitización Integral de Nombres de Artistas**:
+  - Se corrigió el problema por el cual nombres con caracteres especiales o tildes se mostraban con identificadores técnicos internos (como `artist_tot__la_momp...` o `artist_los_hermanos...`).
+  - Se agregó sanitización automática y resolución inteligente basada en las pistas del artista, garantizando títulos siempre limpios y legibles.
+  - Se actualizaron todos los puntos de navegación de la aplicación para transferir el modelo de artista completo con nombre real y carátula.
+- **Corrección de Redirección Incorrecta de Álbumes (`AlbumResolverService`)**:
+  - Se eliminó el fallback no estricto que asignaba álbumes arbitrarios en búsquedas de YouTube Music cuando no había coincidencia exacta.
+  - Se implementó coincidencia estricta y normalizada de títulos y artistas, evitando que se muestren pistas o metadatos de un álbum diferente al presionado.
+  - Se priorizó la resolución directa por ID para álbumes provenientes de la discografía de Deezer (`dz_album_...`).
+- **Mejora Visual y Espaciado en la Pantalla del Artista (`ArtistScreen`)**:
+  - Se aumentó la altura del encabezado hero a `300px` y se reajustó el relleno del título para eliminar la colisión con los botones de acción.
+  - Se implementó un degradado suave de 4 paradas para una transición sedosa de la imagen hacia el fondo.
+  - Se rediseñaron los botones de *Reproducir* y *Aleatorio* con estética moderna de Apple Music.
+
 ## [1.0.54] - 2026-09-05
 
 ### Fixed

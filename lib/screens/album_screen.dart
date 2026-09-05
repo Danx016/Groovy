@@ -1,14 +1,18 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/screen_helper.dart';
+import '../utils/navigation_helper.dart';
 import '../services/services.dart';
+import 'artist_screen.dart';
 
 class AlbumScreen extends StatefulWidget {
   final String albumId;
@@ -93,7 +97,33 @@ class _AlbumScreenState extends State<AlbumScreen> {
             song: widget.song,
           );
           if (resolved != null && resolved.songs.isNotEmpty) {
-            album = resolved.album;
+            final keepName = (widget.album != null &&
+                    widget.album!.name.isNotEmpty &&
+                    widget.album!.name.toLowerCase() != 'album' &&
+                    widget.album!.name.toLowerCase() != 'álbum')
+                ? widget.album!.name
+                : resolved.album.name;
+            final keepArtist = (widget.album?.artist != null &&
+                    widget.album!.artist!.isNotEmpty &&
+                    widget.album!.artist!.toLowerCase() != 'artist' &&
+                    widget.album!.artist!.toLowerCase() != 'artista')
+                ? widget.album!.artist
+                : resolved.album.artist;
+
+            album = Album(
+              id: resolved.album.id,
+              name: keepName,
+              artist: keepArtist,
+              artistId: widget.album?.artistId ?? resolved.album.artistId,
+              coverArt: resolved.album.coverArt ?? widget.album?.coverArt,
+              songCount: resolved.songs.length,
+              duration: resolved.album.duration,
+              year: resolved.album.year ?? widget.album?.year,
+              genre: resolved.album.genre ?? widget.album?.genre,
+              created: resolved.album.created ?? widget.album?.created,
+              artistParticipants: widget.album?.artistParticipants ?? resolved.album.artistParticipants,
+              starred: widget.album?.starred ?? resolved.album.starred,
+            );
             songs = resolved.songs;
           }
         } catch (e) {
@@ -286,6 +316,21 @@ class _AlbumScreenState extends State<AlbumScreen> {
       } else {
         await libraryProvider.star(albumId: _album!.id);
       }
+      if (mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              isStarred
+                  ? 'Eliminado de álbumes favoritos'
+                  : 'Agregado a álbumes favoritos',
+            ),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } catch (e) {
       // Revert on failure
       setState(() {
@@ -293,23 +338,286 @@ class _AlbumScreenState extends State<AlbumScreen> {
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to update liked status')),
+          const SnackBar(
+            content: Text('Error al actualizar favoritos'),
+            behavior: SnackBarBehavior.floating,
+          ),
         );
       }
     }
   }
 
-  Widget _buildLikeButton(BuildContext context) {
+  Widget _buildStarButton(BuildContext context, bool isDark) {
     if (_album == null) return const SizedBox.shrink();
-    final isStarred = _album!.starred == true;
-    final primaryColor = Theme.of(context).colorScheme.primary;
-    
+    return Consumer<LibraryProvider>(
+      builder: (context, libraryProvider, _) {
+        final isStarred = _album!.starred == true || libraryProvider.isAlbumStarred(_album!.id);
+        
+        return IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.45)
+                  : Colors.black.withValues(alpha: 0.25),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              isStarred ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: isStarred ? Colors.amber : Colors.white,
+              size: 22,
+            ),
+          ),
+          tooltip: isStarred ? 'Quitar de favoritos' : 'Agregar a favoritos',
+          onPressed: _toggleLike,
+        );
+      },
+    );
+  }
+
+  Widget _buildMoreButton(BuildContext context, bool isDark) {
     return IconButton(
-      tooltip: isStarred ? 'Unlike' : 'Like',
-      onPressed: _toggleLike,
-      icon: Icon(
-        isStarred ? CupertinoIcons.heart_fill : CupertinoIcons.heart,
-        color: isStarred ? primaryColor : null,
+      icon: Container(
+        padding: const EdgeInsets.all(7),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.45)
+              : Colors.black.withValues(alpha: 0.25),
+          shape: BoxShape.circle,
+        ),
+        child: const Icon(
+          Icons.more_vert_rounded,
+          color: Colors.white,
+          size: 22,
+        ),
+      ),
+      tooltip: 'Más opciones',
+      onPressed: () => _showAlbumOptionsMenu(context),
+    );
+  }
+
+  Future<void> _addAlbumToQueue() async {
+    if (_songs.isEmpty) return;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    playerProvider.addAllToQueue(_songs);
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Álbum "${_album?.name ?? ""}" agregado a la cola'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  void _showAlbumOptionsMenu(BuildContext context) {
+    if (_album == null) return;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1C1C1E) : Colors.white;
+    final textColor = isDark ? Colors.white : const Color(0xFF1C1C1E);
+    final subtitleColor = isDark ? Colors.white60 : Colors.black54;
+    final dividerColor = isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08);
+    final cover = _resolvedCoverArt;
+    final isStarred = _album!.starred == true;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      builder: (ctx) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 8, bottom: 8),
+                  width: 36,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: SizedBox(
+                        width: 50,
+                        height: 50,
+                        child: (cover != null && cover.isNotEmpty)
+                            ? (cover.startsWith('http')
+                                ? CachedNetworkImage(
+                                    imageUrl: cover,
+                                    fit: BoxFit.cover,
+                                    errorWidget: (_, __, ___) => _buildFallbackCover(),
+                                  )
+                                : isLocalFilePath(cover)
+                                    ? Image.file(
+                                        File(cover),
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) => _buildFallbackCover(),
+                                      )
+                                    : AlbumArtwork(coverArt: cover, size: 50))
+                            : _buildFallbackCover(),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _album!.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 17,
+                              color: textColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_album!.artist ?? AppLocalizations.of(context)!.unknownArtist} • ${_songs.length} ${_songs.length == 1 ? "canción" : "canciones"}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: subtitleColor,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Divider(height: 1, color: dividerColor),
+              ListTile(
+                leading: const Icon(Icons.queue_music_rounded, color: AppTheme.appleMusicRed),
+                title: Text(
+                  AppLocalizations.of(context)?.addToQueue ?? 'Agregar a la cola',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _addAlbumToQueue();
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  _allDownloaded ? Icons.cloud_done : CupertinoIcons.cloud_download,
+                  color: _allDownloaded ? Colors.green : AppTheme.appleMusicRed,
+                ),
+                title: Text(
+                  _allDownloaded ? 'Eliminar descargas del álbum' : 'Descargar álbum',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (_allDownloaded) {
+                    _removeDownloads();
+                  } else {
+                    _downloadAlbum();
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(CupertinoIcons.play_circle, color: AppTheme.appleMusicRed),
+                title: Text(
+                  'Reproducir álbum',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _playAll(shuffle: false);
+                },
+              ),
+              ListTile(
+                leading: const Icon(CupertinoIcons.shuffle, color: AppTheme.appleMusicRed),
+                title: Text(
+                  'Reproducción aleatoria',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _playAll(shuffle: true);
+                },
+              ),
+              if (_album!.artist != null && _album!.artist!.isNotEmpty)
+                ListTile(
+                  leading: const Icon(CupertinoIcons.person_crop_circle, color: AppTheme.appleMusicRed),
+                  title: Text(
+                    'Ir al artista (${_album!.artist})',
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    NavigationHelper.push(
+                      context,
+                      ArtistScreen(
+                        artistId: _album!.artistId ?? _album!.artist!,
+                        artist: Artist(
+                          id: _album!.artistId ?? _album!.artist!,
+                          name: _album!.artist!,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ListTile(
+                leading: Icon(
+                  isStarred ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: isStarred ? Colors.amber : AppTheme.appleMusicRed,
+                ),
+                title: Text(
+                  isStarred ? 'Quitar de favoritos' : 'Agregar a favoritos',
+                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _toggleLike();
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFallbackCover() {
+    return Container(
+      color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
+      child: const Center(
+        child: Icon(
+          Icons.album_rounded,
+          size: 26,
+          color: AppTheme.appleMusicRed,
+        ),
       ),
     );
   }
@@ -462,8 +770,8 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   ),
                 ),
                 actions: [
-                  if (!isOffline) _buildLikeButton(context),
-                  if (!isOffline) _buildDownloadButton(context),
+                  _buildStarButton(context, isDark),
+                  _buildMoreButton(context, isDark),
                 ],
               ),
               SliverToBoxAdapter(
@@ -573,15 +881,18 @@ class _PlayButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accent = Theme.of(context).colorScheme.primary;
+    final btnBg = isDark
+        ? const Color(0xFF2C2C2E)
+        : const Color(0xFFF2F2F7);
 
     return Material(
-      color: accent.withValues(alpha: isDark ? 0.15 : 0.1),
-      borderRadius: BorderRadius.circular(10),
+      color: btnBg,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 13),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -593,6 +904,7 @@ class _PlayButton extends StatelessWidget {
                   color: accent,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],

@@ -14,8 +14,9 @@ import '../services/services.dart';
 
 class ArtistScreen extends StatefulWidget {
   final String artistId;
+  final Artist? artist;
 
-  const ArtistScreen({super.key, required this.artistId});
+  const ArtistScreen({super.key, required this.artistId, this.artist});
 
   @override
   State<ArtistScreen> createState() => _ArtistScreenState();
@@ -44,25 +45,51 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final youtubeService = libraryProvider.youtubeService;
 
     try {
-      Artist? artist;
+      final rawName = widget.artist?.name ?? widget.artistId;
+      String cleanArtistQuery = rawName;
+      if (cleanArtistQuery.toLowerCase().startsWith('artist_') ||
+          cleanArtistQuery.toLowerCase().startsWith('local_artist_')) {
+        cleanArtistQuery = cleanArtistQuery
+            .replaceAll(RegExp(r'^(artist_|local_artist_)', caseSensitive: false), '')
+            .replaceAll(RegExp(r'_+'), ' ')
+            .trim();
+      }
+
+      Artist? artist = widget.artist;
+      if (artist != null &&
+          (artist.name.toLowerCase().startsWith('artist_') ||
+              artist.name.toLowerCase().startsWith('local_artist_') ||
+              artist.name.contains('__'))) {
+        artist = Artist(
+          id: artist.id,
+          name: cleanArtistQuery,
+          coverArt: artist.coverArt,
+          albumCount: artist.albumCount,
+          artistImageUrl: artist.artistImageUrl,
+          isLocal: artist.isLocal,
+        );
+      }
+
       List<Song> topSongs = [];
       List<Album> albums = [];
 
       if (libraryProvider.isLocalOnlyMode) {
         artist = libraryProvider.artists.firstWhere(
-          (a) => a.id == widget.artistId,
-          orElse: () => Artist(id: widget.artistId, name: widget.artistId),
+          (a) => a.id == widget.artistId || a.name.toLowerCase() == cleanArtistQuery.toLowerCase(),
+          orElse: () => Artist(id: widget.artistId, name: cleanArtistQuery),
         );
         albums = await libraryProvider.getArtistAlbums(widget.artistId);
 
         topSongs = libraryProvider.cachedAllSongs
-            .where((s) => s.artistId == widget.artistId)
+            .where((s) => s.artistId == widget.artistId || (s.artist != null && s.artist!.toLowerCase() == cleanArtistQuery.toLowerCase()))
             .toList();
       } else {
         // First check if widget.artistId matches an artist in libraryProvider
         Artist? libraryMatch;
         for (final a in libraryProvider.artists) {
-          if (a.id == widget.artistId || a.name.toLowerCase() == widget.artistId.toLowerCase()) {
+          if (a.id == widget.artistId ||
+              a.name.toLowerCase() == widget.artistId.toLowerCase() ||
+              a.name.toLowerCase() == cleanArtistQuery.toLowerCase()) {
             libraryMatch = a;
             break;
           }
@@ -98,29 +125,60 @@ class _ArtistScreenState extends State<ArtistScreen> {
 
       // If artist was not found in local DB or has no top songs, fetch online via YouTube
       if (artist == null || topSongs.isEmpty) {
-        final artistName = widget.artistId;
         artist ??= Artist(
           id: widget.artistId,
-          name: artistName,
+          name: cleanArtistQuery,
         );
 
         try {
           final ytResult =
-              await YoutubeService().search(artistName, songCount: 30);
+              await YoutubeService().search(cleanArtistQuery, songCount: 30);
           if (ytResult.songs.isNotEmpty) {
             topSongs = ytResult.songs;
             albums = ytResult.albums;
-            if (artist.coverArt == null && topSongs.isNotEmpty) {
-              artist = Artist(
-                id: artist.id,
-                name: artist.name,
-                coverArt: topSongs.first.coverArt,
-              );
-            }
+            final realArtistName = (widget.artist?.name != null &&
+                    widget.artist!.name.isNotEmpty &&
+                    !widget.artist!.name.toLowerCase().startsWith('artist_') &&
+                    !widget.artist!.name.toLowerCase().startsWith('local_artist_'))
+                ? widget.artist!.name
+                : (topSongs.first.artist ?? cleanArtistQuery);
+            artist = Artist(
+              id: artist.id,
+              name: realArtistName,
+              coverArt: artist.coverArt ?? topSongs.first.coverArt,
+            );
           }
         } catch (ytErr) {
           debugPrint('Online artist search error: $ytErr');
         }
+      }
+
+      // Final guarantee: ensure artist name is clean and readable, never an internal ID
+      if (artist != null &&
+          (artist.name.toLowerCase().startsWith('artist_') ||
+              artist.name.toLowerCase().startsWith('local_artist_') ||
+              artist.name.contains('__') ||
+              artist.name == widget.artistId)) {
+        String resolvedName = cleanArtistQuery;
+        if (topSongs.isNotEmpty &&
+            topSongs.first.artist != null &&
+            topSongs.first.artist!.isNotEmpty &&
+            !topSongs.first.artist!.toLowerCase().startsWith('artist_')) {
+          resolvedName = topSongs.first.artist!;
+        } else if (widget.artist?.name != null &&
+            widget.artist!.name.isNotEmpty &&
+            !widget.artist!.name.toLowerCase().startsWith('artist_')) {
+          resolvedName = widget.artist!.name;
+        }
+
+        artist = Artist(
+          id: artist.id,
+          name: resolvedName,
+          coverArt: artist.coverArt,
+          albumCount: artist.albumCount,
+          artistImageUrl: artist.artistImageUrl,
+          isLocal: artist.isLocal,
+        );
       }
 
       // Ensure all unique albums from topSongs are included in albums
@@ -334,7 +392,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 260,
+            expandedHeight: 300,
             backgroundColor: pageBgColor,
             surfaceTintColor: Colors.transparent,
             leading: IconButton(
@@ -356,14 +414,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
             ),
             flexibleSpace: FlexibleSpaceBar(
               centerTitle: true,
-              titlePadding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+              titlePadding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
               title: Text(
                 _artist!.name,
                 style: TextStyle(
                   color: titleTextColor,
                   fontWeight: FontWeight.bold,
                   fontSize: 22,
-                  letterSpacing: -0.3,
+                  letterSpacing: -0.4,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -378,7 +436,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
           if (_topSongs.isNotEmpty)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
                 child: Row(
                   children: [
                     Expanded(
@@ -571,7 +629,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             bottom: 0,
             left: 0,
             right: 0,
-            height: 150,
+            height: 180,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -579,10 +637,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    pageBgColor.withValues(alpha: 0.65),
+                    pageBgColor.withValues(alpha: 0.35),
+                    pageBgColor.withValues(alpha: 0.85),
                     pageBgColor,
                   ],
-                  stops: const [0.0, 0.55, 1.0],
+                  stops: const [0.0, 0.45, 0.8, 1.0],
                 ),
               ),
             ),
@@ -882,17 +941,19 @@ class _PlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final accent = Theme.of(context).colorScheme.primary;
+    final btnBg = isDark
+        ? const Color(0xFF2C2C2E)
+        : const Color(0xFFF2F2F7);
 
     return Material(
-      color: accent.withValues(alpha: isDark ? 0.15 : 0.1),
-      borderRadius: BorderRadius.circular(10),
+      color: btnBg,
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+          padding: const EdgeInsets.symmetric(vertical: 13),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -904,6 +965,7 @@ class _PlayButton extends StatelessWidget {
                   color: accent,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],

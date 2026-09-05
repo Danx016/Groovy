@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/song.dart';
 import '../models/radio_station.dart';
+import '../models/artist.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../theme/app_theme.dart';
@@ -21,17 +22,21 @@ class DesktopPlayerBar extends StatefulWidget {
 
 class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
 
-  void _navigateToArtist(BuildContext context, String artistId) {
+  void _navigateToArtist(BuildContext context, String artistId, {String? artistName, String? coverArt}) {
+    final artistObj = (artistName != null && artistName.isNotEmpty)
+        ? Artist(id: artistId, name: artistName, coverArt: coverArt)
+        : null;
+
     if (widget.navigatorKey?.currentState != null) {
       widget.navigatorKey!.currentState!.push(
         MaterialPageRoute(
-          builder: (context) => ArtistScreen(artistId: artistId),
+          builder: (context) => ArtistScreen(artistId: artistId, artist: artistObj),
         ),
       );
     } else {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => ArtistScreen(artistId: artistId),
+          builder: (context) => ArtistScreen(artistId: artistId, artist: artistObj),
         ),
       );
     }
@@ -275,10 +280,13 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                           cursor: SystemMouseCursors.click,
                           child: GestureDetector(
                             onTap: () {
-                              if (currentSong.artistId != null) {
-                                _navigateToArtist(
-                                    context, currentSong.artistId!);
-                              }
+                              final id = currentSong.artistId ?? currentSong.artist!;
+                              _navigateToArtist(
+                                context,
+                                id,
+                                artistName: currentSong.artist,
+                                coverArt: currentSong.coverArt,
+                              );
                             },
                             child: Text(
                               currentSong.artist!,

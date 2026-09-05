@@ -224,7 +224,14 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
               if (effectiveArtistId.isNotEmpty) {
                 nav.push(
                   MaterialPageRoute(
-                    builder: (_) => ArtistScreen(artistId: effectiveArtistId),
+                    builder: (_) => ArtistScreen(
+                      artistId: effectiveArtistId,
+                      artist: Artist(
+                        id: effectiveArtistId,
+                        name: artistName,
+                        coverArt: coverUrl,
+                      ),
+                    ),
                   ),
                 );
               }

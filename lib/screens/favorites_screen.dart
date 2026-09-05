@@ -227,7 +227,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           size: double.infinity,
           onTap: () => NavigationHelper.push(
             context,
-            AlbumScreen(albumId: album.id),
+            AlbumScreen(albumId: album.id, album: album),
           ),
         );
       },

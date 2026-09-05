@@ -150,7 +150,7 @@ class _TopRatedScreenState extends State<TopRatedScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AlbumScreen(albumId: album.id),
+                          builder: (context) => AlbumScreen(albumId: album.id, album: album),
                         ),
                       );
                     },

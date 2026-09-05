@@ -101,7 +101,7 @@ class _LikedAlbumsScreenState extends State<LikedAlbumsScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AlbumScreen(albumId: album.id),
+              builder: (_) => AlbumScreen(albumId: album.id, album: album),
             ),
           ),
         );

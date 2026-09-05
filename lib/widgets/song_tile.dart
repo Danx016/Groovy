@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/artist_ref.dart';
+import '../models/artist.dart';
 import '../models/song.dart';
 import '../models/album.dart';
 import '../utils/navigation_helper.dart';
@@ -830,18 +831,37 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
       return;
     }
 
-    final artistId = widget.song.artistId;
+    final artistId = widget.song.artistId ?? (widget.song.artist != null ? 'artist_${widget.song.artist!}' : null);
     if (artistId != null && artistId.isNotEmpty) {
       nav.push(
-        MaterialPageRoute(builder: (_) => ArtistScreen(artistId: artistId)),
+        MaterialPageRoute(
+          builder: (_) => ArtistScreen(
+            artistId: artistId,
+            artist: Artist(
+              id: artistId,
+              name: widget.song.artist ?? artistId,
+              coverArt: widget.song.coverArt,
+            ),
+          ),
+        ),
       );
     }
   }
 
   void _pushArtist(NavigatorState nav, ArtistRef artist) {
-    if (artist.id.isNotEmpty) {
+    if (artist.id.isNotEmpty || artist.name.isNotEmpty) {
+      final effectiveId = artist.id.isNotEmpty ? artist.id : 'artist_${artist.name}';
       nav.push(
-        MaterialPageRoute(builder: (_) => ArtistScreen(artistId: artist.id)),
+        MaterialPageRoute(
+          builder: (_) => ArtistScreen(
+            artistId: effectiveId,
+            artist: Artist(
+              id: effectiveId,
+              name: artist.name.isNotEmpty ? artist.name : effectiveId,
+              coverArt: artist.effectiveCoverArt,
+            ),
+          ),
+        ),
       );
     }
   }

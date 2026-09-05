@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
 import '../models/artist_ref.dart';
+import '../models/artist.dart';
 import '../screens/artist_screen.dart';
 import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
@@ -64,11 +65,19 @@ class MultiArtistWidget extends StatelessWidget {
   }
 
   void _navigate(BuildContext context, ArtistRef artist) {
-    if (artist.id.isNotEmpty) {
+    if (artist.id.isNotEmpty || artist.name.isNotEmpty) {
       final navigator = Navigator.of(context);
+      final effectiveId = artist.id.isNotEmpty ? artist.id : 'artist_${artist.name}';
       onBeforeNavigate?.call();
       navigator.push(MaterialPageRoute(
-        builder: (_) => ArtistScreen(artistId: artist.id),
+        builder: (_) => ArtistScreen(
+          artistId: effectiveId,
+          artist: Artist(
+            id: effectiveId,
+            name: artist.name.isNotEmpty ? artist.name : effectiveId,
+            coverArt: artist.effectiveCoverArt,
+          ),
+        ),
       ));
     } else if (artist.name.isNotEmpty) {
       _searchAndNavigate(context, artist.name);
@@ -93,7 +102,10 @@ class MultiArtistWidget extends StatelessWidget {
         );
         onBeforeNavigate?.call();
         navigator.push(MaterialPageRoute(
-          builder: (_) => ArtistScreen(artistId: matched.id),
+          builder: (_) => ArtistScreen(
+            artistId: matched.id,
+            artist: matched,
+          ),
         ));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(

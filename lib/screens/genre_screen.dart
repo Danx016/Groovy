@@ -260,7 +260,7 @@ class _GenreScreenState extends State<GenreScreen>
         return AlbumCard(
           album: album,
           onTap: () =>
-              NavigationHelper.push(context, AlbumScreen(albumId: album.id)),
+              NavigationHelper.push(context, AlbumScreen(albumId: album.id, album: album)),
         );
       },
     );

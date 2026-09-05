@@ -163,7 +163,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => AlbumScreen(albumId: album.id),
+              builder: (_) => AlbumScreen(albumId: album.id, album: album),
             ),
           ),
         );

@@ -149,7 +149,7 @@ class _NewReleasesScreenState extends State<NewReleasesScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (context) => AlbumScreen(albumId: album.id),
+                          builder: (context) => AlbumScreen(albumId: album.id, album: album),
                         ),
                       );
                     },

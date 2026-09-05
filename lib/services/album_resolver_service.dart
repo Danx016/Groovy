@@ -22,6 +22,16 @@ class AlbumResolverService {
     'Referer': 'https://music.youtube.com/',
   };
 
+  /// Helper to normalize strings for comparisons
+  String _normalize(String s) {
+    return s
+        .toLowerCase()
+        .replaceAll(RegExp(r'[\(\[\{\)\|\-–—\]\}]'), ' ')
+        .replaceAll(RegExp(r'[^a-z0-9áéíóúñü\s]'), '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+  }
+
   /// Clean helper to check if a string is a dummy/placeholder
   bool _isPlaceholder(String? s) {
     if (s == null) return true;
@@ -59,7 +69,24 @@ class AlbumResolverService {
       title = albumId;
     }
 
-    // Step 1: If title is still missing, resolve it from the song via Deezer
+    // Step 1: If albumId is already an MPREb_ browseId, browse directly
+    if (albumId.startsWith('MPREb_')) {
+      final direct = await _browseYtmAlbum(albumId, title ?? albumId, artist ?? '');
+      if (direct != null && direct.songs.isNotEmpty) {
+        return direct;
+      }
+    }
+
+    // Step 2: If albumId is a Deezer album ID (from artist discography or search)
+    final dzId = albumId.replaceFirst('dz_album_', '');
+    if (RegExp(r'^\d+$').hasMatch(dzId)) {
+      final dzRes = await _fetchDeezerAlbum(dzId, title, artist, coverArt);
+      if (dzRes != null && dzRes.songs.isNotEmpty) {
+        return dzRes;
+      }
+    }
+
+    // Step 3: If title is still missing, resolve it from the song via Deezer
     if (title == null && song != null && song.title.isNotEmpty) {
       final resolved = await _resolveAlbumInfoFromSong(song.title, song.artist);
       if (resolved != null) {
@@ -69,28 +96,11 @@ class AlbumResolverService {
       }
     }
 
-    // Step 2: If albumId is already an MPREb_ browseId, browse directly
-    if (albumId.startsWith('MPREb_')) {
-      final direct = await _browseYtmAlbum(albumId, title ?? albumId, artist ?? '');
-      if (direct != null && direct.songs.isNotEmpty) {
-        return direct;
-      }
-    }
-
-    // Step 3: If we have a title, search YouTube Music with the official Albums filter
+    // Step 4: If we have a title, search YouTube Music with the official Albums filter
     if (title != null && title.isNotEmpty) {
       final ytmRes = await _searchAndBrowseYtmAlbum(title, artist ?? '');
       if (ytmRes != null && ytmRes.songs.isNotEmpty) {
         return ytmRes;
-      }
-    }
-
-    // Step 4: If albumId is a Deezer album ID (or we have Deezer ID)
-    final dzId = albumId.replaceFirst('dz_album_', '');
-    if (RegExp(r'^\d+$').hasMatch(dzId)) {
-      final dzRes = await _fetchDeezerAlbum(dzId, title, artist, coverArt);
-      if (dzRes != null && dzRes.songs.isNotEmpty) {
-        return dzRes;
       }
     }
 
@@ -180,8 +190,8 @@ class AlbumResolverService {
       String? matchedBrowseId;
       String? matchedTitle;
 
-      final normAlbum = albumName.toLowerCase().trim();
-      final albumWords = normAlbum.split(RegExp(r'\s+')).where((w) => w.length > 2).toList();
+      final normAlbum = _normalize(albumName);
+      final normArtist = _normalize(cleanArtist);
 
       void scanForAlbum(dynamic obj) {
         if (obj is Map<String, dynamic>) {
@@ -196,20 +206,33 @@ class AlbumResolverService {
                   (runs.isNotEmpty ? runs[0]['navigationEndpoint'] : null);
               final bId = nav?['browseEndpoint']?['browseId'] as String?;
 
-              if (bId != null && bId.startsWith('MPREb_')) {
-                final normT = (t ?? '').toLowerCase();
-                // Check for word match with album name
-                bool isMatch = normT == normAlbum || normT.contains(normAlbum) || normAlbum.contains(normT);
-                if (!isMatch && albumWords.isNotEmpty) {
-                  isMatch = albumWords.any((w) => normT.contains(w));
+              if (bId != null && bId.startsWith('MPREb_') && t != null && t.isNotEmpty) {
+                final normT = _normalize(t);
+
+                // Extract artist runs from secondary flex column if present
+                String itemArtist = '';
+                if (flex.length > 1) {
+                  final col2Runs = (flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs']
+                      as List<dynamic>?) ?? [];
+                  for (final r in col2Runs) {
+                    final txt = r['text'] as String? ?? '';
+                    if (txt != ' • ' && txt.toLowerCase() != 'album' && txt.toLowerCase() != 'álbum' && txt.toLowerCase() != 'ep' && txt.toLowerCase() != 'single') {
+                      itemArtist = _normalize(txt);
+                      break;
+                    }
+                  }
                 }
 
-                if (isMatch && matchedBrowseId == null) {
-                  matchedBrowseId = bId;
-                  matchedTitle = t;
-                } else if (matchedBrowseId == null) {
-                  matchedBrowseId = bId;
-                  matchedTitle = t;
+                // Strict title matching
+                final bool isExactMatch = normT == normAlbum;
+                final bool isPrefixMatch = normT.startsWith(normAlbum) || normAlbum.startsWith(normT);
+                final bool artistMatches = normArtist.isEmpty || itemArtist.isEmpty || itemArtist.contains(normArtist) || normArtist.contains(itemArtist);
+
+                if ((isExactMatch || isPrefixMatch) && artistMatches) {
+                  if (matchedBrowseId == null || isExactMatch) {
+                    matchedBrowseId = bId;
+                    matchedTitle = t;
+                  }
                 }
               }
             }

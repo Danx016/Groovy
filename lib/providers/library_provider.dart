@@ -1210,6 +1210,12 @@ class LibraryProvider extends ChangeNotifier {
     await loadStarred();
   }
 
+  bool isAlbumStarred(String albumId) {
+    if (_starred?.albums.any((a) => a.id == albumId) == true) return true;
+    if (_cachedAllAlbums.any((a) => a.id == albumId && a.starred == true)) return true;
+    return false;
+  }
+
   Future<void> unstar({
     String? songId,
     String? albumId,
