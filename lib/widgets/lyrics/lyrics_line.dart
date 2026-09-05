@@ -35,22 +35,20 @@ class LyricsLineWidget extends StatelessWidget {
 
     final isHighlighted = isCurrent || isUnsynced;
 
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 24.0),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          opacity: targetOpacity,
-          child: Text(
-            line.text,
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 24.0),
+          child: AnimatedDefaultTextStyle(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
             style: TextStyle(
               fontSize: 32,
               fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
               letterSpacing: -0.6,
-              color: Colors.white,
+              color: Colors.white.withValues(alpha: targetOpacity),
               height: 1.25,
               fontFamilyFallback: const [
                 '-apple-system',
@@ -69,6 +67,7 @@ class LyricsLineWidget extends StatelessWidget {
                     ]
                   : null,
             ),
+            child: Text(line.text),
           ),
         ),
       ),

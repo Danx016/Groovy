@@ -153,12 +153,17 @@ class _LyricsListViewState extends State<LyricsListView> {
       return;
     }
 
+    int low = 0;
+    int high = _items.length - 1;
     int newIndex = -1;
-    for (int i = 0; i < _items.length; i++) {
-      if (pos >= _items[i].startTime) {
-        newIndex = i;
+
+    while (low <= high) {
+      final mid = (low + high) >> 1;
+      if (_items[mid].startTime <= pos) {
+        newIndex = mid;
+        low = mid + 1;
       } else {
-        break;
+        high = mid - 1;
       }
     }
 

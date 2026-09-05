@@ -44,7 +44,7 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final playerProvider = Provider.of<PlayerProvider>(context);
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
     final currentSong = widget.song ?? playerProvider.currentSong;
 
     if (currentSong == null) {
