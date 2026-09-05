@@ -9,7 +9,7 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/jukebox_service.dart';
 import '../services/player_ui_settings_service.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/offline_service.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
@@ -388,7 +388,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                           context,
                           listen: false,
                         );
-                        final subsonic = Provider.of<SubsonicService>(
+                        final youtubeService = Provider.of<YoutubeService>(
                           context,
                           listen: false,
                         );
@@ -405,7 +405,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                               onTap: () {
                                 Navigator.pop(context);
                                 jukebox.setQueue(
-                                    subsonic,
+                                    youtubeService,
                                     [
                                       widget.song,
                                     ],
@@ -420,7 +420,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                                   .addToJukeboxQueue,
                               onTap: () {
                                 Navigator.pop(context);
-                                jukebox.addToQueue(subsonic, [widget.song]);
+                                jukebox.addToQueue(youtubeService, [widget.song]);
                               },
                             ),
                           ],
@@ -552,7 +552,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
   }
 
   Future<void> _downloadSong(BuildContext context) async {
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -567,7 +567,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
     try {
       final success = await _offlineService.downloadSong(
         widget.song,
-        subsonicService,
+        youtubeService,
         onProgress: (progress) {
           if (mounted) {
             setState(() {
@@ -687,7 +687,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
   }
 
   Future<void> _setRating(BuildContext context, int rating) async {
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -695,7 +695,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await subsonicService.setRating(widget.song.id, rating);
+      await youtubeService.setRating(widget.song.id, rating);
 
       if (mounted) {
         messenger.showSnackBar(
@@ -849,7 +849,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                   onTap: () async {
                     Navigator.pop(context);
 
-                    final subsonicService = Provider.of<SubsonicService>(
+                    final youtubeService = Provider.of<YoutubeService>(
                       context,
                       listen: false,
                     );
@@ -860,7 +860,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                     bool isDuplicate = false;
                     try {
                       final fullPlaylist =
-                          await subsonicService.getPlaylist(playlist.id);
+                          await youtubeService.getPlaylist(playlist.id);
                       final existingSongs =
                           fullPlaylist.songs ?? playlist.songs ?? [];
                       isDuplicate = existingSongs.any(
@@ -905,12 +905,12 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                       await libraryProvider.addSongToLibrary(song);
 
                       try {
-                        await subsonicService.updatePlaylist(
+                        await youtubeService.updatePlaylist(
                           playlistId: playlist.id,
                           songIdsToAdd: [song.id],
                         );
                       } catch (e) {
-                        debugPrint('Subsonic playlist sync note: $e');
+                        debugPrint('Playlist sync note: $e');
                       }
 
                       final currentSongs = List<Song>.from(playlist.songs ?? []);

@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import 'bpm_analyzer_service.dart';
-import 'subsonic_service.dart';
+import 'youtube_service.dart';
 import 'recommendation_service.dart';
 
 enum AutoDjMode {
@@ -73,7 +73,7 @@ class AutoDjService extends ChangeNotifier {
   final Set<String> _recentlyAddedIds = {};
   static const int _maxRecentlyAdded = 100;
 
-  SubsonicService? _subsonicService;
+  YoutubeService? _youtubeService;
   RecommendationService? _recommendationService;
 
   bool _isAnalyzing = false;
@@ -92,10 +92,10 @@ class AutoDjService extends ChangeNotifier {
   bool get isEnabled => _mode != AutoDjMode.off;
 
   void setServices(
-    SubsonicService subsonicService,
+    YoutubeService youtubeService,
     RecommendationService? recommendationService,
   ) {
-    _subsonicService = subsonicService;
+    _youtubeService = youtubeService;
     _recommendationService = recommendationService;
   }
 
@@ -148,7 +148,7 @@ class AutoDjService extends ChangeNotifier {
     required List<Song> currentQueue,
     List<Song>? availableSongs,
   }) async {
-    if (!isEnabled || _subsonicService == null) return [];
+    if (!isEnabled || _youtubeService == null) return [];
 
     final existingIds = currentQueue.map((s) => s.id).toSet();
 
@@ -192,7 +192,7 @@ class AutoDjService extends ChangeNotifier {
   }
 
   Future<List<Song>> _getShuffledLibrarySongs(Set<String> existingIds) async {
-    final songs = await _subsonicService!.getRandomSongs(size: _songsToAdd * 2);
+    final songs = await _youtubeService!.getRandomSongs(size: _songsToAdd * 2);
     return _filterAndLimit(songs, existingIds);
   }
 
@@ -200,7 +200,7 @@ class AutoDjService extends ChangeNotifier {
     Song song,
     Set<String> existingIds,
   ) async {
-    final similarSongs = await _subsonicService!.getSimilarSongs(
+    final similarSongs = await _youtubeService!.getSimilarSongs(
       song.id,
       count: _songsToAdd * 2,
     );
@@ -229,9 +229,9 @@ class AutoDjService extends ChangeNotifier {
     String genre,
     Set<String> existingIds,
   ) async {
-    final songs = await _subsonicService!.getSongsByGenre(
+    final songs = await _youtubeService!.getSongsByGenre(
       genre,
-      count: _songsToAdd * 2,
+      size: _songsToAdd * 2,
     );
     final filtered = _filterAndLimit(songs, existingIds);
 
@@ -245,7 +245,7 @@ class AutoDjService extends ChangeNotifier {
     String artistId,
     Set<String> existingIds,
   ) async {
-    final topSongs = await _subsonicService!.getArtistTopSongs(
+    final topSongs = await _youtubeService!.getArtistTopSongs(
       artistId,
       count: _songsToAdd * 2,
     );
@@ -268,7 +268,7 @@ class AutoDjService extends ChangeNotifier {
     if (currentSong != null) {
       
       futures.add(
-        _subsonicService!.getSimilarSongs(
+        _youtubeService!.getSimilarSongs(
           currentSong.id,
           count: (_songsToAdd * 0.4).ceil(),
         ),
@@ -276,9 +276,9 @@ class AutoDjService extends ChangeNotifier {
 
       if (currentSong.genre != null) {
         futures.add(
-          _subsonicService!.getSongsByGenre(
+          _youtubeService!.getSongsByGenre(
             currentSong.genre!,
-            count: (_songsToAdd * 0.3).ceil(),
+            size: (_songsToAdd * 0.3).ceil(),
           ),
         );
       }
@@ -287,12 +287,12 @@ class AutoDjService extends ChangeNotifier {
     if (_recommendationService != null) {
       final topGenres = _recommendationService!.getRecommendedGenres(limit: 3);
       for (final genre in topGenres.take(2)) {
-        futures.add(_subsonicService!.getSongsByGenre(genre, count: 3));
+        futures.add(_youtubeService!.getSongsByGenre(genre, size: 3));
       }
     }
 
     futures.add(
-      _subsonicService!.getRandomSongs(size: (_songsToAdd * 0.3).ceil()),
+      _youtubeService!.getRandomSongs(size: (_songsToAdd * 0.3).ceil()),
     );
 
     if (currentSong != null &&

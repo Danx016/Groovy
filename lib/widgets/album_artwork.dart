@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/offline_service.dart';
 
@@ -16,7 +16,7 @@ bool isLocalFilePath(String? s) {
 class _ImageUrlCache {
   static final Map<String, String> _cache = {};
 
-  static String getUrl(SubsonicService service, String? coverArt, int size) {
+  static String getUrl(YoutubeService service, String? coverArt, int size) {
     if (coverArt == null || coverArt.isEmpty) return '';
     final key = '${coverArt}_$size';
     return _cache.putIfAbsent(
@@ -193,7 +193,7 @@ class AlbumArtwork extends StatelessWidget {
     return Builder(
       builder: (context) {
         final imageUrl = _ImageUrlCache.getUrl(
-          Provider.of<SubsonicService>(context, listen: false),
+          Provider.of<YoutubeService>(context, listen: false),
           coverArt,
           cacheSize,
         );
@@ -252,7 +252,7 @@ class AlbumArtwork extends StatelessWidget {
     return Builder(
       builder: (context) {
         final imageUrl = _ImageUrlCache.getUrl(
-          Provider.of<SubsonicService>(context, listen: false),
+          Provider.of<YoutubeService>(context, listen: false),
           coverArt,
           cacheSize,
         );

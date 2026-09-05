@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/models.dart';
-import '../../services/subsonic_service.dart';
+import '../../services/youtube_service.dart';
 import '../../providers/library_provider.dart';
 import '../../l10n/app_localizations.dart';
 
@@ -176,9 +176,9 @@ class _PlaylistSelectionBottomSheetState extends State<PlaylistSelectionBottomSh
   }
 
   Future<void> _loadPlaylists() async {
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     try {
-      final playlists = await subsonic.getPlaylists();
+      final playlists = await youtubeService.getPlaylists();
       if (mounted) {
         setState(() {
           _playlists = playlists;
@@ -256,7 +256,7 @@ class _PlaylistSelectionBottomSheetState extends State<PlaylistSelectionBottomSh
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(4),
                               child: CachedNetworkImage(
-                                imageUrl: Provider.of<SubsonicService>(context, listen: false)
+                                imageUrl: Provider.of<YoutubeService>(context, listen: false)
                                     .getCoverArtUrl(playlist.coverArt!, size: 100),
                                 fit: BoxFit.cover,
                                 errorWidget: (context, url, error) => const Icon(Icons.queue_music_rounded, color: Colors.grey),
@@ -268,13 +268,13 @@ class _PlaylistSelectionBottomSheetState extends State<PlaylistSelectionBottomSh
                     subtitle: Text(AppLocalizations.of(context)!.songsCount(playlist.songCount ?? 0)),
                     onTap: () async {
                       Navigator.of(context).pop();
-                      final subsonic = Provider.of<SubsonicService>(context, listen: false);
+                      final youtubeService = Provider.of<YoutubeService>(context, listen: false);
 
                       // Check if song already exists in the playlist
                       bool isDuplicate = false;
                       try {
                         final fullPlaylist =
-                            await subsonic.getPlaylist(playlist.id);
+                            await youtubeService.getPlaylist(playlist.id);
                         final existingSongs =
                             fullPlaylist.songs ?? playlist.songs ?? [];
                         isDuplicate = existingSongs.any(
@@ -321,9 +321,9 @@ class _PlaylistSelectionBottomSheetState extends State<PlaylistSelectionBottomSh
                         await libraryProvider.addSongToLibrary(widget.song);
 
                         try {
-                          await subsonic.updatePlaylist(playlistId: playlist.id, songIdsToAdd: [widget.song.id]);
+                          await youtubeService.updatePlaylist(playlistId: playlist.id, songIdsToAdd: [widget.song.id]);
                         } catch (e) {
-                          debugPrint('Subsonic playlist sync note: $e');
+                          debugPrint('Playlist sync note: $e');
                         }
 
                         final currentSongs = List<Song>.from(playlist.songs ?? []);

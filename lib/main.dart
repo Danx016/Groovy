@@ -190,7 +190,7 @@ void main() async {
   );
 
   final storageService = StorageService();
-  final subsonicService = SubsonicService();
+  final youtubeService = YoutubeService();
   final offlineService = OfflineService();
   final recommendationService = RecommendationService();
   final localMusicService = LocalMusicService();
@@ -252,9 +252,9 @@ void main() async {
   // engine starts. This matters for the headless cold start: when Android
   // Auto launches the app with no UI, no widget ever reads the providers, so
   // lazy construction would leave the browse tree and search unwired.
-  final authProvider = AuthProvider(subsonicService, storageService);
+  final authProvider = AuthProvider(storageService);
   final playerProvider = PlayerProvider(
-    subsonicService,
+    youtubeService,
     storageService,
     castService,
     upnpService,
@@ -262,7 +262,7 @@ void main() async {
     jukeboxService,
     transcodingService,
   );
-  final libraryProvider = LibraryProvider(subsonicService, audioHandler);
+  final libraryProvider = LibraryProvider(youtubeService, audioHandler);
   libraryProvider.setLocalMusicService(localMusicService, mergeWithServer: true);
   libraryProvider.setMergeLocalLibrary(true);
   playerProvider.setLibraryProvider(libraryProvider);
@@ -270,7 +270,7 @@ void main() async {
   final Widget appWithProviders = MultiProvider(
     providers: [
       Provider<StorageService>.value(value: storageService),
-      Provider<SubsonicService>.value(value: subsonicService),
+      Provider<YoutubeService>.value(value: youtubeService),
       ChangeNotifierProvider<RecommendationService>.value(
         value: recommendationService,
       ),

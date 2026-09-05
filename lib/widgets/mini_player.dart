@@ -8,7 +8,7 @@ import '../models/radio_station.dart';
 import '../providers/player_provider.dart';
 import '../services/theme_service.dart';
 import '../theme/app_theme.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'album_artwork.dart';
 import '../screens/now_playing_screen.dart';
@@ -36,8 +36,8 @@ class MiniPlayer extends StatelessWidget {
             return;
           }
           if (currentSong != null) {
-            final subsonic = Provider.of<SubsonicService>(context, listen: false);
-            final coverUrl = currentSong.coverArt != null ? subsonic.getCoverArtUrl(currentSong.coverArt, size: 600) : null;
+            final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+            final coverUrl = currentSong.coverArt != null ? youtubeService.getCoverArtUrl(currentSong.coverArt, size: 600) : null;
             final imageProvider = coverUrl != null 
                 ? CachedNetworkImageProvider(coverUrl) as ImageProvider
                 : const AssetImage('assets/default_cover.png') as ImageProvider;

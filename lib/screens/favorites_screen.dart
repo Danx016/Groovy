@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../providers/library_provider.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
@@ -167,13 +167,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Future<void> _removeFromFavorites(Song song, int index) async {
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
 
     try {
-      await subsonicService.unstar(id: song.id);
+      await youtubeService.unstar(id: song.id);
       if (mounted) {
         setState(() {
           _favoriteSongs.removeAt(index);

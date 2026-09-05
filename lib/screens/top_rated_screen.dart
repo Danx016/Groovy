@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../models/album.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
@@ -27,11 +27,11 @@ class _TopRatedScreenState extends State<TopRatedScreen> {
 
   Future<void> _loadAlbums() async {
     try {
-      final subsonicService = Provider.of<SubsonicService>(
+      final youtubeService = Provider.of<YoutubeService>(
         context,
         listen: false,
       );
-      final albums = await subsonicService.getAlbumList(
+      final albums = await youtubeService.getAlbumList(
         type: 'highest',
         size: 50,
       );

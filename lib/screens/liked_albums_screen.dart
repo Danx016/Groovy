@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import 'album_screen.dart';
@@ -28,13 +28,13 @@ class _LikedAlbumsScreenState extends State<LikedAlbumsScreen> {
   Future<void> _loadLikedAlbums() async {
     setState(() => _isLoading = true);
 
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
 
     try {
-      final starred = await subsonicService.getStarred();
+      final starred = await youtubeService.getStarred();
       if (mounted) {
         setState(() {
           _likedAlbums = starred.albums;

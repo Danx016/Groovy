@@ -11,7 +11,7 @@ import '../services/local_music_service.dart';
 import '../services/groovy_api_service.dart';
 
 class LibraryProvider extends ChangeNotifier {
-  final SubsonicService _subsonicService;
+  final YoutubeService _youtubeService;
   final MuslyAudioHandler _audioHandler;
 
   bool _localOnlyMode = false;
@@ -44,7 +44,7 @@ class LibraryProvider extends ChangeNotifier {
   static const String _artistsCacheKey = 'cached_artists';
   static const String _lastUpdateKey = 'last_cache_update';
 
-  LibraryProvider(this._subsonicService, this._audioHandler) {
+  LibraryProvider(this._youtubeService, this._audioHandler) {
     // Serve the Android Auto browse tree: audio_service pulls these lists on
     // demand, including from the headless engine when the car connects while
     // the app UI has never been opened.
@@ -54,9 +54,9 @@ class LibraryProvider extends ChangeNotifier {
     _audioHandler.onGetLibraryPlaylists = _playlistsForAuto;
     // Tell the audio handler whether we are in YT Stream mode so it can
     // adapt the Android Auto root browse tree accordingly.
-    _audioHandler.onIsYoutubeMode = () => _subsonicService.isYoutube;
+    _audioHandler.onIsYoutubeMode = () => _youtubeService.isYoutube;
   }
-  SubsonicService get subsonicService => _subsonicService;
+  YoutubeService get youtubeService => _youtubeService;
   LibraryDatabaseService get database => _db;
 
   void setLocalMusicService(LocalMusicService service,
@@ -125,7 +125,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   String getCoverArtUrl(String? coverArt) {
-    return _subsonicService.getCoverArtUrl(coverArt, size: 300);
+    return _youtubeService.getCoverArtUrl(coverArt, size: 300);
   }
 
   List<Album> get recentAlbums => _recentAlbums;
@@ -229,25 +229,15 @@ class LibraryProvider extends ChangeNotifier {
 
       _audioHandler.notifyAutoChildrenChanged();
 
-      if (!_serverOfflineMode) {
-        try {
-          await Future.wait([
-            loadRecentAlbums(),
-            loadRandomSongs(),
-            loadPlaylists(),
-            loadArtists(),
-          ]).timeout(
-            const Duration(seconds: 5),
-            onTimeout: () {
-              debugPrint(
-                'Server initialization timed out - continuing in local mode',
-              );
-              throw TimeoutException('Server not responding');
-            },
-          );
-        } catch (serverError) {
-          debugPrint('Server initialization skipped: $serverError');
-        }
+      try {
+        await Future.wait([
+          loadRecentAlbums(),
+          loadRandomSongs(),
+          loadPlaylists(),
+          loadArtists(),
+        ]);
+      } catch (e) {
+        debugPrint('Library initialization error: $e');
       }
 
       _isInitialized = true;
@@ -409,7 +399,15 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> _refreshAllDataInBackground() async {
+    if (_isLoading) return;
+    _isLoading = true;
+    notifyListeners();
+
     try {
+      debugPrint('[LibraryProvider] Starting full background cache refresh...');
+      final sw = Stopwatch()..start();
+
+      // Download all albums paginated into the local SQLite DB.
       const pageSize = 500;
       int offset = 0;
       final List<Album> allAlbums = [];
@@ -419,7 +417,7 @@ class LibraryProvider extends ChangeNotifier {
       await _db.clearServerData();
 
       while (true) {
-        final page = await _subsonicService.getAlbumList(
+        final page = await _youtubeService.getAlbumList(
           type: 'alphabeticalByName',
           size: pageSize,
           offset: offset,
@@ -431,23 +429,9 @@ class LibraryProvider extends ChangeNotifier {
         offset += pageSize;
       }
 
-      if (_subsonicService.isJellyfin) {
-        // Jellyfin/Emby: fetch all songs in O(1) API call.
-        try {
-          final allSongs = await _subsonicService.getAllSongs();
-          for (final song in allSongs) {
-            seenSongIds.add(song.id);
-          }
-          await _db.insertSongsBatch(allSongs);
-        } catch (e) {
-          debugPrint(
-              'Jellyfin getAllSongs failed, falling back to album traversal: $e');
-        }
-      }
-
       var failedAlbumLoads = 0;
       if (seenSongIds.isEmpty) {
-        // Subsonic or Jellyfin fallback: iterate albums from DB
+        // Fallback: iterate albums from DB
         // instead of holding the entire album list in RAM.
         final albumCount = await _db.getAlbumCount();
         const albumBatchSize = 50;
@@ -459,7 +443,7 @@ class LibraryProvider extends ChangeNotifier {
           for (final album in albums) {
             try {
               final albumSongs =
-                  await _subsonicService.getAlbumSongs(album.id);
+                  await _youtubeService.getAlbumSongs(album.id);
               final newSongs = albumSongs.where((s) => seenSongIds.add(s.id)).toList();
               if (newSongs.isNotEmpty) {
                 await _db.insertSongsBatch(newSongs);
@@ -549,7 +533,7 @@ class LibraryProvider extends ChangeNotifier {
     // In YT Stream mode there is no classic "recent albums" concept;
     // use the locally cached songs from the SQLite DB (populated by previous
     // sessions) as the "Recent" section so the browse tree is not empty.
-    var songs = _subsonicService.isYoutube
+    var songs = _youtubeService.isYoutube
         ? (_cachedAllSongs.isNotEmpty ? _cachedAllSongs : _randomSongs)
         : _randomSongs;
     if (_serverOfflineMode) {
@@ -560,13 +544,13 @@ class LibraryProvider extends ChangeNotifier {
     return songs
         .take(50)
         .map(
-          (song) => <String, dynamic>{
+          (song) => {
             'id': song.id,
             'title': song.title,
-            'artist': song.artist ?? '',
-            'album': song.album ?? '',
+            'artist': song.artist,
+            'album': song.album,
+            'duration': song.duration,
             'artworkUrl': getCoverArtUrl(song.coverArt),
-            'duration': song.duration ?? 0,
           },
         )
         .toList();
@@ -574,25 +558,24 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> _albumsForAuto() async {
     await _ensureInitializedForAuto();
-    var albums = _recentAlbums;
+    var albums = _cachedAllAlbums.isNotEmpty ? _cachedAllAlbums : _recentAlbums;
     if (_serverOfflineMode) {
       final downloadedIds = await _downloadedSongIdsForAuto();
-      final albumIdsWithDownloads = _cachedAllSongs
+      final offlineAlbumIds = _cachedAllSongs
           .where((s) => downloadedIds.contains(s.id))
           .map((s) => s.albumId)
           .whereType<String>()
           .toSet();
-      albums = _cachedAllAlbums
-          .where((a) => albumIdsWithDownloads.contains(a.id))
-          .toList();
+      albums = albums.where((a) => offlineAlbumIds.contains(a.id)).toList();
     }
     return albums
-        .take(100)
+        .take(50)
         .map(
-          (album) => <String, dynamic>{
+          (album) => {
             'id': album.id,
-            'name': album.name,
-            'artist': album.artist ?? '',
+            'title': album.name,
+            'artist': album.artist,
+            'songCount': album.songCount,
             'artworkUrl': getCoverArtUrl(album.coverArt),
           },
         )
@@ -604,22 +587,21 @@ class LibraryProvider extends ChangeNotifier {
     var artists = _artists;
     if (_serverOfflineMode) {
       final downloadedIds = await _downloadedSongIdsForAuto();
-      final artistIdsWithDownloads = _cachedAllSongs
+      final offlineArtistIds = _cachedAllSongs
           .where((s) => downloadedIds.contains(s.id))
           .map((s) => s.artistId)
           .whereType<String>()
           .toSet();
-      artists = _artists
-          .where((a) => artistIdsWithDownloads.contains(a.id))
-          .toList();
+      artists = artists.where((a) => offlineArtistIds.contains(a.id)).toList();
     }
     return artists
-        .take(100)
+        .take(50)
         .map(
-          (artist) => <String, dynamic>{
+          (artist) => {
             'id': artist.id,
             'name': artist.name,
             'albumCount': artist.albumCount,
+            'artworkUrl': getCoverArtUrl(artist.coverArt),
           },
         )
         .toList();
@@ -627,21 +609,12 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Map<String, dynamic>>> _playlistsForAuto() async {
     await _ensureInitializedForAuto();
-    var playlists = _playlists;
-    if (_serverOfflineMode) {
-      final downloadedIds = await _downloadedSongIdsForAuto();
-      playlists = _playlists
-          .where(
-            (p) => p.songs?.any((s) => downloadedIds.contains(s.id)) ?? false,
-          )
-          .toList();
-    }
-    return playlists
+    return _playlists
         .take(50)
         .map(
-          (playlist) => <String, dynamic>{
+          (playlist) => {
             'id': playlist.id,
-            'name': playlist.name,
+            'title': playlist.name,
             'songCount': playlist.songCount,
             'artworkUrl': getCoverArtUrl(playlist.coverArt),
           },
@@ -655,7 +628,7 @@ class LibraryProvider extends ChangeNotifier {
       for (final album in allAlbums.take(50)) {
         if (album.coverArt != null) {
           try {
-            final url = _subsonicService.getCoverArtUrl(
+            final url = _youtubeService.getCoverArtUrl(
               album.coverArt,
               size: 300,
             );
@@ -684,7 +657,7 @@ class LibraryProvider extends ChangeNotifier {
       List<Artist> serverArtists = [];
       if (!_serverOfflineMode) {
         try {
-          serverArtists = await _subsonicService.getArtists();
+          serverArtists = await _youtubeService.getArtists();
         } catch (_) {}
       }
       final localArtists = await _db.getAllArtists();
@@ -726,7 +699,7 @@ class LibraryProvider extends ChangeNotifier {
       List<Album> fetched = [];
       if (!_serverOfflineMode) {
         try {
-          fetched = await _subsonicService.getAlbumList(type: 'recent', size: 20);
+          fetched = await _youtubeService.getAlbumList(type: 'recent', size: 20);
         } catch (_) {}
       }
 
@@ -752,7 +725,7 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> loadFrequentAlbums() async {
     if (_serverOfflineMode) return;
     try {
-      _frequentAlbums = await _subsonicService.getAlbumList(
+      _frequentAlbums = await _youtubeService.getAlbumList(
         type: 'frequent',
         size: 20,
       );
@@ -765,7 +738,7 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> loadNewestAlbums() async {
     if (_serverOfflineMode) return;
     try {
-      _newestAlbums = await _subsonicService.getAlbumList(
+      _newestAlbums = await _youtubeService.getAlbumList(
         type: 'newest',
         size: 20,
       );
@@ -778,7 +751,7 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> loadRandomAlbums() async {
     if (_serverOfflineMode) return;
     try {
-      _randomAlbums = await _subsonicService.getAlbumList(
+      _randomAlbums = await _youtubeService.getAlbumList(
         type: 'random',
         size: 20,
       );
@@ -793,7 +766,7 @@ class LibraryProvider extends ChangeNotifier {
       List<Playlist> serverPlaylists = [];
       if (!_serverOfflineMode) {
         try {
-          serverPlaylists = await _subsonicService.getPlaylists();
+          serverPlaylists = await _youtubeService.getPlaylists();
         } catch (_) {}
       }
       final localPlaylists = await _db.getAllPlaylists();
@@ -824,7 +797,7 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> loadRandomSongs() async {
     if (_serverOfflineMode) return;
     try {
-      _randomSongs = await _subsonicService.getRandomSongs(size: 50);
+      _randomSongs = await _youtubeService.getRandomSongs(size: 50);
       notifyListeners();
       _audioHandler
           .notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdRecent]);
@@ -836,7 +809,7 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> loadGenres() async {
     if (_serverOfflineMode) return;
     try {
-      _richGenres = await _subsonicService.getGenres();
+      _richGenres = await _youtubeService.getGenres();
       _genres = _richGenres.map((g) => g.value).toList();
       notifyListeners();
     } catch (e) {
@@ -847,7 +820,7 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> loadStarred() async {
     if (_serverOfflineMode) return;
     try {
-      _starred = await _subsonicService.getStarred();
+      _starred = await _youtubeService.getStarred();
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading starred: $e');
@@ -859,7 +832,7 @@ class LibraryProvider extends ChangeNotifier {
       return _localMusicService!.getAlbumsByArtist(artistId);
     }
     try {
-      final albums = await _subsonicService.getArtistAlbums(artistId);
+      final albums = await _youtubeService.getArtistAlbums(artistId);
       if (albums.isNotEmpty) return albums;
     } catch (e) {
       debugPrint('Error loading artist albums: $e');
@@ -877,7 +850,7 @@ class LibraryProvider extends ChangeNotifier {
       return _localMusicService!.getSongsByAlbum(albumId);
     }
     try {
-      final songs = await _subsonicService.getAlbumSongs(albumId);
+      final songs = await _youtubeService.getAlbumSongs(albumId);
       if (songs.isNotEmpty) return songs;
     } catch (e) {
       debugPrint('Error loading album songs: $e');
@@ -903,7 +876,7 @@ class LibraryProvider extends ChangeNotifier {
     }
 
     try {
-      final playlist = await _subsonicService.getPlaylist(playlistId);
+      final playlist = await _youtubeService.getPlaylist(playlistId);
 
       final index = _playlists.indexWhere((p) => p.id == playlistId);
       if (index != -1) {
@@ -935,7 +908,7 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> createPlaylist(String name, {List<String>? songIds}) async {
     try {
-      await _subsonicService.createPlaylist(name: name, songIds: songIds);
+      await _youtubeService.createPlaylist(name: name, songIds: songIds);
     } catch (_) {}
     final newId = 'pl_${DateTime.now().millisecondsSinceEpoch}';
     final playlist = Playlist(
@@ -951,14 +924,14 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> deletePlaylist(String playlistId) async {
     try {
-      await _subsonicService.deletePlaylist(playlistId);
+      await _youtubeService.deletePlaylist(playlistId);
     } catch (_) {}
     await _db.deletePlaylist(playlistId);
     await loadPlaylists();
   }
 
   Future<void> addSongToPlaylist(String playlistId, String songId) async {
-    await _subsonicService.updatePlaylist(
+    await _youtubeService.updatePlaylist(
       playlistId: playlistId,
       songIdsToAdd: [songId],
     );
@@ -966,46 +939,36 @@ class LibraryProvider extends ChangeNotifier {
 
   SearchResult searchLocal(String query) => _searchLocal(query);
 
-  Future<SearchResult> search(String query, {bool includeOnline = false}) async {
-    SearchResult serverOrLocalResult;
-    if (_localOnlyMode) {
-      serverOrLocalResult = _searchLocal(query);
-    } else {
-      try {
-        serverOrLocalResult = await _subsonicService.search(query);
-      } catch (e) {
-        serverOrLocalResult = _searchLocal(query);
-      }
-    }
-
-    if (!includeOnline) {
-      return serverOrLocalResult;
+  Future<SearchResult> search(String query, {bool includeOnline = true}) async {
+    final localResult = _searchLocal(query);
+    if (!includeOnline || _localOnlyMode) {
+      return localResult;
     }
 
     try {
-      final ytResults = await YoutubeService().search(query, songCount: 15);
+      final ytResults = await _youtubeService.search(query, songCount: 20);
 
-      final existingIds = serverOrLocalResult.songs.map((s) => s.id).toSet();
+      final existingIds = localResult.songs.map((s) => s.id).toSet();
       final extraSongs = ytResults.songs
           .where((s) => !existingIds.contains(s.id))
           .toList();
 
       return SearchResult(
-        artists: serverOrLocalResult.artists.isNotEmpty
-            ? serverOrLocalResult.artists
-            : ytResults.artists,
-        albums: serverOrLocalResult.albums.isNotEmpty
-            ? serverOrLocalResult.albums
-            : ytResults.albums,
+        artists: ytResults.artists.isNotEmpty
+            ? ytResults.artists
+            : localResult.artists,
+        albums: ytResults.albums.isNotEmpty
+            ? ytResults.albums
+            : localResult.albums,
         songs: [
-          ...serverOrLocalResult.songs,
+          ...localResult.songs,
           ...extraSongs,
         ],
         youtubeVideos: ytResults.youtubeVideos,
       );
     } catch (e) {
       debugPrint('[Search] YouTube search error: $e');
-      return serverOrLocalResult;
+      return localResult;
     }
   }
 
@@ -1158,9 +1121,9 @@ class LibraryProvider extends ChangeNotifier {
     if (!isYt && song.isLocal != true) {
       try {
         if (newStarred) {
-          await _subsonicService.star(id: song.id);
+          await _youtubeService.star(id: song.id);
         } else {
-          await _subsonicService.unstar(id: song.id);
+          await _youtubeService.unstar(id: song.id);
         }
       } catch (e) {
         debugPrint('[Library] Server star sync error: $e');
@@ -1208,7 +1171,7 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> star({String? songId, String? albumId, String? artistId}) async {
-    await _subsonicService.star(
+    await _youtubeService.star(
       id: songId,
       albumId: albumId,
       artistId: artistId,
@@ -1221,7 +1184,7 @@ class LibraryProvider extends ChangeNotifier {
     String? albumId,
     String? artistId,
   }) async {
-    await _subsonicService.unstar(
+    await _youtubeService.unstar(
       id: songId,
       albumId: albumId,
       artistId: artistId,
@@ -1231,7 +1194,7 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Song>> getSongsByGenre(String genre) async {
     try {
-      return await _subsonicService.getSongsByGenre(genre);
+      return await _youtubeService.getSongsByGenre(genre);
     } catch (e) {
       debugPrint('Error loading songs by genre: $e');
       return [];
@@ -1240,7 +1203,7 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Album>> getAlbumsByGenre(String genre) async {
     try {
-      return await _subsonicService.getAlbumsByGenre(genre);
+      return await _youtubeService.getAlbumsByGenre(genre);
     } catch (e) {
       debugPrint('Error loading albums by genre: $e');
       return [];
@@ -1249,18 +1212,18 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Song>> getAllSongs() async {
     try {
-      final allArtists = await _subsonicService.getArtists();
+      final allArtists = await _youtubeService.getArtists();
 
       final List<Song> allSongs = [];
 
       for (final artist in allArtists) {
         try {
-          final artistAlbums = await _subsonicService.getArtistAlbums(
+          final artistAlbums = await _youtubeService.getArtistAlbums(
             artist.id,
           );
           for (final album in artistAlbums) {
             try {
-              final songs = await _subsonicService.getAlbumSongs(album.id);
+              final songs = await _youtubeService.getAlbumSongs(album.id);
               allSongs.addAll(songs);
             } catch (e) {
               debugPrint('Error loading album ${album.id}: $e');
@@ -1280,13 +1243,13 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Album>> getAllAlbums() async {
     try {
-      final allArtists = await _subsonicService.getArtists();
+      final allArtists = await _youtubeService.getArtists();
 
       final List<Album> allAlbums = [];
 
       for (final artist in allArtists) {
         try {
-          final artistAlbums = await _subsonicService.getArtistAlbums(
+          final artistAlbums = await _youtubeService.getArtistAlbums(
             artist.id,
           );
           allAlbums.addAll(artistAlbums);

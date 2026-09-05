@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/artist_ref.dart';
 import '../screens/artist_screen.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
 import 'album_artwork.dart';
 
@@ -18,19 +18,18 @@ import 'album_artwork.dart';
 /// - **Mobile / single artist**: tapping the whole row opens a bottom sheet
 ///   (for multiple artists) or navigates directly (for a single artist).
 ///
-/// Falls back gracefully when [artists] is null (non-Navidrome Subsonic servers):
+/// Falls back gracefully when [artists] is null:
 /// the [artistFallback] string is shown as a single clickable item that
 /// navigates via [artistIdFallback].
 class MultiArtistWidget extends StatelessWidget {
-  /// Parsed artist list from Navidrome's `participants` field. Optional.
+  /// Parsed artist list from track participants. Optional.
   final List<ArtistRef>? artists;
 
-  /// The raw artist string from the standard Subsonic `artist` field.
+  /// The raw artist string.
   /// Used when [artists] is null.
   final String? artistFallback;
 
-  /// The primary `artistId` from the Subsonic response, used as navigation
-  /// target when [artists] is null.
+  /// The primary `artistId` used as navigation target when [artists] is null.
   final String? artistIdFallback;
 
   /// Text style applied to artist names.
@@ -78,9 +77,9 @@ class MultiArtistWidget extends StatelessWidget {
 
   Future<void> _searchAndNavigate(BuildContext context, String name) async {
     final navigator = Navigator.of(context);
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     try {
-      final result = await subsonic.search(
+      final result = await youtubeService.search(
         name,
         artistCount: 5,
         albumCount: 0,

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
-import 'subsonic_service.dart';
+import 'youtube_service.dart';
 
 class JukeboxStatus {
   final bool playing;
@@ -63,12 +63,12 @@ class JukeboxService extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refresh(SubsonicService subsonic) async {
+  Future<void> refresh(YoutubeService musicService) async {
     if (!_enabled) return;
     _isLoading = true;
     notifyListeners();
     try {
-      final data = await subsonic.jukeboxGet();
+      final data = await musicService.jukeboxGet();
       _status = _parseStatus(data);
       _error = null;
       _serverUnsupported = false;
@@ -87,33 +87,33 @@ class JukeboxService extends ChangeNotifier {
     }
   }
 
-  Future<void> play(SubsonicService subsonic) async {
-    await _command(() => subsonic.jukeboxStart(), subsonic);
+  Future<void> play(YoutubeService musicService) async {
+    await _command(() => musicService.jukeboxStart(), musicService);
   }
 
-  Future<void> pause(SubsonicService subsonic) async {
-    await _command(() => subsonic.jukeboxStop(), subsonic);
+  Future<void> pause(YoutubeService musicService) async {
+    await _command(() => musicService.jukeboxStop(), musicService);
   }
 
-  Future<void> skip(SubsonicService subsonic, int index) async {
-    await _command(() => subsonic.jukeboxSkip(index), subsonic);
+  Future<void> skip(YoutubeService musicService, int index) async {
+    await _command(() => musicService.jukeboxSkip(index), musicService);
   }
 
-  Future<void> skipNext(SubsonicService subsonic) async {
+  Future<void> skipNext(YoutubeService musicService) async {
     final next = (_status.currentIndex + 1).clamp(
       0,
       (_status.playlist.length - 1).clamp(0, double.maxFinite.toInt()),
     );
-    await skip(subsonic, next);
+    await skip(musicService, next);
   }
 
-  Future<void> skipPrevious(SubsonicService subsonic) async {
+  Future<void> skipPrevious(YoutubeService musicService) async {
     final prev = (_status.currentIndex - 1).clamp(0, double.maxFinite.toInt());
-    await skip(subsonic, prev);
+    await skip(musicService, prev);
   }
 
   Future<void> setQueue(
-    SubsonicService subsonic,
+    YoutubeService musicService,
     List<Song> songs, {
     int startIndex = 0,
   }) async {
@@ -122,44 +122,44 @@ class JukeboxService extends ChangeNotifier {
     notifyListeners();
     try {
       final ids = songs.map((s) => s.id).toList();
-      await subsonic.jukeboxSet(ids);
-      await subsonic.jukeboxSkip(startIndex);
-      await subsonic.jukeboxStart();
+      await musicService.jukeboxSet(ids);
+      await musicService.jukeboxSkip(startIndex);
+      await musicService.jukeboxStart();
     } catch (e) {
       debugPrint('Jukebox setQueue error: $e');
     } finally {
-      await refresh(subsonic);
+      await refresh(musicService);
     }
   }
 
-  Future<void> addToQueue(SubsonicService subsonic, List<Song> songs) async {
+  Future<void> addToQueue(YoutubeService musicService, List<Song> songs) async {
     if (songs.isEmpty) return;
     final ids = songs.map((s) => s.id).toList();
-    await _command(() => subsonic.jukeboxAdd(ids), subsonic);
+    await _command(() => musicService.jukeboxAdd(ids), musicService);
   }
 
-  Future<void> clearQueue(SubsonicService subsonic) async {
-    await _command(() => subsonic.jukeboxClear(), subsonic);
+  Future<void> clearQueue(YoutubeService musicService) async {
+    await _command(() => musicService.jukeboxClear(), musicService);
   }
 
-  Future<void> shuffleQueue(SubsonicService subsonic) async {
-    await _command(() => subsonic.jukeboxShuffle(), subsonic);
+  Future<void> shuffleQueue(YoutubeService musicService) async {
+    await _command(() => musicService.jukeboxShuffle(), musicService);
   }
 
-  Future<void> removeFromQueue(SubsonicService subsonic, int index) async {
-    await _command(() => subsonic.jukeboxRemove(index), subsonic);
+  Future<void> removeFromQueue(YoutubeService musicService, int index) async {
+    await _command(() => musicService.jukeboxRemove(index), musicService);
   }
 
-  Future<void> setGain(SubsonicService subsonic, double gain) async {
+  Future<void> setGain(YoutubeService musicService, double gain) async {
     await _command(
-      () => subsonic.jukeboxSetGain(gain.clamp(0.0, 1.0)),
-      subsonic,
+      () => musicService.jukeboxSetGain(gain.clamp(0.0, 1.0)),
+      musicService,
     );
   }
 
   Future<void> _command(
     Future<Map<String, dynamic>> Function() fn,
-    SubsonicService subsonic,
+    YoutubeService musicService,
   ) async {
     _isLoading = true;
     notifyListeners();
@@ -177,7 +177,7 @@ class JukeboxService extends ChangeNotifier {
       } else {
         _error = msg.replaceFirst('Exception: ', '');
       }
-      await refresh(subsonic);
+      await refresh(musicService);
     } finally {
       _isLoading = false;
       notifyListeners();

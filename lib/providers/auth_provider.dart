@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../models/models.dart';
-import '../models/server_config.dart';
 import '../services/services.dart';
 import '../services/groovy_api_service.dart';
 import '../services/library_database_service.dart';
@@ -25,13 +24,14 @@ class AuthProvider extends ChangeNotifier {
   GroovyUser? _currentUser;
   String? _token;
 
-  AuthProvider(dynamic unusedSubsonicService, this._storageService) {
+  AuthProvider([dynamic _, StorageService? storageService])
+      : _storageService = (storageService ?? (_ is StorageService ? _ : StorageService())) {
     _loadSavedSession();
   }
 
   AuthState get state => _state;
   String? get error => _error;
-  ServerConfig? get config => null;
+  dynamic get config => null;
   GroovyUser? get currentUser => _currentUser;
   String? get token => _token;
   bool get isAuthenticated => _state == AuthState.authenticated;
@@ -233,10 +233,4 @@ class AuthProvider extends ChangeNotifier {
   Future<void> disconnect() => logout();
 
   bool get isLocalOnlyMode => false;
-
-  Future<List<ServerConfig>> getSavedProfiles() async => [];
-
-  Future<void> switchProfile(ServerConfig profile) async {}
-
-  Future<void> updateSelectedMusicFolderIds(List<String> ids) async {}
 }

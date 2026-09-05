@@ -20,7 +20,7 @@ import 'album_screen.dart';
 import '../utils/navigation_helper.dart';
 import '../models/song.dart';
 import '../services/palette_service.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/offline_service.dart';
 import '../services/lrc_ttml_parser.dart';
 import '../widgets/now_playing/queue_view.dart';
@@ -141,8 +141,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   Future<void> _updateImageProviderAndColors() async {
     if (_lastSong == null) return;
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
-    final coverUrl = _lastSong!.coverArt != null ? subsonic.getCoverArtUrl(_lastSong!.coverArt, size: 600) : null;
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+    final coverUrl = _lastSong!.coverArt != null ? youtubeService.getCoverArtUrl(_lastSong!.coverArt, size: 600) : null;
     if (coverUrl != null) {
       _currentImageProvider = CachedNetworkImageProvider(coverUrl);
     } else {
@@ -224,7 +224,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
 
     try {
-      final subsonic = Provider.of<SubsonicService>(context, listen: false);
       final offlineService = OfflineService();
       
       List<LyricLine> parsed = [];
@@ -237,47 +236,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         }
       }
       
-      // 2. Online fetch: Try OpenSubsonic and LRCLIB in parallel, prioritizing synchronized lyrics
+      // 2. Online fetch: Try LRCLIB for synchronized lyrics
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
-        final results = await Future.wait([
-          subsonic.getLyricsBySongId(songId).catchError((_) => null),
-          LrcLibService().searchLyrics(
-            artist: song.artist,
-            title: song.title,
-            durationSeconds: song.duration,
-          ).catchError((_) => null),
-          subsonic.getLyrics(
-            artist: song.artist,
-            title: song.title,
-            duration: song.duration,
-          ).catchError((_) => null),
-        ]).timeout(
-          const Duration(seconds: 7),
-          onTimeout: () => [null, null, null],
-        );
+        final lrcLibRes = await LrcLibService().searchLyrics(
+          artist: song.artist,
+          title: song.title,
+          durationSeconds: song.duration,
+        ).catchError((_) => null);
 
-        final openSubsonicRes = results[0];
-        final lrcLibRes = results[1];
-        final legacySubsonicRes = results[2];
-
-        List<LyricLine> candidate1 = openSubsonicRes != null ? _extractParsedLines(openSubsonicRes) : [];
-        List<LyricLine> candidate2 = lrcLibRes != null ? _extractParsedLines(lrcLibRes) : [];
-        List<LyricLine> candidate3 = legacySubsonicRes != null ? _extractParsedLines(legacySubsonicRes) : [];
-
-        bool isSynced(List<LyricLine> lines) => lines.any((l) => l.startTime > Duration.zero);
-
-        if (isSynced(candidate1)) {
-          parsed = candidate1;
-        } else if (isSynced(candidate2)) {
-          parsed = candidate2;
-        } else if (isSynced(candidate3)) {
-          parsed = candidate3;
-        } else if (candidate1.isNotEmpty) {
-          parsed = candidate1;
-        } else if (candidate2.isNotEmpty) {
-          parsed = candidate2;
-        } else {
-          parsed = candidate3;
+        if (lrcLibRes != null) {
+          parsed = _extractParsedLines(lrcLibRes);
         }
       }
       

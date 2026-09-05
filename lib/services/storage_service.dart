@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:uuid/uuid.dart';
 import '../models/server_config.dart';
 
 class StorageService {
@@ -292,15 +291,7 @@ class StorageService {
 
 
 
-  Future<String> getOrCreateSubsonicSalt() async {
-    final prefs = await _prefs;
-    String? salt = prefs.getString('subsonic_client_salt');
-    if (salt == null || salt.isEmpty) {
-      salt = const Uuid().v4().substring(0, 16);
-      await prefs.setString('subsonic_client_salt', salt);
-    }
-    return salt;
-  }
+
 
   Future<void> saveLastSelectedFamily(String family) async {
     final prefs = await _prefs;

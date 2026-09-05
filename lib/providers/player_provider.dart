@@ -12,7 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../models/models.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/offline_service.dart';
 import '../services/windows_system_service.dart';
 import '../services/recommendation_service.dart';
@@ -35,7 +35,7 @@ import '../providers/library_provider.dart';
 enum RepeatMode { off, all, one }
 
 class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
-  final SubsonicService _subsonicService;
+  final YoutubeService _youtubeService;
   late final StorageService _storageService;
   final MuslyAudioHandler _audioHandler;
   // Convenience getter — use this everywhere just_audio is accessed directly.
@@ -107,7 +107,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _pitchCorrection = true;
 
   PlayerProvider(
-    this._subsonicService,
+    this._youtubeService,
     StorageService storageService,
     this._castService,
     this._upnpService,
@@ -277,7 +277,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _pollJukebox() async {
     if (!_jukeboxService.enabled) return;
     try {
-      await _jukeboxService.refresh(_subsonicService);
+      await _jukeboxService.refresh(_youtubeService);
       _syncFromJukeboxStatus();
     } catch (e) {
       debugPrint('Jukebox poll error: $e');
@@ -328,7 +328,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void setRecommendationService(RecommendationService recommendationService) {
     _recommendationService = recommendationService;
-    _autoDjService.setServices(_subsonicService, recommendationService);
+    _autoDjService.setServices(_youtubeService, recommendationService);
   }
 
   AutoDjService get autoDjService => _autoDjService;
@@ -336,7 +336,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _initializeAutoDj() async {
     await _autoDjService.initialize();
-    _autoDjService.setServices(_subsonicService, _recommendationService);
+    _autoDjService.setServices(_youtubeService, _recommendationService);
   }
 
 
@@ -384,7 +384,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                         null
                     ? Uri.file(_offlineService.getLocalCoverArtPath(song.id)!)
                         .toString()
-                    : _subsonicService.getCoverArtUrl(song.coverArt, size: 300),
+                    : _youtubeService.getCoverArtUrl(song.coverArt, size: 300),
                 'duration': (song.duration ?? 0).toString(),
               },
             )
@@ -392,7 +392,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     try {
-      final songs = await _subsonicService.getAlbumSongs(albumId);
+      final songs = await _youtubeService.getAlbumSongs(albumId);
       return songs
           .map(
             (song) => {
@@ -400,7 +400,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               'title': song.title,
               'artist': song.artist ?? '',
               'album': song.album ?? '',
-              'artworkUrl': _subsonicService.getCoverArtUrl(
+              'artworkUrl': _youtubeService.getCoverArtUrl(
                 song.coverArt,
                 size: 300,
               ),
@@ -435,7 +435,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 'id': album.id,
                 'name': album.name,
                 'artist': album.artist ?? '',
-                'artworkUrl': _subsonicService.getCoverArtUrl(
+                'artworkUrl': _youtubeService.getCoverArtUrl(
                   album.coverArt,
                   size: 300,
                 ),
@@ -445,14 +445,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     try {
-      final albums = await _subsonicService.getArtistAlbums(artistId);
+      final albums = await _youtubeService.getArtistAlbums(artistId);
       return albums
           .map(
             (album) => {
               'id': album.id,
               'name': album.name,
               'artist': album.artist ?? '',
-              'artworkUrl': _subsonicService.getCoverArtUrl(
+              'artworkUrl': _youtubeService.getCoverArtUrl(
                 album.coverArt,
                 size: 300,
               ),
@@ -490,7 +490,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                           null
                       ? Uri.file(_offlineService.getLocalCoverArtPath(song.id)!)
                           .toString()
-                      : _subsonicService.getCoverArtUrl(song.coverArt,
+                      : _youtubeService.getCoverArtUrl(song.coverArt,
                           size: 300),
                   'duration': (song.duration ?? 0).toString(),
                 },
@@ -500,7 +500,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
     try {
-      final playlist = await _subsonicService.getPlaylist(playlistId);
+      final playlist = await _youtubeService.getPlaylist(playlistId);
       final songs = playlist.songs ?? [];
       return songs
           .map(
@@ -509,7 +509,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               'title': song.title,
               'artist': song.artist ?? '',
               'album': song.album ?? '',
-              'artworkUrl': _subsonicService.getCoverArtUrl(
+              'artworkUrl': _youtubeService.getCoverArtUrl(
                 song.coverArt,
                 size: 300,
               ),
@@ -556,7 +556,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                       null
                   ? Uri.file(_offlineService.getLocalCoverArtPath(song.id)!)
                       .toString()
-                  : _subsonicService.getCoverArtUrl(song.coverArt, size: 300),
+                  : _youtubeService.getCoverArtUrl(song.coverArt, size: 300),
               'duration': (song.duration ?? 0).toString(),
             },
           )
@@ -565,7 +565,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // For YT Stream, also do a fast local-DB search on already-cached songs
     // before hitting the network, to make Auto browsing feel snappier.
-    if (_subsonicService.isYoutube && _libraryProvider != null) {
+    if (_youtubeService.isYoutube && _libraryProvider != null) {
       final lowerQuery = query.toLowerCase();
       final localHits = _libraryProvider!.cachedAllSongs
           .where(
@@ -594,8 +594,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       debugPrint(
-          'PlayerProvider: Calling subsonicService.search with query="$query"');
-      final results = await _subsonicService.search(
+          'PlayerProvider: Calling youtubeService.search with query="$query"');
+      final results = await _youtubeService.search(
         query,
         songCount: 20,
         albumCount: 0,
@@ -610,9 +610,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               'title': song.title,
               'artist': song.artist ?? '',
               'album': song.album ?? '',
-              'artworkUrl': _subsonicService.isYoutube
+              'artworkUrl': _youtubeService.isYoutube
                   ? (song.coverArt ?? '')
-                  : _subsonicService.getCoverArtUrl(song.coverArt, size: 300),
+                  : _youtubeService.getCoverArtUrl(song.coverArt, size: 300),
               'duration': (song.duration ?? 0).toString(),
             },
           )
@@ -633,7 +633,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           return;
         }
         // In YT Stream mode play from cached songs when no query is given.
-        if (_subsonicService.isYoutube &&
+        if (_youtubeService.isYoutube &&
             _libraryProvider != null &&
             _libraryProvider!.cachedAllSongs.isNotEmpty) {
           final songs = _libraryProvider!.cachedAllSongs;
@@ -648,7 +648,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
-      final results = await _subsonicService.search(
+      final results = await _youtubeService.search(
         query,
         songCount: 20,
         albumCount: 0,
@@ -678,44 +678,39 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    // 2. Check the in-memory library (randomSongs for Subsonic/Jellyfin;
-    //    cachedAllSongs for YT Stream which keeps track in its local DB).
+    // 2. Check the in-memory library
     if (_libraryProvider != null) {
-      final allSongs = _subsonicService.isYoutube
+      final allSongs = _youtubeService.isYoutube
           ? _libraryProvider!.cachedAllSongs
           : _libraryProvider!.randomSongs;
       final songIndex = allSongs.indexWhere((song) => song.id == mediaId);
       if (songIndex != -1) {
-        await playSong(
-          allSongs[songIndex],
-          playlist: allSongs,
-          startIndex: songIndex,
-        );
+        await playSongs(allSongs, initialIndex: songIndex);
         return;
       }
     }
 
     // 3. In YT Stream mode the mediaId IS the YouTube video ID – play it
     //    directly without a round-trip search.
-    if (_subsonicService.isYoutube) {
+    if (_youtubeService.isYoutube) {
       try {
         // Build a minimal Song object so playSong can resolve the stream.
         final tempSong = Song(
           id: mediaId,
-          title: mediaId, // title will be updated once stream metadata loads
-          duration: 0,
+          title: mediaId,
+          artist: 'YouTube',
         );
         await playSong(tempSong);
         return;
       } catch (e) {
-        debugPrint('Android Auto: YT Stream playFromMediaId error: $e');
+        debugPrint('Direct YouTube ID play error: $e');
       }
       return;
     }
 
-    // 4. Fallback: search by ID for Subsonic / Jellyfin.
+    // 4. Fallback: search by ID.
     try {
-      final searchResults = await _subsonicService.search(
+      final searchResults = await _youtubeService.search(
         mediaId,
         songCount: 5,
       );
@@ -749,7 +744,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (cover.startsWith('http://') || cover.startsWith('https://')) {
       return cover;
     }
-    return _subsonicService.getCoverArtUrl(cover, size: 800);
+    return _youtubeService.getCoverArtUrl(cover, size: 800);
   }
 
   Future<void> _refreshArtworkUrl() async {
@@ -776,7 +771,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final coverArtId = song.coverArt!;
     final directUrl = (coverArtId.startsWith('http://') || coverArtId.startsWith('https://'))
         ? coverArtId
-        : _subsonicService.getCoverArtUrl(coverArtId, size: 800);
+        : _youtubeService.getCoverArtUrl(coverArtId, size: 800);
 
     _resolvedArtworkUrl = directUrl;
     if (_currentSong?.id == song.id) _updateAndroidAuto();
@@ -973,7 +968,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 1. Preload stream URL / YouTube Direct Stream Info
     if (nextSong.isLocal != true) {
       final cleanId = nextSong.id.replaceFirst('ytmusic://', '');
-      if (_subsonicService.isYoutube ||
+      if (_youtubeService.isYoutube ||
           nextSong.id.startsWith('ytmusic://') ||
           nextSong.id.length == 11) {
         unawaited(
@@ -984,8 +979,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         );
       } else {
         unawaited(
-          _subsonicService.resolveStreamUrlAsync(nextSong).catchError((e) {
-            debugPrint('[Player Preload] Subsonic pre-resolve error (harmless): $e');
+          _youtubeService.resolveStreamUrlAsync(nextSong).catchError((e) {
+            debugPrint('[Player Preload] Pre-resolve error (harmless): $e');
             return '';
           }),
         );
@@ -1006,7 +1001,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 3. Preload cover artwork into Flutter image cache
     if (nextSong.coverArt != null) {
       final coverUrl =
-          _subsonicService.getCoverArtUrl(nextSong.coverArt, size: 300);
+          _youtubeService.getCoverArtUrl(nextSong.coverArt, size: 300);
       if (coverUrl.isNotEmpty) {
         try {
           CachedNetworkImageProvider(coverUrl).resolve(ImageConfiguration.empty);
@@ -1015,7 +1010,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     // 4. Preload next YouTube radio tracks if near queue end
-    if (_subsonicService.isYoutube &&
+    if (_youtubeService.isYoutube &&
         _currentIndex >= _queue.length - 2 &&
         _currentSong != null) {
       _fetchAndQueueRadioTracks(_currentSong!).catchError((_) {});
@@ -1184,7 +1179,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Resume any playlists that were queued for download but interrupted
     _offlineService.initialize().then((_) {
-      _offlineService.resumeIncompleteDownloads(_subsonicService);
+      _offlineService.resumeIncompleteDownloads(_youtubeService);
     });
 
 
@@ -1343,7 +1338,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _onSongComplete() async {
     if (_currentSong != null && _currentSong!.isLocal != true) {
-      _subsonicService.scrobble(_currentSong!.id, submission: true).catchError((
+      _youtubeService.scrobble(_currentSong!.id, submission: true).catchError((
         e,
       ) {
         _offlineService.queueScrobble(_currentSong!.id, submission: true);
@@ -1378,12 +1373,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else if (_currentIndex < _queue.length - 1 ||
         _repeatMode == RepeatMode.all ||
         _shuffleEnabled) {
-      if (_subsonicService.isYoutube && _currentIndex >= _queue.length - 2 && _currentSong != null) {
+      if (_youtubeService.isYoutube && _currentIndex >= _queue.length - 2 && _currentSong != null) {
         _fetchAndQueueRadioTracks(_currentSong!).catchError((_) {});
       }
       await skipNext();
-    } else if (_subsonicService.isYoutube && _currentSong != null) {
-      final moreSimilar = await _subsonicService.getSimilarSongs(_currentSong!.id, count: 20);
+    } else if (_youtubeService.isYoutube && _currentSong != null) {
+      final moreSimilar = await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
       final existingIds = _queue.map((s) => s.id).toSet();
       final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
       if (toAdd.isNotEmpty) {
@@ -1421,7 +1416,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> _fetchAndQueueRadioTracks(Song song) async {
     if (_currentSong?.id != song.id) return;
     try {
-      final similar = await _subsonicService.getSimilarSongs(song.id, count: 25);
+      final similar = await _youtubeService.getSimilarSongs(song.id, count: 25);
       if (similar.isNotEmpty && _currentSong?.id == song.id) {
         final existingIds = _queue.map((s) => s.id).toSet();
         final toAdd = similar.where((s) => !existingIds.contains(s.id)).toList();
@@ -1458,7 +1453,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               .indexWhere((s) => s.id == song.id)
               .clamp(0, targetPlaylist.length - 1);
       await _jukeboxService.setQueue(
-        _subsonicService,
+        _youtubeService,
         targetPlaylist,
         startIndex: targetIndex,
       );
@@ -1505,10 +1500,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         final playUrl = song.isLocal == true
             ? Uri.file(song.path!).toString()
-            : await _subsonicService.resolveStreamUrlAsync(song);
+            : await _youtubeService.resolveStreamUrlAsync(song);
         final coverUrl = song.isLocal == true && song.coverArt != null
             ? song.coverArt!
-            : _subsonicService.getCoverArtUrl(song.coverArt ?? song.id);
+            : _youtubeService.getCoverArtUrl(song.coverArt ?? song.id);
 
         await _castService.loadMedia(
           url: playUrl,
@@ -1534,7 +1529,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         final playUrl = song.isLocal == true && song.path != null
             ? Uri.file(song.path!).toString()
-            : await _subsonicService.resolveStreamUrlAsync(song);
+            : await _youtubeService.resolveStreamUrlAsync(song);
 
         try {
           // Resolve the MIME type so strict UPnP renderers (e.g. moode /
@@ -1547,7 +1542,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             artist: song.artist ?? 'Unknown Artist',
             album: song.album,
             albumArtUrl: song.coverArt != null
-                ? _subsonicService.getCoverArtUrl(song.coverArt, size: 0)
+                ? _youtubeService.getCoverArtUrl(song.coverArt, size: 0)
                 : null,
             durationSecs: song.duration,
             contentType: mimeType,
@@ -1571,7 +1566,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // For YouTube, pre-fetch the manifest then hand a StreamAudioSource
         // to just_audio so ExoPlayer never touches the YouTube URL directly.
         final youtubeSource = song.isLocal != true
-            ? await _subsonicService.getYoutubeAudioSource(song)
+            ? await _youtubeService.getYoutubeAudioSource(song)
             : null;
 
         if (youtubeSource != null) {
@@ -1581,7 +1576,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
-        } else if (_subsonicService.isYoutube) {
+        } else if (_youtubeService.isYoutube) {
           // All songs are YouTube — can't build ConcatenatingAudioSource easily
           _concatenatingSource = null;
           final String playUrl;
@@ -1592,7 +1587,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             if (offlinePath != null) {
               playUrl = 'file://$offlinePath';
             } else {
-              playUrl = await _subsonicService.resolveStreamUrlAsync(song);
+              playUrl = await _youtubeService.resolveStreamUrlAsync(song);
             }
           }
           await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
@@ -1642,7 +1637,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               final format = _transcodingService.enabled
                   ? _transcodingService.format
                   : null;
-              playUrl = _subsonicService.getStreamUrl(song.id,
+              playUrl = _youtubeService.getStreamUrl(song.id,
                   maxBitRate: maxBitRate, format: format);
             }
           }
@@ -1677,12 +1672,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (_offlineService.isOfflineMode) {
           _offlineService.queueScrobble(song.id, submission: false);
         } else {
-          _subsonicService.scrobble(song.id, submission: false).catchError((e) {
+          _youtubeService.scrobble(song.id, submission: false).catchError((e) {
             _offlineService.queueScrobble(song.id, submission: false);
           });
 
           _offlineService
-              .flushPendingScrobbles(_subsonicService)
+              .flushPendingScrobbles(_youtubeService)
               .catchError((e) {
             debugPrint('Scrobble flush failed: $e');
           });
@@ -1790,7 +1785,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> play() async {
     if (_jukeboxService.enabled) {
-      await _jukeboxService.play(_subsonicService);
+      await _jukeboxService.play(_youtubeService);
       _isPlaying = true;
       notifyListeners();
       _updateAndroidAuto();
@@ -1823,7 +1818,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> pause() async {
     if (_jukeboxService.enabled) {
-      await _jukeboxService.pause(_subsonicService);
+      await _jukeboxService.pause(_youtubeService);
       _isPlaying = false;
       notifyListeners();
       _updateAndroidAuto();
@@ -1992,7 +1987,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (_jukeboxService.enabled) {
-      await _jukeboxService.skipNext(_subsonicService);
+      await _jukeboxService.skipNext(_youtubeService);
       return;
     }
 
@@ -2009,12 +2004,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } while (next == _currentIndex);
       await skipToIndex(next);
     } else if (_currentIndex < _queue.length - 1) {
-      if (_subsonicService.isYoutube && _currentIndex >= _queue.length - 2 && _currentSong != null) {
+      if (_youtubeService.isYoutube && _currentIndex >= _queue.length - 2 && _currentSong != null) {
         _fetchAndQueueRadioTracks(_currentSong!).catchError((_) {});
       }
       await skipToIndex(_currentIndex + 1);
-    } else if (_subsonicService.isYoutube && _currentSong != null) {
-      final moreSimilar = await _subsonicService.getSimilarSongs(_currentSong!.id, count: 20);
+    } else if (_youtubeService.isYoutube && _currentSong != null) {
+      final moreSimilar = await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
       final existingIds = _queue.map((s) => s.id).toSet();
       final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
       if (toAdd.isNotEmpty) {
@@ -2056,7 +2051,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipPrevious() async {
     if (_jukeboxService.enabled) {
-      await _jukeboxService.skipPrevious(_subsonicService);
+      await _jukeboxService.skipPrevious(_youtubeService);
       return;
     }
     if (_position.inSeconds > 3) {
@@ -2307,7 +2302,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (offlinePath != null) {
       return AudioSource.uri(Uri.file(offlinePath));
     }
-    final ytSource = await _subsonicService.getYoutubeAudioSource(song);
+    final ytSource = await _youtubeService.getYoutubeAudioSource(song);
     if (ytSource != null) return ytSource;
 
     // Apply transcoding settings if enabled
@@ -2315,7 +2310,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _transcodingService.enabled ? _transcodingService.currentBitRate : null;
     final format =
         _transcodingService.enabled ? _transcodingService.format : null;
-    final url = _subsonicService.getStreamUrl(song.id,
+    final url = _youtubeService.getStreamUrl(song.id,
         maxBitRate: maxBitRate, format: format);
 
     // Cache all remote songs on local disk for instant seek and bufferless playback
@@ -2349,7 +2344,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_jukeboxService.enabled) return;
     try {
       final ytSource = _currentSong!.isLocal != true
-          ? await _subsonicService.getYoutubeAudioSource(_currentSong!)
+          ? await _youtubeService.getYoutubeAudioSource(_currentSong!)
           : null;
       if (ytSource != null) {
         _concatenatingSource = null;
@@ -2371,7 +2366,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             playUrl = 'file://$offlinePath';
           } else {
             playUrl =
-                await _subsonicService.resolveStreamUrlAsync(_currentSong!);
+                await _youtubeService.resolveStreamUrlAsync(_currentSong!);
           }
         }
         if (_currentSong!.isLocal == true ||
@@ -2418,7 +2413,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Track completion of the previous song
     if (_currentSong != null) {
       if (_currentSong!.isLocal != true) {
-        _subsonicService
+        _youtubeService
             .scrobble(_currentSong!.id, submission: true)
             .catchError(
           (e) {
@@ -2489,9 +2484,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     try {
       if (isStarred) {
-        await _subsonicService.unstar(id: newSong.id);
+        await _youtubeService.unstar(id: newSong.id);
       } else {
-        await _subsonicService.star(id: newSong.id);
+        await _youtubeService.star(id: newSong.id);
       }
       _libraryProvider?.loadStarred();
     } catch (e) {
@@ -2505,9 +2500,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final isStarred = song.starred == true;
     try {
       if (isStarred) {
-        await _subsonicService.unstar(id: song.id);
+        await _youtubeService.unstar(id: song.id);
       } else {
-        await _subsonicService.star(id: song.id);
+        await _youtubeService.star(id: song.id);
       }
       _libraryProvider?.loadStarred();
 
@@ -2528,7 +2523,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
 
     try {
-      await _subsonicService.setRating(songId, rating);
+      await _youtubeService.setRating(songId, rating);
     } catch (e) {
       _currentSong = _currentSong?.copyWith(userRating: previousRating);
       notifyListeners();
@@ -2743,7 +2738,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     final playUrl = lastSong.isLocal == true && lastSong.path != null
         ? Uri.file(lastSong.path!).toString()
-        : _offlineService.getPlayableUrl(lastSong, _subsonicService);
+        : _offlineService.getPlayableUrl(lastSong, _youtubeService);
 
     _isLoading = true;
     notifyListeners();

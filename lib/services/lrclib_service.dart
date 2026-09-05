@@ -444,7 +444,7 @@ class LrcLibService {
     return null;
   }
 
-  /// Converts an LRC string into the Subsonic structured-lyrics format.
+  /// Converts an LRC string into structured lyrics format.
   Map<String, dynamic> _buildStructuredLyrics(String lrcText) {
     final lines = <Map<String, dynamic>>[];
     for (final raw in LineSplitter.split(lrcText)) {

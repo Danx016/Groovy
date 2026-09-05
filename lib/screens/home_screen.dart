@@ -6,10 +6,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../models/models.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
-import '../providers/auth_provider.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../services/recommendation_service.dart';
-import '../services/offline_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
@@ -435,11 +433,11 @@ class _SongCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final subsonic = Provider.of<SubsonicService>(context, listen: false);
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = song.coverArt != null
         ? (isLocalFilePath(song.coverArt)
             ? song.coverArt
-            : subsonic.getCoverArtUrl(song.coverArt!, size: 400))
+            : youtubeService.getCoverArtUrl(song.coverArt!, size: 400))
         : null;
 
     return GestureDetector(
@@ -552,7 +550,7 @@ class _QuickAccessGrid extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -571,7 +569,7 @@ class _QuickAccessGrid extends StatelessWidget {
           ),
           itemCount: items.length,
           itemBuilder: (context, index) =>
-              _buildTile(context, items[index], subsonicService),
+              _buildTile(context, items[index], youtubeService),
         ),
       );
     }
@@ -596,7 +594,7 @@ class _QuickAccessGrid extends StatelessWidget {
             ),
             itemCount: items.length,
             itemBuilder: (context, index) =>
-                _buildTile(context, items[index], subsonicService),
+                _buildTile(context, items[index], youtubeService),
           );
         },
       ),
@@ -606,14 +604,14 @@ class _QuickAccessGrid extends StatelessWidget {
   Widget _buildTile(
     BuildContext context,
     dynamic item,
-    SubsonicService subsonicService,
+    YoutubeService youtubeService,
   ) {
     if (item is Song) {
       final title = item.title;
       final imageUrl = item.coverArt != null
           ? (isLocalFilePath(item.coverArt)
               ? item.coverArt
-              : subsonicService.getCoverArtUrl(item.coverArt!, size: 100))
+              : youtubeService.getCoverArtUrl(item.coverArt!, size: 100))
           : null;
       return _QuickAccessTile(
         title: title,
@@ -635,7 +633,7 @@ class _QuickAccessGrid extends StatelessWidget {
       imageUrl = item.coverArt != null
           ? (isLocalFilePath(item.coverArt)
               ? item.coverArt
-              : subsonicService.getCoverArtUrl(item.coverArt!, size: 100))
+              : youtubeService.getCoverArtUrl(item.coverArt!, size: 100))
           : null;
       onTap = () => Navigator.push(
             context,
@@ -649,7 +647,7 @@ class _QuickAccessGrid extends StatelessWidget {
       imageUrl = item.coverArt != null
           ? (isLocalFilePath(item.coverArt)
               ? item.coverArt
-              : subsonicService.getCoverArtUrl(item.coverArt!, size: 100))
+              : youtubeService.getCoverArtUrl(item.coverArt!, size: 100))
           : null;
       onTap = () => Navigator.push(
             context,
@@ -787,13 +785,13 @@ class _PlaylistCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final coverArtUrl = playlist.coverArt != null
-        ? subsonicService.getCoverArtUrl(playlist.coverArt!, size: 300)
+        ? youtubeService.getCoverArtUrl(playlist.coverArt!, size: 300)
         : null;
 
     return GestureDetector(
@@ -992,7 +990,7 @@ class _DesktopSongRowState extends State<_DesktopSongRow> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final song = widget.song;
-    final subsonicService = Provider.of<SubsonicService>(
+    final youtubeService = Provider.of<YoutubeService>(
       context,
       listen: false,
     );
@@ -1060,7 +1058,7 @@ class _DesktopSongRowState extends State<_DesktopSongRow> {
                   height: 40,
                   child: song.coverArt != null
                       ? CachedNetworkImage(
-                          imageUrl: subsonicService.getCoverArtUrl(
+                          imageUrl: youtubeService.getCoverArtUrl(
                             song.coverArt!,
                             size: 80,
                           ),

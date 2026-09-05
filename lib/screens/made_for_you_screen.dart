@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../services/subsonic_service.dart';
+import '../services/youtube_service.dart';
 import '../models/song.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
@@ -25,11 +25,11 @@ class _MadeForYouScreenState extends State<MadeForYouScreen> {
 
   Future<void> _loadSongs() async {
     try {
-      final subsonicService = Provider.of<SubsonicService>(
+      final youtubeService = Provider.of<YoutubeService>(
         context,
         listen: false,
       );
-      final songs = await subsonicService.getRandomSongs(size: 50);
+      final songs = await youtubeService.getRandomSongs(size: 50);
       if (mounted) {
         setState(() {
           _songs = songs;
