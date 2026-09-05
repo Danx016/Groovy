@@ -339,22 +339,22 @@ class _SongCreditsScreenState extends State<SongCreditsScreen> {
                   ],
 
                   // 7. COMPOSICIÓN Y LETRA Section
-                  if (_credits?.writers.isNotEmpty == true) ...[
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 4, bottom: 8),
-                        child: Text(
-                          'COMPOSICIÓN Y LETRA',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 0.6,
-                            color: subtitleColor,
-                          ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 4, bottom: 8),
+                      child: Text(
+                        'COMPOSICIÓN Y LETRA',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                          color: subtitleColor,
                         ),
                       ),
                     ),
+                  ),
+                  if (_credits?.writers.isNotEmpty == true)
                     Container(
                       decoration: BoxDecoration(
                         color: cardBg,
@@ -429,9 +429,25 @@ class _SongCreditsScreenState extends State<SongCreditsScreen> {
                           );
                         },
                       ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Text(
+                        'Información de composición no disponible',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: subtitleColor,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                     ),
-                    const SizedBox(height: 24),
-                  ],
+                  const SizedBox(height: 24),
 
                   // 8. PRODUCCIÓN Y ARREGLOS Section
                   if (_credits?.production.isNotEmpty == true) ...[
