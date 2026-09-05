@@ -108,29 +108,15 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   // Remote (UPnP/Cast) volume state mirrored into the media session.
   bool _remotePlayback = false;
-  bool _remoteIsPlaying = false;
-  Duration _remotePosition = Duration.zero;
   int _remoteVolume = 50;
   static const _remoteMaxVolume = 100;
   static const _remoteVolumeStep = 5;
 
-  StreamSubscription? _playbackEventSub;
-  StreamSubscription? _playerStateSub;
-  StreamSubscription? _positionDiscontinuitySub;
-
   MuslyAudioHandler() {
-    // Forward just_audio playback events and state changes → audio_service playback state.
+    // Forward just_audio playback events → audio_service playback state.
     // This drives the iOS Control Center / lock screen widget and the
-    // Android media notification automatically and keeps them 100% in sync.
-    _playbackEventSub = _player.playbackEventStream.listen((event) {
-      broadcastPlaybackState(event: event);
-    });
-    _playerStateSub = _player.playerStateStream.listen((state) {
-      broadcastPlaybackState();
-    });
-    _positionDiscontinuitySub = _player.positionDiscontinuityStream.listen((_) {
-      broadcastPlaybackState();
-    });
+    // Android media notification automatically.
+    _player.playbackEventStream.map(_buildPlaybackState).pipe(playbackState);
   }
 
   // ---------------------------------------------------------------------------
@@ -138,29 +124,14 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
   // ---------------------------------------------------------------------------
 
   @override
-  Future<void> play() async {
-    if (onPlay != null) {
-      await onPlay!.call();
-    } else {
-      await _player.play();
-    }
-    broadcastPlaybackState(playing: true);
-  }
+  Future<void> play() => onPlay?.call() ?? _player.play();
 
   @override
-  Future<void> pause() async {
-    if (onPause != null) {
-      await onPause!.call();
-    } else {
-      await _player.pause();
-    }
-    broadcastPlaybackState(playing: false);
-  }
+  Future<void> pause() => onPause?.call() ?? _player.pause();
 
   @override
   Future<void> stop() async {
     await (onStop?.call() ?? _player.stop());
-    broadcastPlaybackState(playing: false, position: Duration.zero);
     await super.stop();
   }
 
@@ -171,26 +142,14 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 
   @override
-  Future<void> skipToNext() async {
-    await (onSkipNext?.call() ?? Future.value());
-    broadcastPlaybackState();
-  }
+  Future<void> skipToNext() => onSkipNext?.call() ?? Future.value();
 
   @override
-  Future<void> skipToPrevious() async {
-    await (onSkipPrevious?.call() ?? Future.value());
-    broadcastPlaybackState();
-  }
+  Future<void> skipToPrevious() => onSkipPrevious?.call() ?? Future.value();
 
   @override
-  Future<void> seek(Duration position) async {
-    if (onSeekTo != null) {
-      await onSeekTo!.call(position);
-    } else {
-      await _player.seek(position);
-    }
-    broadcastPlaybackState(position: position);
-  }
+  Future<void> seek(Duration position) =>
+      onSeekTo?.call(position) ?? _player.seek(position);
 
   @override
   Future<void> click([MediaButton button = MediaButton.media]) async {
@@ -200,15 +159,8 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
       case MediaButton.previous:
         await skipToPrevious();
       case MediaButton.media:
-        if (onTogglePlayPause != null) {
-          await onTogglePlayPause!.call();
-        } else {
-          if (_player.playing) {
-            await pause();
-          } else {
-            await play();
-          }
-        }
+        await (onTogglePlayPause?.call() ??
+            (_player.playing ? _player.pause() : _player.play()));
     }
   }
 
@@ -441,11 +393,10 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
         ),
       );
     } else {
-      _remotePlayback = false;
       androidPlaybackInfo.add(LocalAndroidPlaybackInfo());
       // Replace the stale remote playback state immediately instead of
       // waiting for the local player to emit its next playback event.
-      broadcastPlaybackState();
+      playbackState.add(_buildPlaybackState(_player.playbackEvent));
     }
   }
 
@@ -501,7 +452,6 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
         artUri = Uri.tryParse(artworkUrl);
       }
     }
-    final effectiveDuration = (duration != null && duration.inMilliseconds > 0) ? duration : null;
     mediaItem.add(
       MediaItem(
         id: id,
@@ -509,21 +459,13 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
         artist: artist,
         album: album,
         artUri: artUri,
-        duration: effectiveDuration,
+        duration: duration,
       ),
     );
-    // Immediately broadcast state so Android and iOS lockscreen / notification widgets
-    // attach the new MediaItem and update UI immediately without waiting for player events!
-    broadcastPlaybackState();
   }
 
   void clearNowPlaying() {
     mediaItem.add(const MediaItem(id: '', title: ''));
-    broadcastPlaybackState(
-      playing: false,
-      position: Duration.zero,
-      processingState: AudioProcessingState.idle,
-    );
   }
 
   /// Pushes an explicit playback state while rendering on a remote target
@@ -533,52 +475,11 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
     required bool playing,
     required Duration position,
   }) {
-    _remoteIsPlaying = playing;
-    _remotePosition = position;
-    broadcastPlaybackState(
-      playing: playing,
-      position: position,
-      processingState: AudioProcessingState.ready,
-    );
-  }
-
-  // ---------------------------------------------------------------------------
-  // Internal: map just_audio state → audio_service PlaybackState
-  // ---------------------------------------------------------------------------
-
-  static const Map<ProcessingState, AudioProcessingState> _processingStateMap = {
-    ProcessingState.idle: AudioProcessingState.idle,
-    ProcessingState.loading: AudioProcessingState.loading,
-    ProcessingState.buffering: AudioProcessingState.buffering,
-    ProcessingState.ready: AudioProcessingState.ready,
-    ProcessingState.completed: AudioProcessingState.completed,
-  };
-
-  /// Broadcasts the current audio state to audio_service (Android notification & iOS Control Center).
-  /// Allows explicit overrides from PlayerProvider for instant, flicker-free updates.
-  void broadcastPlaybackState({
-    PlaybackEvent? event,
-    bool? playing,
-    Duration? position,
-    AudioProcessingState? processingState,
-  }) {
-    final evt = event ?? _player.playbackEvent;
-    final bool isPlaying = playing ?? (_remotePlayback ? _remoteIsPlaying : _player.playing);
-    final Duration currentPos = position ?? (_remotePlayback ? _remotePosition : _player.position);
-    final Duration bufferedPos = _remotePlayback ? _remotePosition : _player.bufferedPosition;
-
-    final state = processingState ??
-        (_remotePlayback
-            ? AudioProcessingState.ready
-            : (_processingStateMap[_player.processingState] ?? AudioProcessingState.idle));
-
-    final effectiveSpeed = isPlaying ? (_player.speed > 0 ? _player.speed : 1.0) : 0.0;
-
     playbackState.add(
-      PlaybackState(
+      playbackState.value.copyWith(
         controls: [
           MediaControl.skipToPrevious,
-          if (isPlaying) MediaControl.pause else MediaControl.play,
+          if (playing) MediaControl.pause else MediaControl.play,
           MediaControl.skipToNext,
         ],
         systemActions: const {
@@ -589,14 +490,48 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
           MediaAction.playFromSearch,
         },
         androidCompactActionIndices: const [0, 1, 2],
-        processingState: state,
-        playing: isPlaying,
-        updatePosition: currentPos,
-        bufferedPosition: bufferedPos,
-        speed: effectiveSpeed,
-        queueIndex: evt.currentIndex,
-        updateTime: DateTime.now(),
+        processingState: AudioProcessingState.ready,
+        playing: playing,
+        updatePosition: position,
       ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal: map just_audio state → audio_service PlaybackState
+  // ---------------------------------------------------------------------------
+
+  PlaybackState _buildPlaybackState(PlaybackEvent event) {
+    final processingStateMap = {
+      ProcessingState.idle: AudioProcessingState.idle,
+      ProcessingState.loading: AudioProcessingState.loading,
+      ProcessingState.buffering: AudioProcessingState.buffering,
+      ProcessingState.ready: AudioProcessingState.ready,
+      ProcessingState.completed: AudioProcessingState.completed,
+    };
+
+    return PlaybackState(
+      controls: [
+        MediaControl.skipToPrevious,
+        if (_player.playing) MediaControl.pause else MediaControl.play,
+        MediaControl.skipToNext,
+      ],
+      systemActions: const {
+        MediaAction.seek,
+        MediaAction.seekForward,
+        MediaAction.seekBackward,
+        MediaAction.playFromMediaId,
+        MediaAction.playFromSearch,
+      },
+      androidCompactActionIndices: const [0, 1, 2],
+      processingState:
+          processingStateMap[_player.processingState] ??
+          AudioProcessingState.idle,
+      playing: _player.playing,
+      updatePosition: _player.position,
+      bufferedPosition: _player.bufferedPosition,
+      speed: _player.speed,
+      queueIndex: event.currentIndex,
     );
   }
 
@@ -621,9 +556,6 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
     if (name == 'dispose') {
-      await _playbackEventSub?.cancel();
-      await _playerStateSub?.cancel();
-      await _positionDiscontinuitySub?.cancel();
       await _player.dispose();
     }
   }
@@ -652,7 +584,7 @@ Future<MuslyAudioHandler> initAudioService() async {
         // effect (audio_service asserts against combining the two).
         androidNotificationOngoing: false,
         androidStopForegroundOnPause: false,
-        androidNotificationIcon: 'drawable/ic_stat_music',
+        androidNotificationIcon: 'mipmap/ic_launcher',
         notificationColor: Color(0xFF1DB954),
         preloadArtwork: true,
         androidBrowsableRootExtras: {
