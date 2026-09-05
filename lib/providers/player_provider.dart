@@ -841,8 +841,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         playing: _isPlaying,
         position: _position,
       );
+    } else {
+      _audioHandler.broadcastPlaybackState(
+        playing: _isPlaying,
+        position: _position,
+      );
     }
-
 
     _updateAllServices();
   }
@@ -1293,8 +1297,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (lastSystemUpdate == null ||
             (position.inMilliseconds - lastSystemUpdate!.inMilliseconds).abs() > 1000) {
+          final diff = lastSystemUpdate == null
+              ? 0
+              : (position.inMilliseconds - lastSystemUpdate!.inMilliseconds).abs();
           lastSystemUpdate = position;
           _updateAllServices();
+          if (diff > 4000 && _isPlaying && !_isRenderingRemotely) {
+            _audioHandler.broadcastPlaybackState(
+              playing: true,
+              position: position,
+            );
+          }
         }
       },
       onError: (error) {
@@ -1515,6 +1528,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _position = Duration.zero;
       notifyListeners();
       _saveQueueState();
+
+      // Immediately publish song info to lockscreen / notification widget
+      _updateAndroidAuto();
 
       _refreshArtworkUrl().catchError((_) {});
 
@@ -2009,6 +2025,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       await _audioPlayer.seek(position);
     }
+    _updateAndroidAuto();
   }
 
   Future<void> seekToProgress(double progress) async {
@@ -2489,6 +2506,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _resolvedArtworkUrl = null;
     notifyListeners();
     _saveQueueState();
+
+    // Immediately publish song info to lockscreen / notification widget
+    _updateAndroidAuto();
 
     await _refreshArtworkUrl();
     if (_currentSong != null) {
