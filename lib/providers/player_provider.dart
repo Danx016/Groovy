@@ -685,7 +685,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           : _libraryProvider!.randomSongs;
       final songIndex = allSongs.indexWhere((song) => song.id == mediaId);
       if (songIndex != -1) {
-        await playSongs(allSongs, initialIndex: songIndex);
+        await playSong(
+          allSongs[songIndex],
+          playlist: allSongs,
+          startIndex: songIndex,
+        );
         return;
       }
     }
