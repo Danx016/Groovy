@@ -281,6 +281,10 @@ class LibraryProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      // Clean up any unrequested media from SQLite DB
+      await _db.cleanupUnsavedLibraryData();
+      await prefs.remove(_artistsCacheKey);
+
       // 1. Load playlists from DB (fallback to SharedPreferences)
       try {
         final dbPlaylists = await _db.getAllPlaylists();
@@ -301,20 +305,9 @@ class LibraryProvider extends ChangeNotifier {
         debugPrint('Error loading playlists from DB: $e');
       }
 
-      // 2. Load artists from DB (fallback to SharedPreferences)
+      // 2. Load artists from DB
       try {
-        final dbArtists = await _db.getAllArtists();
-        if (dbArtists.isNotEmpty) {
-          _artists = dbArtists;
-        } else {
-          final artistsJson = prefs.getString(_artistsCacheKey);
-          if (artistsJson != null) {
-            final List<dynamic> artistsList = json.decode(artistsJson);
-            _artists = artistsList
-                .map((a) => Artist.fromJson(a as Map<String, dynamic>))
-                .toList();
-          }
-        }
+        _artists = await _db.getAllArtists();
       } catch (e) {
         debugPrint('Error loading artists from DB: $e');
       }
@@ -404,71 +397,37 @@ class LibraryProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      debugPrint('[LibraryProvider] Starting full background cache refresh...');
-      final sw = Stopwatch()..start();
+      debugPrint('[LibraryProvider] Refreshing library and syncing user data...');
 
-      // Download all albums paginated into the local SQLite DB.
-      const pageSize = 500;
-      int offset = 0;
-      final List<Album> allAlbums = [];
-      final seenSongIds = <String>{};
+      // Clean up any unrequested media
+      await _db.cleanupUnsavedLibraryData();
 
-      // Clear DB before refresh so we don't accumulate stale data.
-      await _db.clearServerData();
-
-      while (true) {
-        final page = await _youtubeService.getAlbumList(
-          type: 'alphabeticalByName',
-          size: pageSize,
-          offset: offset,
-        );
-        if (page.isEmpty) break;
-        allAlbums.addAll(page);
-        await _db.insertAlbumsBatch(page);
-        if (page.length < pageSize) break;
-        offset += pageSize;
-      }
-
-      var failedAlbumLoads = 0;
-      if (seenSongIds.isEmpty) {
-        // Fallback: iterate albums from DB
-        // instead of holding the entire album list in RAM.
-        final albumCount = await _db.getAlbumCount();
-        const albumBatchSize = 50;
-        for (int aOffset = 0;
-            aOffset < albumCount;
-            aOffset += albumBatchSize) {
-          final albums =
-              await _db.getAlbumsPaginated(limit: albumBatchSize, offset: aOffset);
-          for (final album in albums) {
-            try {
-              final albumSongs =
-                  await _youtubeService.getAlbumSongs(album.id);
-              final newSongs = albumSongs.where((s) => seenSongIds.add(s.id)).toList();
-              if (newSongs.isNotEmpty) {
-                await _db.insertSongsBatch(newSongs);
-              }
-            } catch (e) {
-              failedAlbumLoads++;
-              debugPrint('Error loading album ${album.id}: $e');
-            }
+      // Sync with Groovy Cloud MySQL backend if authenticated
+      try {
+        final token = await StorageService().getUserToken();
+        if (token != null && token.isNotEmpty) {
+          final cloudFavs = await GroovyApiService().getFavorites(token);
+          for (final s in cloudFavs) {
+            final songToAdd = s.copyWith(starred: true, created: s.created ?? DateTime.now());
+            await _db.insertOrUpdateSong(songToAdd);
           }
         }
+      } catch (e) {
+        debugPrint('[LibraryProvider] Cloud sync note: $e');
       }
 
-      _cachedAllAlbums = allAlbums;
       _cachedAllSongs = await _db.getAllSongs();
+      _cachedAllAlbums = await _db.getAllAlbums();
+      _artists = await _db.getAllArtists();
       _lastCacheUpdate = DateTime.now();
 
       await _saveCachedData();
       notifyListeners();
-      debugPrint(
-        'Background refresh complete: ${allAlbums.length} albums, '
-        '${_cachedAllSongs.length} songs '
-        '(${failedAlbumLoads > 0 ? "$failedAlbumLoads album(s) failed, " : ""}kept what succeeded).',
-      );
     } catch (e) {
       debugPrint('Error refreshing all data: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
@@ -654,18 +613,9 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<void> loadArtists() async {
     try {
-      List<Artist> serverArtists = [];
-      if (!_serverOfflineMode) {
-        try {
-          serverArtists = await _youtubeService.getArtists();
-        } catch (_) {}
-      }
       final localArtists = await _db.getAllArtists();
 
       final map = <String, Artist>{};
-      for (final a in serverArtists) {
-        map[a.id] = a;
-      }
       for (final a in localArtists) {
         map[a.id] = a;
       }
@@ -691,6 +641,33 @@ class LibraryProvider extends ChangeNotifier {
       _saveCachedData();
     } catch (e) {
       debugPrint('Error loading artists: $e');
+    }
+  }
+
+  Future<void> updateArtistCoverArt(String artistId, String coverArt, {String? artistName}) async {
+    try {
+      bool updated = false;
+      for (int i = 0; i < _artists.length; i++) {
+        final a = _artists[i];
+        if (a.id == artistId || (artistName != null && a.name.toLowerCase() == artistName.toLowerCase())) {
+          _artists[i] = Artist(
+            id: a.id,
+            name: a.name,
+            coverArt: coverArt,
+            albumCount: a.albumCount,
+            artistImageUrl: coverArt,
+            isLocal: a.isLocal,
+          );
+          updated = true;
+          _db.insertOrUpdateArtist(_artists[i]).catchError((_) {});
+          break;
+        }
+      }
+      if (updated) {
+        notifyListeners();
+      }
+    } catch (e) {
+      debugPrint('[Library] updateArtistCoverArt error: $e');
     }
   }
 
@@ -909,16 +886,29 @@ class LibraryProvider extends ChangeNotifier {
   Future<void> createPlaylist(String name, {List<String>? songIds}) async {
     try {
       await _youtubeService.createPlaylist(name: name, songIds: songIds);
-    } catch (_) {}
-    final newId = 'pl_${DateTime.now().millisecondsSinceEpoch}';
-    final playlist = Playlist(
-      id: newId,
-      name: name,
-      songCount: songIds?.length ?? 0,
-      created: DateTime.now(),
-      changed: DateTime.now(),
-    );
-    await _db.insertOrUpdatePlaylist(playlist);
+    } catch (e) {
+      debugPrint('[Library] createPlaylist error, using fallback: $e');
+      final newId = 'pl_${DateTime.now().millisecondsSinceEpoch}';
+      final playlist = Playlist(
+        id: newId,
+        name: name,
+        songCount: songIds?.length ?? 0,
+        created: DateTime.now(),
+        changed: DateTime.now(),
+      );
+      await _db.insertOrUpdatePlaylist(playlist);
+    }
+
+    // Sync with Groovy Cloud MySQL backend if authenticated
+    try {
+      final token = await StorageService().getUserToken();
+      if (token != null && token.isNotEmpty) {
+        GroovyApiService().createPlaylist(token, name).catchError((_) => null);
+      }
+    } catch (e) {
+      debugPrint('[Library] Cloud playlist sync note: $e');
+    }
+
     await loadPlaylists();
   }
 
@@ -1095,10 +1085,51 @@ class LibraryProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool isSongStarred(String songId) {
+    if (songId.isEmpty) return false;
+    if (_starred != null && _starred!.songs.any((s) => s.id == songId)) {
+      return true;
+    }
+    final inCache = _cachedAllSongs.firstWhere(
+      (s) => s.id == songId,
+      orElse: () => Song(id: '', title: ''),
+    );
+    if (inCache.id.isNotEmpty && inCache.starred == true) {
+      return true;
+    }
+    return false;
+  }
+
   Future<bool> toggleStarSong(Song song) async {
-    final bool currentStarred = song.starred ?? false;
+    final bool currentStarred = isSongStarred(song.id) || (song.starred ?? false);
     final bool newStarred = !currentStarred;
     final updatedSong = song.copyWith(starred: newStarred);
+
+    // Update in cached songs
+    final idx = _cachedAllSongs.indexWhere((s) => s.id == song.id);
+    if (idx >= 0) {
+      _cachedAllSongs[idx] = updatedSong;
+    } else if (newStarred) {
+      _cachedAllSongs.insert(0, updatedSong);
+    }
+
+    // Update in _starred object if initialized
+    if (_starred != null) {
+      final currentSongs = List<Song>.from(_starred!.songs);
+      if (newStarred) {
+        if (!currentSongs.any((s) => s.id == song.id)) {
+          currentSongs.insert(0, updatedSong);
+        }
+      } else {
+        currentSongs.removeWhere((s) => s.id == song.id);
+      }
+      _starred = SearchResult(
+        artists: _starred!.artists,
+        albums: _starred!.albums,
+        songs: currentSongs,
+        youtubeVideos: _starred!.youtubeVideos,
+      );
+    }
 
     await addSongToLibrary(updatedSong);
     await _db.setSongStarred(song.id, newStarred);

@@ -1,8 +1,10 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../models/artist.dart';
 import '../providers/library_provider.dart';
+import '../services/services.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/album_artwork.dart';
@@ -109,16 +111,36 @@ class _ArtistsScreenState extends State<ArtistsScreen> {
                             width: 48,
                             height: 48,
                             color: isDark ? Colors.white12 : Colors.black12,
-                            child: (artist.coverArt != null)
+                            child: (artist.coverArt != null && artist.coverArt!.isNotEmpty)
                                 ? AlbumArtwork(
                                     coverArt: artist.coverArt,
                                     size: 48,
                                     borderRadius: 24,
                                   )
-                                : Icon(
-                                    CupertinoIcons.person_solid,
-                                    color: isDark ? Colors.white54 : Colors.black45,
-                                    size: 24,
+                                : FutureBuilder<String?>(
+                                    future: ArtistImageService().getArtistImageUrl(artist.name),
+                                    builder: (context, snapshot) {
+                                      if (snapshot.hasData &&
+                                          snapshot.data != null &&
+                                          snapshot.data!.isNotEmpty) {
+                                        return CachedNetworkImage(
+                                          imageUrl: snapshot.data!,
+                                          width: 48,
+                                          height: 48,
+                                          fit: BoxFit.cover,
+                                          errorWidget: (_, __, ___) => Icon(
+                                            CupertinoIcons.person_solid,
+                                            color: isDark ? Colors.white54 : Colors.black45,
+                                            size: 24,
+                                          ),
+                                        );
+                                      }
+                                      return Icon(
+                                        CupertinoIcons.person_solid,
+                                        color: isDark ? Colors.white54 : Colors.black45,
+                                        size: 24,
+                                      );
+                                    },
                                   ),
                           ),
                         ),

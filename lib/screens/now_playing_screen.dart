@@ -434,26 +434,54 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     );
                   }
                 },
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
+                child: Consumer<LibraryProvider>(
+                  builder: (context, lib, _) {
+                    final isFav = currentSong != null &&
+                        (lib.isSongStarred(currentSong.id) || (currentSong.starred ?? false));
+                    return Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.35),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image(
-                      image: _currentImageProvider ?? widget.image,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image(
+                              image: _currentImageProvider ?? widget.image,
+                              fit: BoxFit.cover,
+                            ),
+                            if (isFav)
+                              Positioned(
+                                bottom: 2,
+                                right: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.star_rounded,
+                                    color: Color(0xFFFFD60A),
+                                    size: 11,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 12),
@@ -504,14 +532,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               // Favorite Button
               Consumer<LibraryProvider>(
                 builder: (context, lib, _) {
-                  final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
+                  final isFav = currentSong != null
+                      ? (lib.isSongStarred(currentSong.id) || (currentSong.starred ?? false))
+                      : isStarred;
                   return _CircleActionButton(
                     margin: const EdgeInsets.only(right: 8),
                     onTap: () async {
                       if (currentSong != null) {
                         HapticFeedback.lightImpact();
-                        await lib.toggleStarSong(currentSong);
-                        provider.toggleFavoriteForSong(currentSong);
+                        final newFav = await lib.toggleStarSong(currentSong);
+                        provider.updateSongStarred(currentSong.id, newFav);
                       }
                     },
                     icon: Icon(
@@ -578,10 +608,26 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   ),
                   child: AspectRatio(
                     aspectRatio: 1.0,
-                    child: AlbumArtView(
-                      image: _currentImageProvider ?? widget.image,
-                      tag: currentSong?.id ?? widget.heroTag,
-                      isPlaying: isPlaying,
+                    child: Consumer<LibraryProvider>(
+                      builder: (context, lib, _) {
+                        final isFav = currentSong != null &&
+                            (lib.isSongStarred(currentSong.id) ||
+                                (currentSong.starred ?? false) ||
+                                isStarred);
+                        return AlbumArtView(
+                          image: _currentImageProvider ?? widget.image,
+                          tag: currentSong?.id ?? widget.heroTag,
+                          isPlaying: isPlaying,
+                          isFavorite: isFav,
+                          onFavoriteToggle: currentSong != null
+                              ? () async {
+                                  HapticFeedback.lightImpact();
+                                  final newFav = await lib.toggleStarSong(currentSong);
+                                  provider.updateSongStarred(currentSong.id, newFav);
+                                }
+                              : null,
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -640,13 +686,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   // Star Button
                   Consumer<LibraryProvider>(
                     builder: (context, lib, _) {
-                      final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
+                      final isFav = currentSong != null
+                          ? (lib.isSongStarred(currentSong.id) || (currentSong.starred ?? false))
+                          : isStarred;
                       return _CircleActionButton(
                         onTap: () async {
                           if (currentSong != null) {
                             HapticFeedback.lightImpact();
-                            await lib.toggleStarSong(currentSong);
-                            provider.toggleFavoriteForSong(currentSong);
+                            final newFav = await lib.toggleStarSong(currentSong);
+                            provider.updateSongStarred(currentSong.id, newFav);
                           }
                         },
                         icon: Icon(
@@ -859,10 +907,26 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   padding: const EdgeInsets.fromLTRB(32.0, 32.0, 16.0, 24.0),
                   child: AspectRatio(
                     aspectRatio: 1.0,
-                    child: AlbumArtView(
-                      image: _currentImageProvider ?? widget.image,
-                      tag: currentSong?.id ?? widget.heroTag,
-                      isPlaying: provider.isPlaying,
+                    child: Consumer<LibraryProvider>(
+                      builder: (context, lib, _) {
+                        final isFav = currentSong != null &&
+                            (lib.isSongStarred(currentSong.id) ||
+                                (currentSong.starred ?? false) ||
+                                isStarred);
+                        return AlbumArtView(
+                          image: _currentImageProvider ?? widget.image,
+                          tag: currentSong?.id ?? widget.heroTag,
+                          isPlaying: provider.isPlaying,
+                          isFavorite: isFav,
+                          onFavoriteToggle: currentSong != null
+                              ? () async {
+                                  HapticFeedback.lightImpact();
+                                  final newFav = await lib.toggleStarSong(currentSong);
+                                  provider.updateSongStarred(currentSong.id, newFav);
+                                }
+                              : null,
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -922,13 +986,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         const SizedBox(width: 10),
                         Consumer<LibraryProvider>(
                           builder: (context, lib, _) {
-                            final isFav = currentSong != null ? (currentSong.starred ?? false) : isStarred;
+                            final isFav = currentSong != null
+                                ? (lib.isSongStarred(currentSong.id) || (currentSong.starred ?? false))
+                                : isStarred;
                             return _CircleActionButton(
                               onTap: () async {
                                 if (currentSong != null) {
                                   HapticFeedback.lightImpact();
-                                  await lib.toggleStarSong(currentSong);
-                                  provider.toggleFavoriteForSong(currentSong);
+                                  final newFav = await lib.toggleStarSong(currentSong);
+                                  provider.updateSongStarred(currentSong.id, newFav);
                                 }
                               },
                               icon: Icon(

@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../models/song.dart';
 import '../models/radio_station.dart';
 import '../providers/player_provider.dart';
+import '../providers/library_provider.dart';
 import '../theme/app_theme.dart';
 import '../screens/artist_screen.dart';
 
@@ -222,10 +223,36 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
             flex: 3,
             child: Row(
               children: [
-                AlbumArtwork(
-                  coverArt: currentSong.coverArt,
-                  size: 56,
-                  borderRadius: 4,
+                Consumer<LibraryProvider>(
+                  builder: (context, lib, _) {
+                    final isFav = lib.isSongStarred(currentSong.id) || currentSong.starred == true;
+                    return Stack(
+                      children: [
+                        AlbumArtwork(
+                          coverArt: currentSong.coverArt,
+                          size: 56,
+                          borderRadius: 4,
+                        ),
+                        if (isFav)
+                          Positioned(
+                            bottom: 2,
+                            right: 2,
+                            child: Container(
+                              padding: const EdgeInsets.all(2.5),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.75),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.favorite_rounded,
+                                size: 10,
+                                color: AppTheme.appleMusicRed,
+                              ),
+                            ),
+                          ),
+                      ],
+                    );
+                  },
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -269,9 +296,9 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                     ],
                   ),
                 ),
-                Selector<PlayerProvider, bool>(
-                  selector: (_, p) => p.currentSong?.starred == true,
-                  builder: (context, isStarred, _) {
+                Consumer<LibraryProvider>(
+                  builder: (context, lib, _) {
+                    final isStarred = lib.isSongStarred(currentSong.id) || currentSong.starred == true;
                     return IconButton(
                       icon: Icon(
                         isStarred

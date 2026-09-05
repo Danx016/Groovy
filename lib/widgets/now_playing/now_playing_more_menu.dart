@@ -63,7 +63,8 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
       (s) => s.id == currentSong.id,
       orElse: () => currentSong,
     );
-    final isStarred = inLibSong.starred ?? (currentSong.starred ?? false);
+    final isStarred = libraryProvider.isSongStarred(currentSong.id) ||
+        (inLibSong.starred ?? (currentSong.starred ?? false));
 
     final isInLibrary = libraryProvider.cachedAllSongs.any((s) => s.id == currentSong.id);
 
@@ -254,6 +255,7 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 Navigator.of(context).pop();
                 final messenger = ScaffoldMessenger.of(context);
                 final newFav = await libraryProvider.toggleStarSong(currentSong);
+                playerProvider.updateSongStarred(currentSong.id, newFav);
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(newFav ? 'Agregada a Favoritos' : 'Eliminada de Favoritos'),

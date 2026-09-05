@@ -5,6 +5,17 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.44] - 2026-09-04
+
+### Added
+- **Artist HD Portraits** — Automatic resolution and caching of high-definition artist photos via Deezer and iTunes API fallback
+- **Artist Screen Modern Header & Actions** — Full-bleed header with gradient overlay, favorite star button toggle, and Apple Music style options menu (add to queue, download albums, play, shuffle)
+- **Song Cover Favorite Badge** — Visual favorite badge directly overlaid on album art across player and song tiles
+- **Accurate Song Credits & Composers** — Real songwriters and composers fetched via Deezer ISRC and MusicBrainz work-rels
+- **Duplicate Playlist Creation Fix** — Resolved race condition that created duplicate playlists
+- **Library Unwanted Items Cleanup** — Removed auto-scraped non-user songs/albums/artists from library
+- **Audio Silence on Resume Fix** — Fixed pause/play mute/silence bug in player provider
+
 ## [1.0.13] - 2026-05-10
 
 ### Added
