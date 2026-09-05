@@ -5,6 +5,14 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.53] - 2026-09-04
+
+### Fixed
+- **Restauración de Notificación de Medios y Corrección de Cierre de App (`ForegroundService`)**:
+  - Se corrigió el icono de notificación de Android (`androidNotificationIcon`), restaurándolo al icono nativo rasterizado `'mipmap/ic_launcher'`. En dispositivos Android (especialmente Xiaomi MIUI / HyperOS), el uso de drawables vectoriales XML como icono pequeño en un servicio en primer plano generaba una excepción interna `BadForegroundServiceNotificationException`, lo que provocaba que el sistema mostrara la notificación genérica *"Groovy se está ejecutando"* y terminara el proceso de la aplicación ("la app se cierra").
+  - Se restauró el enlace nativo de eventos de reproducción (`_player.playbackEventStream.map(_buildPlaybackState).pipe(playbackState)`) y se eliminaron las llamadas redundantes a `broadcastPlaybackState()`.
+  - La notificación de reproducción ahora muestra siempre la carátula, título de la canción, artista, barra de progreso y botones interactivos (anterior, reproducir/pausar, siguiente) de forma estable sin cierres inesperados.
+
 ## [1.0.52] - 2026-09-04
 
 ### Fixed
