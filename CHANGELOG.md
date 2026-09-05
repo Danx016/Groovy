@@ -5,6 +5,16 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.49] - 2026-09-04
+
+### Fixed
+- **Sincronización Total del Reproductor de Notificación y Pantalla de Bloqueo (Android MediaStyle / MediaSession)**:
+  - Se corrigió el error donde la notificación del sistema se quedaba congelada en 0:00 con el botón de Play (`▶`) mientras la canción ya estaba sonando.
+  - Se eliminó el uso restrictivo de `pipe` en `playbackState`, implementando un gestor de eventos reactivo (`broadcastPlaybackState`) suscrito activamente a `playbackEventStream`, `playerStateStream` y `positionDiscontinuityStream`.
+  - Sincronización instantánea de metadatos (`MediaItem` y duración real) al cambiar de pista en `PlayerProvider`, evitando retardos y canciones en blanco.
+  - Sincronización continua de posición (`updatePosition`, `speed: 1.0/0.0` y `updateTime: DateTime.now()`) con reanclaje periódico para evitar desfases o saltos de progreso en Android 13/14+.
+  - Icono de notificación nítido (`ic_stat_music.xml`) reemplazando el icono adaptativo con fondo opaco que generaba un recuadro negro sobre la carátula en la notificación.
+
 ## [1.0.48] - 2026-09-04
 
 ### Fixed
