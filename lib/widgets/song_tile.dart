@@ -165,30 +165,12 @@ class SongTile extends StatelessWidget {
 
   Widget _buildSubtitleWidget(ThemeData theme) {
     if (showArtist) {
-      if (showAlbum && song.album != null) {
-        return Row(
-          children: [
-            Flexible(
-              flex: 3,
-              fit: FlexFit.loose,
-              child: MultiArtistWidget(
-                artists: song.artistParticipants,
-                artistFallback: song.artist,
-                artistIdFallback: song.artistId,
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-            Flexible(
-              flex: 1,
-              fit: FlexFit.loose,
-              child: Text(
-                ' \u2022 ${song.album}',
-                style: theme.textTheme.bodySmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
+      if (showAlbum && song.album != null && song.album!.trim().isNotEmpty) {
+        return Text(
+          '${song.artist ?? ""}${song.album != null && song.album!.trim().isNotEmpty ? " • ${song.album}" : ""}',
+          style: theme.textTheme.bodySmall,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         );
       }
       return MultiArtistWidget(
@@ -237,15 +219,18 @@ class SongTile extends StatelessWidget {
                     padding: EdgeInsets.only(right: 6),
                     child: DolbyAtmosBadge(),
                   ),
-                if (showDuration)
+                if (showDuration) ...[
                   Text(
                     song.formattedDuration,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+                ],
                 IconButton(
                   icon: const Icon(Icons.more_horiz),
                   iconSize: 20,
+                  padding: const EdgeInsets.all(4),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   color: Theme.of(context).textTheme.bodySmall?.color,
                   onPressed: () => _showOptions(context),
                 ),
