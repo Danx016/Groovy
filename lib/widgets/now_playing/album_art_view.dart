@@ -41,6 +41,12 @@ class AlbumArtView extends StatelessWidget {
               image: image,
               fit: BoxFit.cover,
               gaplessPlayback: true,
+              errorBuilder: (context, error, stackTrace) => Container(
+                color: Colors.white.withValues(alpha: 0.12),
+                child: const Center(
+                  child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
+                ),
+              ),
             ),
           ),
         ),

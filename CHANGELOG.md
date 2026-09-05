@@ -5,6 +5,16 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.54] - 2026-09-05
+
+### Fixed
+- **Corrección Definitiva de Cierre/Crash al Deslizar e Interactuar en el Reproductor (`NowPlayingScreen`)**:
+  - **`LyricsListView`**: Se agregó validación estricta de nulidad (`viewport == null`) y comprobación de enlace (`renderObject.attached`) en `_scrollToCurrentLine()`. La llamada a `viewport.getOffsetToReveal()` provocaba un fallo no controlado (`NoSuchMethodError`) al deslizar entre páginas mientras el viewport aún se encontraba en proceso de layout.
+  - **`PaletteService`**: Se blindó el cálculo de distancias de color (`_colorDistance`) para evitar incompatibilidades de canales RGB entre versiones del SDK de Flutter.
+  - **`AlbumArtView`**: Se incorporó un `errorBuilder` resiliente en el visor de carátula para evitar excepciones fatales de renderizado en imágenes de red.
+  - **`NowPlayingScreen`**: Se capturó de forma asíncrona cualquier error de canal nativo en `FlutterDisplayMode.setHighRefreshRate()` para evitar excepciones en el hilo principal en dispositivos con tasas de refresco adaptativas o perfiles de ahorro de energía.
+  - **`MiniPlayer`**: Se desactivó el deslizamiento por defecto del modal (`enableDrag: false`) para garantizar que los gestos táctiles y scrolls internos de la carátula, letra y lista de espera pertenezcan exclusivamente a sus vistas correspondientes sin conflicto de cierre.
+
 ## [1.0.53] - 2026-09-04
 
 ### Fixed

@@ -187,26 +187,29 @@ class _LyricsListViewState extends State<LyricsListView> {
   }
 
   void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 400)}) {
-    if (!widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
+    if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
-    final key = _keys[_currentIndex];
-    final keyContext = key.currentContext;
-    if (keyContext != null) {
-      final renderObject = keyContext.findRenderObject();
-      if (renderObject is RenderBox && _scrollController.hasClients) {
-        final viewport = RenderAbstractViewport.of(renderObject);
-        final targetOffset = viewport.getOffsetToReveal(renderObject, 0.24).offset;
-        final clamped = targetOffset.clamp(
-          _scrollController.position.minScrollExtent,
-          _scrollController.position.maxScrollExtent,
-        );
-        _scrollController.animateTo(
-          clamped,
-          duration: duration,
-          curve: Curves.easeOutCubic,
-        );
+    try {
+      final key = _keys[_currentIndex];
+      final keyContext = key.currentContext;
+      if (keyContext != null) {
+        final renderObject = keyContext.findRenderObject();
+        if (renderObject is RenderBox && _scrollController.hasClients && renderObject.attached) {
+          final viewport = RenderAbstractViewport.of(renderObject);
+          if (viewport == null) return;
+          final targetOffset = viewport.getOffsetToReveal(renderObject, 0.24).offset;
+          final clamped = targetOffset.clamp(
+            _scrollController.position.minScrollExtent,
+            _scrollController.position.maxScrollExtent,
+          );
+          _scrollController.animateTo(
+            clamped,
+            duration: duration,
+            curve: Curves.easeOutCubic,
+          );
+        }
       }
-    }
+    } catch (_) {}
   }
 
   void _onUserScroll() {
