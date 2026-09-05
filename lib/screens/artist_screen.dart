@@ -309,6 +309,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final pageBgColor = isDark ? AppTheme.darkBackground : Colors.white;
+    final titleTextColor = isDark ? Colors.white : Colors.black87;
 
     if (_isLoading) {
       return Scaffold(
@@ -331,13 +334,16 @@ class _ArtistScreenState extends State<ArtistScreen> {
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 240,
-            backgroundColor: Colors.black,
+            expandedHeight: 260,
+            backgroundColor: pageBgColor,
+            surfaceTintColor: Colors.transparent,
             leading: IconButton(
               icon: Container(
                 padding: const EdgeInsets.all(7),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.35),
+                  color: isDark
+                      ? Colors.black.withValues(alpha: 0.45)
+                      : Colors.black.withValues(alpha: 0.25),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -349,18 +355,24 @@ class _ArtistScreenState extends State<ArtistScreen> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             flexibleSpace: FlexibleSpaceBar(
+              centerTitle: true,
+              titlePadding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
               title: Text(
                 _artist!.name,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: titleTextColor,
                   fontWeight: FontWeight.bold,
+                  fontSize: 22,
+                  letterSpacing: -0.3,
                 ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-              background: _buildHeaderBackground(context),
+              background: _buildHeaderBackground(context, pageBgColor),
             ),
             actions: [
-              _buildStarButton(context),
-              _buildMoreButton(context),
+              _buildStarButton(context, isDark),
+              _buildMoreButton(context, isDark),
             ],
           ),
           if (_topSongs.isNotEmpty)
@@ -411,7 +423,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
                           song: song,
                           playlist: _topSongs,
                           index: index,
+                          showArtist: false,
                           showAlbum: true,
+                          showDuration: false,
                         );
                       },
                     ),
@@ -479,7 +493,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildHeaderBackground(BuildContext context) {
+  Widget _buildHeaderBackground(BuildContext context, Color pageBgColor) {
     final cover = _resolvedCoverArt ?? _artist?.coverArt ?? _artist?.artistImageUrl;
 
     if (cover != null && cover.isNotEmpty) {
@@ -538,26 +552,26 @@ class _ArtistScreenState extends State<ArtistScreen> {
             top: 0,
             left: 0,
             right: 0,
-            height: 100,
+            height: 90,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Colors.black.withValues(alpha: 0.5),
+                    Colors.black.withValues(alpha: 0.45),
                     Colors.transparent,
                   ],
                 ),
               ),
             ),
           ),
-          // Bottom gradient to make white title text razor-sharp and clean
+          // Bottom gradient for smooth fade into page background
           Positioned(
             bottom: 0,
             left: 0,
             right: 0,
-            height: 140,
+            height: 150,
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -565,10 +579,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    Colors.black.withValues(alpha: 0.5),
-                    Colors.black.withValues(alpha: 0.85),
+                    pageBgColor.withValues(alpha: 0.65),
+                    pageBgColor,
                   ],
-                  stops: const [0.0, 0.45, 1.0],
+                  stops: const [0.0, 0.55, 1.0],
                 ),
               ),
             ),
@@ -589,7 +603,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildStarButton(BuildContext context) {
+  Widget _buildStarButton(BuildContext context, bool isDark) {
     if (_artist == null) return const SizedBox.shrink();
     return AnimatedBuilder(
       animation: FavoriteArtistsService(),
@@ -603,7 +617,9 @@ class _ArtistScreenState extends State<ArtistScreen> {
           icon: Container(
             padding: const EdgeInsets.all(7),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.35),
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.45)
+                  : Colors.black.withValues(alpha: 0.25),
               shape: BoxShape.circle,
             ),
             child: Icon(
@@ -619,12 +635,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
-  Widget _buildMoreButton(BuildContext context) {
+  Widget _buildMoreButton(BuildContext context, bool isDark) {
     return IconButton(
       icon: Container(
         padding: const EdgeInsets.all(7),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.35),
+          color: isDark
+              ? Colors.black.withValues(alpha: 0.45)
+              : Colors.black.withValues(alpha: 0.25),
           shape: BoxShape.circle,
         ),
         child: const Icon(

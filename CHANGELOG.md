@@ -5,6 +5,12 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.47] - 2026-09-04
+
+### Fixed
+- **Diseño del Encabezado de Artista Adaptable a Modo Claro/Oscuro** — Se corrigió el corte abrupto y oscuro en modo claro reemplazando el degradado negro rígido por un difuminado gradual fluido hacia el color de fondo de la página (`pageBgColor`). El nombre del artista ahora usa contraste dinámico inteligente (oscuro en modo claro, blanco en modo oscuro) con centrado y espaciado pulido.
+- **Títulos Completos en "Canciones Destacadas"** — Se resolvió el truncamiento severo de títulos de canciones (como "Amarte Más No Pude" y "La Falla Fue Tuya"). Se optimizó el espacio horizontal desactivando la repetición redundante del nombre del artista y la duración en la pantalla del artista, compactando el botón de opciones secundario y permitiendo que los títulos y álbumes se lean de forma amplia y natural.
+
 ## [1.0.46] - 2026-09-04
 
 ### Fixed
