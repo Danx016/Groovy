@@ -145,7 +145,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = _lastSong!.coverArt != null ? youtubeService.getCoverArtUrl(_lastSong!.coverArt, size: 600) : null;
     if (coverUrl != null) {
-      _currentImageProvider = CachedNetworkImageProvider(coverUrl, maxWidth: 600, maxHeight: 600);
+      _currentImageProvider = CachedNetworkImageProvider(coverUrl);
     } else {
       _currentImageProvider = const AssetImage('assets/default_cover.png');
     }
@@ -296,20 +296,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     super.dispose();
   }
 
-  void _onVerticalDragUpdate(DragUpdateDetails details) {
-    // Implement drag down to dismiss (shrink and slide down)
-    // This requires a more complex CustomRoute or wrapping the whole scaffold 
-    // in a Transform. For simplicity in this demo, a basic pop can be triggered
-    // if the drag goes far enough, but a true interactive dismissal requires
-    // Navigator route transition manipulation.
-  }
-
-  void _onVerticalDragEnd(DragEndDetails details) {
-    if (details.primaryVelocity != null && details.primaryVelocity! > 300) {
-      Navigator.of(context).pop();
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final accentColor = _bgColors.isNotEmpty ? _bgColors.first : Colors.white;
@@ -318,11 +304,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       data: ThemeData.dark(),
       child: Scaffold(
         backgroundColor: Colors.black,
-        body: GestureDetector(
-          onVerticalDragUpdate: _onVerticalDragUpdate,
-          onVerticalDragEnd: _onVerticalDragEnd,
-          child: Stack(
-            children: [
+        body: Stack(
+          children: [
               // 1. Shared Animated Fluid Mesh Gradient Background
               Positioned.fill(
                 child: BlurredGradientBackground(
@@ -351,8 +334,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildPortraitLayout(BuildContext context, Color accentColor, BoxConstraints constraints) {
@@ -622,10 +604,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         final isStarred = data.$2;
         final isPlaying = data.$3;
 
-        return RepaintBoundary(
-          child: Column(
-            children: [
-              // Big Album Artwork
+        return Column(
+          children: [
+            // Big Album Artwork
             Expanded(
               child: Center(
                 child: Padding(
@@ -746,11 +727,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
             ),
           ],
-        ),
-      );
-    },
-  );
-}
+        );
+      },
+    );
+  }
 
   Widget _buildLyricsPage() {
     final provider = context.read<PlayerProvider>();
