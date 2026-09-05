@@ -447,6 +447,155 @@ class LibraryDatabaseService {
     });
   }
 
+  /// Cleans up unrequested media (songs, albums, and artists) that were
+  /// automatically cached from YouTube search results, radio recommendations, or
+  /// scrapers, and do NOT belong to the user's library.
+  Future<void> cleanupUnsavedLibraryData() async {
+    final db = await database;
+
+    // 1. Gather all song IDs that belong to any user playlist
+    final playlists = await getAllPlaylists();
+    final playlistSongIds = <String>{};
+    for (final p in playlists) {
+      if (p.songs != null) {
+        for (final s in p.songs!) {
+          if (s.id.isNotEmpty) playlistSongIds.add(s.id);
+        }
+      }
+    }
+
+    // 2. Fetch all songs and identify ones that don't belong to the library
+    final allSongMaps = await db.query('songs');
+    final songsToDelete = <String>[];
+    final remainingArtistNames = <String>{};
+    final remainingArtistIds = <String>{};
+    final remainingAlbumNames = <String>{};
+    final remainingAlbumIds = <String>{};
+
+    for (final m in allSongMaps) {
+      final id = m['id'] as String;
+      final isLocal = (m['isLocal'] as int?) == 1;
+      final starred = (m['starred'] as int?) == 1;
+      final createdStr = m['created'] as String?;
+      final inPlaylist = playlistSongIds.contains(id);
+
+      final isUserLibrarySong = isLocal ||
+          starred ||
+          (createdStr != null && createdStr.trim().isNotEmpty) ||
+          inPlaylist;
+
+      if (!isUserLibrarySong) {
+        songsToDelete.add(id);
+      } else {
+        final artist = m['artist'] as String?;
+        final artistId = m['artistId'] as String?;
+        final album = m['album'] as String?;
+        final albumId = m['albumId'] as String?;
+        if (artist != null && artist.trim().isNotEmpty) {
+          remainingArtistNames.add(artist.trim().toLowerCase());
+        }
+        if (artistId != null && artistId.trim().isNotEmpty) {
+          remainingArtistIds.add(artistId.trim());
+        }
+        if (album != null && album.trim().isNotEmpty) {
+          remainingAlbumNames.add(album.trim().toLowerCase());
+        }
+        if (albumId != null && albumId.trim().isNotEmpty) {
+          remainingAlbumIds.add(albumId.trim());
+        }
+      }
+    }
+
+    // Delete unrequested songs in batches
+    if (songsToDelete.isNotEmpty) {
+      await db.transaction((txn) async {
+        const batchSize = 400;
+        for (var i = 0; i < songsToDelete.length; i += batchSize) {
+          final chunk = songsToDelete.sublist(
+            i,
+            (i + batchSize < songsToDelete.length)
+                ? i + batchSize
+                : songsToDelete.length,
+          );
+          final placeholders = List.filled(chunk.length, '?').join(',');
+          await txn.delete(
+            'songs',
+            where: 'id IN ($placeholders)',
+            whereArgs: chunk,
+          );
+        }
+      });
+    }
+
+    // 3. Delete orphaned albums (albums with no remaining songs in library)
+    final allAlbums = await db.query('albums');
+    final albumsToDelete = <String>[];
+    for (final a in allAlbums) {
+      final isLocal = (a['isLocal'] as int?) == 1;
+      if (isLocal) continue;
+      final id = a['id'] as String;
+      final name = (a['name'] as String?)?.trim().toLowerCase();
+      final hasSong = remainingAlbumIds.contains(id) ||
+          (name != null && remainingAlbumNames.contains(name));
+      if (!hasSong) {
+        albumsToDelete.add(id);
+      }
+    }
+    if (albumsToDelete.isNotEmpty) {
+      await db.transaction((txn) async {
+        const batchSize = 400;
+        for (var i = 0; i < albumsToDelete.length; i += batchSize) {
+          final chunk = albumsToDelete.sublist(
+            i,
+            (i + batchSize < albumsToDelete.length)
+                ? i + batchSize
+                : albumsToDelete.length,
+          );
+          final placeholders = List.filled(chunk.length, '?').join(',');
+          await txn.delete(
+            'albums',
+            where: 'id IN ($placeholders)',
+            whereArgs: chunk,
+          );
+        }
+      });
+    }
+
+    // 4. Delete orphaned artists (artists with no remaining songs in library)
+    final allArtists = await db.query('artists');
+    final artistsToDelete = <String>[];
+    for (final art in allArtists) {
+      final isLocal = (art['isLocal'] as int?) == 1;
+      if (isLocal) continue;
+      final id = art['id'] as String;
+      final name = (art['name'] as String?)?.trim().toLowerCase();
+      final hasSong = remainingArtistIds.contains(id) ||
+          (name != null && remainingArtistNames.contains(name));
+      if (!hasSong) {
+        artistsToDelete.add(id);
+      }
+    }
+    if (artistsToDelete.isNotEmpty) {
+      await db.transaction((txn) async {
+        const batchSize = 400;
+        for (var i = 0; i < artistsToDelete.length; i += batchSize) {
+          final chunk = artistsToDelete.sublist(
+            i,
+            (i + batchSize < artistsToDelete.length)
+                ? i + batchSize
+                : artistsToDelete.length,
+          );
+          final placeholders = List.filled(chunk.length, '?').join(',');
+          await txn.delete(
+            'artists',
+            where: 'id IN ($placeholders)',
+            whereArgs: chunk,
+          );
+        }
+      });
+    }
+  }
+
   /// Clear only server-side data, preserving local library entries and user favorites.
   Future<void> clearServerData() async {
     final db = await database;

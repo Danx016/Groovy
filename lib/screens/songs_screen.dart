@@ -27,7 +27,7 @@ class _SongsScreenState extends State<SongsScreen> {
       context,
       listen: false,
     );
-    await libraryProvider.loadRandomSongs();
+    await libraryProvider.ensureLibraryLoaded();
     if (mounted) {
       setState(() => _isLoading = false);
     }
@@ -36,6 +36,7 @@ class _SongsScreenState extends State<SongsScreen> {
   @override
   Widget build(BuildContext context) {
     final libraryProvider = Provider.of<LibraryProvider>(context);
+    final songs = libraryProvider.cachedAllSongs;
 
     return Scaffold(
       appBar: AppBar(
@@ -44,7 +45,6 @@ class _SongsScreenState extends State<SongsScreen> {
           IconButton(
             icon: const Icon(Icons.shuffle_rounded),
             onPressed: () {
-              final songs = libraryProvider.randomSongs;
               if (songs.isNotEmpty) {
                 final playerProvider = Provider.of<PlayerProvider>(
                   context,
@@ -63,18 +63,18 @@ class _SongsScreenState extends State<SongsScreen> {
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : libraryProvider.randomSongs.isEmpty
+          : songs.isEmpty
           ? Center(child: Text(AppLocalizations.of(context)!.noSongsFound))
           : ListView.builder(
               padding: const EdgeInsets.only(bottom: 150),
               itemExtent: 68.0,
               cacheExtent: 300,
-              itemCount: libraryProvider.randomSongs.length,
+              itemCount: songs.length,
               itemBuilder: (context, index) {
-                final song = libraryProvider.randomSongs[index];
+                final song = songs[index];
                 return SongTile(
                   song: song,
-                  playlist: libraryProvider.randomSongs,
+                  playlist: songs,
                   index: index,
                   showArtist: true,
                   showAlbum: true,

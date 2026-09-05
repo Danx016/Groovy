@@ -323,7 +323,28 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   void setLibraryProvider(LibraryProvider libraryProvider) {
+    _libraryProvider?.removeListener(_onLibraryChanged);
     _libraryProvider = libraryProvider;
+    _libraryProvider?.addListener(_onLibraryChanged);
+  }
+
+  void _onLibraryChanged() {
+    if (_currentSong != null && _libraryProvider != null) {
+      final libStarred = _libraryProvider!.isSongStarred(_currentSong!.id);
+      if (_currentSong!.starred != libStarred) {
+        _currentSong = _currentSong!.copyWith(starred: libStarred);
+        notifyListeners();
+      }
+    }
+  }
+
+  void updateSongStarred(String songId, bool isStarred) {
+    if (_currentSong != null && _currentSong!.id == songId) {
+      if (_currentSong!.starred != isStarred) {
+        _currentSong = _currentSong!.copyWith(starred: isStarred);
+        notifyListeners();
+      }
+    }
   }
 
   void setRecommendationService(RecommendationService recommendationService) {
@@ -1806,17 +1827,27 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAndroidAuto();
     } else {
-      // After app restart the audio source may not be loaded yet.
-      // If we have a current song but the player has no source, prepare it first.
+      // After app restart, or if playback stalled/disconnected while paused,
+      // prepare the audio source if missing, idle, or completed.
+      final state = _audioPlayer.playerState.processingState;
       if (_currentSong != null &&
           (_audioPlayer.audioSource == null ||
-              _audioPlayer.duration == Duration.zero)) {
+              _audioPlayer.duration == Duration.zero ||
+              state == ProcessingState.idle ||
+              state == ProcessingState.completed)) {
         await _prepareCurrentSong();
       }
       await _ensureAudioFocus(() async {
+        // Ensure volume is properly restored to effective volume before playing
+        await _audioPlayer.setVolume(_effectiveVolume);
         await _audioPlayer.play();
-        await _fadeIn();
+        if (_fadeSettingsService.getFadeEnabled()) {
+          await _fadeIn();
+        }
       });
+      _isPlaying = true;
+      notifyListeners();
+      _updateAndroidAuto();
     }
   }
 
@@ -1839,20 +1870,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAndroidAuto();
     } else {
-      await _fadeOut(onComplete: () async {
-        await _audioPlayer.pause();
-      });
+      if (_fadeSettingsService.getFadeEnabled()) {
+        await _fadeOut();
+      }
+      await _audioPlayer.pause();
+      // Ensure volume is restored to effective volume so it never stays mute
+      await _audioPlayer.setVolume(_effectiveVolume);
       _isPlaying = false;
       notifyListeners();
       _updateAndroidAuto();
-      // Intentionally do NOT abandon audio focus here: pause() is also
-      // invoked in reaction to a transient OS focus loss (e.g. an incoming
-      // call, via onAudioFocusLossTransient). Abandoning would unregister
-      // our AudioFocusRequest and its listener, so the OS's AUDIOFOCUS_GAIN
-      // callback telling us the call ended — delivered to that SAME
-      // request — would never arrive. Keeping focus while paused matches
-      // standard Android media-app behavior; stop() below is the actual
-      // "done with playback" signal that releases focus for other apps.
     }
   }
 
@@ -1864,6 +1890,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _upnpService.stop();
     } else {
       await _audioPlayer.stop();
+      await _audioPlayer.setVolume(_effectiveVolume);
     }
 
     _isPlaying = false;
@@ -1884,62 +1911,78 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _stopFade();
 
     if (!_fadeSettingsService.getFadeEnabled()) {
-      await _audioPlayer.setVolume(_volume);
+      await _audioPlayer.setVolume(_effectiveVolume);
       return;
     }
 
+    final targetVolume = _effectiveVolume;
+    if (targetVolume <= 0.0) return;
+
     final fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
-    final steps = 20;
-    final stepDurationMs = fadeDurationMs ~/ steps;
-    final volumeStep = _volume / steps;
+    final steps = 15;
+    final stepDurationMs = (fadeDurationMs ~/ steps).clamp(10, 100);
+    final volumeStep = targetVolume / steps;
 
     _isFading = true;
     await _audioPlayer.setVolume(0.0);
 
     var currentStep = 0;
-    _fadeTimer =
-        Timer.periodic(Duration(milliseconds: stepDurationMs), (timer) async {
+    _fadeTimer = Timer.periodic(Duration(milliseconds: stepDurationMs), (timer) async {
       if (!_isFading || currentStep >= steps) {
         timer.cancel();
+        _fadeTimer = null;
         _isFading = false;
+        await _audioPlayer.setVolume(targetVolume);
         return;
       }
       currentStep++;
-      final newVolume = volumeStep * currentStep;
-      await _audioPlayer.setVolume(newVolume.clamp(0.0, _volume));
+      final newVolume = (volumeStep * currentStep).clamp(0.0, targetVolume);
+      await _audioPlayer.setVolume(newVolume);
     });
   }
 
-  Future<void> _fadeOut({VoidCallback? onComplete}) async {
+  Future<void> _fadeOut() async {
     _stopFade();
 
     if (!_fadeSettingsService.getFadeEnabled()) {
-      await _audioPlayer.setVolume(0.0);
-      onComplete?.call();
       return;
     }
 
-    final fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
-    final steps = 20;
-    final stepDurationMs = fadeDurationMs ~/ steps;
     final currentVolume = _audioPlayer.volume;
+    if (currentVolume <= 0.0) return;
+
+    final fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
+    final steps = 15;
+    final stepDurationMs = (fadeDurationMs ~/ steps).clamp(10, 100);
     final volumeStep = currentVolume / steps;
 
     _isFading = true;
 
+    final completer = Completer<void>();
     var currentStep = 0;
-    _fadeTimer =
-        Timer.periodic(Duration(milliseconds: stepDurationMs), (timer) async {
+    _fadeTimer = Timer.periodic(Duration(milliseconds: stepDurationMs), (timer) async {
       if (!_isFading || currentStep >= steps) {
         timer.cancel();
+        _fadeTimer = null;
         _isFading = false;
-        onComplete?.call();
+        if (!completer.isCompleted) completer.complete();
         return;
       }
       currentStep++;
-      final newVolume = currentVolume - (volumeStep * currentStep);
-      await _audioPlayer.setVolume(newVolume.clamp(0.0, 1.0));
+      final newVolume = (currentVolume - (volumeStep * currentStep)).clamp(0.0, 1.0);
+      await _audioPlayer.setVolume(newVolume);
     });
+
+    try {
+      await completer.future.timeout(
+        Duration(milliseconds: fadeDurationMs + 200),
+        onTimeout: () {
+          _stopFade();
+        },
+      );
+    } catch (_) {
+      _stopFade();
+    }
   }
 
 
@@ -2456,18 +2499,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAndroidAuto();
   }
 
+  double get _effectiveVolume {
+    final replayGainMultiplier = _replayGainService.calculateVolumeMultiplier(
+      trackGain: _currentSong?.replayGainTrackGain,
+      albumGain: _currentSong?.replayGainAlbumGain,
+      trackPeak: _currentSong?.replayGainTrackPeak,
+      albumPeak: _currentSong?.replayGainAlbumPeak,
+    );
+    return (_volume * replayGainMultiplier).clamp(0.0, 1.0);
+  }
+
   Future<void> _applyReplayGain(Song? song) async {
     await _replayGainService.initialize();
-
-    final replayGainMultiplier = _replayGainService.calculateVolumeMultiplier(
-      trackGain: song?.replayGainTrackGain,
-      albumGain: song?.replayGainAlbumGain,
-      trackPeak: song?.replayGainTrackPeak,
-      albumPeak: song?.replayGainAlbumPeak,
-    );
-
-    final effectiveVolume = _volume * replayGainMultiplier;
-    await _audioPlayer.setVolume(effectiveVolume);
+    await _audioPlayer.setVolume(_effectiveVolume);
   }
 
   Future<void> refreshReplayGain() async {
@@ -2479,6 +2523,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> toggleFavorite() async {
     if (_currentSong == null) return;
+
+    if (_libraryProvider != null) {
+      final newStarred = await _libraryProvider!.toggleStarSong(_currentSong!);
+      _currentSong = _currentSong!.copyWith(starred: newStarred);
+      notifyListeners();
+      return;
+    }
 
     final isStarred = _currentSong!.starred == true;
 
@@ -2501,6 +2552,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> toggleFavoriteForSong(Song song) async {
+    if (_libraryProvider != null) {
+      final newStarred = await _libraryProvider!.toggleStarSong(song);
+      if (_currentSong?.id == song.id) {
+        _currentSong = _currentSong!.copyWith(starred: newStarred);
+        notifyListeners();
+      }
+      return;
+    }
+
     final isStarred = song.starred == true;
     try {
       if (isStarred) {

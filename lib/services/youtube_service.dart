@@ -509,11 +509,6 @@ class YoutubeService {
       final musicSongs = (dualResults['music'] ?? []).map(_mapDictToSong).toList();
       final youtubeVideos = (dualResults['youtube'] ?? []).map(_mapDictToSong).toList();
 
-      // Cache songs in local SQLite database for future playlist & star operations
-      for (final song in [...musicSongs, ...youtubeVideos]) {
-        _db.insertOrUpdateSong(song).catchError((_) {});
-      }
-
       // 2. Query local matching songs
       final localSongs = await _db.searchSongs(query, limit: songCount);
 
@@ -573,11 +568,6 @@ class YoutubeService {
       }
       final rawResults = await _ytdlp.search(query, limit: size);
       final songs = rawResults.map(_mapDictToSong).toList();
-
-      for (final song in songs) {
-        _db.insertOrUpdateSong(song).catchError((_) {});
-      }
-
       return songs;
     } catch (e) {
       debugPrint('[YouTube] getRandomSongs error: $e');
@@ -686,11 +676,7 @@ class YoutubeService {
     try {
       final radioRaw = await _ytdlp.getRadioTracks(videoId, limit: count);
       if (radioRaw.isNotEmpty) {
-        final songs = radioRaw.map(_mapDictToSong).toList();
-        for (final song in songs) {
-          _db.insertOrUpdateSong(song).catchError((_) {});
-        }
-        return songs;
+        return radioRaw.map(_mapDictToSong).toList();
       }
 
       final info = await _ytdlp.getVideoInfo(videoId);
@@ -698,11 +684,7 @@ class YoutubeService {
           ? '${info['artist'] ?? ''} ${info['title'] ?? ''} audio'
           : 'recommended music';
       final rawResults = await _ytdlp.search(query, limit: count);
-      final songs = rawResults.map(_mapDictToSong).toList();
-      for (final song in songs) {
-        _db.insertOrUpdateSong(song).catchError((_) {});
-      }
-      return songs;
+      return rawResults.map(_mapDictToSong).toList();
     } catch (e) {
       debugPrint('[YouTube] getSimilarSongs error: $e');
       return [];

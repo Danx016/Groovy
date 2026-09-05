@@ -41,44 +41,72 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   void _showCreatePlaylistDialog(BuildContext context) {
     final controller = TextEditingController();
+    bool isSubmitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(AppLocalizations.of(context)!.newPlaylist),
-        content: TextField(
-          controller: controller,
-          decoration: InputDecoration(
-            hintText: AppLocalizations.of(context)!.playlistName,
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(AppLocalizations.of(context)!.cancel),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (controller.text.isNotEmpty) {
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(AppLocalizations.of(context)!.newPlaylist),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(
+              hintText: AppLocalizations.of(context)!.playlistName,
+            ),
+            autofocus: true,
+            onSubmitted: (_) async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty && !isSubmitting) {
+                setState(() => isSubmitting = true);
                 final libraryProvider = Provider.of<LibraryProvider>(
                   context,
                   listen: false,
                 );
-                await libraryProvider.createPlaylist(controller.text);
+                await libraryProvider.createPlaylist(name);
                 await libraryProvider.refresh();
-                if (context.mounted) {
-                  Navigator.pop(context);
+                if (dialogCtx.mounted) {
+                  Navigator.pop(dialogCtx);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(AppLocalizations.of(context)!.playlistCreated(controller.text)),
+                      content: Text(AppLocalizations.of(context)!.playlistCreated(name)),
                     ),
                   );
                 }
               }
             },
-            child: Text(AppLocalizations.of(context)!.create),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: Text(AppLocalizations.of(context)!.cancel),
+            ),
+            TextButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final name = controller.text.trim();
+                      if (name.isNotEmpty) {
+                        setState(() => isSubmitting = true);
+                        final libraryProvider = Provider.of<LibraryProvider>(
+                          context,
+                          listen: false,
+                        );
+                        await libraryProvider.createPlaylist(name);
+                        await libraryProvider.refresh();
+                        if (dialogCtx.mounted) {
+                          Navigator.pop(dialogCtx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(AppLocalizations.of(context)!.playlistCreated(name)),
+                            ),
+                          );
+                        }
+                      }
+                    },
+              child: Text(AppLocalizations.of(context)!.create),
+            ),
+          ],
+        ),
       ),
     );
   }

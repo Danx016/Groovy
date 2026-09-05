@@ -383,37 +383,50 @@ class _LibrarySection extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final controller = TextEditingController();
+    bool isCreating = false;
+
     await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF282828) : Colors.white,
-        title: Text(l10n.newPlaylist),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: InputDecoration(
-            hintText: l10n.playlistName,
-            filled: true,
-            fillColor:
-                isDark ? const Color(0xFF383838) : const Color(0xFFF2F2F7),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (ctx, setState) => AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF282828) : Colors.white,
+          title: Text(l10n.newPlaylist),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: InputDecoration(
+              hintText: l10n.playlistName,
+              filled: true,
+              fillColor:
+                  isDark ? const Color(0xFF383838) : const Color(0xFFF2F2F7),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide.none,
+              ),
+              contentPadding: const EdgeInsets.all(12),
             ),
-            contentPadding: const EdgeInsets.all(12),
+            onSubmitted: (_) async {
+              if (isCreating) return;
+              setState(() => isCreating = true);
+              await _doCreate(ctx, controller, libraryProvider, l10n);
+            },
           ),
-          onSubmitted: (_) => _doCreate(ctx, controller, libraryProvider, l10n),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(l10n.cancel),
+            ),
+            TextButton(
+              onPressed: isCreating
+                  ? null
+                  : () async {
+                      setState(() => isCreating = true);
+                      await _doCreate(ctx, controller, libraryProvider, l10n);
+                    },
+              child: Text(l10n.create),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text(l10n.cancel),
-          ),
-          TextButton(
-            onPressed: () => _doCreate(ctx, controller, libraryProvider, l10n),
-            child: Text(l10n.create),
-          ),
-        ],
       ),
     );
     // Dispose controller to prevent memory leak

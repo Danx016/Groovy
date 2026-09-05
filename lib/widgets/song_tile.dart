@@ -133,6 +133,28 @@ class SongTile extends StatelessWidget {
                 ),
               ),
             ),
+          Consumer<LibraryProvider>(
+            builder: (context, lib, _) {
+              final isFav = lib.isSongStarred(song.id) || (song.starred == true);
+              if (!isFav) return const SizedBox.shrink();
+              return Positioned(
+                bottom: 2,
+                right: 2,
+                child: Container(
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.75),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    CupertinoIcons.heart_fill,
+                    size: 11,
+                    color: Color(0xFFFA2D48),
+                  ),
+                ),
+              );
+            },
+          ),
         ],
       );
     }
@@ -185,45 +207,50 @@ class SongTile extends StatelessWidget {
   }
 
   Widget _buildTrailing(BuildContext context) {
-    return ValueListenableBuilder<Set<String>>(
-      valueListenable: OfflineService().downloadedSongIds,
-      builder: (context, ids, _) {
-        final isDownloaded = ids.contains(song.id);
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (isDownloaded)
-              const Padding(
-                padding: EdgeInsets.only(right: 4),
-                child: Icon(CupertinoIcons.arrow_down_circle_fill, size: 14, color: Colors.grey),
-              ),
-            if (song.starred == true)
-              Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: Icon(
-                  CupertinoIcons.heart_fill,
-                  size: 14,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+    return Consumer<LibraryProvider>(
+      builder: (context, lib, _) {
+        final isFav = lib.isSongStarred(song.id) || (song.starred == true);
+        return ValueListenableBuilder<Set<String>>(
+          valueListenable: OfflineService().downloadedSongIds,
+          builder: (context, ids, _) {
+            final isDownloaded = ids.contains(song.id);
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isDownloaded)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 4),
+                    child: Icon(CupertinoIcons.arrow_down_circle_fill, size: 14, color: Colors.grey),
+                  ),
+                if (isFav)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      CupertinoIcons.heart_fill,
+                      size: 14,
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.7),
+                    ),
+                  ),
+                if (song.hasDolbyAtmos == true)
+                  const Padding(
+                    padding: EdgeInsets.only(right: 6),
+                    child: DolbyAtmosBadge(),
+                  ),
+                if (showDuration)
+                  Text(
+                    song.formattedDuration,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.more_horiz),
+                  iconSize: 20,
+                  color: Theme.of(context).textTheme.bodySmall?.color,
+                  onPressed: () => _showOptions(context),
                 ),
-              ),
-            if (song.hasDolbyAtmos == true)
-              const Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: DolbyAtmosBadge(),
-              ),
-            if (showDuration)
-              Text(
-                song.formattedDuration,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            const SizedBox(width: 8),
-            IconButton(
-              icon: const Icon(Icons.more_horiz),
-              iconSize: 20,
-              color: Theme.of(context).textTheme.bodySmall?.color,
-              onPressed: () => _showOptions(context),
-            ),
-          ],
+              ],
+            );
+          },
         );
       },
     );
@@ -263,7 +290,8 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
   @override
   void initState() {
     super.initState();
-    _isStarred = widget.song.starred ?? false;
+    final lib = Provider.of<LibraryProvider>(context, listen: false);
+    _isStarred = lib.isSongStarred(widget.song.id) || (widget.song.starred ?? false);
     _checkDownloadStatus();
   }
 
@@ -726,11 +754,16 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
       context,
       listen: false,
     );
+    final playerProvider = Provider.of<PlayerProvider>(
+      context,
+      listen: false,
+    );
     final l10n = AppLocalizations.of(context)!;
     final messenger = ScaffoldMessenger.of(context);
 
     try {
       final isFav = await libraryProvider.toggleStarSong(widget.song);
+      playerProvider.updateSongStarred(widget.song.id, isFav);
       if (mounted) {
         setState(() {
           _isStarred = isFav;

@@ -124,37 +124,58 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
 
   Future<void> _showCreatePlaylistDialog(BuildContext context) async {
     final controller = TextEditingController();
+    bool isSubmitting = false;
 
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('New Playlist'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'Playlist name'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              if (controller.text.trim().isNotEmpty) {
+      builder: (dialogCtx) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('New Playlist'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Playlist name'),
+            onSubmitted: (_) async {
+              final name = controller.text.trim();
+              if (name.isNotEmpty && !isSubmitting) {
+                setState(() => isSubmitting = true);
                 final libraryProvider = Provider.of<LibraryProvider>(
                   context,
                   listen: false,
                 );
-                await libraryProvider.createPlaylist(controller.text.trim());
-                if (context.mounted) {
-                  Navigator.pop(context);
+                await libraryProvider.createPlaylist(name);
+                if (dialogCtx.mounted) {
+                  Navigator.pop(dialogCtx);
                 }
               }
             },
-            child: const Text('Create'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogCtx),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: isSubmitting
+                  ? null
+                  : () async {
+                      final name = controller.text.trim();
+                      if (name.isNotEmpty) {
+                        setState(() => isSubmitting = true);
+                        final libraryProvider = Provider.of<LibraryProvider>(
+                          context,
+                          listen: false,
+                        );
+                        await libraryProvider.createPlaylist(name);
+                        if (dialogCtx.mounted) {
+                          Navigator.pop(dialogCtx);
+                        }
+                      }
+                    },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
       ),
     );
     controller.dispose();

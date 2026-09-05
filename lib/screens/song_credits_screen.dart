@@ -433,7 +433,101 @@ class _SongCreditsScreenState extends State<SongCreditsScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // 8. AUDIO / CALIDAD Section (if available)
+                  // 8. PRODUCCIÓN Y ARREGLOS Section
+                  if (_credits?.production.isNotEmpty == true) ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 4, bottom: 8),
+                        child: Text(
+                          'PRODUCCIÓN Y ARREGLOS',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.6,
+                            color: subtitleColor,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: isDark ? 0.3 : 0.04),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _credits!.production.length,
+                        separatorBuilder: (_, __) => Divider(
+                          indent: 68,
+                          height: 1,
+                          color: isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.06),
+                        ),
+                        itemBuilder: (context, idx) {
+                          final prod = _credits!.production[idx];
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            child: Row(
+                              children: [
+                                ClipOval(
+                                  child: Container(
+                                    width: 44,
+                                    height: 44,
+                                    color: const Color(0xFF636366),
+                                    child: Center(
+                                      child: Text(
+                                        prod.initials,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        prod.name,
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                          color: textColor,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        prod.role,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          color: subtitleColor,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // 9. AUDIO / CALIDAD Section (if available)
                   if (_credits?.audioQuality != null) ...[
                     Align(
                       alignment: Alignment.centerLeft,
