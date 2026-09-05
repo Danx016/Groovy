@@ -19,6 +19,7 @@ import '../providers/library_provider.dart';
 import 'album_screen.dart';
 import '../utils/navigation_helper.dart';
 import '../models/song.dart';
+import '../models/album.dart';
 import '../services/palette_service.dart';
 import '../services/youtube_service.dart';
 import '../services/offline_service.dart';
@@ -424,8 +425,31 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               // Cover Thumbnail -> Navigate to Album or Page 0
               GestureDetector(
                 onTap: () {
-                  if (currentSong?.albumId != null && currentSong!.albumId!.isNotEmpty) {
-                    NavigationHelper.push(context, AlbumScreen(albumId: currentSong.albumId!));
+                  if (currentSong != null) {
+                    final effectiveAlbumId = (currentSong.albumId != null && currentSong.albumId!.isNotEmpty)
+                        ? currentSong.albumId!
+                        : (currentSong.album != null && currentSong.album!.isNotEmpty && currentSong.album != 'Album' && currentSong.album != 'Álbum')
+                            ? currentSong.album!
+                            : '${currentSong.title} ${currentSong.artist ?? ""}';
+                    final alb = (currentSong.album != null &&
+                            currentSong.album!.isNotEmpty &&
+                            currentSong.album != 'Album' &&
+                            currentSong.album != 'Álbum')
+                        ? Album(
+                            id: effectiveAlbumId,
+                            name: currentSong.album!,
+                            artist: currentSong.artist,
+                            coverArt: currentSong.coverArt,
+                          )
+                        : null;
+                    NavigationHelper.push(
+                      context,
+                      AlbumScreen(
+                        albumId: effectiveAlbumId,
+                        album: alb,
+                        song: currentSong,
+                      ),
+                    );
                   } else {
                     _pageController.animateToPage(
                       0,

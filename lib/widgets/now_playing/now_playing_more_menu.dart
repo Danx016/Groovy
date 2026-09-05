@@ -3,9 +3,12 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/song.dart';
+import '../../models/album.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../screens/song_credits_screen.dart';
+import '../../screens/album_screen.dart';
+import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
 import 'add_to_menu.dart';
@@ -246,7 +249,59 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               },
             ),
 
-            // 4. Agregar a Favoritos / Eliminar de Favoritos
+            // 4. Ir al álbum
+            _buildMenuItem(
+              icon: Icons.album_rounded,
+              title: 'Ir al álbum',
+              textColor: textColor,
+              onTap: () {
+                Navigator.of(context).pop();
+                final effectiveAlbumId = currentSong.albumId ??
+                    (currentSong.album != null && currentSong.album!.isNotEmpty
+                        ? currentSong.album!
+                        : '${currentSong.title} ${currentSong.artist ?? ""}');
+                final alb = (currentSong.album != null &&
+                        currentSong.album!.isNotEmpty &&
+                        currentSong.album != 'Album' &&
+                        currentSong.album != 'Álbum')
+                    ? Album(
+                        id: effectiveAlbumId,
+                        name: currentSong.album!,
+                        artist: currentSong.artist,
+                        coverArt: currentSong.coverArt,
+                      )
+                    : null;
+                Navigator.of(context).push(
+                  CupertinoPageRoute(
+                    builder: (ctx) => AlbumScreen(
+                      albumId: effectiveAlbumId,
+                      album: alb,
+                      song: currentSong,
+                    ),
+                  ),
+                );
+              },
+            ),
+
+            // 5. Ir al artista
+            _buildMenuItem(
+              icon: Icons.person_rounded,
+              title: 'Ir al artista',
+              textColor: textColor,
+              onTap: () {
+                Navigator.of(context).pop();
+                final artistId = currentSong.artistId ?? currentSong.artist ?? '';
+                if (artistId.isNotEmpty) {
+                  Navigator.of(context).push(
+                    CupertinoPageRoute(
+                      builder: (ctx) => ArtistScreen(artistId: artistId),
+                    ),
+                  );
+                }
+              },
+            ),
+
+            // 6. Agregar a Favoritos / Eliminar de Favoritos
             _buildMenuItem(
               icon: isStarred ? CupertinoIcons.star_fill : CupertinoIcons.star,
               title: isStarred ? 'Eliminar de Favoritos' : 'Agregar a Favoritos',

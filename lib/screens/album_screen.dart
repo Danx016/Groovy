@@ -4,20 +4,23 @@ import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
-import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import '../utils/screen_helper.dart';
-import '../services/offline_service.dart';
-
 import '../services/services.dart';
 
 class AlbumScreen extends StatefulWidget {
   final String albumId;
   final Album? album;
+  final Song? song;
 
-  const AlbumScreen({super.key, required this.albumId, this.album});
+  const AlbumScreen({
+    super.key,
+    required this.albumId,
+    this.album,
+    this.song,
+  });
 
   @override
   State<AlbumScreen> createState() => _AlbumScreenState();
@@ -74,6 +77,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
       Album? album = widget.album;
       List<Song> songs = [];
 
+      // 1. Local-only mode or local cache
       if (libraryProvider.isLocalOnlyMode) {
         album ??= libraryProvider.cachedAllAlbums.firstWhere(
           (a) => a.id == widget.albumId,
@@ -81,80 +85,72 @@ class _AlbumScreenState extends State<AlbumScreen> {
         );
         songs = await libraryProvider.getAlbumSongs(widget.albumId);
       } else {
+        // 2. Try online resolution via AlbumResolverService (YouTube Music browse & Deezer official tracks)
         try {
-          album ??= await youtubeService.getAlbum(widget.albumId);
-          songs = await libraryProvider.getAlbumSongs(widget.albumId);
-        } catch (_) {}
-      }
-
-      // Filter songs specifically for this album
-      if (album != null && songs.isNotEmpty) {
-        final albumNameLower = album.name.trim().toLowerCase();
-        final filteredSongs = songs.where((s) {
-          final sAlbumLower = s.album?.trim().toLowerCase() ?? '';
-          return s.albumId == album?.id || (albumNameLower.isNotEmpty && sAlbumLower == albumNameLower);
-        }).toList();
-        if (filteredSongs.isNotEmpty) {
-          songs = filteredSongs;
-        }
-      }
-
-      // If no songs found or only 1 track matched from cache, search online specifically for this album
-      if (songs.isEmpty || (album != null && songs.length <= 1)) {
-        final albumName = album?.name ?? widget.albumId;
-        final artistName = album?.artist ?? '';
-        album ??= Album(
-          id: widget.albumId,
-          name: albumName,
-          artist: artistName,
-        );
-
-        final searchQuery = artistName.isNotEmpty && !albumName.toLowerCase().contains(artistName.toLowerCase())
-            ? '$albumName $artistName'
-            : albumName;
-
-        try {
-          final ytResult =
-              await YoutubeService().search('$searchQuery album', songCount: 25);
-          if (ytResult.songs.isNotEmpty) {
-            songs = ytResult.songs;
-            if (album.coverArt == null || album.coverArt!.isEmpty) {
-              album = Album(
-                id: album.id,
-                name: album.name,
-                artist: artistName.isNotEmpty ? artistName : songs.first.artist,
-                coverArt: songs.first.coverArt,
-                songCount: songs.length,
-              );
-            }
+          final resolved = await AlbumResolverService().resolveAlbum(
+            albumId: widget.albumId,
+            existingAlbum: widget.album,
+            song: widget.song,
+          );
+          if (resolved != null && resolved.songs.isNotEmpty) {
+            album = resolved.album;
+            songs = resolved.songs;
           }
         } catch (e) {
-          debugPrint('Online album search error: $e');
+          debugPrint('[AlbumScreen] AlbumResolver error: $e');
+        }
+
+        // 3. Fallback to local DB or YouTube playlist if online resolution had no songs
+        if (songs.isEmpty) {
+          try {
+            final ytAlbum = await youtubeService.getAlbum(widget.albumId);
+            if (ytAlbum != null) album = ytAlbum;
+            songs = await libraryProvider.getAlbumSongs(widget.albumId);
+          } catch (_) {}
         }
       }
 
-      // If coverArt is missing or not a valid URL/ID, resolve from the tracks
-      if (songs.isNotEmpty) {
-        final currentCover = album?.coverArt ?? '';
-        final hasValidCover = currentCover.startsWith('http') ||
-            currentCover.startsWith('/') ||
-            RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(currentCover.replaceFirst('ytmusic://', '').replaceFirst('yt_', ''));
+      // 4. Sanitize album name and artist to guarantee no dummy placeholders
+      if (album == null ||
+          album.name.isEmpty ||
+          album.name.toLowerCase() == 'album' ||
+          album.name.toLowerCase() == 'álbum') {
+        final safeName = widget.album?.name ?? widget.song?.album ?? widget.albumId;
+        final safeArtist = widget.album?.artist ?? widget.song?.artist;
+        final safeCover = widget.album?.coverArt ??
+            widget.song?.coverArt ??
+            (songs.isNotEmpty ? songs.first.coverArt : null);
+        album = Album(
+          id: widget.albumId,
+          name: (safeName.toLowerCase() == 'album' || safeName.toLowerCase() == 'álbum')
+              ? (widget.song?.title ?? widget.albumId)
+              : safeName,
+          artist: (safeArtist != null &&
+                  safeArtist.toLowerCase() != 'artist' &&
+                  safeArtist.toLowerCase() != 'artista')
+              ? safeArtist
+              : null,
+          coverArt: safeCover,
+          songCount: songs.length,
+          year: widget.album?.year ?? widget.song?.year,
+        );
+      }
 
-        if (!hasValidCover) {
-          final firstValidCover = songs.firstWhere(
-            (s) => s.coverArt != null && s.coverArt!.isNotEmpty,
-            orElse: () => songs.first,
+      // 5. If coverArt is missing, resolve from first song
+      if (songs.isNotEmpty && (album.coverArt == null || album.coverArt!.isEmpty)) {
+        final firstCover = songs.firstWhere(
+          (s) => s.coverArt != null && s.coverArt!.isNotEmpty,
+          orElse: () => songs.first,
+        ).coverArt;
+        if (firstCover != null && firstCover.isNotEmpty) {
+          album = Album(
+            id: album.id,
+            name: album.name,
+            artist: album.artist,
+            coverArt: firstCover,
+            songCount: songs.length,
+            year: album.year,
           );
-          final cover = firstValidCover.coverArt ?? firstValidCover.id;
-          if (cover.isNotEmpty) {
-            album = Album(
-              id: album?.id ?? widget.albumId,
-              name: album?.name ?? widget.albumId,
-              artist: album?.artist ?? firstValidCover.artist,
-              coverArt: cover,
-              songCount: songs.length,
-            );
-          }
         }
       }
 

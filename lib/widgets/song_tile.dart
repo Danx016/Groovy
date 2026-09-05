@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/artist_ref.dart';
 import '../models/song.dart';
+import '../models/album.dart';
 import '../utils/navigation_helper.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
@@ -98,7 +99,7 @@ class SongTile extends StatelessWidget {
                   ),
                 )
               : Text(
-                  '${song.track ?? index ?? 1}',
+                  '${song.track ?? (index != null ? index! + 1 : 1)}',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                         color: AppTheme.lightSecondaryText,
                       ),
@@ -454,15 +455,32 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                       title: 'Go to Album',
                       onTap: () {
                         Navigator.pop(context);
-                        if (widget.song.albumId != null) {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  AlbumScreen(albumId: widget.song.albumId!),
+                        final song = widget.song;
+                        final effectiveAlbumId = song.albumId ??
+                            (song.album != null && song.album!.isNotEmpty
+                                ? song.album!
+                                : '${song.title} ${song.artist ?? ""}');
+                        final alb = (song.album != null &&
+                                song.album!.isNotEmpty &&
+                                song.album != 'Album' &&
+                                song.album != 'Álbum')
+                            ? Album(
+                                id: effectiveAlbumId,
+                                name: song.album!,
+                                artist: song.artist,
+                                coverArt: song.coverArt,
+                              )
+                            : null;
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => AlbumScreen(
+                              albumId: effectiveAlbumId,
+                              album: alb,
+                              song: song,
                             ),
-                          );
-                        }
+                          ),
+                        );
                       },
                     ),
                     _OptionTile(

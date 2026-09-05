@@ -141,9 +141,32 @@ class YoutubeService {
 
   Future<void> configure(dynamic config) async {}
 
-  Future<AudioSource?> getYoutubeAudioSource(Song song) => buildAudioSource(song.id);
+  Future<String> _resolvePlayableVideoId(Song song) async {
+    final cleanId = song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+    if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+      return cleanId;
+    }
+    try {
+      final q = (song.artist != null && song.artist!.isNotEmpty)
+          ? '${song.title} ${song.artist}'
+          : song.title;
+      final results = await search(q, songCount: 1);
+      if (results.songs.isNotEmpty) {
+        return results.songs.first.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+      }
+    } catch (_) {}
+    return cleanId;
+  }
 
-  Future<String> resolveStreamUrlAsync(Song song) => resolveStreamUrl(song.id);
+  Future<AudioSource?> getYoutubeAudioSource(Song song) async {
+    final videoId = await _resolvePlayableVideoId(song);
+    return buildAudioSource(videoId);
+  }
+
+  Future<String> resolveStreamUrlAsync(Song song) async {
+    final videoId = await _resolvePlayableVideoId(song);
+    return resolveStreamUrl(videoId);
+  }
 
   Future<ArtistInfo?> getArtistInfo(String id) async => null;
 
@@ -308,19 +331,29 @@ class YoutubeService {
     }
   }
 
-  Future<Album> getAlbum(String playlistOrAlbumId) async {
+  Future<Album?> getAlbum(String playlistOrAlbumId) async {
     try {
       final songs = await getAlbumSongs(playlistOrAlbumId);
-      return Album(
-        id: playlistOrAlbumId,
-        name: songs.isNotEmpty ? (songs.first.album ?? 'Album') : 'Album',
-        artist: songs.isNotEmpty ? songs.first.artist : 'Artist',
-        coverArt: playlistOrAlbumId,
-        songCount: songs.length,
-      );
+      if (songs.isNotEmpty) {
+        final firstSong = songs.first;
+        final cleanAlbum = (firstSong.album != null &&
+                firstSong.album!.isNotEmpty &&
+                firstSong.album != 'Album' &&
+                firstSong.album != 'Álbum')
+            ? firstSong.album!
+            : playlistOrAlbumId;
+        return Album(
+          id: playlistOrAlbumId,
+          name: cleanAlbum,
+          artist: firstSong.artist,
+          coverArt: firstSong.coverArt ?? playlistOrAlbumId,
+          songCount: songs.length,
+        );
+      }
+      return null;
     } catch (e) {
       debugPrint('[YouTube] getAlbum error: $e');
-      return Album(id: playlistOrAlbumId, name: 'Album');
+      return null;
     }
   }
 
