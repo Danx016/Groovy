@@ -5,6 +5,16 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.48] - 2026-09-04
+
+### Fixed
+- **Navegación al Álbum Real de la Canción ("Ir al Álbum")** — Se solucionó de raíz el problema donde al ir al álbum de la canción que estaba sonando o buscar un álbum se abría una pantalla genérica titulada "Album" por "Artist" con canciones aleatorias.
+  - Implementación de `AlbumResolverService`: busca y navega directamente al álbum oficial en YouTube Music (mediante el filtro de álbumes oficial y extracción de `browseId`), cargando la lista de reproducción completa oficial con identificadores de video reales y portada en alta resolución.
+  - Eliminación total de fallbacks erróneos en `getAlbum` que devolvían objetos con título "Album" y artista "Artist".
+  - Enriquecimiento automático de álbumes sin metadatos mediante Deezer/iTunes API para canciones en reproducción.
+  - Corrección de la numeración de pistas en la lista del álbum para que inicie en 1 (en vez de 0).
+  - Acceso directo a "Ir al álbum" e "Ir al artista" desde la portada en reproducción, hoja de navegación de pista, menú de 3 puntos y resultados de búsqueda.
+
 ## [1.0.47] - 2026-09-04
 
 ### Fixed

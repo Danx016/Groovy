@@ -1,14 +1,15 @@
-import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/song.dart';
 import '../../models/artist.dart';
+import '../../models/album.dart';
 import '../../providers/library_provider.dart';
 import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/album_resolver_service.dart';
 
 class TrackNavigationBottomSheet extends StatefulWidget {
   final Song? song;
@@ -39,11 +40,39 @@ class TrackNavigationBottomSheet extends StatefulWidget {
 
 class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet> {
   String? _artistImageUrl;
+  String? _resolvedAlbumName;
+  String? _resolvedAlbumCover;
 
   @override
   void initState() {
     super.initState();
     _fetchArtistImage();
+    _resolveAlbumInfo();
+  }
+
+  Future<void> _resolveAlbumInfo() async {
+    final song = widget.song;
+    if (song == null) return;
+    if (song.album != null &&
+        song.album!.isNotEmpty &&
+        song.album != 'Álbum' &&
+        song.album != 'Album') {
+      return;
+    }
+    try {
+      final res = await AlbumResolverService().resolveAlbum(
+        albumId: song.albumId ?? song.id,
+        song: song,
+      );
+      if (res != null && mounted) {
+        setState(() {
+          _resolvedAlbumName = res.album.name;
+          if (res.album.coverArt != null && res.album.coverArt!.isNotEmpty) {
+            _resolvedAlbumCover = res.album.coverArt;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _fetchArtistImage() async {
@@ -96,7 +125,14 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
 
     final artistName = song?.artist ?? 'Artista';
-    final albumName = song?.album ?? 'Álbum';
+    final rawAlbum = song?.album;
+    final albumName = _resolvedAlbumName ??
+        ((rawAlbum != null &&
+                rawAlbum.isNotEmpty &&
+                rawAlbum != 'Álbum' &&
+                rawAlbum != 'Album')
+            ? rawAlbum
+            : 'Álbum');
 
     // Find artist from library if available
     Artist? matchedArtist;
@@ -109,11 +145,19 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
     }
 
     final effectiveArtistId = song?.artistId ?? matchedArtist?.id ?? artistName;
-    final effectiveAlbumId = song?.albumId ?? song?.album;
+    final effectiveAlbumName = _resolvedAlbumName ?? song?.album;
+    final effectiveAlbumId = song?.albumId ??
+        (effectiveAlbumName != null &&
+                effectiveAlbumName.isNotEmpty &&
+                effectiveAlbumName != 'Álbum' &&
+                effectiveAlbumName != 'Album'
+            ? effectiveAlbumName
+            : '${song?.title} ${song?.artist ?? ""}');
 
-    final coverUrl = (song?.coverArt != null)
-        ? youtubeService.getCoverArtUrl(song!.coverArt, size: 150)
-        : null;
+    final coverUrl = _resolvedAlbumCover ??
+        ((song?.coverArt != null)
+            ? youtubeService.getCoverArtUrl(song!.coverArt, size: 150)
+            : null);
 
     final artistFallbackCover = matchedArtist?.coverArt != null
         ? youtubeService.getCoverArtUrl(matchedArtist!.coverArt!, size: 150)
@@ -236,13 +280,26 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
             onTap: () {
               final nav = Navigator.of(context, rootNavigator: true);
               nav.pop(); // Close sheet
-              if (effectiveAlbumId != null && effectiveAlbumId.isNotEmpty) {
-                nav.push(
-                  MaterialPageRoute(
-                    builder: (_) => AlbumScreen(albumId: effectiveAlbumId),
+              final alb = (effectiveAlbumName != null &&
+                      effectiveAlbumName.isNotEmpty &&
+                      effectiveAlbumName != 'Álbum' &&
+                      effectiveAlbumName != 'Album')
+                  ? Album(
+                      id: effectiveAlbumId,
+                      name: effectiveAlbumName,
+                      artist: song?.artist,
+                      coverArt: coverUrl,
+                    )
+                  : null;
+              nav.push(
+                MaterialPageRoute(
+                  builder: (_) => AlbumScreen(
+                    albumId: effectiveAlbumId,
+                    album: alb,
+                    song: song,
                   ),
-                );
-              }
+                ),
+              );
             },
           ),
         ],

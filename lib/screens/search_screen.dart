@@ -12,6 +12,7 @@ import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
+import '../models/album.dart';
 import 'artist_screen.dart';
 import 'genres_screen.dart';
 import 'new_releases_screen.dart';
@@ -464,7 +465,19 @@ class _SearchScreenState extends State<SearchScreen> {
                 if (item.type == RecentSearchType.artist) {
                   NavigationHelper.push(context, ArtistScreen(artistId: item.id));
                 } else if (item.type == RecentSearchType.album) {
-                  NavigationHelper.push(context, AlbumScreen(albumId: item.id));
+                  NavigationHelper.push(
+                    context,
+                    AlbumScreen(
+                      albumId: item.id,
+                      album: item.album ??
+                          Album(
+                            id: item.id,
+                            name: item.title,
+                            artist: item.subtitle,
+                            coverArt: item.imageUrl,
+                          ),
+                    ),
+                  );
                 } else if (item.type == RecentSearchType.song && item.song != null) {
                   player.playSongWithRadio(item.song!);
                 }
@@ -533,7 +546,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       RecentSearchesService().addAlbum(album);
                       NavigationHelper.push(
                         context,
-                        AlbumScreen(albumId: album.id),
+                        AlbumScreen(albumId: album.id, album: album),
                       );
                     },
                   ),
@@ -791,7 +804,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             setState(() => _showSuggestions = false);
                             NavigationHelper.push(
                               context,
-                              AlbumScreen(albumId: album.id),
+                              AlbumScreen(albumId: album.id, album: album),
                             );
                           },
                         ),
