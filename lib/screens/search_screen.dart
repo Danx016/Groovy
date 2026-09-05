@@ -13,6 +13,7 @@ import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import '../models/album.dart';
+import '../models/artist.dart';
 import 'artist_screen.dart';
 import 'genres_screen.dart';
 import 'new_releases_screen.dart';
@@ -463,7 +464,17 @@ class _SearchScreenState extends State<SearchScreen> {
                   : null,
               onTap: () {
                 if (item.type == RecentSearchType.artist) {
-                  NavigationHelper.push(context, ArtistScreen(artistId: item.id));
+                  NavigationHelper.push(
+                    context,
+                    ArtistScreen(
+                      artistId: item.id,
+                      artist: Artist(
+                        id: item.id,
+                        name: item.title,
+                        coverArt: item.imageUrl,
+                      ),
+                    ),
+                  );
                 } else if (item.type == RecentSearchType.album) {
                   NavigationHelper.push(
                     context,
@@ -525,7 +536,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     RecentSearchesService().addArtist(artist);
                     NavigationHelper.push(
                       context,
-                      ArtistScreen(artistId: artist.id),
+                      ArtistScreen(artistId: artist.id, artist: artist),
                     );
                   },
                 ),
@@ -760,7 +771,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             setState(() => _showSuggestions = false);
                             NavigationHelper.push(
                               context,
-                              ArtistScreen(artistId: artist.id),
+                              ArtistScreen(artistId: artist.id, artist: artist),
                             );
                           },
                         ),

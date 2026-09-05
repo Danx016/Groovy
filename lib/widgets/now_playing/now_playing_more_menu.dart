@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../models/song.dart';
 import '../../models/album.dart';
+import '../../models/artist.dart';
 import '../../providers/library_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../screens/song_credits_screen.dart';
@@ -294,7 +295,14 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 if (artistId.isNotEmpty) {
                   Navigator.of(context).push(
                     CupertinoPageRoute(
-                      builder: (ctx) => ArtistScreen(artistId: artistId),
+                      builder: (ctx) => ArtistScreen(
+                        artistId: artistId,
+                        artist: Artist(
+                          id: artistId,
+                          name: currentSong.artist ?? artistId,
+                          coverArt: currentSong.coverArt,
+                        ),
+                      ),
                     ),
                   );
                 }

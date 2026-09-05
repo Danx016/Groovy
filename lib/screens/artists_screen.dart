@@ -171,7 +171,7 @@ class _ArtistsScreenState extends State<ArtistsScreen> {
                         onTap: () {
                           NavigationHelper.push(
                             context,
-                            ArtistScreen(artistId: artist.id),
+                            ArtistScreen(artistId: artist.id, artist: artist),
                           );
                         },
                       );

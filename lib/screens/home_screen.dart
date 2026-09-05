@@ -652,7 +652,7 @@ class _QuickAccessGrid extends StatelessWidget {
       onTap = () => Navigator.push(
             context,
             MaterialPageRoute(
-                builder: (context) => AlbumScreen(albumId: item.id)),
+                builder: (context) => AlbumScreen(albumId: item.id, album: item)),
           );
     }
 
