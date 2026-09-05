@@ -223,9 +223,16 @@ class PaletteService {
   }
 
   static double _colorDistance(Color a, Color b) {
-    final dr = (a.r - b.r).abs() * 255;
-    final dg = (a.g - b.g).abs() * 255;
-    final db = (a.b - b.b).abs() * 255;
-    return dr + dg + db;
+    try {
+      final dr = ((a.r - b.r).abs() * 255);
+      final dg = ((a.g - b.g).abs() * 255);
+      final db = ((a.b - b.b).abs() * 255);
+      return dr + dg + db;
+    } catch (_) {
+      final dr = (a.red - b.red).abs();
+      final dg = (a.green - b.green).abs();
+      final db = (a.blue - b.blue).abs();
+      return (dr + dg + db).toDouble();
+    }
   }
 }

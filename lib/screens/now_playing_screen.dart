@@ -84,9 +84,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
     // 2. Lock 120Hz display refresh rate on Android
     if (!kIsWeb && Platform.isAndroid) {
-      try {
-        FlutterDisplayMode.setHighRefreshRate();
-      } catch (_) {}
+      FlutterDisplayMode.setHighRefreshRate().catchError((_) {});
     }
 
     // 3. Extract palette immediately (runs async, caches instantly)
