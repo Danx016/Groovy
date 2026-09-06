@@ -84,27 +84,19 @@ jobs:
           
           echo "✅ Keystore configured for signing"
       
-      - name: Build APKs (with encrypted analytics)
+      - name: Build APKs
         env:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          # Mask secrets in logs (GitHub does this automatically, but we double-check)
-          echo "::add-mask::$COUNTLY_APP_KEY"
-          echo "Building with analytics configured..."
-          flutter build apk --release \
-            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
-      
-      - name: Build AppBundle (with encrypted analytics)
-        env:
-          COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
-          COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
-        run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
-          flutter build appbundle --release \
-            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
+          if [ -n "$COUNTLY_APP_KEY" ]; then
+            echo "::add-mask::$COUNTLY_APP_KEY"
+            flutter build apk --release \
+              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
+              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+          else
+            flutter build apk --release
+          fi
       
       - name: Upload APKs
         uses: actions/upload-artifact@v4
@@ -143,10 +135,14 @@ jobs:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
-          flutter build ios --release --no-codesign \
-            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
+          if [ -n "$COUNTLY_APP_KEY" ]; then
+            echo "::add-mask::$COUNTLY_APP_KEY"
+            flutter build ios --release --no-codesign \
+              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
+              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+          else
+            flutter build ios --release --no-codesign
+          fi
       
       - name: Create IPA
         run: |
@@ -195,11 +191,15 @@ jobs:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          $key = $env:COUNTLY_APP_KEY
-          Write-Host "::add-mask::$key"
-          flutter build windows --release `
-            --dart-define=COUNTLY_SERVER_URL="$env:COUNTLY_SERVER_URL" `
-            --dart-define=COUNTLY_APP_KEY="$key" 2>&1 | Select-String -Pattern $key -NotMatch
+          if ($env:COUNTLY_APP_KEY) {
+            $key = $env:COUNTLY_APP_KEY
+            Write-Host "::add-mask::$key"
+            flutter build windows --release `
+              --dart-define=COUNTLY_SERVER_URL="$env:COUNTLY_SERVER_URL" `
+              --dart-define=COUNTLY_APP_KEY="$key"
+          } else {
+            flutter build windows --release
+          }
       
       - name: Install NSIS
         run: choco install nsis -y
@@ -256,10 +256,14 @@ jobs:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
-          flutter build linux --release \
-            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
+          if [ -n "$COUNTLY_APP_KEY" ]; then
+            echo "::add-mask::$COUNTLY_APP_KEY"
+            flutter build linux --release \
+              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
+              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+          else
+            flutter build linux --release
+          fi
       
       - name: Upload Linux Build
         uses: actions/upload-artifact@v4
@@ -298,10 +302,14 @@ jobs:
           COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
           COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
         run: |
-          echo "::add-mask::$COUNTLY_APP_KEY"
-          flutter build macos --release \
-            --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-            --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY" 2>&1 | grep -v "$COUNTLY_APP_KEY" || true
+          if [ -n "$COUNTLY_APP_KEY" ]; then
+            echo "::add-mask::$COUNTLY_APP_KEY"
+            flutter build macos --release \
+              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
+              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
+          else
+            flutter build macos --release
+          fi
       
       - name: Create DMG
         run: |
