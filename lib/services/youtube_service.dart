@@ -255,7 +255,12 @@ class _DesktopAudioProxyServer {
       }
 
       // Stream continuous audio data to player without premature disconnection
-      await upstreamResp.pipe(request.response);
+      try {
+        await request.response.addStream(upstreamResp);
+        await request.response.close();
+      } catch (e) {
+        // Normal when client seeks or closes socket after buffer
+      }
     } catch (e) {
       // Normal when seeking or skipping to another song
       debugPrint('[AudioProxy] Stream finished or connection closed for $cleanId: $e');

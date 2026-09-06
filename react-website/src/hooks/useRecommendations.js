@@ -25,8 +25,8 @@ const cleanSong = (song) =>
   (!song.duration || song.duration >= 15);
 
 export function useRecommendations() {
-  const { history, queue } = usePlayer();
-  const { favorites } = useLibrary();
+  const { queue } = usePlayer();
+  const { favorites = [], history = [] } = useLibrary();
 
   return useMemo(() => {
     /* Source pool: history + favorites, deduplicated */

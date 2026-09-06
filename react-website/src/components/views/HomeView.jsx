@@ -138,12 +138,12 @@ const QuickAccessGrid = ({ items }) => {
 };
 
 export const HomeView = ({ setActiveTab }) => {
-  const { history, currentSong, isPlaying, playSong, togglePlay } = usePlayer();
-  const { favorites } = useLibrary();
+  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
+  const { favorites = [], history = [] } = useLibrary();
   const { isAuthenticated } = useAuth();
-  const { forYou, quickPicks, mixes } = useRecommendations();
+  const { forYou = [], quickPicks = [], mixes = [] } = useRecommendations();
 
-  const hasData = history.length > 0 || favorites.length > 0;
+  const hasData = (history?.length || 0) > 0 || (favorites?.length || 0) > 0;
 
   /* Quick access: last 6 unique songs from history */
   const quickAccessSongs = (() => {

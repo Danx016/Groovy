@@ -82,6 +82,18 @@ class YtDlpService {
     _streamCacheTime.clear();
   }
 
+  yt.AudioStreamInfo _selectBestAudioStream(Iterable<yt.AudioStreamInfo> audioStreams) {
+    if (!kIsWeb && Platform.isWindows) {
+      final mp4Streams = audioStreams.where((s) =>
+          s.container.name.toLowerCase() == 'mp4' ||
+          s.container.name.toLowerCase() == 'm4a');
+      if (mp4Streams.isNotEmpty) {
+        return mp4Streams.withHighestBitrate();
+      }
+    }
+    return audioStreams.withHighestBitrate();
+  }
+
   void invalidateCache(String videoId) {
     _streamInfoCache.remove(videoId);
     _streamCacheTime.remove(videoId);
@@ -648,7 +660,10 @@ class YtDlpService {
     try {
       final result = await _runYtDlp([
         '-j',
-        '-f', 'ba/b[acodec!=none]/bestaudio/best',
+        '-f',
+        (!kIsWeb && Platform.isWindows)
+            ? 'ba[ext=m4a]/ba[ext=mp4]/ba/bestaudio'
+            : 'ba/b[acodec!=none]/bestaudio/best',
         '--extractor-args', 'youtube:player_client=android_music,android,ios,mweb',
         '--no-warnings',
         '--no-check-certificates',
@@ -680,7 +695,7 @@ class YtDlpService {
       final manifest = await _fallbackClient.videos.streamsClient.getManifest(cleanId);
       final audioOnly = manifest.audioOnly;
       if (audioOnly.isNotEmpty) {
-        final best = audioOnly.withHighestBitrate();
+        final best = _selectBestAudioStream(audioOnly);
         final url = best.url.toString();
         final info = YtStreamInfo(
           url: url,
@@ -714,7 +729,7 @@ class YtDlpService {
         );
         final audioOnly = manifest.audioOnly;
         if (audioOnly.isNotEmpty) {
-          final best = audioOnly.withHighestBitrate();
+          final best = _selectBestAudioStream(audioOnly);
           final url = best.url.toString();
           final info = YtStreamInfo(
             url: url,
