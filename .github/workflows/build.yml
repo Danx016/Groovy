@@ -5,8 +5,11 @@ on:
     inputs:
       version:
         description: 'Version number (e.g., 1.0.8)'
-        required: true
+        required: false
         type: string
+  push:
+    tags:
+      - 'v*'
 
 env:
   FLUTTER_VERSION: '3.41.7'
@@ -356,12 +359,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Create Tag
+      - name: Determine Version
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VER="${{ github.event.inputs.version }}"
+          elif [ "${{ github.ref_type }}" = "tag" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="1.0.57"
+          fi
+          echo "VERSION=$VER" >> $GITHUB_OUTPUT
+          echo "TAG=v$VER" >> $GITHUB_OUTPUT
+
+      - name: Create Tag (if workflow_dispatch)
+        if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -a "v${{ github.event.inputs.version }}" -m "Release v${{ github.event.inputs.version }}"
-          git push origin "v${{ github.event.inputs.version }}"
+          git tag -a "${{ steps.get_version.outputs.TAG }}" -m "Release ${{ steps.get_version.outputs.TAG }}" || true
+          git push origin "${{ steps.get_version.outputs.TAG }}" || true
 
       - name: Download Android Artifacts
         uses: actions/download-artifact@v4
@@ -418,10 +435,10 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.event.inputs.version }}
-          name: Groovy v${{ github.event.inputs.version }}
+          tag_name: ${{ steps.get_version.outputs.TAG }}
+          name: Groovy ${{ steps.get_version.outputs.TAG }}
           body: |
-            ## 🎉 Groovy v${{ github.event.inputs.version }}
+            ## 🎉 Groovy ${{ steps.get_version.outputs.TAG }}
 
             ### 📦 Downloads
 
