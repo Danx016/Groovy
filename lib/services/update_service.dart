@@ -159,7 +159,30 @@ class UpdateService {
       if (!kIsWeb && Platform.isAndroid) {
         await _channel.invokeMethod('installApk', {'filePath': filePath});
       } else if (!kIsWeb && Platform.isWindows) {
-        await Process.start(filePath, [], mode: ProcessStartMode.detached);
+        try {
+          // Launch via ShellExecute (cmd start) to invoke Windows UAC elevation prompt
+          await Process.start(
+            'cmd.exe',
+            ['/c', 'start', '', filePath],
+            mode: ProcessStartMode.detached,
+          );
+        } catch (_) {
+          await Process.start(
+            'powershell.exe',
+            [
+              '-NoProfile',
+              '-Command',
+              'Start-Process',
+              '-FilePath',
+              '"$filePath"',
+              '-Verb',
+              'RunAs'
+            ],
+            mode: ProcessStartMode.detached,
+          );
+        }
+      } else if (!kIsWeb && Platform.isLinux) {
+        await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
       }
     } catch (e) {
       isDownloadingNotifier.value = false;
