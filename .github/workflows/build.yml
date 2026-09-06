@@ -112,53 +112,6 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
-      - name: Install dependencies
-        run: flutter pub get
-      
-      - name: Build iOS (no codesign for testing)
-        env:
-          COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
-          COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
-        run: |
-          if [ -n "$COUNTLY_APP_KEY" ]; then
-            echo "::add-mask::$COUNTLY_APP_KEY"
-            flutter build ios --release --no-codesign \
-              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
-          else
-            flutter build ios --release --no-codesign
-          fi
-      
-      - name: Create IPA
-        run: |
-          ls -la build/ios/
-          cd build/ios/Release-iphoneos
-          mkdir -p Payload
-          cp -r *.app Payload/
-          zip -r ../../../musly-ios.ipa Payload
-          cd ../../..
-      
-      - name: Upload iOS Build
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-build
-          path: musly-ios.ipa
-
   # Windows Build
   build-windows:
     runs-on: windows-latest
@@ -220,149 +173,10 @@ jobs:
           name: windows-build
           path: windows_package/
 
-  # Linux Build
-  build-linux:
-    runs-on: ubuntu-latest
-    needs: check-secrets
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libasound2-dev libnotify-dev libsecret-1-dev libjsoncpp-dev libmpv-dev mpv
-      
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
-      - name: Install dependencies
-        run: flutter pub get
-      
-      - name: Build Linux
-        env:
-          COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
-          COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
-        run: |
-          if [ -n "$COUNTLY_APP_KEY" ]; then
-            echo "::add-mask::$COUNTLY_APP_KEY"
-            flutter build linux --release \
-              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
-          else
-            flutter build linux --release
-          fi
-      
-      - name: Upload Linux Build
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-build
-          path: build/linux/x64/release/bundle/
-
-  # macOS Build
-  build-macos:
-    runs-on: macos-latest
-    needs: check-secrets
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
-      
-      - name: Install dependencies
-        run: flutter pub get
-      
-      - name: Build macOS
-        env:
-          COUNTLY_SERVER_URL: ${{ secrets.COUNTLY_SERVER_URL }}
-          COUNTLY_APP_KEY: ${{ secrets.COUNTLY_APP_KEY }}
-        run: |
-          if [ -n "$COUNTLY_APP_KEY" ]; then
-            echo "::add-mask::$COUNTLY_APP_KEY"
-            flutter build macos --release \
-              --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
-              --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
-          else
-            flutter build macos --release
-          fi
-      
-      - name: Create DMG
-        run: |
-          set -e
-          APP_PATH="build/macos/Build/Products/Release/musly.app"
-          DMG_NAME="musly-macos"
-
-          echo "Verifying app exists at $APP_PATH..."
-          if [ ! -d "$APP_PATH" ]; then
-            echo "Error: App not found at $APP_PATH"
-            ls -la build/macos/Build/Products/Release/
-            exit 1
-          fi
-
-          echo "Creating temporary directory for DMG contents..."
-          TEMP_DIR=$(mktemp -d)
-          cp -r "$APP_PATH" "$TEMP_DIR/"
-          ln -s /Applications "$TEMP_DIR/Applications"
-
-          echo "Creating DMG with hdiutil..."
-          hdiutil create -srcfolder "$TEMP_DIR" -volname "Musly" -fs HFS+ -format UDRW -size 200M "${DMG_NAME}_temp.dmg"
-
-          echo "Converting to compressed DMG..."
-          hdiutil convert "${DMG_NAME}_temp.dmg" -format UDZO -o "${DMG_NAME}.dmg"
-
-          echo "Cleaning up..."
-          rm -rf "$TEMP_DIR" "${DMG_NAME}_temp.dmg"
-
-          echo "Verifying DMG was created..."
-          if [ ! -f "${DMG_NAME}.dmg" ]; then
-            echo "Error: DMG was not created!"
-            exit 1
-          fi
-
-          ls -lh "${DMG_NAME}.dmg"
-          echo "DMG created successfully!"
-
-      - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-dmg
-          path: musly-macos.dmg
-
-      - name: Upload macOS Build
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-build
-          path: build/macos/Build/Products/Release/
-
-  # Create Release with all artifacts
+  # Create Release with Android and Windows artifacts
   release:
     runs-on: ubuntu-latest
-    needs: [build-android, build-ios, build-windows, build-linux, build-macos]
+    needs: [build-android, build-windows]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -375,7 +189,7 @@ jobs:
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             VER="${GITHUB_REF_NAME#v}"
           else
-            VER="1.0.57"
+            VER="1.0.58"
           fi
           echo "VERSION=$VER" >> $GITHUB_OUTPUT
           echo "TAG=v$VER" >> $GITHUB_OUTPUT
@@ -394,51 +208,17 @@ jobs:
           name: android-apk
           path: artifacts/android/
 
-      - name: Download iOS Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: ios-build
-          path: artifacts/ios/
-
       - name: Download Windows Artifacts
         uses: actions/download-artifact@v4
         with:
           name: windows-build
           path: artifacts/windows/
 
-      - name: Download Linux Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-build
-          path: artifacts/linux/
-
-      - name: Download macOS Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-build
-          path: artifacts/macos/
-
-      - name: Download macOS DMG
-        uses: actions/download-artifact@v4
-        with:
-          name: macos-dmg
-          path: artifacts/macos-dmg/
-
       - name: Package Windows
         run: |
           cd artifacts/windows
           zip -r ../../groovy-windows.zip .
           cd ../..
-
-      - name: Package Linux
-        run: |
-          cd artifacts/linux
-          tar -czf ../../groovy-linux-x64.tar.gz .
-          cd ../..
-
-      - name: Package macOS
-        run: |
-          cp artifacts/macos-dmg/*.dmg groovy-macos.dmg
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -451,26 +231,17 @@ jobs:
             ### 📦 Downloads
 
             **Android:**
-            - `app-release.apk` (universal APK for all devices)
+            - `app-release.apk` (universal APK for Android devices)
 
             **Windows:**
-            - `Groovy-Setup.exe` (setup installer, run to install Groovy)
+            - `Groovy-Setup.exe` (setup installer, run to install Groovy on Windows)
             - `groovy-windows.zip` (portable version, extract and run)
-
-            **macOS:**
-            - `groovy-macos.dmg` (drag Groovy.app to Applications)
-
-            **Linux:**
-            - `groovy-linux-x64.tar.gz` (extract and run groovy)
 
             ### 📝 Changelog
             See [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md)
           files: |
             artifacts/android/*.apk
-            artifacts/ios/*.ipa
             artifacts/windows/Groovy-Setup.exe
             groovy-windows.zip
-            groovy-linux-x64.tar.gz
-            groovy-macos.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
