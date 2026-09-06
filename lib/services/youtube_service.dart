@@ -320,12 +320,17 @@ class YoutubeService {
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty) return null;
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
-      if (proxyUrl.isNotEmpty) {
-        return AudioSource.uri(
-          Uri.parse(proxyUrl),
-          tag: song.id,
-        );
+      try {
+        final streamInfo = await _ytdlp.resolveStreamInfo(videoId);
+        if (streamInfo.url.isNotEmpty) {
+          return AudioSource.uri(
+            Uri.parse(streamInfo.url),
+            headers: streamInfo.headers,
+            tag: song.id,
+          );
+        }
+      } catch (e) {
+        debugPrint('[YouTube] Direct AudioSource resolution error, using fallback: $e');
       }
     }
     return buildAudioSource(videoId);
@@ -333,10 +338,6 @@ class YoutubeService {
 
   Future<String> resolveStreamUrlAsync(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
-      if (proxyUrl.isNotEmpty) return proxyUrl;
-    }
     return _ytdlp.resolveStreamUrl(videoId);
   }
 

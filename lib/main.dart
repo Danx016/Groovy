@@ -179,14 +179,6 @@ void main() async {
   JustAudioMediaKit.title = 'Groovy';
   JustAudioMediaKit.bufferSize = 32 * 1024 * 1024;
   JustAudioMediaKit.prefetchPlaylist = false;
-  JustAudioMediaKit.protocolWhitelist = const [
-    'http',
-    'https',
-    'file',
-    'data',
-    'tcp',
-    'tls',
-  ];
   JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
