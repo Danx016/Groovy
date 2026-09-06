@@ -209,6 +209,8 @@ class _DesktopAudioProxyServer {
         );
         if (rangeHeader != null) {
           req.headers.set(HttpHeaders.rangeHeader, rangeHeader);
+        } else {
+          req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-');
         }
         return await req.close();
       }
@@ -235,7 +237,7 @@ class _DesktopAudioProxyServer {
           streamInfo.url.contains('mime=audio/webm'));
       final defaultType = isWebm ? 'audio/webm' : 'audio/mp4';
       final contentType =
-          upstreamResp.headers.contentType?.toString() ?? defaultType;
+          upstreamResp.headers.contentType?.mimeType ?? defaultType;
       request.response.headers.set(HttpHeaders.contentTypeHeader, contentType);
 
       final contentRange =
