@@ -107,14 +107,6 @@ jobs:
           name: android-apk
           path: build/app/outputs/flutter-apk/*.apk
 
-  # iOS Build (macOS required)
-  build-ios:
-    runs-on: macos-latest
-    needs: check-secrets
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Flutter
   # Windows Build
   build-windows:
     runs-on: windows-latest
