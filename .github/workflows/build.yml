@@ -14,6 +14,9 @@ on:
 env:
   FLUTTER_VERSION: '3.41.7'
 
+permissions:
+  contents: write
+
 jobs:
   # Validate secrets exist
   check-secrets:
@@ -289,22 +292,29 @@ jobs:
           tag_name: ${{ steps.get_version.outputs.TAG }}
           name: Groovy ${{ steps.get_version.outputs.TAG }}
           body: |
-            ## 🎉 Groovy ${{ steps.get_version.outputs.TAG }}
+            ## 🎵 Groovy ${{ steps.get_version.outputs.TAG }}
 
-            ### 📦 Downloads
+            ### ✨ Novedades y Mejoras:
+            - 🖥️ **Soporte Oficial para Windows y Linux**: Nuevo instalador ejecutable (`Groovy-Setup.exe`), versión portable (`.zip`) y paquete Linux (`.tar.gz`) con optimizaciones completas de escritorio.
+            - ⚡ **Motor de Streaming yt-dlp & YouTube**: Reproducción ultrarrápida, streaming de audio directo y caché inteligente.
+            - 🎨 **Interfaz Renovada Estilo Apple Music**: Barra lateral, nuevo reproductor de escritorio, panel de letras sincronizadas y navegación fluida a 120 Hz.
+            - 📱 **Sincronización Multiplataforma**: Experiencia unificada entre móvil (Android) y escritorio (Windows / Linux).
+            - 🛡️ **Correcciones y Rendimiento**: Mejoras de estabilidad, gestión de colas y consumo de memoria.
 
-            **Android:**
-            - `app-release.apk` (universal APK for Android devices)
+            ### 📦 Descargas Disponibles:
 
-            **Windows:**
-            - `Groovy-Setup.exe` (setup installer, run to install Groovy on Windows)
-            - `groovy-windows.zip` (portable version, extract and run)
+            **📱 Android:**
+            - `app-release.apk` (APK universal para cualquier dispositivo Android)
 
-            **Linux:**
-            - `groovy-linux-x64.tar.gz` (extract and run groovy on Linux)
+            **🪟 Windows:**
+            - `Groovy-Setup.exe` (Instalador con asistente para Windows)
+            - `groovy-windows.zip` (Versión portable, descomprimir y usar)
 
-            ### 📝 Changelog
-            See [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md)
+            **🐧 Linux:**
+            - `groovy-linux-x64.tar.gz` (Binario empaquetado para Linux x64)
+
+            ### 📝 Registro de Cambios
+            Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para más detalles.
           files: |
             artifacts/android/*.apk
             artifacts/windows/Groovy-Setup.exe

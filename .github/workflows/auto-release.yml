@@ -88,14 +88,11 @@ jobs:
             ## 🎵 Groovy v${{ env.VERSION }}
 
             ### ✨ Novedades y Mejoras:
-            - 🚀 **Rendimiento a 120 Hz desbloqueado**: Animaciones ultra fluidas en pantalla completa, carátula y letras sin caídas de fotogramas.
-            - 🍎 **Rediseño Completo Apple Music**:
-              - **Biblioteca**: Categorías con iconos rojos (*Playlists, Artistas, Álbumes, Canciones*) y cuadrícula de *Agregadas recientemente*.
-              - **Cuenta**: Cabecera con avatar, edición de perfil, suscripciones y configuración estilo Apple Music.
-              - **Cola de Reproducción ("A continuación")**: Controles inferiores anclados y accesos directos (*Aleatorio, Repetir*).
-              - **Fondo dinámico radiante**: Degradados de malla ambiental en alta resolución.
-            - ⚡ **Búsqueda Instantánea en 0 ms**: Resultados locales inmediatos mientras escribes sin bloqueos de red.
-            - 🛡️ **Navegación Fluida a Artista y Álbum**: Toca el título o artista para explorar su perfil y discografía completa.
+            - 🖥️ **Soporte Oficial para Windows y Linux**: Nuevo instalador ejecutable (`Groovy-Setup.exe`), versión portable (`.zip`) y paquete Linux (`.tar.gz`) con optimizaciones completas de escritorio.
+            - ⚡ **Motor de Streaming yt-dlp & YouTube**: Reproducción ultrarrápida, streaming de audio directo y caché inteligente.
+            - 🎨 **Interfaz Renovada Estilo Apple Music**: Barra lateral, nuevo reproductor de escritorio, panel de letras sincronizadas y navegación fluida a 120 Hz.
+            - 📱 **Sincronización Multiplataforma**: Experiencia unificada entre móvil (Android) y escritorio (Windows / Linux).
+            - 🛡️ **Correcciones y Rendimiento**: Mejoras de estabilidad, gestión de colas y consumo de memoria.
           make_latest: true
           files: |
             release-assets/app-release.apk
