@@ -1229,6 +1229,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         final wasPlaying = _isPlaying;
         _isPlaying = state.playing;
+        if (state.playing || state.processingState == ProcessingState.ready) {
+          _isLoading = false;
+        }
 
         if (wasPlaying != _isPlaying && !_reactivatingSession) {
           debugPrint(
@@ -1668,6 +1671,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
+          _isPlaying = true;
+          _isLoading = false;
+          notifyListeners();
         } else if (_youtubeService.isYoutube) {
           // All songs are YouTube — can't build ConcatenatingAudioSource easily
           _concatenatingSource = null;

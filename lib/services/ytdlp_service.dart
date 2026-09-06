@@ -655,7 +655,42 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop: Execute host Python / yt-dlp subprocess with JSON dump
+    // 2. Direct, lightning-fast pure-Dart Innertube manifest resolution
+    final clientSets = [
+      [yt.YoutubeApiClient.androidMusic, yt.YoutubeApiClient.mweb],
+      [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],
+      null,
+    ];
+
+    for (final clientList in clientSets) {
+      try {
+        final manifest = await _fallbackClient.videos.streamsClient.getManifest(
+          cleanId,
+          ytClients: clientList,
+        );
+        final audioOnly = manifest.audioOnly;
+        if (audioOnly.isNotEmpty) {
+          final best = _selectBestAudioStream(audioOnly);
+          final url = best.url.toString();
+          final info = YtStreamInfo(
+            url: url,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            ext: best.container.name,
+          );
+          _streamInfoCache[cleanId] = info;
+          _streamCacheTime[cleanId] = DateTime.now();
+          debugPrint('[yt-dlp] Instantly resolved stream info via Innertube for $cleanId');
+          return info;
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp] Innertube getManifest attempt error for $cleanId: $e');
+      }
+    }
+
+    // 3. Fallback to subprocess (yt-dlp / Python) if available
     final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
     try {
       final result = await _runYtDlp([
@@ -668,7 +703,7 @@ class YtDlpService {
         '--no-warnings',
         '--no-check-certificates',
         targetUrl,
-      ], timeout: const Duration(seconds: 15));
+      ], timeout: const Duration(seconds: 10));
 
       if (result != null && result.exitCode == 0) {
         final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
@@ -689,66 +724,7 @@ class YtDlpService {
       debugPrint('[yt-dlp/Desktop Python] Subprocess stream resolution error: $e');
     }
 
-    // 3. Fallback to youtube_explode_dart
-    debugPrint('[yt-dlp] Falling back to youtube_explode_dart for $cleanId');
-    try {
-      final manifest = await _fallbackClient.videos.streamsClient.getManifest(cleanId);
-      final audioOnly = manifest.audioOnly;
-      if (audioOnly.isNotEmpty) {
-        final best = _selectBestAudioStream(audioOnly);
-        final url = best.url.toString();
-        final info = YtStreamInfo(
-          url: url,
-          headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-          ext: best.container.name,
-        );
-        _streamInfoCache[cleanId] = info;
-        _streamCacheTime[cleanId] = DateTime.now();
-        return info;
-      }
-    } catch (e) {
-      debugPrint('[yt-dlp] Default getManifest failed for $cleanId: $e');
-    }
-
-    final clients = [
-      [yt.YoutubeApiClient.androidMusic],
-      [yt.YoutubeApiClient.mweb],
-      [yt.YoutubeApiClient.ios],
-      null,
-    ];
-
-    Object? lastError;
-    for (final clientList in clients) {
-      try {
-        final manifest = await _fallbackClient.videos.streamsClient.getManifest(
-          cleanId,
-          ytClients: clientList,
-        );
-        final audioOnly = manifest.audioOnly;
-        if (audioOnly.isNotEmpty) {
-          final best = _selectBestAudioStream(audioOnly);
-          final url = best.url.toString();
-          final info = YtStreamInfo(
-            url: url,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-            ext: best.container.name,
-          );
-          _streamInfoCache[cleanId] = info;
-          _streamCacheTime[cleanId] = DateTime.now();
-          return info;
-        }
-      } catch (e) {
-        lastError = e;
-      }
-    }
-
-    throw lastError ?? Exception('No audio streams available for video $cleanId');
+    throw Exception('No audio streams available for video $cleanId');
   }
 
   /// Extracts the direct audio stream URL for a given [videoId].
