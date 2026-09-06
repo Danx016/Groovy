@@ -3,14 +3,16 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  audio_service_win
   battery_plus
   connectivity_plus
   dynamic_color
   flutter_secure_storage_windows
-  just_audio_windows
   local_notifier
+  media_kit_libs_windows_audio
   permission_handler_windows
   screen_retriever
+  sqlite3_flutter_libs
   url_launcher_windows
   volume_controller
   window_manager

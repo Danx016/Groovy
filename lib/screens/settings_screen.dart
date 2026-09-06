@@ -3,8 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../l10n/app_localizations.dart';
-import 'settings_playback_tab.dart';
-import 'settings_storage_tab.dart';
 import 'settings_server_tab.dart';
 import 'settings_display_tab.dart';
 import 'settings_about_tab.dart';
@@ -32,7 +30,7 @@ class _SettingsScreenState extends State<SettingsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {
         setState(() {
@@ -53,16 +51,12 @@ class _SettingsScreenState extends State<SettingsScreen>
     final l10n = AppLocalizations.of(context)!;
     
     final tabs = [
-      (icon: CupertinoIcons.play_circle, text: l10n.tabPlayback),
-      (icon: CupertinoIcons.folder, text: l10n.tabStorage),
       (icon: CupertinoIcons.person_crop_circle, text: 'Cuenta'),
       (icon: CupertinoIcons.paintbrush, text: l10n.tabDisplay),
       (icon: CupertinoIcons.info, text: l10n.tabAbout),
     ];
     
     final tabViews = const [
-      SettingsPlaybackTab(),
-      SettingsStorageTab(),
       SettingsServerTab(),
       SettingsDisplayTab(),
       SettingsAboutTab(),

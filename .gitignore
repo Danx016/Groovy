@@ -12,6 +12,9 @@
 .swiftpm/
 migrate_working_dir/
 musly-1.0.4-setup.exe
+Groovy-Setup*.exe
+*.exe
+*.zip
 .claude/
 /discord_sdk_temp
 # lib/services/analytics_service.dart

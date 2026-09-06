@@ -41,6 +41,14 @@ class ReleaseInfo {
     return apkAsset?.browserDownloadUrl;
   }
 
+  String? get windowsSetupDownloadUrl {
+    final exeAsset = assets.cast<ReleaseAsset?>().firstWhere(
+          (a) => a?.name.toLowerCase().endsWith('.exe') ?? false,
+          orElse: () => null,
+        );
+    return exeAsset?.browserDownloadUrl;
+  }
+
   factory ReleaseInfo.fromJson(Map<String, dynamic> json) {
     final tag = json['tag_name'] as String? ?? '';
     return ReleaseInfo(
@@ -57,7 +65,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.44';
+  static String currentVersion = '1.0.57';
   static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
 
   static const String _apiUrl =
@@ -107,8 +115,17 @@ class UpdateService {
   }
 
   static Future<void> startDownload(ReleaseInfo release) async {
-    final apkUrl = release.apkDownloadUrl;
-    if (apkUrl == null) return;
+    final String? downloadUrl;
+    final String filename;
+    if (!kIsWeb && Platform.isWindows) {
+      downloadUrl = release.windowsSetupDownloadUrl ?? release.htmlUrl;
+      filename = 'Groovy-Update-Setup.exe';
+    } else {
+      downloadUrl = release.apkDownloadUrl;
+      filename = 'app-update.apk';
+    }
+
+    if (downloadUrl == null || downloadUrl.isEmpty) return;
     if (isDownloadingNotifier.value) return;
 
     isDownloadingNotifier.value = true;
@@ -117,7 +134,7 @@ class UpdateService {
 
     try {
       final dir = await getTemporaryDirectory();
-      final filePath = '${dir.path}/app-update.apk';
+      final filePath = '${dir.path}/$filename';
       final file = File(filePath);
       if (await file.exists()) {
         try {
@@ -126,7 +143,7 @@ class UpdateService {
       }
 
       await _dio.download(
-        apkUrl,
+        downloadUrl,
         filePath,
         onReceiveProgress: (received, total) {
           if (total > 0) {
@@ -141,6 +158,8 @@ class UpdateService {
 
       if (!kIsWeb && Platform.isAndroid) {
         await _channel.invokeMethod('installApk', {'filePath': filePath});
+      } else if (!kIsWeb && Platform.isWindows) {
+        await Process.start(filePath, [], mode: ProcessStartMode.detached);
       }
     } catch (e) {
       isDownloadingNotifier.value = false;
@@ -216,7 +235,7 @@ class UpdateService {
         .trim();
 
     if (cleaned.isEmpty) {
-      return '• Mejoras en la reproducción y estabilidad\n• Sincronización precisa de letras multi-fuente\n• Interfaz renovada y optimizaciones de rendimiento a 120 Hz';
+      return '• 🖥️ Soporte Oficial para Windows: Nuevo instalador y optimizaciones de escritorio.\n• ⚡ Streaming yt-dlp & YouTube: Mayor estabilidad y streaming directo de audio.\n• 🎨 Interfaz renovada: Mejoras en navegación, reproductor y sincronización multiplataforma.\n• 🚀 Rendimiento a 120 Hz: Animaciones fluidas, letras en tiempo real y correcciones generales.';
     }
     return cleaned;
   }

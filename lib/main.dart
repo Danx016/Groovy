@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'dart:io';
 import 'dart:async';
 import 'package:window_manager/window_manager.dart';
+import 'package:media_kit/media_kit.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:safe_device/safe_device.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
@@ -24,6 +25,7 @@ import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'package:dynamic_color/dynamic_color.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'theme/theme.dart';
 import 'utils/image_cache.dart';
 
@@ -143,6 +145,11 @@ class _EmulatorWarningScreen extends StatelessWidget {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
   final isEmulator = await _isRunningOnEmulator();
   if (isEmulator) {
     runApp(const _EmulatorWarningScreen());
@@ -168,12 +175,27 @@ void main() async {
     }
   }
 
-  JustAudioMediaKit.ensureInitialized(linux: true, windows: false);
+  MediaKit.ensureInitialized();
+  JustAudioMediaKit.title = 'Groovy';
+  JustAudioMediaKit.bufferSize = 32 * 1024 * 1024;
+  JustAudioMediaKit.prefetchPlaylist = false;
+  JustAudioMediaKit.protocolWhitelist = const [
+    'http',
+    'https',
+    'file',
+    'data',
+    'tcp',
+    'tls',
+  ];
+  JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
-    const windowOptions = WindowOptions();
+    const windowOptions = WindowOptions(
+      title: 'Groovy',
+    );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
+      await windowManager.setTitle('Groovy');
       await windowManager.show();
       await windowManager.focus();
     });
@@ -229,6 +251,11 @@ void main() async {
   });
   if (!kIsWeb && Platform.isAndroid) {
     Permission.notification.request().catchError((_) => PermissionStatus.denied);
+  }
+  if (!kIsWeb && Platform.isWindows) {
+    WindowsSystemService().initialize().catchError((e) {
+      debugPrint('Failed to initialize Windows system service: $e');
+    });
   }
 
   // Parallel async initialization of core services to minimize startup time

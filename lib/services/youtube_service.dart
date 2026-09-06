@@ -6,6 +6,7 @@ import '../models/models.dart';
 import 'library_database_service.dart';
 import 'recommendation_service.dart';
 import 'ytdlp_service.dart';
+import 'album_resolver_service.dart';
 
 class PingResult {
   final bool success;
@@ -126,12 +127,162 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   }
 }
 
+class _DesktopAudioProxyServer {
+  static final _DesktopAudioProxyServer instance =
+      _DesktopAudioProxyServer._internal();
+  _DesktopAudioProxyServer._internal();
+
+  HttpServer? _server;
+  int? _port;
+  final YtDlpService _ytdlp = YtDlpService();
+  HttpClient? _sharedClient;
+
+  HttpClient get _client {
+    _sharedClient ??= HttpClient()
+      ..idleTimeout = const Duration(seconds: 30)
+      ..connectionTimeout = const Duration(seconds: 10);
+    return _sharedClient!;
+  }
+
+  Future<void> ensureStarted() async {
+    if (_server != null) return;
+    try {
+      _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      _port = _server!.port;
+      debugPrint('[AudioProxy] Local proxy server running on http://127.0.0.1:$_port');
+      _server!.listen(_handleRequest, onError: (e) {
+        debugPrint('[AudioProxy] Server error: $e');
+      });
+    } catch (e) {
+      debugPrint('[AudioProxy] Failed to start local proxy: $e');
+    }
+  }
+
+  Future<String> getProxyUrl(String videoId) async {
+    await ensureStarted();
+    if (_port != null) {
+      return 'http://127.0.0.1:$_port/stream?id=$videoId';
+    }
+    return '';
+  }
+
+  Future<void> _handleRequest(HttpRequest request) async {
+    if (request.uri.path != '/stream') {
+      request.response.statusCode = HttpStatus.notFound;
+      await request.response.close();
+      return;
+    }
+
+    final videoId = request.uri.queryParameters['id'] ?? '';
+    if (videoId.isEmpty) {
+      request.response.statusCode = HttpStatus.badRequest;
+      await request.response.close();
+      return;
+    }
+
+    final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+
+    try {
+      var streamInfo = await _ytdlp.resolveStreamInfo(cleanId);
+      if (streamInfo.url.isEmpty) {
+        request.response.statusCode = HttpStatus.notFound;
+        await request.response.close();
+        return;
+      }
+
+      final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
+
+      Future<HttpClientResponse> fetchUpstream(String url, Map<String, String> headers) async {
+        final req = await _client.openUrl(request.method, Uri.parse(url));
+        headers.forEach((key, value) {
+          final lower = key.toLowerCase();
+          if (lower != 'host' &&
+              lower != 'content-length' &&
+              lower != 'range' &&
+              lower != 'user-agent') {
+            req.headers.set(key, value);
+          }
+        });
+        req.headers.set(
+          HttpHeaders.userAgentHeader,
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        );
+        if (rangeHeader != null) {
+          req.headers.set(HttpHeaders.rangeHeader, rangeHeader);
+        }
+        return await req.close();
+      }
+
+      var upstreamResp = await fetchUpstream(streamInfo.url, streamInfo.headers);
+
+      if (upstreamResp.statusCode == 403 ||
+          upstreamResp.statusCode == 410 ||
+          upstreamResp.statusCode == 429) {
+        debugPrint(
+            '[AudioProxy] Stream rejected (${upstreamResp.statusCode}) for $cleanId, refreshing stream URL...');
+        await upstreamResp.drain().catchError((_) {});
+        _ytdlp.invalidateCache(cleanId);
+        streamInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
+        upstreamResp = await fetchUpstream(streamInfo.url, streamInfo.headers);
+      }
+
+      request.response.statusCode = upstreamResp.statusCode;
+      request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+
+      final isWebm = (streamInfo.ext == 'webm' ||
+          streamInfo.ext == 'opus' ||
+          streamInfo.url.contains('mime=audio%2Fwebm') ||
+          streamInfo.url.contains('mime=audio/webm'));
+      final defaultType = isWebm ? 'audio/webm' : 'audio/mp4';
+      final contentType =
+          upstreamResp.headers.contentType?.toString() ?? defaultType;
+      request.response.headers.set(HttpHeaders.contentTypeHeader, contentType);
+
+      final contentRange =
+          upstreamResp.headers.value(HttpHeaders.contentRangeHeader);
+      if (contentRange != null) {
+        request.response.headers.set(HttpHeaders.contentRangeHeader, contentRange);
+      }
+
+      if (upstreamResp.contentLength >= 0) {
+        request.response.contentLength = upstreamResp.contentLength;
+      }
+
+      if (request.method == 'HEAD') {
+        await upstreamResp.drain().catchError((_) {});
+        await request.response.close();
+        return;
+      }
+
+      // Stream continuous audio data to player without premature disconnection
+      await upstreamResp.pipe(request.response);
+    } catch (e) {
+      // Normal when seeking or skipping to another song
+      debugPrint('[AudioProxy] Stream finished or connection closed for $cleanId: $e');
+      try {
+        await request.response.close();
+      } catch (_) {}
+    }
+  }
+
+  void dispose() {
+    _server?.close(force: true);
+    _server = null;
+    _port = null;
+    _sharedClient?.close(force: true);
+    _sharedClient = null;
+  }
+}
+
 class YoutubeService {
   final YtDlpService _ytdlp = YtDlpService();
   final LibraryDatabaseService _db = LibraryDatabaseService();
 
   void dispose() {
     _ytdlp.dispose();
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      _DesktopAudioProxyServer.instance.dispose();
+    }
   }
 
   bool get isYoutube => true;
@@ -160,12 +311,26 @@ class YoutubeService {
 
   Future<AudioSource?> getYoutubeAudioSource(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
+    if (videoId.isEmpty) return null;
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
+      if (proxyUrl.isNotEmpty) {
+        return AudioSource.uri(
+          Uri.parse(proxyUrl),
+          tag: song.id,
+        );
+      }
+    }
     return buildAudioSource(videoId);
   }
 
   Future<String> resolveStreamUrlAsync(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
-    return resolveStreamUrl(videoId);
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
+      if (proxyUrl.isNotEmpty) return proxyUrl;
+    }
+    return _ytdlp.resolveStreamUrl(videoId);
   }
 
   Future<ArtistInfo?> getArtistInfo(String id) async => null;
@@ -364,6 +529,14 @@ class YoutubeService {
       final matching = songs.where((s) => s.albumId == albumId || s.album == albumId).toList();
       if (matching.isNotEmpty) return matching;
 
+      // Try AlbumResolverService (which handles MPREb_, Deezer, and YTM browse endpoints)
+      try {
+        final resolved = await AlbumResolverService().resolveAlbum(albumId: albumId);
+        if (resolved != null && resolved.songs.isNotEmpty) {
+          return resolved.songs;
+        }
+      } catch (_) {}
+
       // Otherwise fetch online via yt-dlp
       final videos = await _ytdlp.getPlaylistVideos(albumId);
       return videos.map(_mapDictToSong).toList();
@@ -388,7 +561,21 @@ class YoutubeService {
           );
         }
       }
-      return albumMap.values.toList();
+      if (albumMap.isNotEmpty) return albumMap.values.toList();
+
+      // If no local albums, fetch official artist albums from YouTube Music Innertube
+      final rawAlbums = await _ytdlp.searchYtAlbumsInnertube(channelOrArtistId, limit: 30);
+      if (rawAlbums.isNotEmpty) {
+        return rawAlbums.map((a) => Album(
+          id: a['id'] as String,
+          name: a['title'] as String? ?? 'Álbum',
+          artist: a['artist'] as String?,
+          year: a['year'] as int?,
+          coverArt: a['coverArt'] as String?,
+        )).toList();
+      }
+
+      return [];
     } catch (e) {
       debugPrint('[YouTube] getArtistAlbums error: $e');
       return [];
@@ -537,8 +724,17 @@ class YoutubeService {
     int songCount = 20,
   }) async {
     try {
-      // 1. Query online tracks via yt-dlp dual search (YouTube Music + YouTube Video)
-      final dualResults = await _ytdlp.searchDual(query, limit: songCount);
+      // 1. Concurrently query songs, official albums, and official artists via YouTube Music Innertube
+      final futures = await Future.wait([
+        _ytdlp.searchDual(query, limit: songCount),
+        _ytdlp.searchYtAlbumsInnertube(query, limit: albumCount),
+        _ytdlp.searchYtArtistsInnertube(query, limit: artistCount),
+      ]);
+
+      final dualResults = futures[0] as Map<String, List<Map<String, dynamic>>>;
+      final rawAlbums = futures[1] as List<Map<String, dynamic>>;
+      final rawArtists = futures[2] as List<Map<String, dynamic>>;
+
       final musicSongs = (dualResults['music'] ?? []).map(_mapDictToSong).toList();
       final youtubeVideos = (dualResults['youtube'] ?? []).map(_mapDictToSong).toList();
 
@@ -555,20 +751,69 @@ class YoutubeService {
         }
       }
 
-      // Build artist & album suggestions from results
+      // 3. Process official YouTube Music artists and albums
       final artists = <Artist>[];
       final albums = <Album>[];
       final seenArtists = <String>{};
       final seenAlbums = <String>{};
 
-      for (final s in [...mergedMusic, ...youtubeVideos]) {
-        if (s.artist != null && s.artist!.isNotEmpty && !seenArtists.contains(s.artist)) {
-          seenArtists.add(s.artist!);
-          artists.add(Artist(id: s.artistId ?? s.artist!, name: s.artist!, coverArt: s.coverArt));
+      for (final art in rawArtists) {
+        final name = art['name'] as String? ?? '';
+        final id = art['id'] as String? ?? name;
+        if (name.isNotEmpty && !seenArtists.contains(name.toLowerCase())) {
+          seenArtists.add(name.toLowerCase());
+          artists.add(Artist(
+            id: id,
+            name: name,
+            coverArt: art['coverArt'] as String?,
+            artistImageUrl: art['artistImageUrl'] as String?,
+          ));
         }
-        if (s.album != null && s.album!.isNotEmpty && !seenAlbums.contains(s.album)) {
-          seenAlbums.add(s.album!);
-          albums.add(Album(id: s.albumId ?? s.album!, name: s.album!, artist: s.artist, coverArt: s.coverArt));
+      }
+
+      for (final alb in rawAlbums) {
+        final title = alb['title'] as String? ?? '';
+        final id = alb['id'] as String? ?? title;
+        if (title.isNotEmpty && !seenAlbums.contains(title.toLowerCase())) {
+          seenAlbums.add(title.toLowerCase());
+          albums.add(Album(
+            id: id,
+            name: title,
+            artist: alb['artist'] as String?,
+            year: alb['year'] as int?,
+            coverArt: alb['coverArt'] as String?,
+          ));
+        }
+      }
+
+      // 4. Supplement with any additional unique artists and albums from song metadata
+      for (final s in [...mergedMusic, ...youtubeVideos]) {
+        final artistName = s.artist?.trim();
+        if (artistName != null &&
+            artistName.isNotEmpty &&
+            !seenArtists.contains(artistName.toLowerCase()) &&
+            !artistName.toLowerCase().endsWith('vevo') &&
+            !artistName.toLowerCase().contains('topic')) {
+          seenArtists.add(artistName.toLowerCase());
+          artists.add(Artist(
+            id: s.artistId ?? artistName,
+            name: artistName,
+            coverArt: s.coverArt,
+          ));
+        }
+        final albumName = s.album?.trim();
+        if (albumName != null &&
+            albumName.isNotEmpty &&
+            !seenAlbums.contains(albumName.toLowerCase()) &&
+            albumName.toLowerCase() != 'album' &&
+            albumName.toLowerCase() != 'álbum') {
+          seenAlbums.add(albumName.toLowerCase());
+          albums.add(Album(
+            id: s.albumId ?? albumName,
+            name: albumName,
+            artist: s.artist,
+            coverArt: s.coverArt,
+          ));
         }
       }
 

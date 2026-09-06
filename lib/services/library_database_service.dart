@@ -1,7 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:sqflite/sqflite.dart';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
 
 /// SQLite-based persistent storage for the music library.
@@ -24,8 +28,23 @@ class LibraryDatabaseService {
   }
 
   Future<Database> _initDatabase() async {
-    final databasesPath = await getDatabasesPath();
-    final dbPath = join(databasesPath, _dbName);
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
+    }
+
+    String dbPath;
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      final appSupportDir = await getApplicationSupportDirectory();
+      final dir = Directory(appSupportDir.path);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      dbPath = join(appSupportDir.path, _dbName);
+    } else {
+      final databasesPath = await getDatabasesPath();
+      dbPath = join(databasesPath, _dbName);
+    }
 
     return openDatabase(
       dbPath,

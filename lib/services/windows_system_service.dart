@@ -53,17 +53,8 @@ class WindowsSystemService {
   }) async {
     if (!kIsWeb && Platform.isWindows && _isInitialized) {
       try {
-        if (duration.inMilliseconds > 0) {
-          WindowsTaskbar.setProgress(
-            position.inMilliseconds,
-            duration.inMilliseconds,
-          );
-          WindowsTaskbar.setProgressMode(
-            isPlaying ? TaskbarProgressMode.normal : TaskbarProgressMode.paused,
-          );
-        } else {
-          WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);
-        }
+        // Clear taskbar progress bar so it never looks like a file download (matches Spotify behavior)
+        WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);
       } catch (e) {
         debugPrint('Error updating Windows playback state: $e');
       }

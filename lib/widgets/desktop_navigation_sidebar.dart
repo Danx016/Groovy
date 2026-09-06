@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
+import '../providers/auth_provider.dart';
 import '../providers/library_provider.dart';
 import '../models/playlist.dart';
 import '../screens/playlist_screen.dart';
+import '../screens/playlists_screen.dart';
 import '../screens/favorites_screen.dart';
-import '../screens/radio_screen.dart';
-import '../screens/settings_screen.dart';
+import '../screens/history_screen.dart';
+import '../screens/artists_screen.dart';
+import '../screens/albums_screen.dart';
+import '../screens/all_songs_screen.dart';
+import '../screens/account_screen.dart';
 
 class DesktopNavigationSidebar extends StatefulWidget {
   final int selectedIndex;
@@ -30,26 +34,47 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
   bool _isCollapsed = false;
   bool _isPushing = false;
 
+  // Section collapse states (expanded by default)
+  bool _isLibraryExpanded = true;
+  bool _isPlaylistsExpanded = true;
+
   void _toggleCollapse() => setState(() => _isCollapsed = !_isCollapsed);
 
   void _navigateToPlaylist(Playlist playlist) {
-    final route = MaterialPageRoute(
-      builder: (_) =>
-          PlaylistScreen(playlistId: playlist.id, playlistName: playlist.name),
-    );
-    _push(route);
+    _push(MaterialPageRoute(
+      builder: (_) => PlaylistScreen(
+        playlistId: playlist.id,
+        playlistName: playlist.name,
+      ),
+    ));
+  }
+
+  void _navigateToPlaylists() {
+    _push(MaterialPageRoute(builder: (_) => const PlaylistsScreen()));
   }
 
   void _navigateToFavorites() {
     _push(MaterialPageRoute(builder: (_) => const FavoritesScreen()));
   }
 
-  void _navigateToRadio() {
-    _push(MaterialPageRoute(builder: (_) => const RadioScreen()));
+  void _navigateToHistory() {
+    _push(MaterialPageRoute(builder: (_) => const HistoryScreen()));
   }
 
-  void _navigateToSettings() {
-    _push(MaterialPageRoute(builder: (_) => const SettingsScreen()));
+  void _navigateToArtists() {
+    _push(MaterialPageRoute(builder: (_) => const ArtistsScreen()));
+  }
+
+  void _navigateToAlbums() {
+    _push(MaterialPageRoute(builder: (_) => const AlbumsScreen()));
+  }
+
+  void _navigateToSongs() {
+    _push(MaterialPageRoute(builder: (_) => const AllSongsScreen()));
+  }
+
+  void _navigateToAccount() {
+    _push(MaterialPageRoute(builder: (_) => const AccountScreen()));
   }
 
   void _push(Route<dynamic> route) {
@@ -70,8 +95,7 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
     final width = _isCollapsed ? 72.0 : 280.0;
-    final sidebarBg =
-        isDark ? const Color(0xFF000000) : const Color(0xFFEEEEEE);
+    final sidebarBg = isDark ? const Color(0xFF0C0D10) : const Color(0xFFF2F2F7);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -99,276 +123,110 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
             isCollapsed: _isCollapsed,
             onTap: () => widget.onDestinationSelected(2),
           ),
-          const SizedBox(height: 8),
-          _LibrarySection(
-            isCollapsed: _isCollapsed,
-            selectedIndex: widget.selectedIndex,
-            navigatorKey: widget.navigatorKey,
-            onLibraryTap: () => widget.onDestinationSelected(1),
-            onFavoritesTap: _navigateToFavorites,
-            onPlaylistTap: _navigateToPlaylist,
+          const SizedBox(height: 10),
+
+          // Expandable Scrollable Navigation Area
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.symmetric(horizontal: _isCollapsed ? 4 : 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // ── BIBLIOTECA SECTION ──────────────────────────────────
+                  _SectionHeader(
+                    icon: Icons.library_music_outlined,
+                    title: 'Biblioteca',
+                    isCollapsed: _isCollapsed,
+                    isExpanded: _isLibraryExpanded,
+                    onToggle: () => setState(
+                        () => _isLibraryExpanded = !_isLibraryExpanded),
+                    onHeaderTap: () => widget.onDestinationSelected(1),
+                  ),
+                  if (!_isCollapsed && _isLibraryExpanded) ...[
+                    _SidebarSubItem(
+                      icon: Icons.access_time_rounded,
+                      label: 'Agregado recientemente',
+                      onTap: _navigateToHistory,
+                    ),
+                    _SidebarSubItem(
+                      icon: Icons.mic_none_rounded,
+                      label: 'Artistas',
+                      onTap: _navigateToArtists,
+                    ),
+                    _SidebarSubItem(
+                      icon: Icons.album_outlined,
+                      label: 'Álbumes',
+                      onTap: _navigateToAlbums,
+                    ),
+                    _SidebarSubItem(
+                      icon: Icons.music_note_rounded,
+                      label: 'Canciones',
+                      onTap: _navigateToSongs,
+                    ),
+                  ],
+
+                  const SizedBox(height: 14),
+
+                  // ── PLAYLISTS SECTION ───────────────────────────────────
+                  _SectionHeader(
+                    icon: Icons.queue_music_rounded,
+                    title: 'Playlists',
+                    isCollapsed: _isCollapsed,
+                    isExpanded: _isPlaylistsExpanded,
+                    trailingAction: Icons.add_rounded,
+                    onTrailingAction: () => _showCreatePlaylist(context),
+                    onToggle: () => setState(
+                        () => _isPlaylistsExpanded = !_isPlaylistsExpanded),
+                    onHeaderTap: _navigateToPlaylists,
+                  ),
+                  if (!_isCollapsed && _isPlaylistsExpanded) ...[
+                    _SidebarSubItem(
+                      icon: Icons.grid_view_rounded,
+                      label: 'Todas las playlists',
+                      onTap: _navigateToPlaylists,
+                    ),
+                    _SidebarSubItem(
+                      icon: Icons.star_rounded,
+                      label: 'Canciones favoritas',
+                      onTap: _navigateToFavorites,
+                    ),
+                    // User created playlists
+                    Consumer<LibraryProvider>(
+                      builder: (context, libraryProvider, _) {
+                        final playlists = libraryProvider.playlists;
+                        if (playlists.isEmpty) return const SizedBox.shrink();
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: playlists.map((pl) {
+                            return _SidebarSubItem(
+                              icon: Icons.playlist_play_rounded,
+                              label: pl.name,
+                              onTap: () => _navigateToPlaylist(pl),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
-          _NavItem(
-            icon: Icons.radio_rounded,
-            activeIcon: Icons.radio_rounded,
-            label: l10n.categoryRadio,
-            isSelected: false,
-            isCollapsed: _isCollapsed,
-            onTap: _navigateToRadio,
-          ),
-          _NavItem(
-            icon: Icons.settings_outlined,
-            activeIcon: Icons.settings_rounded,
-            label: l10n.settings,
-            isSelected: false,
-            isCollapsed: _isCollapsed,
-            onTap: _navigateToSettings,
-          ),
+
+          // ── BOTTOM CONTROLS & PROFILE ─────────────────────────────────────
+          const SizedBox(height: 4),
           _CollapseButton(
             isCollapsed: _isCollapsed,
             onTap: _toggleCollapse,
             label: l10n.collapse,
             expandLabel: l10n.expand,
           ),
-        ],
-      ),
-    );
-  }
-}
 
-class _LogoRow extends StatelessWidget {
-  final bool isCollapsed;
-  const _LogoRow({required this.isCollapsed});
+          const Divider(height: 1, thickness: 0.5, color: Colors.white12),
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        isCollapsed ? 0 : 20,
-        20,
-        isCollapsed ? 0 : 16,
-        12,
-      ),
-      child: isCollapsed
-          ? Center(child: Image.asset('assets/logo.png', width: 30, height: 30))
-          : Row(
-              children: [
-                Image.asset('assets/logo.png', width: 30, height: 30),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'Groovy',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-    );
-  }
-}
-
-class _NavItem extends StatelessWidget {
-  final IconData icon;
-  final IconData activeIcon;
-  final String label;
-  final bool isSelected;
-  final bool isCollapsed;
-  final VoidCallback onTap;
-
-  const _NavItem({
-    required this.icon,
-    required this.activeIcon,
-    required this.label,
-    required this.isSelected,
-    required this.isCollapsed,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isSelected
-        ? (isDark ? Colors.white : Colors.black)
-        : (isDark ? const Color(0xFFB3B3B3) : const Color(0xFF6B6B6B));
-    final hoverBg = isDark
-        ? Colors.white.withValues(alpha: 0.07)
-        : Colors.black.withValues(alpha: 0.06);
-
-    return Tooltip(
-      message: isCollapsed ? label : '',
-      waitDuration: const Duration(milliseconds: 400),
-      child: InkWell(
-        onTap: onTap,
-        hoverColor: hoverBg,
-        splashColor: Colors.transparent,
-        highlightColor: Colors.transparent,
-        child: Container(
-          height: 44,
-          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-          padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 0 : 12),
-          alignment: isCollapsed ? Alignment.center : Alignment.centerLeft,
-          child: isCollapsed
-              ? Icon(isSelected ? activeIcon : icon, color: textColor, size: 26)
-              : Row(
-                  children: [
-                    Icon(
-                      isSelected ? activeIcon : icon,
-                      color: textColor,
-                      size: 26,
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 14,
-                          fontWeight:
-                              isSelected ? FontWeight.w700 : FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LibrarySection extends StatelessWidget {
-  final bool isCollapsed;
-  final int selectedIndex;
-  final GlobalKey<NavigatorState>? navigatorKey;
-  final VoidCallback onLibraryTap;
-  final VoidCallback onFavoritesTap;
-  final ValueChanged<Playlist> onPlaylistTap;
-
-  const _LibrarySection({
-    required this.isCollapsed,
-    required this.selectedIndex,
-    this.navigatorKey,
-    required this.onLibraryTap,
-    required this.onFavoritesTap,
-    required this.onPlaylistTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final l10n = AppLocalizations.of(context)!;
-    final headerColor = selectedIndex == 1
-        ? (isDark ? Colors.white : Colors.black)
-        : (isDark ? const Color(0xFFB3B3B3) : const Color(0xFF6B6B6B));
-    final hoverBg = isDark
-        ? Colors.white.withValues(alpha: 0.07)
-        : Colors.black.withValues(alpha: 0.06);
-
-    return Expanded(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (!isCollapsed)
-            InkWell(
-              onTap: onLibraryTap,
-              hoverColor: hoverBg,
-              splashColor: Colors.transparent,
-              highlightColor: Colors.transparent,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 12, 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        l10n.yourLibrary,
-                        style: TextStyle(
-                          color: headerColor,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 0.1,
-                        ),
-                      ),
-                    ),
-                    Tooltip(
-                      message: l10n.createPlaylist,
-                      child: InkWell(
-                        onTap: () => _showCreatePlaylist(context),
-                        borderRadius: BorderRadius.circular(50),
-                        hoverColor: hoverBg,
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.add_rounded,
-                            size: 20,
-                            color: isDark
-                                ? const Color(0xFFB3B3B3)
-                                : const Color(0xFF6B6B6B),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (isCollapsed)
-            Tooltip(
-              message: l10n.yourLibrary,
-              waitDuration: const Duration(milliseconds: 400),
-              child: InkWell(
-                onTap: onLibraryTap,
-                hoverColor: hoverBg,
-                splashColor: Colors.transparent,
-                highlightColor: Colors.transparent,
-                child: Container(
-                  height: 44,
-                  margin: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  alignment: Alignment.center,
-                  child: Icon(
-                    Icons.library_music_rounded,
-                    size: 26,
-                    color: selectedIndex == 1
-                        ? (isDark ? Colors.white : Colors.black)
-                        : (isDark
-                            ? const Color(0xFFB3B3B3)
-                            : const Color(0xFF6B6B6B)),
-                  ),
-                ),
-              ),
-            ),
-          _LikedSongsItem(isCollapsed: isCollapsed, onTap: onFavoritesTap),
-          Expanded(
-            child: Consumer<LibraryProvider>(
-              builder: (context, libraryProvider, _) {
-                final playlists = libraryProvider.playlists;
-                if (playlists.isEmpty) return const SizedBox.shrink();
-                return ListView.builder(
-                  padding: EdgeInsets.only(
-                    top: 4,
-                    bottom: 8,
-                    left: isCollapsed ? 12 : 0,
-                    right: isCollapsed ? 12 : 0,
-                  ),
-                  itemCount: playlists.length,
-                  itemBuilder: (context, index) => _PlaylistTile(
-                    playlist: playlists[index],
-                    isCollapsed: isCollapsed,
-                    onTap: () => onPlaylistTap(playlists[index]),
-                  ),
-                );
-              },
-            ),
+          _UserProfileBottomRow(
+            isCollapsed: _isCollapsed,
+            onTap: _navigateToAccount,
           ),
         ],
       ),
@@ -429,7 +287,6 @@ class _LibrarySection extends StatelessWidget {
         ),
       ),
     );
-    // Dispose controller to prevent memory leak
     controller.dispose();
   }
 
@@ -452,131 +309,72 @@ class _LibrarySection extends StatelessWidget {
           ),
         );
       }
-    } catch (e) {
-      if (ctx.mounted) {
-        Navigator.pop(ctx);
-        ScaffoldMessenger.of(ctx).showSnackBar(
-          SnackBar(
-            content: Text(l10n.errorCreatingPlaylist(e)),
-            behavior: SnackBarBehavior.floating,
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
+    } catch (_) {}
   }
 }
 
-class _LikedSongsItem extends StatelessWidget {
-  final bool isCollapsed;
-  final VoidCallback onTap;
-  const _LikedSongsItem({required this.isCollapsed, required this.onTap});
+// ── HEADER ROW WITH LOGO & TITLE ─────────────────────────────────────────────
 
-  static const _gradient = LinearGradient(
-    colors: [Color(0xFF4B0082), Color(0xFFADD8E6)],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+class _LogoRow extends StatelessWidget {
+  final bool isCollapsed;
+  const _LogoRow({required this.isCollapsed});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final l10n = AppLocalizations.of(context)!;
-    final hoverBg = isDark
-        ? Colors.white.withValues(alpha: 0.07)
-        : Colors.black.withValues(alpha: 0.06);
-
-    if (isCollapsed) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Tooltip(
-          message: l10n.likedSongsSidebar,
-          waitDuration: const Duration(milliseconds: 400),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(4),
-            hoverColor: hoverBg,
-            child: Container(
-              width: 48,
-              height: 48,
-              decoration: const BoxDecoration(
-                gradient: _gradient,
-                borderRadius: BorderRadius.all(Radius.circular(4)),
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        isCollapsed ? 0 : 20,
+        20,
+        isCollapsed ? 0 : 16,
+        12,
+      ),
+      child: isCollapsed
+          ? Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset('assets/app_icon.png', width: 32, height: 32),
               ),
-              child: const Icon(
-                Icons.favorite_rounded,
-                color: Colors.white,
-                size: 22,
-              ),
-            ),
-          ),
-        ),
-      );
-    }
-
-    return InkWell(
-      onTap: onTap,
-      hoverColor: hoverBg,
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        child: Row(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: const BoxDecoration(gradient: _gradient),
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  color: Colors.white,
-                  size: 22,
+            )
+          : Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset('assets/app_icon.png', width: 32, height: 32),
                 ),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    l10n.likedSongsSidebar,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Groovy',
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
-                    l10n.playlist,
-                    style: TextStyle(
-                      color: isDark
-                          ? const Color(0xFF9B9B9B)
-                          : const Color(0xFF6B6B6B),
-                      fontSize: 11,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
     );
   }
 }
 
-class _PlaylistTile extends StatelessWidget {
-  final Playlist playlist;
+// ── MAIN NAV ITEM ────────────────────────────────────────────────────────────
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool isSelected;
   final bool isCollapsed;
   final VoidCallback onTap;
-  const _PlaylistTile({
-    required this.playlist,
+
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.isSelected,
     required this.isCollapsed,
     required this.onTap,
   });
@@ -584,89 +382,151 @@ class _PlaylistTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final libraryProvider = Provider.of<LibraryProvider>(
-      context,
-      listen: false,
+    final textColor = isSelected
+        ? (isDark ? Colors.white : Colors.black)
+        : (isDark ? const Color(0xFFB3B3B3) : const Color(0xFF6B6B6B));
+    final hoverBg = isDark
+        ? Colors.white.withValues(alpha: 0.07)
+        : Colors.black.withValues(alpha: 0.06);
+
+    return Tooltip(
+      message: isCollapsed ? label : '',
+      waitDuration: const Duration(milliseconds: 400),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        hoverColor: hoverBg,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        child: Container(
+          height: 42,
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+          padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 0 : 12),
+          alignment: isCollapsed ? Alignment.center : Alignment.centerLeft,
+          child: isCollapsed
+              ? Icon(isSelected ? activeIcon : icon, color: textColor, size: 24)
+              : Row(
+                  children: [
+                    Icon(
+                      isSelected ? activeIcon : icon,
+                      color: textColor,
+                      size: 24,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+        ),
+      ),
     );
-    final l10n = AppLocalizations.of(context)!;
-    final coverArtUrl = playlist.coverArt != null
-        ? libraryProvider.getCoverArtUrl(playlist.coverArt)
-        : null;
+  }
+}
+
+// ── SECTION HEADER (BIBLIOTECA / PLAYLISTS) ───────────────────────────────────
+
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final bool isCollapsed;
+  final bool isExpanded;
+  final IconData? trailingAction;
+  final VoidCallback? onTrailingAction;
+  final VoidCallback onToggle;
+  final VoidCallback? onHeaderTap;
+
+  const _SectionHeader({
+    required this.icon,
+    required this.title,
+    required this.isCollapsed,
+    required this.isExpanded,
+    this.trailingAction,
+    this.onTrailingAction,
+    required this.onToggle,
+    this.onHeaderTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final headerColor = isDark ? Colors.white : Colors.black87;
+    final iconColor = isDark ? const Color(0xFFB3B3B3) : const Color(0xFF6B6B6B);
     final hoverBg = isDark
         ? Colors.white.withValues(alpha: 0.07)
         : Colors.black.withValues(alpha: 0.06);
 
     if (isCollapsed) {
-      return Padding(
-        key: ValueKey(playlist.id),
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Tooltip(
-          message: playlist.name,
-          waitDuration: const Duration(milliseconds: 400),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(4),
-            hoverColor: hoverBg,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: _ArtworkImage(url: coverArtUrl, isDark: isDark),
-              ),
-            ),
+      return Tooltip(
+        message: title,
+        waitDuration: const Duration(milliseconds: 400),
+        child: InkWell(
+          onTap: onHeaderTap ?? onToggle,
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: hoverBg,
+          child: Container(
+            height: 42,
+            margin: const EdgeInsets.symmetric(vertical: 2),
+            alignment: Alignment.center,
+            child: Icon(icon, color: iconColor, size: 24),
           ),
         ),
       );
     }
 
     return InkWell(
-      key: ValueKey(playlist.id),
-      onTap: onTap,
+      onTap: onToggle,
+      borderRadius: BorderRadius.circular(8),
       hoverColor: hoverBg,
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        padding: const EdgeInsets.fromLTRB(10, 8, 6, 6),
         child: Row(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: SizedBox(
-                width: 44,
-                height: 44,
-                child: _ArtworkImage(url: coverArtUrl, isDark: isDark),
+            Icon(icon, size: 22, color: iconColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: headerColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.2,
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    playlist.name,
-                    style: TextStyle(
-                      color: isDark ? Colors.white : Colors.black,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (playlist.songCount != null)
-                    Text(
-                      l10n.playlistSongsCount(playlist.songCount!),
-                      style: TextStyle(
-                        color: isDark
-                            ? const Color(0xFF9B9B9B)
-                            : const Color(0xFF6B6B6B),
-                        fontSize: 11,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                ],
+            if (trailingAction != null)
+              InkWell(
+                onTap: onTrailingAction,
+                borderRadius: BorderRadius.circular(50),
+                hoverColor: hoverBg,
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(trailingAction, size: 20, color: iconColor),
+                ),
+              ),
+            InkWell(
+              onTap: onToggle,
+              borderRadius: BorderRadius.circular(50),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(
+                  isExpanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 20,
+                  color: iconColor,
+                ),
               ),
             ),
           ],
@@ -676,48 +536,170 @@ class _PlaylistTile extends StatelessWidget {
   }
 }
 
-class _ArtworkImage extends StatelessWidget {
-  final String? url;
-  final bool isDark;
-  const _ArtworkImage({required this.url, required this.isDark});
+// ── SIDEBAR SUB ITEM ─────────────────────────────────────────────────────────
+
+class _SidebarSubItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _SidebarSubItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final bg = isDark ? const Color(0xFF181818) : const Color(0xFFD0D0D0);
-    if (url == null) {
-      return Container(
-        color: bg,
-        child: Icon(
-          Icons.music_note_rounded,
-          color: isDark ? Colors.white24 : Colors.black26,
-        ),
-      );
-    }
-    return CachedNetworkImage(
-      imageUrl: url!,
-      cacheKey: url,
-      fit: BoxFit.cover,
-      memCacheHeight: 200,
-      memCacheWidth: 200,
-      fadeInDuration: Duration.zero,
-      fadeOutDuration: Duration.zero,
-      placeholder: (context, url) => Container(color: bg),
-      errorWidget: (context, url, error) => Container(
-        color: bg,
-        child: Icon(
-          Icons.music_note_rounded,
-          color: isDark ? Colors.white24 : Colors.black26,
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? const Color(0xFFD4D4D8) : const Color(0xFF4B5563);
+    final hoverBg = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.06);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      hoverColor: hoverBg,
+      child: Container(
+        height: 38,
+        margin: const EdgeInsets.symmetric(vertical: 1),
+        padding: const EdgeInsets.only(left: 36, right: 12),
+        alignment: Alignment.centerLeft,
+        child: Row(
+          children: [
+            Icon(icon, size: 19, color: textColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w500,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+// ── BOTTOM USER PROFILE ROW ──────────────────────────────────────────────────
+
+class _UserProfileBottomRow extends StatelessWidget {
+  final bool isCollapsed;
+  final VoidCallback onTap;
+
+  const _UserProfileBottomRow({
+    required this.isCollapsed,
+    required this.onTap,
+  });
+
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return 'U';
+    final parts = name.trim().split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return parts[0][0].toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.currentUser;
+
+    final displayName = (user?.name != null && user!.name.isNotEmpty)
+        ? user.name
+        : (user?.email != null && user!.email.isNotEmpty)
+            ? user.email.split('@').first
+            : 'Leidy Francisco';
+
+    final initials = _getInitials(displayName);
+    final hoverBg = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : Colors.black.withValues(alpha: 0.06);
+
+    if (isCollapsed) {
+      return Tooltip(
+        message: displayName,
+        child: InkWell(
+          onTap: onTap,
+          hoverColor: hoverBg,
+          child: Container(
+            height: 56,
+            alignment: Alignment.center,
+            child: CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFF2A2B30),
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return InkWell(
+      onTap: onTap,
+      hoverColor: hoverBg,
+      child: Container(
+        height: 60,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFF2A2B30),
+              child: Text(
+                initials,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                displayName,
+                style: TextStyle(
+                  color: isDark ? Colors.white : Colors.black87,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── COLLAPSE BUTTON ──────────────────────────────────────────────────────────
+
 class _CollapseButton extends StatelessWidget {
   final bool isCollapsed;
   final VoidCallback onTap;
   final String label;
   final String expandLabel;
+
   const _CollapseButton({
     required this.isCollapsed,
     required this.onTap,
@@ -728,8 +710,7 @@ class _CollapseButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final iconColor =
-        isDark ? const Color(0xFF9B9B9B) : const Color(0xFF6B6B6B);
+    final color = isDark ? const Color(0xFFB3B3B3) : const Color(0xFF6B6B6B);
     final hoverBg = isDark
         ? Colors.white.withValues(alpha: 0.07)
         : Colors.black.withValues(alpha: 0.06);
@@ -739,37 +720,40 @@ class _CollapseButton extends StatelessWidget {
       waitDuration: const Duration(milliseconds: 400),
       child: InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
         hoverColor: hoverBg,
         splashColor: Colors.transparent,
         highlightColor: Colors.transparent,
         child: Container(
           height: 40,
-          margin: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+          margin: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
           padding: EdgeInsets.symmetric(horizontal: isCollapsed ? 0 : 12),
           alignment: isCollapsed ? Alignment.center : Alignment.centerLeft,
-          child: Row(
-            mainAxisSize: isCollapsed ? MainAxisSize.min : MainAxisSize.max,
-            children: [
-              Icon(
-                isCollapsed
-                    ? Icons.keyboard_double_arrow_right_rounded
-                    : Icons.keyboard_double_arrow_left_rounded,
-                color: iconColor,
-                size: 20,
-              ),
-              if (!isCollapsed) ...[
-                const SizedBox(width: 10),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: iconColor,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w500,
-                  ),
+          child: isCollapsed
+              ? Icon(Icons.keyboard_double_arrow_right_rounded,
+                  color: color, size: 22)
+              : Row(
+                  children: [
+                    Icon(
+                      Icons.keyboard_double_arrow_left_rounded,
+                      color: color,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ],
-          ),
         ),
       ),
     );

@@ -13,8 +13,23 @@ import 'album_artwork.dart';
 
 class DesktopPlayerBar extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
+  final VoidCallback? onToggleQueue;
+  final VoidCallback? onToggleNowPlaying;
+  final VoidCallback? onToggleLyrics;
+  final bool isQueueOpen;
+  final bool isNowPlayingOpen;
+  final bool isLyricsOpen;
 
-  const DesktopPlayerBar({super.key, this.navigatorKey});
+  const DesktopPlayerBar({
+    super.key,
+    this.navigatorKey,
+    this.onToggleQueue,
+    this.onToggleNowPlaying,
+    this.onToggleLyrics,
+    this.isQueueOpen = false,
+    this.isNowPlayingOpen = false,
+    this.isLyricsOpen = false,
+  });
 
   @override
   State<DesktopPlayerBar> createState() => _DesktopPlayerBarState();
@@ -200,7 +215,21 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
             flex: 3,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
-              children: const [_VolumeControl()],
+              children: [
+                IconButton(
+                  icon: Icon(
+                    Icons.slideshow_rounded,
+                    size: 20,
+                    color: widget.isNowPlayingOpen
+                        ? theme.colorScheme.primary
+                        : iconColor,
+                  ),
+                  onPressed: widget.onToggleNowPlaying ?? widget.onToggleQueue,
+                  tooltip: 'Vista que suena',
+                ),
+                const SizedBox(width: 8),
+                const _VolumeControl(),
+              ],
             ),
           ),
         ],
@@ -348,13 +377,44 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-
                 IconButton(
-                  icon: const Icon(Icons.queue_music_rounded, size: 20),
-                  onPressed: () {},
-                  color: isDark
-                      ? const Color(0xFFB3B3B3)
-                      : const Color(0xFF6B6B6B),
+                  icon: Icon(
+                    Icons.slideshow_rounded,
+                    size: 20,
+                    color: widget.isNowPlayingOpen
+                        ? theme.colorScheme.primary
+                        : (isDark
+                            ? const Color(0xFFB3B3B3)
+                            : const Color(0xFF6B6B6B)),
+                  ),
+                  onPressed: widget.onToggleNowPlaying ?? widget.onToggleQueue,
+                  tooltip: 'Vista que suena',
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.mic_none_rounded,
+                    size: 20,
+                    color: widget.isLyricsOpen
+                        ? theme.colorScheme.primary
+                        : (isDark
+                            ? const Color(0xFFB3B3B3)
+                            : const Color(0xFF6B6B6B)),
+                  ),
+                  onPressed: widget.onToggleLyrics ?? widget.onToggleQueue,
+                  tooltip: 'Letras',
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.queue_music_rounded,
+                    size: 20,
+                    color: widget.isQueueOpen
+                        ? theme.colorScheme.primary
+                        : (isDark
+                            ? const Color(0xFFB3B3B3)
+                            : const Color(0xFF6B6B6B)),
+                  ),
+                  onPressed: widget.onToggleQueue,
+                  tooltip: 'Cola de reproducción',
                 ),
                 const SizedBox(width: 8),
                 const _VolumeControl(),
@@ -372,9 +432,11 @@ class _PlayerControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final color = isDark ? Colors.white : Colors.black;
     final disabledColor = isDark ? Colors.grey[800] : Colors.grey[300];
+    final activeAccent = theme.colorScheme.primary;
 
     return Selector<PlayerProvider, (bool, bool, bool, bool, RepeatMode)>(
       selector: (_, p) => (
@@ -395,15 +457,15 @@ class _PlayerControls extends StatelessWidget {
             IconButton(
               icon: Icon(
                 Icons.shuffle_rounded,
-                size: 20,
+                size: 22,
                 color: shuffleEnabled
-                    ? AppTheme.appleMusicRed
+                    ? activeAccent
                     : (isDark
                         ? const Color(0xFFB3B3B3)
                         : const Color(0xFF6B6B6B)),
               ),
               onPressed: provider.toggleShuffle,
-              tooltip: AppLocalizations.of(context)!.enableShuffle,
+              tooltip: AppLocalizations.of(context)?.enableShuffle ?? 'Aleatorio',
             ),
             const SizedBox(width: 8),
             IconButton(
@@ -419,8 +481,8 @@ class _PlayerControls extends StatelessWidget {
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
-                    blurRadius: 4,
+                    color: Colors.black.withValues(alpha: 0.15),
+                    blurRadius: 6,
                     offset: const Offset(0, 2),
                   ),
                 ],
@@ -448,15 +510,15 @@ class _PlayerControls extends StatelessWidget {
                 repeatMode == RepeatMode.one
                     ? Icons.repeat_one_rounded
                     : Icons.repeat_rounded,
-                size: 20,
+                size: 22,
                 color: repeatMode != RepeatMode.off
-                    ? AppTheme.appleMusicRed
+                    ? activeAccent
                     : (isDark
                         ? const Color(0xFFB3B3B3)
                         : const Color(0xFF6B6B6B)),
               ),
               onPressed: provider.toggleRepeat,
-              tooltip: AppLocalizations.of(context)!.enableRepeat,
+              tooltip: AppLocalizations.of(context)?.enableRepeat ?? 'Repetir',
             ),
           ],
         );
@@ -478,6 +540,7 @@ class _ProgressBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final activeAccent = theme.colorScheme.primary;
     final timeStyle = theme.textTheme.bodySmall?.copyWith(
       fontSize: 11,
       color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -507,11 +570,11 @@ class _ProgressBar extends StatelessWidget {
                       overlayShape: const RoundSliderOverlayShape(
                         overlayRadius: 14,
                       ),
-                      activeTrackColor: AppTheme.appleMusicRed,
+                      activeTrackColor: activeAccent,
                       inactiveTrackColor:
                           isDark ? const Color(0xFF3A3A3A) : Colors.grey[300],
                       thumbColor: Colors.white,
-                      overlayColor: AppTheme.appleMusicRed.withValues(
+                      overlayColor: activeAccent.withValues(
                         alpha: 0.2,
                       ),
                     ),
@@ -544,6 +607,9 @@ class _VolumeControl extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final activeAccent = theme.colorScheme.primary;
+    
     return Selector<PlayerProvider, double>(
       selector: (_, p) => p.volume,
       builder: (context, volume, _) {
@@ -579,15 +645,19 @@ class _VolumeControl extends StatelessWidget {
                   overlayShape: const RoundSliderOverlayShape(
                     overlayRadius: 14,
                   ),
-                  activeTrackColor: AppTheme.appleMusicRed,
+                  activeTrackColor: activeAccent,
                   inactiveTrackColor:
                       isDark ? const Color(0xFF3A3A3A) : Colors.grey[300],
                   thumbColor: Colors.white,
-                  overlayColor: AppTheme.appleMusicRed.withValues(alpha: 0.2),
+                  overlayColor: activeAccent.withValues(alpha: 0.2),
                 ),
                 child: Slider(
-                  value: volume,
-                  onChanged: (value) => provider.setVolume(value),
+                  value: volume.clamp(0.0, 1.0),
+                  min: 0.0,
+                  max: 1.0,
+                  onChanged: (value) {
+                    provider.setVolume(value);
+                  },
                 ),
               ),
             ),

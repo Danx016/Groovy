@@ -10,7 +10,6 @@ import '../services/local_music_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/theme_service.dart';
 import '../services/update_service.dart';
-import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
@@ -21,6 +20,29 @@ import 'fantasy_screen.dart';
 
 class PlayPauseIntent extends Intent {
   const PlayPauseIntent();
+}
+
+class _PlayPauseAction extends Action<PlayPauseIntent> {
+  final BuildContext context;
+  _PlayPauseAction(this.context);
+
+  @override
+  bool isEnabled(PlayPauseIntent intent, [BuildContext? targetContext]) {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus != null && focus.context != null) {
+      if (focus.context!.findAncestorWidgetOfExactType<EditableText>() != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @override
+  Object? invoke(PlayPauseIntent intent, [BuildContext? targetContext]) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    playerProvider.togglePlayPause();
+    return null;
+  }
 }
 
 class MainScreen extends StatefulWidget {
@@ -36,7 +58,8 @@ class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   int _searchTapCount = 0;
   DateTime _lastSearchTap = DateTime.fromMillisecondsSinceEpoch(0);
-  final bool _showRightSidebar = true;
+  bool _showRightSidebar = true;
+  RightSidebarTab _sidebarTab = RightSidebarTab.nowPlaying;
 
   final List<Widget> _screens = const [
     HomeScreen(),
@@ -458,7 +481,13 @@ class _MainScreenState extends State<MainScreen> {
                           p.currentSong != null || p.isPlayingRadio,
                       builder: (context, hasCurrentSong, _) {
                         return hasCurrentSong
-                            ? const RightSidebar()
+                            ? RightSidebar(
+                                initialTab: _sidebarTab,
+                                onTabChanged: (tab) =>
+                                    setState(() => _sidebarTab = tab),
+                                onClose: () =>
+                                    setState(() => _showRightSidebar = false),
+                              )
                             : const SizedBox.shrink();
                       },
                     ),
@@ -471,6 +500,45 @@ class _MainScreenState extends State<MainScreen> {
                 return hasCurrentSong
                     ? DesktopPlayerBar(
                         navigatorKey: NavigationHelper.desktopNavigatorKey,
+                        isNowPlayingOpen: _showRightSidebar &&
+                            _sidebarTab == RightSidebarTab.nowPlaying,
+                        isLyricsOpen: _showRightSidebar &&
+                            _sidebarTab == RightSidebarTab.lyrics,
+                        isQueueOpen: _showRightSidebar &&
+                            _sidebarTab == RightSidebarTab.queue,
+                        onToggleNowPlaying: () {
+                          setState(() {
+                            if (_showRightSidebar &&
+                                _sidebarTab == RightSidebarTab.nowPlaying) {
+                              _showRightSidebar = false;
+                            } else {
+                              _showRightSidebar = true;
+                              _sidebarTab = RightSidebarTab.nowPlaying;
+                            }
+                          });
+                        },
+                        onToggleLyrics: () {
+                          setState(() {
+                            if (_showRightSidebar &&
+                                _sidebarTab == RightSidebarTab.lyrics) {
+                              _showRightSidebar = false;
+                            } else {
+                              _showRightSidebar = true;
+                              _sidebarTab = RightSidebarTab.lyrics;
+                            }
+                          });
+                        },
+                        onToggleQueue: () {
+                          setState(() {
+                            if (_showRightSidebar &&
+                                _sidebarTab == RightSidebarTab.queue) {
+                              _showRightSidebar = false;
+                            } else {
+                              _showRightSidebar = true;
+                              _sidebarTab = RightSidebarTab.queue;
+                            }
+                          });
+                        },
                       )
                     : const SizedBox.shrink();
               },
@@ -485,13 +553,7 @@ class _MainScreenState extends State<MainScreen> {
         },
         child: Actions(
           actions: <Type, Action<Intent>>{
-            PlayPauseIntent: CallbackAction<PlayPauseIntent>(
-              onInvoke: (PlayPauseIntent intent) {
-                final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
-                playerProvider.togglePlayPause();
-                return null;
-              },
-            ),
+            PlayPauseIntent: _PlayPauseAction(context),
           },
           child: Focus(
             autofocus: true,

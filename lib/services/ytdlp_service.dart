@@ -59,7 +59,7 @@ class YtDlpService {
   // Stream Info cache: videoId -> YtStreamInfo
   final Map<String, YtStreamInfo> _streamInfoCache = {};
   final Map<String, DateTime> _streamCacheTime = {};
-  static const Duration _cacheTtl = Duration(hours: 5);
+  static const Duration _cacheTtl = Duration(hours: 2);
 
   // Search Caches: query -> result
   final Map<String, Map<String, List<Map<String, dynamic>>>> _dualSearchCache = {};
@@ -85,6 +85,425 @@ class YtDlpService {
   void invalidateCache(String videoId) {
     _streamInfoCache.remove(videoId);
     _streamCacheTime.remove(videoId);
+  }
+
+  // ── Native Dart Innertube Helpers (Windows / Desktop / Fallback) ────────────
+
+  static final HttpClient _innertubeHttpClient = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 8)
+    ..idleTimeout = const Duration(seconds: 15);
+
+  static const Map<String, String> _innertubeHeaders = {
+    'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Content-Type': 'application/json',
+    'Origin': 'https://music.youtube.com',
+    'Referer': 'https://music.youtube.com/',
+  };
+
+  static String _upgradeThumbnail(String? url) {
+    if (url == null || url.isEmpty) return '';
+    var upgraded = url;
+    upgraded = upgraded.replaceAll(RegExp(r'=w\d+-h\d+'), '=w800-h800');
+    upgraded = upgraded.replaceAll(RegExp(r'=s\d+'), '=s800');
+    upgraded = upgraded.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
+    upgraded = upgraded.replaceAll('/default.jpg', '/hqdefault.jpg');
+    return upgraded;
+  }
+
+  static dynamic _dig(dynamic obj, List<String> keys) {
+    dynamic current = obj;
+    for (final key in keys) {
+      if (current is Map && current.containsKey(key)) {
+        current = current[key];
+      } else {
+        return null;
+      }
+    }
+    return current;
+  }
+
+  /// Queries official YouTube Music Innertube API (Songs filter) directly in pure Dart.
+  Future<List<Map<String, dynamic>>> searchYtMusicInnertube(String query, {int limit = 25}) async {
+    try {
+      final req = await _innertubeHttpClient.postUrl(
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+      );
+      _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
+      req.write(jsonEncode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240101.01.00',
+            'hl': 'es',
+            'gl': 'US',
+          }
+        },
+        'query': query,
+        'params': 'EgWKAQIIAWoKEAUQAxAEEAkQBQ==',
+      }));
+
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        await resp.drain<void>();
+        return [];
+      }
+      final jsonStr = await resp.transform(utf8.decoder).join();
+      final res = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final sections = res['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List<dynamic>? ?? [];
+      final results = <Map<String, dynamic>>[];
+
+      for (final sec in sections) {
+        final musicShelf = sec['musicShelfRenderer'];
+        if (musicShelf == null) continue;
+        final contents = musicShelf['contents'] as List<dynamic>? ?? [];
+        for (final item in contents) {
+          final r = item['musicResponsiveListItemRenderer'];
+          if (r == null) continue;
+          final flex = r['flexColumns'] as List<dynamic>? ?? [];
+          if (flex.isEmpty) continue;
+
+          final titleRuns = (flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [];
+          final title = titleRuns.isNotEmpty ? (titleRuns[0]['text'] as String? ?? '') : '';
+
+          final firstRun = titleRuns.isNotEmpty && titleRuns[0] is Map ? (titleRuns[0] as Map) : null;
+          String? videoId;
+          if (firstRun != null && firstRun['navigationEndpoint'] is Map) {
+            final ep = firstRun['navigationEndpoint'] as Map;
+            if (ep['watchEndpoint'] is Map) {
+              videoId = ep['watchEndpoint']['videoId']?.toString();
+            }
+          }
+          if (videoId == null || videoId.isEmpty) {
+            final overlay = _dig(r, ['overlay', 'musicItemThumbnailOverlayRenderer', 'content', 'musicPlayButtonRenderer', 'playNavigationEndpoint', 'watchEndpoint']);
+            if (overlay is Map) {
+              videoId = overlay['videoId']?.toString();
+            }
+          }
+          if (videoId == null || videoId.isEmpty) continue;
+
+          final infoRuns = flex.length > 1
+              ? ((flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [])
+              : <dynamic>[];
+
+          final parts = <String>[];
+          var curr = <String>[];
+          for (final x in infoRuns) {
+            final t = x['text'] as String? ?? '';
+            if (t == ' • ') {
+              if (curr.isNotEmpty) {
+                parts.add(curr.join(''));
+                curr = [];
+              }
+            } else {
+              curr.add(t);
+            }
+          }
+          if (curr.isNotEmpty) parts.add(curr.join(''));
+
+          String artist = 'Unknown Artist';
+          String? albumName;
+          int durationSecs = 0;
+
+          if (parts.length >= 3) {
+            artist = parts[0];
+            albumName = parts[1];
+            final durSplit = parts[2].split(':');
+            if (durSplit.length == 2) {
+              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
+            } else if (durSplit.length == 3) {
+              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
+            }
+          } else if (parts.length == 2) {
+            artist = parts[0];
+            final durSplit = parts[1].split(':');
+            if (durSplit.length == 2) {
+              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
+            } else if (durSplit.length == 3) {
+              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
+            }
+          } else if (parts.isNotEmpty) {
+            artist = parts[0];
+          }
+
+          final thumbs = (r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
+          final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
+
+          results.add({
+            'id': videoId,
+            'title': title,
+            'artist': artist,
+            'album': albumName,
+            'duration': durationSecs,
+            'thumbnailUrl': thumb,
+            'coverArt': videoId,
+          });
+
+          if (results.length >= limit) break;
+        }
+        if (results.length >= limit) break;
+      }
+      return results;
+    } catch (e) {
+      debugPrint('[yt-dlp] searchYtMusicInnertube error: $e');
+      return [];
+    }
+  }
+
+  /// Queries official YouTube Innertube API (Video filter) directly in pure Dart.
+  Future<List<Map<String, dynamic>>> searchYoutubeVideoInnertube(String query, {int limit = 25}) async {
+    try {
+      final req = await _innertubeHttpClient.postUrl(
+        Uri.parse('https://www.youtube.com/youtubei/v1/search?prettyPrint=false'),
+      );
+      req.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+      req.headers.set('Content-Type', 'application/json');
+      req.headers.set('Origin', 'https://www.youtube.com');
+      req.headers.set('Referer', 'https://www.youtube.com/');
+      req.write(jsonEncode({
+        'context': {
+          'client': {
+            'clientName': 'WEB',
+            'clientVersion': '2.20240101.01.00',
+            'hl': 'es',
+            'gl': 'US',
+          }
+        },
+        'query': query,
+        'params': 'EgIQAQ==',
+      }));
+
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        await resp.drain<void>();
+        return [];
+      }
+      final jsonStr = await resp.transform(utf8.decoder).join();
+      final res = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final contents = res['contents']?['twoColumnSearchResultsRenderer']?['primaryContents']?['sectionListRenderer']?['contents'] as List<dynamic>? ?? [];
+      final results = <Map<String, dynamic>>[];
+
+      for (final sec in contents) {
+        final itemSection = sec['itemSectionRenderer'];
+        if (itemSection == null) continue;
+        final items = itemSection['contents'] as List<dynamic>? ?? [];
+        for (final it in items) {
+          final r = it['videoRenderer'];
+          if (r == null) continue;
+          final vid = r['videoId'] as String?;
+          if (vid == null || vid.isEmpty) continue;
+
+          final titleRuns = (r['title']?['runs'] as List<dynamic>?) ?? [];
+          final title = titleRuns.isNotEmpty ? (titleRuns[0]['text'] as String? ?? '') : '';
+
+          final ownerRuns = (r['ownerText']?['runs'] as List<dynamic>?) ??
+              (r['longBylineText']?['runs'] as List<dynamic>?) ??
+              [];
+          final artist = ownerRuns.isNotEmpty ? (ownerRuns[0]['text'] as String? ?? 'Unknown Artist') : 'Unknown Artist';
+
+          final durStr = r['lengthText']?['simpleText'] as String? ?? '0:00';
+          final durSplit = durStr.split(':');
+          int durSecs = 0;
+          if (durSplit.length == 2) {
+            durSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
+          } else if (durSplit.length == 3) {
+            durSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
+          }
+
+          final thumbs = (r['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
+          final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
+
+          results.add({
+            'id': vid,
+            'title': title,
+            'artist': artist,
+            'album': null,
+            'duration': durSecs,
+            'thumbnailUrl': thumb,
+            'coverArt': vid,
+          });
+
+          if (results.length >= limit) break;
+        }
+        if (results.length >= limit) break;
+      }
+      return results;
+    } catch (e) {
+      debugPrint('[yt-dlp] searchYoutubeVideoInnertube error: $e');
+      return [];
+    }
+  }
+
+  /// Queries official YouTube Music Innertube API (Albums filter) directly in pure Dart.
+  Future<List<Map<String, dynamic>>> searchYtAlbumsInnertube(String query, {int limit = 20}) async {
+    try {
+      final req = await _innertubeHttpClient.postUrl(
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+      );
+      _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
+      req.write(jsonEncode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240101.01.00',
+            'hl': 'es',
+            'gl': 'US',
+          }
+        },
+        'query': query,
+        'params': 'EgWKAQIYAWoKEAUQAxAEEAkQBQ==',
+      }));
+
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        await resp.drain<void>();
+        return [];
+      }
+      final jsonStr = await resp.transform(utf8.decoder).join();
+      final res = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final sections = res['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List<dynamic>? ?? [];
+      final results = <Map<String, dynamic>>[];
+
+      for (final sec in sections) {
+        final musicShelf = sec['musicShelfRenderer'];
+        if (musicShelf == null) continue;
+        final contents = musicShelf['contents'] as List<dynamic>? ?? [];
+        for (final it in contents) {
+          final r = it['musicResponsiveListItemRenderer'];
+          if (r == null) continue;
+          final flex = r['flexColumns'] as List<dynamic>? ?? [];
+          if (flex.isEmpty) continue;
+
+          final tRuns = (flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [];
+          final title = tRuns.isNotEmpty ? (tRuns[0]['text'] as String? ?? '') : '';
+
+          final nav = r['navigationEndpoint'] ?? (tRuns.isNotEmpty ? tRuns[0]['navigationEndpoint'] : null);
+          final browseId = nav?['browseEndpoint']?['browseId'] as String?;
+          if (browseId == null || browseId.isEmpty) continue;
+
+          final infoRuns = flex.length > 1
+              ? ((flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [])
+              : <dynamic>[];
+
+          final parts = <String>[];
+          var curr = <String>[];
+          for (final x in infoRuns) {
+            final t = x['text'] as String? ?? '';
+            if (t == ' • ') {
+              if (curr.isNotEmpty) {
+                parts.add(curr.join(''));
+                curr = [];
+              }
+            } else {
+              curr.add(t);
+            }
+          }
+          if (curr.isNotEmpty) parts.add(curr.join(''));
+
+          String? artistName;
+          int? year;
+
+          for (final p in parts) {
+            final yMatch = RegExp(r'\b(19\d\d|20\d\d)\b').firstMatch(p);
+            if (yMatch != null && year == null) {
+              year = int.tryParse(yMatch.group(1)!);
+            } else if (artistName == null) {
+              final lower = p.toLowerCase();
+              if (lower != 'álbum' && lower != 'album' && lower != 'ep' && lower != 'single' && lower != 'sencillo') {
+                artistName = p;
+              }
+            }
+          }
+
+          final thumbs = (r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
+          final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
+
+          results.add({
+            'id': browseId,
+            'title': title,
+            'artist': artistName,
+            'year': year,
+            'coverArt': thumb.isNotEmpty ? thumb : browseId,
+            'thumbnailUrl': thumb,
+          });
+
+          if (results.length >= limit) break;
+        }
+        if (results.length >= limit) break;
+      }
+      return results;
+    } catch (e) {
+      debugPrint('[yt-dlp] searchYtAlbumsInnertube error: $e');
+      return [];
+    }
+  }
+
+  /// Queries official YouTube Music Innertube API (Artists filter) directly in pure Dart.
+  Future<List<Map<String, dynamic>>> searchYtArtistsInnertube(String query, {int limit = 20}) async {
+    try {
+      final req = await _innertubeHttpClient.postUrl(
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+      );
+      _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
+      req.write(jsonEncode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240101.01.00',
+            'hl': 'es',
+            'gl': 'US',
+          }
+        },
+        'query': query,
+        'params': 'EgWKAQIgAWoKEAUQAxAEEAkQBQ==',
+      }));
+
+      final resp = await req.close();
+      if (resp.statusCode != 200) {
+        await resp.drain<void>();
+        return [];
+      }
+      final jsonStr = await resp.transform(utf8.decoder).join();
+      final res = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final sections = res['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List<dynamic>? ?? [];
+      final results = <Map<String, dynamic>>[];
+
+      for (final sec in sections) {
+        final musicShelf = sec['musicShelfRenderer'];
+        if (musicShelf == null) continue;
+        final contents = musicShelf['contents'] as List<dynamic>? ?? [];
+        for (final it in contents) {
+          final r = it['musicResponsiveListItemRenderer'];
+          if (r == null) continue;
+          final flex = r['flexColumns'] as List<dynamic>? ?? [];
+          if (flex.isEmpty) continue;
+
+          final tRuns = (flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [];
+          final name = tRuns.isNotEmpty ? (tRuns[0]['text'] as String? ?? '') : '';
+
+          final nav = r['navigationEndpoint'] ?? (tRuns.isNotEmpty ? tRuns[0]['navigationEndpoint'] : null);
+          final browseId = nav?['browseEndpoint']?['browseId'] as String?;
+          if (browseId == null || browseId.isEmpty || name.isEmpty) continue;
+
+          final thumbs = (r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
+          final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
+
+          results.add({
+            'id': browseId,
+            'name': name,
+            'coverArt': thumb.isNotEmpty ? thumb : browseId,
+            'artistImageUrl': thumb,
+          });
+
+          if (results.length >= limit) break;
+        }
+        if (results.length >= limit) break;
+      }
+      return results;
+    } catch (e) {
+      debugPrint('[yt-dlp] searchYtArtistsInnertube error: $e');
+      return [];
+    }
   }
 
   // ── Binary Detection (Desktop) ──────────────────────────────────────────────
@@ -150,12 +569,12 @@ class YtDlpService {
 
     for (final py in pythonCandidates) {
       try {
-        final result = await Process.run(py, ['--version']).timeout(
-          const Duration(seconds: 3),
+        final result = await Process.run(py, ['-c', 'import yt_dlp']).timeout(
+          const Duration(seconds: 2),
         );
         if (result.exitCode == 0) {
           _detectedPythonPath = py;
-          debugPrint('[yt-dlp] Found Python interpreter at: $py (${result.stdout.toString().trim()})');
+          debugPrint('[yt-dlp] Found Python with yt_dlp module at: $py');
           break;
         }
       } catch (_) {}
@@ -257,6 +676,28 @@ class YtDlpService {
 
     // 3. Fallback to youtube_explode_dart
     debugPrint('[yt-dlp] Falling back to youtube_explode_dart for $cleanId');
+    try {
+      final manifest = await _fallbackClient.videos.streamsClient.getManifest(cleanId);
+      final audioOnly = manifest.audioOnly;
+      if (audioOnly.isNotEmpty) {
+        final best = audioOnly.withHighestBitrate();
+        final url = best.url.toString();
+        final info = YtStreamInfo(
+          url: url,
+          headers: {
+            'User-Agent':
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+          ext: best.container.name,
+        );
+        _streamInfoCache[cleanId] = info;
+        _streamCacheTime[cleanId] = DateTime.now();
+        return info;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp] Default getManifest failed for $cleanId: $e');
+    }
+
     final clients = [
       [yt.YoutubeApiClient.androidMusic],
       [yt.YoutubeApiClient.mweb],
@@ -330,7 +771,29 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop: Parallel searches
+    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Direct native Innertube queries
+    try {
+      final results = await Future.wait([
+        searchYtMusicInnertube(query, limit: limit),
+        searchYoutubeVideoInnertube(query, limit: limit),
+      ]);
+      final musicTracks = results[0];
+      final ytTracks = results[1];
+
+      if (musicTracks.isNotEmpty || ytTracks.isNotEmpty) {
+        final res = {
+          'music': musicTracks,
+          'youtube': ytTracks,
+        };
+        debugPrint('[yt-dlp/Desktop Innertube] Dual search "$query": ${musicTracks.length} music, ${ytTracks.length} youtube');
+        if (cleanQuery.isNotEmpty) _dualSearchCache[cleanQuery] = res;
+        return res;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp/Desktop Innertube] Dual search error: $e');
+    }
+
+    // 3. Fallback: Process execution or youtube_explode_dart
     try {
       final results = await Future.wait([
         search('$query audio', limit: limit),
@@ -380,7 +843,25 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop: Execute host Python / yt-dlp subprocess
+    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Native Innertube query
+    try {
+      final musicItems = await searchYtMusicInnertube(query, limit: limit);
+      if (musicItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Desktop Innertube] Search "$query" returned ${musicItems.length} items');
+        _searchCache[cleanQuery] = musicItems;
+        return musicItems;
+      }
+      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit);
+      if (ytItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Desktop Innertube] Video search "$query" returned ${ytItems.length} items');
+        _searchCache[cleanQuery] = ytItems;
+        return ytItems;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp/Desktop Innertube] Search error: $e');
+    }
+
+    // 3. Desktop: Execute host Python / yt-dlp subprocess
     final searchParam = 'ytsearch$limit:$query';
     try {
       final result = await _runYtDlp([
@@ -441,7 +922,7 @@ class YtDlpService {
       debugPrint('[yt-dlp/Desktop Python] Search error: $e');
     }
 
-    // 3. Fallback to youtube_explode_dart
+    // 4. Fallback to youtube_explode_dart
     debugPrint('[yt-dlp] Falling back to youtube_explode_dart search');
     final searchResults = await _fallbackClient.search.search(
       query,

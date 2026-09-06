@@ -63,22 +63,6 @@ class _SettingsServerTabState extends State<SettingsServerTab> {
                                 : AppTheme.lightSecondaryText,
                           ),
                         ),
-                        const SizedBox(height: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1DB954).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text(
-                            'Groovy Cloud • Activo',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF1DB954),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),

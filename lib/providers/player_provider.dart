@@ -105,6 +105,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   double _playbackSpeed = 1.0;
   double _pitch = 1.0;
   bool _pitchCorrection = true;
+  int _streamInterruptionRetryCount = 0;
+  bool _hasRetriedCurrentPlay = false;
 
   PlayerProvider(
     this._youtubeService,
@@ -855,6 +857,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         ? _duration
         : Duration(seconds: _currentSong!.duration ?? 0);
 
+    _windowsService.updateSongInfo(_currentSong);
     _windowsService.updatePlaybackState(
       song: _currentSong!,
       artworkUrl: artworkUrl,
@@ -1360,7 +1363,56 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await onGranted();
   }
 
+  Future<void> _resumeCurrentSongAfterInterruption() async {
+    if (_currentSong == null) return;
+    try {
+      final resumePos = _position;
+      debugPrint('[Player] Resuming "${_currentSong!.title}" at $resumePos');
+      if (_currentSong!.isLocal != true) {
+        YtDlpService().invalidateCache(_currentSong!.id);
+      }
+      final source = await _youtubeService.getYoutubeAudioSource(_currentSong!);
+      if (source != null) {
+        await _audioPlayer.setAudioSource(source, initialPosition: resumePos);
+        await _applyReplayGain(_currentSong!);
+        await _audioPlayer.play();
+        _isPlaying = true;
+        notifyListeners();
+      } else {
+        await skipNext();
+      }
+    } catch (e) {
+      debugPrint('[Player] Auto-resume failed: $e');
+      if (_streamInterruptionRetryCount >= 3) {
+        _streamInterruptionRetryCount = 0;
+        await skipNext();
+      }
+    }
+  }
+
   Future<void> _onSongComplete() async {
+    final totalDurationSec = _duration.inSeconds > 0
+        ? _duration.inSeconds
+        : (_currentSong?.duration ?? 0);
+
+    // Guard against premature stream drops/glitches:
+    // If the stream ended early while the track is far from over, resume from current position
+    // instead of falsely marking the song as finished and skipping to the next track.
+    final isPrematureEnd = totalDurationSec > 10 &&
+        _position.inSeconds < (totalDurationSec - 5);
+
+    if (isPrematureEnd) {
+      debugPrint(
+        '[Player] ⚠️ Song completed prematurely at ${_position.inSeconds}s / ${totalDurationSec}s. Attempting auto-resume (retry \$_streamInterruptionRetryCount/3)...',
+      );
+      if (_streamInterruptionRetryCount < 3 && _currentSong != null) {
+        _streamInterruptionRetryCount++;
+        await _resumeCurrentSongAfterInterruption();
+        return;
+      }
+    }
+    _streamInterruptionRetryCount = 0;
+
     if (_currentSong != null && _currentSong!.isLocal != true) {
       _youtubeService.scrobble(_currentSong!.id, submission: true).catchError((
         e,
@@ -1468,6 +1520,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _isPlayingRadio = false;
     _currentRadioStation = null;
+    _streamInterruptionRetryCount = 0;
 
     // Jukebox mode: send to server instead of playing locally.
     if (_jukeboxService.enabled) {
@@ -1600,7 +1653,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // YouTube: single StreamAudioSource, no gapless
           _concatenatingSource = null;
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: Duration.zero);
-          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_youtubeService.isYoutube) {
@@ -1618,7 +1670,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             }
           }
           await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
-          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_gaplessEnabled) {
@@ -1671,7 +1722,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // Cache all remote streams locally on fast flash storage so seeking works instantly
           // and playback never stutters even on poor/unstable connections (#170).
           if (song.isLocal == true ||
-              _offlineService.getLocalPath(song.id) != null) {
+              _offlineService.getLocalPath(song.id) != null ||
+              (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
             await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
           } else {
             final cacheDir = await getTemporaryDirectory();
@@ -1689,7 +1741,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               initialPosition: Duration.zero,
             );
           }
-          await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         }
@@ -1725,9 +1776,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
       }).catchError((_) {});
 
+      _hasRetriedCurrentPlay = false;
       _updateAndroidAuto();
     } catch (e) {
       debugPrint('[Player] ✗ Error playing song "${song.title}": $e');
+      if (song.isLocal != true && !_hasRetriedCurrentPlay) {
+        _hasRetriedCurrentPlay = true;
+        YtDlpService().invalidateCache(song.id);
+        debugPrint('[Player] Retrying playSong for "${song.title}" once with fresh cache...');
+        await Future.delayed(const Duration(milliseconds: 500));
+        await playSong(song, playlist: playlist, startIndex: startIndex);
+        return;
+      }
+      _hasRetriedCurrentPlay = false;
       _isPlaying = false;
       _position = Duration.zero;
       _updateAndroidAuto();
@@ -1999,6 +2060,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> seek(Duration position) async {
     _position = position;
+    _streamInterruptionRetryCount = 0;
     notifyListeners();
     if (_jukeboxService.enabled) {
       // Jukebox doesn't support seek by position; ignore.
@@ -2022,6 +2084,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipNext() async {
+    _streamInterruptionRetryCount = 0;
+    _hasRetriedCurrentPlay = false;
     if (_currentSong != null && _recommendationService != null) {
       final played = _position.inSeconds;
       final total = _duration.inSeconds;
@@ -2100,6 +2164,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipPrevious() async {
+    _streamInterruptionRetryCount = 0;
+    _hasRetriedCurrentPlay = false;
     if (_jukeboxService.enabled) {
       await _jukeboxService.skipPrevious(_youtubeService);
       return;
@@ -2363,6 +2429,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final url = _youtubeService.getStreamUrl(song.id,
         maxBitRate: maxBitRate, format: format);
 
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      return AudioSource.uri(Uri.parse(url), tag: song.id);
+    }
     // Cache all remote songs on local disk for instant seek and bufferless playback
     final cacheDir = await getTemporaryDirectory();
     final cacheFile = File(
@@ -2420,7 +2489,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
         if (_currentSong!.isLocal == true ||
-            _offlineService.getLocalPath(_currentSong!.id) != null) {
+            _offlineService.getLocalPath(_currentSong!.id) != null ||
+            (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
           await _audioPlayer.setUrl(playUrl);
         } else {
           final cacheDir = await getTemporaryDirectory();

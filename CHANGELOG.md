@@ -5,6 +5,19 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.57] - 2026-09-06
+
+### Added & Improved
+- **Instalador Oficial de Windows y Soporte de Escritorio**:
+  - Nuevo instalador ejecutable de Windows (`Groovy-Setup.exe`) basado en NSIS e Inno Setup con accesos directos y desinstalador limpio.
+  - Script de automatización [`build_installer.ps1`](file:///c:/Users/danil/Downloads/Groovy/Groovy-master/build_installer.ps1) para compilar la release y generar el instalador en un solo comando.
+  - Mejoras completas en la interfaz de escritorio: nueva barra de navegación lateral, reproductor de escritorio optimizado y panel lateral derecho.
+- **Motor de Audio yt-dlp & YouTube Streaming**:
+  - Implementación de servicio dedicado yt-dlp para resolución de streaming de audio directo y extracción rápida.
+  - Streaming eficiente con `StreamAudioSource` y caché inteligente.
+- **Marca y Assets**:
+  - Nuevos iconos de aplicación de alta resolución para Windows y móviles.
+
 ## [1.0.55] - 2026-09-05
 
 ### Added & Improved

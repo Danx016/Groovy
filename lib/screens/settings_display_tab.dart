@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:io';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/recommendation_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/theme_service.dart';
 import '../services/locale_service.dart';
-import '../providers/player_provider.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/settings/settings_section_card.dart';
@@ -24,25 +20,11 @@ class SettingsDisplayTab extends StatefulWidget {
 
 class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   final _playerUiSettings = PlayerUiSettingsService();
-  bool _showVolumeSlider = true;
-  bool _showStarRatings = false;
-  bool _showMiniPlayerHeart = false;
-  bool _showMiniPlayerRepeat = false;
-  bool _showMiniPlayerShuffle = false;
-  double _albumArtCornerRadius = 8.0;
-  String _artworkShape = 'rounded';
-  String _artworkShadow = 'soft';
-  String _artworkShadowColor = 'black';
   bool _liveSearch = true;
 
   ThemeMode _themeMode = ThemeMode.system;
   AccentColor _accentColor = AccentColor.red;
   bool _liquidGlass = false;
-
-  bool get _isDesktop {
-    if (kIsWeb) return false;
-    return Platform.isWindows || Platform.isLinux || Platform.isMacOS;
-  }
 
   @override
   void initState() {
@@ -57,15 +39,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     final themeService = Provider.of<ThemeService>(context, listen: false);
 
     setState(() {
-      _showVolumeSlider = _playerUiSettings.getShowVolumeSlider();
-      _showStarRatings = _playerUiSettings.getShowStarRatings();
-      _showMiniPlayerHeart = _playerUiSettings.getShowMiniPlayerHeart();
-      _showMiniPlayerRepeat = _playerUiSettings.getShowMiniPlayerRepeat();
-      _showMiniPlayerShuffle = _playerUiSettings.getShowMiniPlayerShuffle();
-      _albumArtCornerRadius = _playerUiSettings.getAlbumArtCornerRadius();
-      _artworkShape = _playerUiSettings.getArtworkShape();
-      _artworkShadow = _playerUiSettings.getArtworkShadow();
-      _artworkShadowColor = _playerUiSettings.getArtworkShadowColor();
       _liveSearch = _playerUiSettings.getLiveSearch();
       _themeMode = themeService.themeMode;
       _accentColor = themeService.accentColor;
@@ -78,37 +51,23 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16),
       children: [
+        // 1. Apariencia
         SettingsSectionCard(
           title: AppLocalizations.of(context)!.appearanceSection.toUpperCase(),
           children: [_buildAppearanceEditor()],
         ),
         const SizedBox(height: 24),
+
+        // 2. Idioma
         SettingsSectionCard(
           title: AppLocalizations.of(context)!.language.toUpperCase(),
           children: [
             _buildLanguageSelector(),
-            const SettingsDivider(),
-            _buildTranslationCredit(),
           ],
         ),
         const SizedBox(height: 24),
-        SettingsSectionCard(
-          title: AppLocalizations.of(context)!.playerInterface.toUpperCase(),
-          children: [
-            _buildVolumeSliderToggle(),
-            const SettingsDivider(),
-            _buildStarRatingsToggle(),
-            const SettingsDivider(),
-            _buildMiniPlayerHeartToggle(),
-            const SettingsDivider(),
-            _buildMiniPlayerRepeatToggle(),
-            const SettingsDivider(),
-            _buildMiniPlayerShuffleToggle(),
 
-          ],
-        ),
-
-        const SizedBox(height: 24),
+        // 3. Búsqueda en vivo
         SettingsSectionCard(
           title: AppLocalizations.of(context)!.liveSearchSection.toUpperCase(),
           children: [
@@ -116,13 +75,8 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
           ],
         ),
         const SizedBox(height: 24),
-        SettingsSectionCard(
-          title: AppLocalizations.of(
-            context,
-          )!.artworkStyleSection.toUpperCase(),
-          children: [_buildArtworkStyleEditor()],
-        ),
-        const SizedBox(height: 24),
+
+        // 4. Recomendaciones inteligentes
         SettingsSectionCard(
           title: AppLocalizations.of(
             context,
@@ -149,53 +103,93 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          
-          _buildEditorRow(
-            icon: CupertinoIcons.moon_stars_fill,
-            iconColor: const Color(0xFF5856D6),
-            label: AppLocalizations.of(context)!.themeLabel,
-            child: _ThemeModeSelector(
-              value: _themeMode,
-              isDark: isDark,
-              onChanged: (mode) async {
-                setState(() => _themeMode = mode);
-                await themeService.setThemeMode(mode);
-              },
-            ),
+          // Theme Mode (System / Light / Dark)
+          _ThemeModeSelector(
+            value: _themeMode,
+            isDark: isDark,
+            onChanged: (mode) async {
+              setState(() => _themeMode = mode);
+              await themeService.setThemeMode(mode);
+            },
           ),
-
           const SizedBox(height: 20),
 
-          _buildEditorRow(
-            icon: Icons.palette_rounded,
-            iconColor: const Color(0xFFFF9500),
-            label: AppLocalizations.of(context)!.accentColorLabel,
-            child: _AccentColorPicker(
-              selected: _accentColor,
-              onChanged: (color) async {
-                setState(() => _accentColor = color);
-                await themeService.setAccentColor(color);
-              },
-            ),
+          // Accent Color
+          const Text(
+            'Color de acento',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
+          const SizedBox(height: 10),
+          _AccentColorPicker(
+            selected: _accentColor,
+            onChanged: (color) async {
+              setState(() => _accentColor = color);
+              await themeService.setAccentColor(color);
+            },
+          ),
+          const SizedBox(height: 20),
 
-          ...[
-            const SizedBox(height: 20),
-            _buildEditorRow(
-              icon: CupertinoIcons.sparkles,
-              iconColor: const Color(0xFF64D2FF),
-              label: AppLocalizations.of(context)!.circularDesignLabel,
+          // Liquid Glass Toggle (Dark Mode only)
+          if (isDark) ...[
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _liquidGlass
+                      ? const Color(0xFF64D2FF).withValues(alpha: 0.4)
+                      : Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppLocalizations.of(context)!.circularDesignSubtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark
-                          ? AppTheme.darkSecondaryText
-                          : AppTheme.lightSecondaryText,
-                    ),
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF64D2FF), Color(0xFF0A84FF)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.sparkles,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Efecto Liquid Glass',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'Fondo translúcido estilo cristal fluido en el reproductor',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.isDark
+                                    ? AppTheme.darkSecondaryText
+                                    : AppTheme.lightSecondaryText,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -219,163 +213,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
       ),
     );
   }
-
-  Widget _buildVolumeSliderToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFF007AFF), Color(0xFF5AC8FA)],
-        icon: CupertinoIcons.speaker_2,
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showVolumeSlider,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showVolumeSliderSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _showVolumeSlider,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _showVolumeSlider = value);
-          await _playerUiSettings.setShowVolumeSlider(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildStarRatingsToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFFFFD700), Color(0xFFFFA500)],
-        icon: CupertinoIcons.star_fill,
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showStarRatings,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showStarRatingsSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _showStarRatings,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _showStarRatings = value);
-          await _playerUiSettings.setShowStarRatings(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildMiniPlayerHeartToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
-        icon: CupertinoIcons.heart_fill,
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showMiniPlayerHeart,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showMiniPlayerHeartSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _showMiniPlayerHeart,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _showMiniPlayerHeart = value);
-          await _playerUiSettings.setShowMiniPlayerHeart(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildMiniPlayerRepeatToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFF34C759), Color(0xFF30D158)],
-        icon: CupertinoIcons.repeat,
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showMiniPlayerRepeat,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showMiniPlayerRepeatSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _showMiniPlayerRepeat,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _showMiniPlayerRepeat = value);
-          await _playerUiSettings.setShowMiniPlayerRepeat(value);
-        },
-      ),
-    );
-  }
-
-  Widget _buildMiniPlayerShuffleToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFF5856D6), Color(0xFF7B68EE)],
-        icon: CupertinoIcons.shuffle,
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.showMiniPlayerShuffle,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.showMiniPlayerShuffleSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _showMiniPlayerShuffle,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _showMiniPlayerShuffle = value);
-          await _playerUiSettings.setShowMiniPlayerShuffle(value);
-        },
-      ),
-    );
-  }
-
-
 
   Widget _buildLiveSearchToggle() {
     return ListTile(
@@ -408,321 +245,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     );
   }
 
-  double _artworkPreviewRadius() {
-    const previewSize = 108.0;
-    // The corner radius setting is applied in raw pixels to every artwork size.
-    // The most visible use-case is the song-tile thumbnail (50 × 50 logical px).
-    // Scale the radius proportionally so the preview matches the visual roundness
-    // the user will actually see in the song list.
-    const referenceSize = 50.0;
-    if (_artworkShape == 'circle') return 9999.0;
-    if (_artworkShape == 'square') return 0.0;
-    return (_albumArtCornerRadius * previewSize / referenceSize)
-        .clamp(0.0, previewSize / 2);
-  }
-
-  List<BoxShadow>? _artworkPreviewShadow() {
-    if (_artworkShadow == 'none') return null;
-    const previewSize = 108.0;
-    final Color color = _artworkShadowColor == 'accent'
-        ? Theme.of(context).colorScheme.primary
-        : Colors.black;
-    double opacity;
-    double blur;
-    Offset offset;
-    switch (_artworkShadow) {
-      case 'medium':
-        opacity = context.isDark ? 0.35 : 0.25;
-        blur = previewSize / 6;
-        offset = Offset(0, previewSize / 20);
-        break;
-      case 'strong':
-        opacity = context.isDark ? 0.55 : 0.40;
-        blur = previewSize / 4;
-        offset = Offset(0, previewSize / 12);
-        break;
-      default: 
-        opacity = context.isDark ? 0.22 : 0.14;
-        blur = previewSize / 10;
-        offset = Offset(0, previewSize / 30);
-    }
-    return [
-      BoxShadow(
-        color: color.withValues(alpha: opacity),
-        blurRadius: blur,
-        offset: offset,
-      ),
-    ];
-  }
-
-  Widget _buildArtworkStyleEditor() {
-    final l10n = AppLocalizations.of(context)!;
-    const previewSize = 108.0;
-    final radius = _artworkPreviewRadius();
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          
-          Center(
-            child: Column(
-              children: [
-                Text(
-                  l10n.artworkPreview,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: context.isDark
-                        ? AppTheme.darkSecondaryText
-                        : AppTheme.lightSecondaryText,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOutCubic,
-                  width: previewSize,
-                  height: previewSize,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.primary.withAlpha(180),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      radius.clamp(0.0, previewSize / 2),
-                    ),
-                    boxShadow: _artworkPreviewShadow(),
-                  ),
-                  child: const Icon(
-                    Icons.music_note_rounded,
-                    color: Colors.white,
-                    size: 44,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 28),
-
-          _buildEditorRow(
-            icon: Icons.crop_square_rounded,
-            iconColor: const Color(0xFF5856D6),
-            label: l10n.artworkShape,
-            child: _buildChips(
-              options: [
-                (value: 'rounded', label: l10n.artworkShapeRounded),
-                (value: 'circle', label: l10n.artworkShapeCircle),
-                (value: 'square', label: l10n.artworkShapeSquare),
-              ],
-              selected: _artworkShape,
-              onSelected: (v) {
-                setState(() => _artworkShape = v);
-                _playerUiSettings.setArtworkShape(v);
-              },
-            ),
-          ),
-
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            child: _artworkShape == 'rounded'
-                ? Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      _buildEditorRow(
-                        icon: Icons.rounded_corner,
-                        iconColor: const Color(0xFFFF9500),
-                        label: l10n.artworkCornerRadius,
-                        trailing: Text(
-                          _albumArtCornerRadius.round() == 0
-                              ? l10n.artworkCornerRadiusNone
-                              : '${_albumArtCornerRadius.round()}px',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        child: SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            activeTrackColor: Theme.of(context).colorScheme.primary,
-                            inactiveTrackColor: context.isDark
-                                ? AppTheme.darkDivider
-                                : AppTheme.lightDivider,
-                            thumbColor: Theme.of(context).colorScheme.primary,
-                            overlayColor: Theme.of(context).colorScheme.primary.withValues(
-                              alpha: 0.12,
-                            ),
-                            trackHeight: 3,
-                            thumbShape: const RoundSliderThumbShape(
-                              enabledThumbRadius: 7,
-                            ),
-                          ),
-                          child: Slider(
-                            value: _albumArtCornerRadius,
-                            min: 0,
-                            max: 24,
-                            divisions: 24,
-                            onChanged: (v) {
-                              setState(() => _albumArtCornerRadius = v);
-                              _playerUiSettings.setAlbumArtCornerRadius(v);
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
-                  )
-                : const SizedBox.shrink(),
-          ),
-
-          const SizedBox(height: 16),
-
-          _buildEditorRow(
-            icon: Icons.blur_on_rounded,
-            iconColor: const Color(0xFF34AADC),
-            label: l10n.artworkShadow,
-            child: _buildChips(
-              options: [
-                (value: 'none', label: l10n.artworkShadowNone),
-                (value: 'soft', label: l10n.artworkShadowSoft),
-                (value: 'medium', label: l10n.artworkShadowMedium),
-                (value: 'strong', label: l10n.artworkShadowStrong),
-              ],
-              selected: _artworkShadow,
-              onSelected: (v) {
-                setState(() => _artworkShadow = v);
-                _playerUiSettings.setArtworkShadow(v);
-              },
-            ),
-          ),
-
-          AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            child: _artworkShadow != 'none'
-                ? Column(
-                    children: [
-                      const SizedBox(height: 16),
-                      _buildEditorRow(
-                        icon: Icons.palette_outlined,
-                        iconColor: const Color(0xFFFF2D55),
-                        label: l10n.artworkShadowColor,
-                        child: _buildChips(
-                          options: [
-                            (
-                              value: 'black',
-                              label: l10n.artworkShadowColorBlack,
-                            ),
-                            (
-                              value: 'accent',
-                              label: l10n.artworkShadowColorAccent,
-                            ),
-                          ],
-                          selected: _artworkShadowColor,
-                          onSelected: (v) {
-                            setState(() => _artworkShadowColor = v);
-                            _playerUiSettings.setArtworkShadowColor(v);
-                          },
-                        ),
-                      ),
-                    ],
-                  )
-                : const SizedBox.shrink(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEditorRow({
-    required IconData icon,
-    required Color iconColor,
-    required String label,
-    required Widget child,
-    Widget? trailing,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                color: iconColor.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(icon, color: iconColor, size: 16),
-            ),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                label,
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            if (trailing != null) ...[const Spacer(), trailing],
-          ],
-        ),
-        const SizedBox(height: 8),
-        child,
-      ],
-    );
-  }
-
-  Widget _buildChips({
-    required List<({String value, String label})> options,
-    required String selected,
-    required ValueChanged<String> onSelected,
-  }) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: options.map((opt) {
-        final isSelected = opt.value == selected;
-        return GestureDetector(
-          onTap: () => onSelected(opt.value),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? Theme.of(context).colorScheme.primary
-                  : (context.isDark
-                        ? Colors.white.withValues(alpha: 0.08)
-                        : Colors.black.withValues(alpha: 0.06)),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isSelected ? Theme.of(context).colorScheme.primary : Colors.transparent,
-              ),
-            ),
-            child: Text(
-              opt.label,
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color: isSelected
-                    ? Colors.white
-                    : (context.isDark ? Colors.white70 : Colors.black87),
-              ),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
   Widget _buildRecommendationsToggle() {
     return Consumer<RecommendationService>(
       builder: (context, service, _) {
@@ -732,9 +254,9 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
             vertical: 4,
           ),
           leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
-        icon: CupertinoIcons.sparkles,
-      ),
+            gradientColors: const [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
+            icon: CupertinoIcons.sparkles,
+          ),
           title: Text(
             AppLocalizations.of(context)!.enableRecommendations,
             style: const TextStyle(fontSize: 16),
@@ -841,8 +363,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     );
   }
 
-
-
   Widget _buildLanguageSelector() {
     return Consumer<LocaleService>(
       builder: (context, localeService, _) {
@@ -857,9 +377,9 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
             vertical: 4,
           ),
           leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFF34C759), Color(0xFF30D158)],
-        icon: CupertinoIcons.globe,
-      ),
+            gradientColors: const [Color(0xFF34C759), Color(0xFF30D158)],
+            icon: CupertinoIcons.globe,
+          ),
           title: Text(
             AppLocalizations.of(context)!.language,
             style: const TextStyle(fontSize: 16),
@@ -880,47 +400,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     );
   }
 
-  Widget _buildTranslationCredit() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 32,
-        height: 32,
-        decoration: BoxDecoration(
-          color: const Color(0xFF5AC8FA).withValues(alpha: 0.2),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(
-          CupertinoIcons.heart_fill,
-          color: Color(0xFFFF3B30),
-          size: 18,
-        ),
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.communityTranslations,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.communityTranslationsSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: const Icon(Icons.open_in_new_rounded, size: 18),
-      onTap: () => _launchUrl('https://crowdin.com/project/musly'),
-    );
-  }
-
-  Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
-
   void _showLanguagePicker(BuildContext context, LocaleService localeService) {
     showModalBottomSheet(
       context: context,
@@ -934,7 +413,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
         ),
         child: Column(
           children: [
-            
             Container(
               margin: const EdgeInsets.only(top: 8, bottom: 4),
               width: 40,
@@ -944,7 +422,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
             Padding(
               padding: const EdgeInsets.all(16),
               child: Row(
@@ -967,7 +444,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
               ),
             ),
             const Divider(height: 1),
-            
             ListTile(
               leading: const Icon(CupertinoIcons.device_phone_portrait),
               title: Text(AppLocalizations.of(context)!.systemDefault),
@@ -980,7 +456,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
               },
             ),
             const Divider(height: 1),
-            
             Expanded(
               child: ListView(
                 children: LocaleService.supportedLanguages.entries.map((entry) {
@@ -1054,9 +529,21 @@ class _ThemeModeSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final options = [
-      (mode: ThemeMode.system, label: AppLocalizations.of(context)!.themeModeSystem, icon: CupertinoIcons.device_phone_portrait),
-      (mode: ThemeMode.light, label: AppLocalizations.of(context)!.themeModeLight, icon: CupertinoIcons.sun_max_fill),
-      (mode: ThemeMode.dark, label: AppLocalizations.of(context)!.themeModeDark, icon: CupertinoIcons.moon_fill),
+      (
+        mode: ThemeMode.system,
+        label: AppLocalizations.of(context)!.themeModeSystem,
+        icon: CupertinoIcons.device_phone_portrait,
+      ),
+      (
+        mode: ThemeMode.light,
+        label: AppLocalizations.of(context)!.themeModeLight,
+        icon: CupertinoIcons.sun_max_fill,
+      ),
+      (
+        mode: ThemeMode.dark,
+        label: AppLocalizations.of(context)!.themeModeDark,
+        icon: CupertinoIcons.moon_fill,
+      ),
     ];
 
     final accent = Theme.of(context).colorScheme.primary;

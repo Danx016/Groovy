@@ -34,7 +34,8 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
   // conflicting pause() on interruption/headphone-unplug. iOS/desktop/web
   // keep the defaults (audio_session drives Control Center/lock-screen
   // interruptions there).
-  static bool get _ownsFocusNatively => !kIsWeb && Platform.isAndroid;
+  static bool get _ownsFocusNatively =>
+      !kIsWeb && (Platform.isAndroid || Platform.isWindows || Platform.isLinux);
 
   final AudioPlayer _player = AudioPlayer(
     handleAudioSessionActivation: !_ownsFocusNatively,
@@ -572,7 +573,7 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
 /// On desktop/web the handler is created directly (audio_service has no
 /// backend there).
 Future<MuslyAudioHandler> initAudioService() async {
-  if (!kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS)) {
+  if (!kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS || Platform.isWindows)) {
     return AudioService.init(
       builder: () => MuslyAudioHandler(),
       config: const AudioServiceConfig(

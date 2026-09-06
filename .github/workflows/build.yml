@@ -209,7 +209,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path windows_package
           Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "windows_package\" -Recurse -Force
-          Copy-Item -Path "musly-setup.exe" -Destination "windows_package\" -Force
+          Copy-Item -Path "Groovy-Setup.exe" -Destination "windows_package\" -Force
 
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
@@ -402,56 +402,50 @@ jobs:
       - name: Package Windows
         run: |
           cd artifacts/windows
-          zip -r ../../musly-windows.zip .
+          zip -r ../../groovy-windows.zip .
           cd ../..
 
       - name: Package Linux
         run: |
           cd artifacts/linux
-          tar -czf ../../musly-linux-x64.tar.gz .
+          tar -czf ../../groovy-linux-x64.tar.gz .
           cd ../..
 
       - name: Package macOS
         run: |
-          cp artifacts/macos-dmg/*.dmg musly-macos.dmg
+          cp artifacts/macos-dmg/*.dmg groovy-macos.dmg
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.event.inputs.version }}
-          name: Musly v${{ github.event.inputs.version }}
+          name: Groovy v${{ github.event.inputs.version }}
           body: |
-            ## 🎉 Musly v${{ github.event.inputs.version }}
+            ## 🎉 Groovy v${{ github.event.inputs.version }}
 
             ### 📦 Downloads
 
             **Android:**
             - `app-release.apk` (universal APK for all devices)
 
-            **iOS:**
-            - `musly-ios.ipa` (sideload with AltStore, Sideloadly, or similar — not signed)
-
             **Windows:**
-            - `musly-setup.exe` (setup installer, run to install Musly)
-            - `musly-windows.zip` (portable version, extract and run)
+            - `Groovy-Setup.exe` (setup installer, run to install Groovy)
+            - `groovy-windows.zip` (portable version, extract and run)
 
             **macOS:**
-            - `musly-macos.dmg` (drag Musly.app to Applications — not notarized)
+            - `groovy-macos.dmg` (drag Groovy.app to Applications)
 
             **Linux:**
-            - `musly-linux-x64.tar.gz` (extract and run musly)
+            - `groovy-linux-x64.tar.gz` (extract and run groovy)
 
             ### 📝 Changelog
-            See [CHANGELOG.md](https://github.com/dddevid/Musly/blob/master/CHANGELOG.md)
-
-            ### 🌍 Translations
-            Contribute translations at [Crowdin](https://crowdin.com/project/musly)
+            See [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md)
           files: |
             artifacts/android/*.apk
             artifacts/ios/*.ipa
-            artifacts/windows/musly-setup.exe
-            musly-windows.zip
-            musly-linux-x64.tar.gz
-            musly-macos.dmg
+            artifacts/windows/Groovy-Setup.exe
+            groovy-windows.zip
+            groovy-linux-x64.tar.gz
+            groovy-macos.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
