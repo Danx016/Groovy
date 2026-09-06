@@ -1310,7 +1310,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // its duration so it doesn't zero out the UPnP/Cast duration.
         if (_isRenderingRemotely) return;
 
-        _duration = duration ?? Duration.zero;
+        if (duration != null && duration > Duration.zero) {
+          _duration = duration;
+        } else if (_currentSong?.duration != null && _currentSong!.duration! > 0) {
+          _duration = Duration(seconds: _currentSong!.duration!);
+        } else {
+          _duration = duration ?? Duration.zero;
+        }
         notifyListeners();
         _updateAndroidAuto();
       },
@@ -1565,6 +1571,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _lastPreloadedSongId = null;
       _resolvedArtworkUrl = null;
       _position = Duration.zero;
+      if (song.duration != null && song.duration! > 0) {
+        _duration = Duration(seconds: song.duration!);
+      } else {
+        _duration = Duration.zero;
+      }
+      _isPlaying = true;
+      _isLoading = true;
       notifyListeners();
       _saveQueueState();
 

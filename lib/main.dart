@@ -177,7 +177,6 @@ void main() async {
 
   MediaKit.ensureInitialized();
   JustAudioMediaKit.title = 'Groovy';
-  JustAudioMediaKit.bufferSize = 32 * 1024 * 1024;
   JustAudioMediaKit.prefetchPlaylist = false;
   JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
 

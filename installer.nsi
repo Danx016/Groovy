@@ -83,6 +83,10 @@ Var StartMenuFolder
 
 Section "Groovy" SecMain
 
+  ; Close any running instances before updating files
+  nsExec::Exec 'taskkill /F /IM groovy.exe'
+  Sleep 500
+
   SetOutPath "$INSTDIR"
   
   ; Copy all files from Release folder
