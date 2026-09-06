@@ -11,9 +11,6 @@ on:
     tags:
       - 'v*'
 
-env:
-  FLUTTER_VERSION: '3.41.7'
-
 permissions:
   contents: write
 
@@ -50,21 +47,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Setup Java JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
-      
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
+          cache: true
       
       - name: Install dependencies
         run: flutter pub get
@@ -77,7 +75,6 @@ jobs:
           echo "Decoding keystore from base64..."
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > android/app/musly-release.keystore
           
-          # Create key.properties
           cat > android/key.properties <<EOF
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
@@ -114,22 +111,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+      
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          cache: true
       
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        shell: pwsh
-        run: |
-          $DART_VERSION = (dart --version 2>&1 | Select-String -Pattern 'Dart SDK version: ([0-9]+\.[0-9]+\.[0-9]+)').Matches.Groups[1].Value
-          Write-Host "✅ Dart SDK version: $DART_VERSION"
+      - name: Enable Windows Desktop
+        run: flutter config --enable-windows-desktop
       
       - name: Install dependencies
         run: flutter pub get
@@ -183,18 +175,11 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: 'stable'
+          cache: true
       
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-        with:
-          sdk: 'stable'
-      
-      - name: Verify Dart SDK Version
-        run: |
-          DART_VERSION=$(dart --version | grep -oP 'Dart SDK version: \K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-          echo "✅ Dart SDK version: $DART_VERSION"
+      - name: Enable Linux Desktop
+        run: flutter config --enable-linux-desktop
       
       - name: Install dependencies
         run: flutter pub get
