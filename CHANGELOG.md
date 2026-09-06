@@ -5,6 +5,17 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.59] - 2026-09-06
+
+### Fixed & Improved
+- **Reproducción de Audio en Windows**:
+  - Selección prioritaria nativa de streams `MP4 / AAC (m4a)` en Windows para garantizar compatibilidad al 100% con *Windows Media Foundation* sin requerir códecs adicionales.
+  - Optimización del proxy local de streaming para soportar peticiones parciales (`Range requests`) continuas.
+- **Web App**:
+  - Corrección en la carga inicial de `HomeView` y `useRecommendations` para sincronización con `LibraryContext`.
+- **Automatización CI/CD Multiplataforma**:
+  - Soporte completo y unificado para compilación y empaquetado de Android (`.apk`), Windows (`Groovy-Setup.exe` y `.zip`) y Linux (`.tar.gz`).
+
 ## [1.0.58] - 2026-09-06
 
 ### Added & Improved

@@ -222,7 +222,7 @@ jobs:
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             VER="${GITHUB_REF_NAME#v}"
           else
-            VER="1.0.58"
+            VER="1.0.59"
           fi
           echo "VERSION=$VER" >> $GITHUB_OUTPUT
           echo "TAG=v$VER" >> $GITHUB_OUTPUT
