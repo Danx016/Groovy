@@ -23,10 +23,49 @@ export const setAuthToken = (token) => {
   }
 };
 
+const getClientHeaders = () => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return {};
+  const ua = navigator.userAgent || '';
+  let os = 'Windows';
+  let osVersion = 'Windows 11 / 10';
+  if (/android/i.test(ua)) {
+    os = 'Android';
+    const m = ua.match(/android\s+([\d\.]+)/i);
+    osVersion = m ? `Android ${m[1]}` : 'Android';
+  } else if (/iphone|ipad|ipod/i.test(ua)) {
+    os = 'iOS';
+    osVersion = 'iOS';
+  } else if (/macintosh|mac os x/i.test(ua)) {
+    os = 'macOS';
+    osVersion = 'macOS';
+  } else if (/linux/i.test(ua)) {
+    os = 'Linux';
+    osVersion = 'Linux';
+  }
+
+  let device = 'Windows PC / Laptop';
+  if (os === 'Android') {
+    const m = ua.match(/;\s*([^;]+?)\s*Build\//i);
+    device = m ? m[1].trim() : 'Dispositivo Android';
+  } else if (os === 'iOS') {
+    device = /ipad/i.test(ua) ? 'iPad' : 'iPhone';
+  } else if (os === 'macOS') {
+    device = 'MacBook / Mac';
+  }
+
+  return {
+    'X-Client-Platform': 'Web',
+    'X-Device-Model': device,
+    'X-OS-Version': osVersion,
+    'X-App-Version': '1.0.65',
+  };
+};
+
 export const authFetch = async (endpoint, options = {}) => {
   const token = getAuthToken();
   const headers = {
     'Content-Type': 'application/json',
+    ...getClientHeaders(),
     ...(options.headers || {}),
   };
 

@@ -13,6 +13,18 @@ function getCountryFlag(countryCode) {
   return String.fromCodePoint(...codePoints);
 }
 
+function cleanIspName(isp = '', org = '', countryCode = '') {
+  let name = (org && org !== 'Desconocido' ? org : isp) || 'Desconocido';
+  if (countryCode === 'CO' || /colombia/i.test(name)) {
+    if (/ufinet/i.test(name)) {
+      return 'Ufinet Colombia';
+    }
+  }
+  name = name.replace(/\bPANAMA\s+S\.?A\.?/i, '').replace(/\bCOLOMBIA,\s*S\.?\s*A\.?/i, 'Colombia').trim();
+  if (!name) name = isp || org || 'Desconocido';
+  return name;
+}
+
 let publicServerGeoCache = null;
 
 /**
@@ -53,13 +65,14 @@ async function resolveIpLocation(ip) {
         const data = await res.json();
         if (data.status === 'success') {
           const flag = getCountryFlag(data.countryCode);
+          const ispClean = cleanIspName(data.isp, data.org, data.countryCode);
           publicServerGeoCache = {
             country: `${flag} ${data.country}`,
             countryCode: data.countryCode,
             flag,
             city: data.city || 'Desconocido',
             region: data.regionName || '',
-            isp: data.org || data.isp || 'Desconocido',
+            isp: ispClean,
             realIp: data.query,
             isLocalLan: true,
           };
@@ -77,13 +90,14 @@ async function resolveIpLocation(ip) {
         const data = await res.json();
         if (data.success !== false) {
           const flag = data.flag?.emoji || getCountryFlag(data.country_code);
+          const ispClean = cleanIspName(data.connection?.isp, data.connection?.org, data.country_code);
           publicServerGeoCache = {
             country: `${flag} ${data.country}`,
             countryCode: data.country_code,
             flag,
             city: data.city || 'Desconocido',
             region: data.region || '',
-            isp: data.connection?.org || data.connection?.isp || 'Desconocido',
+            isp: ispClean,
             realIp: data.ip,
             isLocalLan: true,
           };
@@ -122,13 +136,14 @@ async function resolveIpLocation(ip) {
       const data = await res.json();
       if (data.status === 'success') {
         const flag = getCountryFlag(data.countryCode);
+        const ispClean = cleanIspName(data.isp, data.org, data.countryCode);
         locationData = {
           country: `${flag} ${data.country}`,
           countryCode: data.countryCode,
           flag,
           city: data.city || 'Desconocido',
           region: data.regionName || '',
-          isp: data.org || data.isp || 'Desconocido',
+          isp: ispClean,
         };
       }
     }
@@ -147,13 +162,14 @@ async function resolveIpLocation(ip) {
         const data = await res.json();
         if (data.success !== false) {
           const flag = data.flag?.emoji || getCountryFlag(data.country_code);
+          const ispClean = cleanIspName(data.connection?.isp, data.connection?.org, data.country_code);
           locationData = {
             country: `${flag} ${data.country}`,
             countryCode: data.country_code,
             flag,
             city: data.city || 'Desconocido',
             region: data.region || '',
-            isp: data.connection?.org || data.connection?.isp || 'Desconocido',
+            isp: ispClean,
           };
         }
       }
@@ -249,15 +265,29 @@ function parseFullClientInfo(req) {
   }
 
   // 3. Detect Real Device Model (from custom headers sent by app or extracted from UA)
-  let deviceModel = customDeviceModel || '';
+  let deviceModel = (customDeviceModel || '').trim();
   if (!deviceModel) {
     const androidModelMatch = ua.match(/;\s*([^;]+?)\s*Build\//i);
     if (androidModelMatch && androidModelMatch[1]) {
       deviceModel = androidModelMatch[1].trim();
-    } else if (os) {
-      deviceModel = os;
+    } else if (os === 'Windows') {
+      deviceModel = 'Windows PC / Laptop';
+    } else if (os === 'macOS') {
+      deviceModel = 'Mac';
+    } else if (os === 'iOS') {
+      deviceModel = /ipad/i.test(ua) ? 'iPad' : 'iPhone';
+    } else if (os === 'Android') {
+      deviceModel = 'Dispositivo Android';
     } else {
-      deviceModel = 'Desconocido';
+      deviceModel = 'Dispositivo';
+    }
+  }
+
+  // Deduplicate repeated brand prefix e.g. "Infinix Infinix X678B" -> "Infinix X678B"
+  if (deviceModel) {
+    const words = deviceModel.split(/\s+/);
+    if (words.length >= 2 && words[0].toLowerCase() === words[1].toLowerCase()) {
+      deviceModel = words.slice(1).join(' ');
     }
   }
 

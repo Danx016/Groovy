@@ -73,7 +73,11 @@ class DeviceInfoService {
         final android = await deviceInfo.androidInfo;
         final brand = android.brand.isNotEmpty ? _capitalize(android.brand) : _capitalize(android.manufacturer);
         final model = android.model.isNotEmpty ? android.model : 'Android Device';
-        deviceModel = brand.toLowerCase() == model.toLowerCase() ? model : '$brand $model';
+        if (model.toLowerCase().startsWith(brand.toLowerCase())) {
+          deviceModel = model;
+        } else {
+          deviceModel = '$brand $model'.trim();
+        }
         osVersion = 'Android ${android.version.release} (API ${android.version.sdkInt})';
       } else if (Platform.isWindows) {
         platform = 'Windows';
