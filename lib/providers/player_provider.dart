@@ -1553,6 +1553,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     debugPrint(
         '[Player] ▶ playSong: "${song.title}" by ${song.artist ?? 'unknown'} (id=${song.id} local=${song.isLocal})');
+    
+    // Stop currently playing audio immediately so the previous song does not bleed into the next
+    if (_audioPlayer.playing) {
+      await _audioPlayer.stop();
+    }
+
     _isLoading = true;
     notifyListeners();
 
