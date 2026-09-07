@@ -13,6 +13,11 @@ import '../screens/artist_screen.dart';
 import '../screens/now_playing_screen.dart';
 
 import 'album_artwork.dart';
+import '../services/cast_service.dart';
+import '../services/upnp_service.dart';
+import 'connect/groovy_connect_icon.dart';
+import 'connect/groovy_connect_modal.dart';
+
 
 class DesktopPlayerBar extends StatefulWidget {
   final GlobalKey<NavigatorState>? navigatorKey;
@@ -261,6 +266,21 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   onPressed: widget.onToggleNowPlaying ?? widget.onToggleQueue,
                   tooltip: 'Vista que suena',
                 ),
+                Consumer2<CastService, UpnpService>(
+                  builder: (context, cs, us, _) {
+                    final isConn = cs.isConnected || us.isConnected;
+                    return IconButton(
+                      icon: GroovyConnectIcon(
+                        size: 20,
+                        color: isConn ? const Color(0xFF1ED760) : iconColor,
+                        isConnected: isConn,
+                        connectedColor: const Color(0xFF1ED760),
+                      ),
+                      onPressed: () => GroovyConnectModal.show(context),
+                      tooltip: 'Conectar a un dispositivo',
+                    );
+                  },
+                ),
                 const SizedBox(width: 8),
                 const _VolumeControl(),
               ],
@@ -455,6 +475,25 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   ),
                   onPressed: widget.onToggleQueue,
                   tooltip: 'Cola de reproducción',
+                ),
+                Consumer2<CastService, UpnpService>(
+                  builder: (context, cs, us, _) {
+                    final isConn = cs.isConnected || us.isConnected;
+                    return IconButton(
+                      icon: GroovyConnectIcon(
+                        size: 20,
+                        color: isConn
+                            ? const Color(0xFF1ED760)
+                            : (isDark
+                                ? const Color(0xFFB3B3B3)
+                                : const Color(0xFF6B6B6B)),
+                        isConnected: isConn,
+                        connectedColor: const Color(0xFF1ED760),
+                      ),
+                      onPressed: () => GroovyConnectModal.show(context),
+                      tooltip: 'Conectar a un dispositivo',
+                    );
+                  },
                 ),
                 IconButton(
                   icon: Icon(

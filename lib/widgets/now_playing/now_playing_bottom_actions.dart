@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import '../cast_button.dart';
+import 'package:provider/provider.dart';
+import '../../services/cast_service.dart';
+import '../../services/upnp_service.dart';
+import '../connect/groovy_connect_icon.dart';
+import '../connect/groovy_connect_modal.dart';
 
 class NowPlayingBottomActions extends StatelessWidget {
   final VoidCallback onLyricsTap;
@@ -21,6 +25,10 @@ class NowPlayingBottomActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isCastConnected = context.select<CastService, bool>((s) => s.isConnected);
+    final isUpnpConnected = context.select<UpnpService, bool>((s) => s.isConnected);
+    final isDeviceConnected = isCastConnected || isUpnpConnected;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 36.0, vertical: 6.0),
       child: Row(
@@ -41,10 +49,20 @@ class NowPlayingBottomActions extends StatelessWidget {
             onTap: onLyricsTap,
           ),
 
-          // 2. Apple Music AirPlay / Cast Button
-          CastButton(
-            iconSize: 22,
-            iconColor: Colors.white.withValues(alpha: 0.60),
+          // 2. Groovy Connect / Device Output Button
+          _ActionButton(
+            customIcon: GroovyConnectIcon(
+              size: 22,
+              color: isDeviceConnected
+                  ? const Color(0xFF1ED760)
+                  : Colors.white.withValues(alpha: 0.65),
+              isConnected: isDeviceConnected,
+              connectedColor: const Color(0xFF1ED760),
+            ),
+            isActive: isDeviceConnected,
+            onTap: () {
+              GroovyConnectModal.show(context);
+            },
           ),
 
           // 3. Apple Music Queue Button (3 bullet lines)

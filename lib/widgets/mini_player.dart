@@ -12,6 +12,10 @@ import '../services/youtube_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'album_artwork.dart';
 import '../screens/now_playing_screen.dart';
+import '../services/cast_service.dart';
+import '../services/upnp_service.dart';
+import 'connect/groovy_connect_icon.dart';
+import 'connect/groovy_connect_modal.dart';
 
 class MiniPlayer extends StatelessWidget {
   final VoidCallback? onTap;
@@ -233,6 +237,10 @@ class _MiniPlayerControls extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final color = isDark ? Colors.white : Colors.black;
 
+    final isCastConnected = context.select<CastService, bool>((s) => s.isConnected);
+    final isUpnpConnected = context.select<UpnpService, bool>((s) => s.isConnected);
+    final isDeviceConnected = isCastConnected || isUpnpConnected;
+
     return Selector<PlayerProvider, (bool, bool)>(
       selector: (_, p) => (p.isPlaying, p.hasNext),
       builder: (context, data, _) {
@@ -242,6 +250,25 @@ class _MiniPlayerControls extends StatelessWidget {
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Connect Device Button (Spotify Connect icon)
+            IconButton(
+              onPressed: () {
+                HapticFeedback.lightImpact();
+                GroovyConnectModal.show(context);
+              },
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              constraints: const BoxConstraints(minWidth: 38, minHeight: 44),
+              icon: GroovyConnectIcon(
+                size: 21,
+                color: isDeviceConnected
+                    ? const Color(0xFF1ED760)
+                    : (isDark ? Colors.white70 : Colors.black87),
+                isConnected: isDeviceConnected,
+                connectedColor: const Color(0xFF1ED760),
+              ),
+              tooltip: 'Dispositivos',
+            ),
+
             // Play / Pause Button (Apple Music iconic solid symbol)
             IconButton(
               onPressed: () {
