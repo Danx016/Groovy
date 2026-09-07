@@ -107,6 +107,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _pitchCorrection = true;
   int _streamInterruptionRetryCount = 0;
   bool _hasRetriedCurrentPlay = false;
+  int _playGeneration = 0;
+  bool _isTransitioningSong = false;
 
   PlayerProvider(
     this._youtubeService,
@@ -1372,110 +1374,65 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await onGranted();
   }
 
-  Future<void> _resumeCurrentSongAfterInterruption() async {
-    if (_currentSong == null) return;
-    try {
-      final resumePos = _position;
-      debugPrint('[Player] Resuming "${_currentSong!.title}" at $resumePos');
-      if (_currentSong!.isLocal != true) {
-        YtDlpService().invalidateCache(_currentSong!.id);
-      }
-      final source = await _youtubeService.getYoutubeAudioSource(_currentSong!);
-      if (source != null) {
-        await _audioPlayer.setAudioSource(source, initialPosition: resumePos);
-        await _applyReplayGain(_currentSong!);
-        await _audioPlayer.play();
-        _isPlaying = true;
-        notifyListeners();
-      } else {
-        await skipNext();
-      }
-    } catch (e) {
-      debugPrint('[Player] Auto-resume failed: $e');
-      if (_streamInterruptionRetryCount >= 3) {
-        _streamInterruptionRetryCount = 0;
-        await skipNext();
-      }
-    }
-  }
-
   Future<void> _onSongComplete() async {
-    final totalDurationSec = _duration.inSeconds > 0
-        ? _duration.inSeconds
-        : (_currentSong?.duration ?? 0);
+    if (_isTransitioningSong) return;
+    _isTransitioningSong = true;
 
-    // Guard against premature stream drops/glitches:
-    // If the stream ended early while the track is far from over, resume from current position
-    // instead of falsely marking the song as finished and skipping to the next track.
-    final isPrematureEnd = totalDurationSec > 10 &&
-        _position.inSeconds < (totalDurationSec - 5);
+    try {
+      final completedSong = _currentSong;
+      debugPrint('[Player] ✓ Song completed: "${completedSong?.title ?? 'unknown'}"');
 
-    if (isPrematureEnd) {
-      debugPrint(
-        '[Player] ⚠️ Song completed prematurely at ${_position.inSeconds}s / ${totalDurationSec}s. Attempting auto-resume (retry \$_streamInterruptionRetryCount/3)...',
-      );
-      if (_streamInterruptionRetryCount < 3 && _currentSong != null) {
-        _streamInterruptionRetryCount++;
-        await _resumeCurrentSongAfterInterruption();
+      if (completedSong != null && completedSong.isLocal != true) {
+        _youtubeService.scrobble(completedSong.id, submission: true).catchError((e) {
+          _offlineService.queueScrobble(completedSong.id, submission: true);
+        });
+      }
+
+      if (completedSong != null && _recommendationService != null) {
+        _recommendationService!.trackSongPlay(
+          completedSong,
+          durationPlayed: _duration.inSeconds,
+          completed: true,
+        );
+      }
+
+      if (_sleepTimerEndCurrentSong) {
+        _doSleepTimerStop();
         return;
       }
-    }
-    _streamInterruptionRetryCount = 0;
 
-    if (_currentSong != null && _currentSong!.isLocal != true) {
-      _youtubeService.scrobble(_currentSong!.id, submission: true).catchError((
-        e,
-      ) {
-        _offlineService.queueScrobble(_currentSong!.id, submission: true);
-      });
-    }
-
-    if (_currentSong != null && _recommendationService != null) {
-      _recommendationService!.trackSongPlay(
-        _currentSong!,
-        durationPlayed: _duration.inSeconds,
-        completed: true,
-      );
-    }
-
-    if (_sleepTimerEndCurrentSong) {
-      _doSleepTimerStop();
-      return;
-    }
-
-    if (_concatenatingSource != null) {
-      // With ConcatenatingAudioSource this only fires at the very end
-      // of the queue when LoopMode is off.
-      await _handleEndOfQueue();
-      return;
-    }
-
-    // Fallback for single-song mode
-    if (_repeatMode == RepeatMode.one ||
-        (_repeatMode == RepeatMode.all && _queue.length == 1)) {
-      await seek(Duration.zero);
-      await play();
-    } else if (_currentIndex < _queue.length - 1 ||
-        _repeatMode == RepeatMode.all ||
-        _shuffleEnabled) {
-      if (_youtubeService.isYoutube && _currentIndex >= _queue.length - 2 && _currentSong != null) {
-        _fetchAndQueueRadioTracks(_currentSong!).catchError((_) {});
+      if (_concatenatingSource != null) {
+        await _handleEndOfQueue();
+        return;
       }
-      await skipNext();
-    } else if (_youtubeService.isYoutube && _currentSong != null) {
-      final moreSimilar = await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
-      final existingIds = _queue.map((s) => s.id).toSet();
-      final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
-      if (toAdd.isNotEmpty) {
-        _queue.addAll(toAdd);
-        notifyListeners();
-        _saveQueueState();
+
+      if (_repeatMode == RepeatMode.one) {
+        await seek(Duration.zero);
+        await play();
+      } else if (_currentIndex < _queue.length - 1 ||
+          _repeatMode == RepeatMode.all ||
+          _shuffleEnabled) {
+        if (_youtubeService.isYoutube && _currentIndex >= _queue.length - 2 && completedSong != null) {
+          _fetchAndQueueRadioTracks(completedSong).catchError((_) {});
+        }
         await skipNext();
+      } else if (_youtubeService.isYoutube && completedSong != null) {
+        final moreSimilar = await _youtubeService.getSimilarSongs(completedSong.id, count: 20);
+        final existingIds = _queue.map((s) => s.id).toSet();
+        final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
+        if (toAdd.isNotEmpty) {
+          _queue.addAll(toAdd);
+          notifyListeners();
+          _saveQueueState();
+          await skipNext();
+        } else {
+          await _handleEndOfQueue();
+        }
       } else {
         await _handleEndOfQueue();
       }
-    } else {
-      await _handleEndOfQueue();
+    } finally {
+      _isTransitioningSong = false;
     }
   }
 
@@ -1522,6 +1479,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     List<Song>? playlist,
     int? startIndex,
   }) async {
+    final currentGen = ++_playGeneration;
+
     if (_currentSong?.id == song.id && !_isPlayingRadio) {
       await togglePlayPause();
       return;
@@ -1595,14 +1554,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       _refreshArtworkUrl().catchError((_) {});
 
-
-
       if (_castService.isConnected) {
         if (_audioPlayer.playing) await _audioPlayer.stop();
 
         final playUrl = song.isLocal == true
             ? Uri.file(song.path!).toString()
             : await _youtubeService.resolveStreamUrlAsync(song);
+        if (currentGen != _playGeneration) return;
+
         final coverUrl = song.isLocal == true && song.coverArt != null
             ? song.coverArt!
             : _youtubeService.getCoverArtUrl(song.coverArt ?? song.id);
@@ -1618,11 +1577,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               song.duration != null ? Duration(seconds: song.duration!) : null,
           autoPlay: true,
         );
+        if (currentGen != _playGeneration) return;
         _isRenderingRemotely = true;
         _isPlaying = true;
       } else if (_upnpService.isConnected) {
-        // Reset before sending Stop so a poll that fires mid-load can't
-        // mistake the STOPPED state for a natural track end and advance twice.
         _upnpWasPlaying = false;
         debugPrint(
           'UPnP: playSong() taking UPnP branch, isConnected=${_upnpService.isConnected}',
@@ -1632,10 +1590,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         final playUrl = song.isLocal == true && song.path != null
             ? Uri.file(song.path!).toString()
             : await _youtubeService.resolveStreamUrlAsync(song);
+        if (currentGen != _playGeneration) return;
 
         try {
-          // Resolve the MIME type so strict UPnP renderers (e.g. moode /
-          // upmpdcli with "check metadata" on) can validate protocolInfo.
           final mimeType =
               song.contentType ?? UpnpService.mimeTypeFromSuffix(song.suffix);
           final success = await _upnpService.loadAndPlay(
@@ -1660,28 +1617,31 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint('UPnP playback failed, disconnected: $e');
           rethrow;
         }
+        if (currentGen != _playGeneration) return;
         _isRenderingRemotely = true;
         _isPlaying = true;
       } else {
         _isRenderingRemotely = false;
 
-        // For YouTube, pre-fetch the manifest then hand a StreamAudioSource
-        // to just_audio so ExoPlayer never touches the YouTube URL directly.
         final youtubeSource = song.isLocal != true
             ? await _youtubeService.getYoutubeAudioSource(song)
             : null;
 
+        if (currentGen != _playGeneration) {
+          debugPrint('[Player] Aborting superseded play request for "${song.title}"');
+          return;
+        }
+
         if (youtubeSource != null) {
-          // YouTube: single StreamAudioSource, no gapless
           _concatenatingSource = null;
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: Duration.zero);
+          if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
           _isPlaying = true;
           _isLoading = false;
           notifyListeners();
         } else if (_youtubeService.isYoutube) {
-          // All songs are YouTube — can't build ConcatenatingAudioSource easily
           _concatenatingSource = null;
           final String playUrl;
           if (song.isLocal == true && song.path != null) {
@@ -1694,18 +1654,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               playUrl = await _youtubeService.resolveStreamUrlAsync(song);
             }
           }
+          if (currentGen != _playGeneration) return;
           await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
+          if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_gaplessEnabled) {
-          // Build ConcatenatingAudioSource for gapless playback
           try {
             await _buildAndSetConcatenatingSource(
               initialIndex: _currentIndex,
               initialPosition: Duration.zero,
             );
           } catch (e) {
-            // Android 16 / Media3 first-play workaround
             if (!_hasPlayedOnce) {
               debugPrint(
                 'First playback failed (Android 16 Media3 issue), retrying: $e',
@@ -1720,11 +1680,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               rethrow;
             }
           }
+          if (currentGen != _playGeneration) return;
           await _audioPlayer.seek(Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else {
-          // Gapless disabled — single-song mode
           final String playUrl;
           if (song.isLocal == true && song.path != null) {
             playUrl = Uri.file(song.path!).toString();
@@ -1733,7 +1693,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             if (offlinePath != null) {
               playUrl = 'file://$offlinePath';
             } else {
-              // Apply transcoding settings if enabled
               final maxBitRate = _transcodingService.enabled
                   ? _transcodingService.currentBitRate
                   : null;
@@ -1744,8 +1703,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   maxBitRate: maxBitRate, format: format);
             }
           }
-          // Cache all remote streams locally on fast flash storage so seeking works instantly
-          // and playback never stutters even on poor/unstable connections (#170).
+          if (currentGen != _playGeneration) return;
           if (song.isLocal == true ||
               _offlineService.getLocalPath(song.id) != null ||
               (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
@@ -1766,10 +1724,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               initialPosition: Duration.zero,
             );
           }
+          if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         }
       }
+
+      if (currentGen != _playGeneration) return;
 
       if (song.isLocal != true) {
         if (_offlineService.isOfflineMode) {
