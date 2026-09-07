@@ -1914,7 +1914,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final state = _audioPlayer.playerState.processingState;
       if (_currentSong != null &&
           (_audioPlayer.audioSource == null ||
-              _audioPlayer.duration == Duration.zero ||
               state == ProcessingState.idle ||
               state == ProcessingState.completed)) {
         await _prepareCurrentSong();
