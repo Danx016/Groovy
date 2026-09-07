@@ -105,7 +105,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   double _playbackSpeed = 1.0;
   double _pitch = 1.0;
   bool _pitchCorrection = true;
-  int _streamInterruptionRetryCount = 0;
   bool _hasRetriedCurrentPlay = false;
   int _playGeneration = 0;
   bool _isTransitioningSong = false;
@@ -1488,7 +1487,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _isPlayingRadio = false;
     _currentRadioStation = null;
-    _streamInterruptionRetryCount = 0;
 
     // Jukebox mode: send to server instead of playing locally.
     if (_jukeboxService.enabled) {
@@ -2045,7 +2043,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> seek(Duration position) async {
     _position = position;
-    _streamInterruptionRetryCount = 0;
     notifyListeners();
     if (_jukeboxService.enabled) {
       // Jukebox doesn't support seek by position; ignore.
@@ -2069,7 +2066,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipNext() async {
-    _streamInterruptionRetryCount = 0;
     _hasRetriedCurrentPlay = false;
     if (_currentSong != null && _recommendationService != null) {
       final played = _position.inSeconds;
@@ -2149,7 +2145,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipPrevious() async {
-    _streamInterruptionRetryCount = 0;
     _hasRetriedCurrentPlay = false;
     if (_jukeboxService.enabled) {
       await _jukeboxService.skipPrevious(_youtubeService);
