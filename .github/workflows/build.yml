@@ -143,22 +143,27 @@ jobs:
             flutter build windows --release
           }
       
-      - name: Install NSIS
-        run: choco install nsis -y
+      - name: Install Inno Setup
+        run: choco install innosetup -y
 
       - name: Download bundled yt-dlp binary
         run: |
           curl.exe -L -o build\windows\x64\runner\Release\yt-dlp.exe https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
 
-      - name: Build NSIS Installer
+      - name: Build Inno Setup Installer
         run: |
-          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Create Portable Zip
+        run: |
+          Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "Groovy-Windows-Portable.zip" -Force
 
       - name: Prepare Windows Package
         run: |
           New-Item -ItemType Directory -Force -Path windows_package
           Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "windows_package\" -Recurse -Force
           Copy-Item -Path "Groovy-Setup.exe" -Destination "windows_package\" -Force
+          Copy-Item -Path "Groovy-Windows-Portable.zip" -Destination "windows_package\" -Force
 
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
@@ -264,9 +269,11 @@ jobs:
 
       - name: Package Windows
         run: |
-          cd artifacts/windows
-          zip -r ../../groovy-windows.zip .
-          cd ../..
+          if [ ! -f artifacts/windows/Groovy-Windows-Portable.zip ]; then
+            cd artifacts/windows && zip -r ../../Groovy-Windows-Portable.zip . && cd ../..
+          else
+            cp artifacts/windows/Groovy-Windows-Portable.zip ./Groovy-Windows-Portable.zip
+          fi
 
       - name: Package Linux
         run: |
@@ -298,7 +305,7 @@ jobs:
 
             **🪟 Windows:**
             - `Groovy-Setup.exe` (Instalador con asistente para Windows)
-            - `groovy-windows.zip` (Versión portable, descomprimir y usar)
+            - `Groovy-Windows-Portable.zip` (Versión portable, descomprimir y usar)
 
             **🐧 Linux:**
             - `groovy-linux-x64.tar.gz` (Binario empaquetado para Linux x64)
@@ -308,7 +315,8 @@ jobs:
           files: |
             artifacts/android/*.apk
             artifacts/windows/Groovy-Setup.exe
-            groovy-windows.zip
+            artifacts/windows/Groovy-Windows-Portable.zip
+            Groovy-Windows-Portable.zip
             groovy-linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

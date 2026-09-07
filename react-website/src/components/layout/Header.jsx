@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Library, User, Settings } from 'lucide-react';
+import { Search, Library, User, Settings, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 
@@ -43,15 +43,32 @@ export const Header = ({ onSearchClick, activeTab, setActiveTab }) => {
         <span style={{ fontSize: '14px', color: '#6B6B6B' }}>Buscar canciones, artistas...</span>
       </div>
 
-      {/* Right: status + user */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      {/* Right: status + download + user */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* Download App button */}
+        <button
+          onClick={() => setActiveTab('download')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '6px',
+            background: 'rgba(250,36,60,0.12)', border: '0.5px solid rgba(250,36,60,0.3)',
+            borderRadius: '20px', padding: '5px 12px',
+            fontSize: '12px', color: '#FA243C', fontWeight: 600,
+            cursor: 'pointer', transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(250,36,60,0.22)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(250,36,60,0.12)'}
+        >
+          <Download size={13} />
+          <span>Descargar App</span>
+        </button>
+
         {/* Online indicator */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: '6px',
           background: '#181818', border: '0.5px solid #404040',
           borderRadius: '20px', padding: '5px 10px',
           fontSize: '11px', color: '#B3B3B3',
-        }}>
+        }} className="desktop-ctrl">
           <div style={{ position: 'relative', width: '8px', height: '8px' }}>
             <div className="animate-ping" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#34C759', opacity: 0.6 }} />
             <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#34C759' }} />

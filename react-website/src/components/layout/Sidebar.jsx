@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Library, User, Settings, PlusCircle, Heart, ListMusic, ShieldCheck } from 'lucide-react';
+import { Home, Compass, Library, User, Settings, PlusCircle, Heart, ListMusic, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { usePlayer } from '../../context/PlayerContext';
@@ -148,6 +148,26 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
               Sin playlists aún.
             </p>
           )}
+        </div>
+
+        {/* Download apps banner button */}
+        <div style={{ padding: '8px 4px 4px', borderTop: '0.5px solid #282828', marginTop: 'auto' }}>
+          <button
+            onClick={() => setActiveTab('download')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px',
+              width: '100%', padding: '9px 12px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, rgba(250,36,60,0.18) 0%, rgba(255,77,103,0.18) 100%)',
+              border: '0.5px solid rgba(250,36,60,0.35)',
+              color: '#fff', fontSize: '13px', fontWeight: 600,
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(250,36,60,0.28) 0%, rgba(255,77,103,0.28) 100%)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(250,36,60,0.18) 0%, rgba(255,77,103,0.18) 100%)'}
+          >
+            <Download size={15} style={{ color: '#FA243C' }} />
+            <span>Descargar Apps</span>
+          </button>
         </div>
       </div>
     </aside>

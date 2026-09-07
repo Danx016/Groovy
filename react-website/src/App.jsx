@@ -16,6 +16,7 @@ import { PlaylistDetailView } from './components/views/PlaylistDetailView';
 import { AccountView } from './components/views/AccountView';
 import { SettingsView } from './components/views/SettingsView';
 import { AdminPortal } from './components/admin/AdminPortal';
+import { LandingDownloadPage } from './components/views/LandingDownloadPage';
 
 /* Global layout + responsive styles */
 const layoutStyles = `
@@ -30,6 +31,8 @@ const layoutStyles = `
   }
   @media (max-width: 767px) {
     .desktop-search { display: none !important; }
+    .desktop-nav { display: none !important; }
+    .hide-mobile { display: none !important; }
   }
 
   /* Song card hover overlay */
@@ -53,19 +56,28 @@ function MainApp() {
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
 
-  // Standalone Admin Route check: /admin, /#admin, or #admin
-  const [isAdminPage, setIsAdminPage] = useState(() => {
-    return window.location.pathname.startsWith('/admin') ||
-      window.location.hash === '#admin' ||
-      window.location.search.includes('admin=true');
+  // Standalone Route checks:
+  const [currentRoute, setCurrentRoute] = useState(() => {
+    const p = window.location.pathname;
+    const h = window.location.hash;
+    const s = window.location.search;
+    if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) return 'admin';
+    if (p.startsWith('/download') || h === '#download' || h === '#descargas' || s.includes('download=true')) return 'download';
+    return 'player';
   });
 
   React.useEffect(() => {
     const handleLocationChange = () => {
-      const isAdm = window.location.pathname.startsWith('/admin') ||
-        window.location.hash === '#admin' ||
-        window.location.search.includes('admin=true');
-      setIsAdminPage(isAdm);
+      const p = window.location.pathname;
+      const h = window.location.hash;
+      const s = window.location.search;
+      if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) {
+        setCurrentRoute('admin');
+      } else if (p.startsWith('/download') || h === '#download' || h === '#descargas' || s.includes('download=true')) {
+        setCurrentRoute('download');
+      } else {
+        setCurrentRoute('player');
+      }
     };
 
     window.addEventListener('popstate', handleLocationChange);
@@ -79,22 +91,49 @@ function MainApp() {
   const switchTab = (tab) => {
     if (tab === 'admin') {
       window.location.hash = 'admin';
-      setIsAdminPage(true);
+      setCurrentRoute('admin');
+      return;
+    }
+    if (tab === 'download') {
+      window.location.hash = 'download';
+      setCurrentRoute('download');
       return;
     }
     setSelectedPlaylist(null);
     setActiveTab(tab);
+    if (currentRoute !== 'player') {
+      window.location.hash = '';
+      setCurrentRoute('player');
+    }
   };
 
-  // If visiting Admin Portal: Render pure standalone page without player
-  if (isAdminPage) {
+  // 1. If visiting Admin Portal:
+  if (currentRoute === 'admin') {
     return (
       <AdminPortal
         onBackToPlayer={() => {
           window.location.hash = '';
           window.history.pushState({}, '', '/');
-          setIsAdminPage(false);
+          setCurrentRoute('player');
           setActiveTab('home');
+        }}
+      />
+    );
+  }
+
+  // 2. If visiting Landing & Download Page:
+  if (currentRoute === 'download') {
+    return (
+      <LandingDownloadPage
+        onOpenPlayer={() => {
+          window.location.hash = '';
+          window.history.pushState({}, '', '/');
+          setCurrentRoute('player');
+          setActiveTab('home');
+        }}
+        onOpenAdmin={() => {
+          window.location.hash = 'admin';
+          setCurrentRoute('admin');
         }}
       />
     );
