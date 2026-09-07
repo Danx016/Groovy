@@ -56,7 +56,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [platformFilter, setPlatformFilter] = useState('apps_only'); // 'apps_only' | 'mobile' | 'windows' | 'all'
+  const [platformFilter, setPlatformFilter] = useState('all'); // 'all' | 'mobile' | 'windows' | 'web'
 
   // Modals / Inspector
   const [selectedUser, setSelectedUser] = useState(null);
@@ -842,11 +842,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             </div>
           </div>
 
-          {/* TAB: LIVE STREAMING & ESCUCHANDO AHORA (Native Mobile & Windows Apps Only) */}
+          {/* TAB: LIVE STREAMING & ESCUCHANDO AHORA */}
           {(() => {
-            const nativeLiveListeners = liveListeners.filter(l => 
-              l.isPlaying && isNativeApp(l.platform, l.deviceName, l.deviceModel)
-            );
+            const activeLiveListeners = liveListeners.filter(l => l.isPlaying);
 
             return (
               <div style={{
@@ -865,28 +863,25 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       <div className="eq-bar" style={{ width: '3px' }} />
                     </div>
                     <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
-                      Escuchando Ahora: Apps Nativas (Móvil & Windows)
+                      En Vivo: Escuchando Ahora
                     </h3>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <span style={{ fontSize: '11px', background: 'rgba(52,199,89,0.15)', color: '#34C759', padding: '3px 9px', borderRadius: '12px', fontWeight: 700 }}>
-                      📱 Móvil & 💻 Windows (Web Excluida)
-                    </span>
-                    <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600 }}>
-                      Actualización en tiempo real (cada 10s)
+                      🟢 Actualización en tiempo real (cada 10s)
                     </span>
                   </div>
                 </div>
 
                 {/* Sub-section: Live Streaming Audio */}
-                {nativeLiveListeners.length > 0 ? (
+                {activeLiveListeners.length > 0 ? (
                   <div>
                     <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#34C759', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
-                      Reproduciendo Música Ahora ({nativeLiveListeners.length})
+                      Reproduciendo Música Ahora ({activeLiveListeners.length})
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {nativeLiveListeners.map((item, idx) => (
+                      {activeLiveListeners.map((item, idx) => (
                         <div
                           key={`${item.userId}_${item.platform}_${item.deviceModel || item.deviceName || idx}`}
                           style={{
@@ -1040,14 +1035,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   ))}
                 </div>
 
-                {/* Platform Filter (Exclude Web by default) */}
+                {/* Platform Filter */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plataforma:</span>
                   {[
-                    { id: 'apps_only', label: '📱 / 💻 Solo Apps Nativas' },
+                    { id: 'all', label: 'Todas las Plataformas' },
                     { id: 'mobile', label: '📱 Solo Android' },
                     { id: 'windows', label: '💻 Solo Windows' },
-                    { id: 'all', label: 'Todas las Plataformas' },
+                    { id: 'web', label: '🌐 Solo Web' },
                   ].map(p => (
                     <button
                       key={p.id}
@@ -1097,9 +1092,6 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 {/* User Rows */}
                 {(() => {
                   const filteredUsers = users.filter(u => {
-                    if (platformFilter === 'apps_only') {
-                      return isNativeApp(u.lastDeviceModel || u.lastDevice, '', u.lastOsVersion);
-                    }
                     if (platformFilter === 'mobile') {
                       const s = `${u.lastDeviceModel} ${u.lastDevice} ${u.lastOsVersion}`.toLowerCase();
                       return s.includes('android') || s.includes('ios') || s.includes('iphone');
@@ -1108,6 +1100,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       const s = `${u.lastDeviceModel} ${u.lastDevice} ${u.lastOsVersion}`.toLowerCase();
                       return s.includes('windows');
                     }
+                    if (platformFilter === 'web') {
+                      return isWebClient(u.lastDeviceModel || u.lastDevice, '', u.lastOsVersion);
+                    }
                     return true;
                   });
 
@@ -1115,11 +1110,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     return (
                       <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
                         <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                        <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>No se encontraron usuarios en la app para este filtro</p>
+                        <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>No se encontraron usuarios para este filtro</p>
                         <p style={{ fontSize: '13px', marginTop: '4px' }}>
-                          {platformFilter === 'apps_only'
-                            ? 'Actualmente filtrando solo aplicaciones móviles y Windows (excluyendo Web).'
-                            : 'Prueba cambiando los filtros de plataforma o estado.'}
+                          Prueba cambiando los filtros de plataforma o estado.
                         </p>
                       </div>
                     );
@@ -1323,10 +1316,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plataforma:</span>
                   {[
-                    { id: 'apps_only', label: '📱 / 💻 Solo Apps Nativas' },
+                    { id: 'all', label: 'Todas las Conexiones' },
                     { id: 'mobile', label: '📱 Solo Android' },
                     { id: 'windows', label: '💻 Solo Windows' },
-                    { id: 'all', label: 'Todas las Conexiones' },
+                    { id: 'web', label: '🌐 Solo Web' },
                   ].map(p => (
                     <button
                       key={p.id}
@@ -1370,9 +1363,6 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               {/* Sessions list */}
               {(() => {
                 const filteredSessions = sessions.filter(s => {
-                  if (platformFilter === 'apps_only') {
-                    return isNativeApp(s.client_platform || s.device_os, s.device_model || s.device_os, s.browser);
-                  }
                   if (platformFilter === 'mobile') {
                     const str = `${s.client_platform} ${s.device_os} ${s.device_model}`.toLowerCase();
                     return str.includes('android') || str.includes('ios') || str.includes('iphone') || s.device_type === 'Mobile';
@@ -1381,6 +1371,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     const str = `${s.client_platform} ${s.device_os} ${s.device_model}`.toLowerCase();
                     return str.includes('windows');
                   }
+                  if (platformFilter === 'web') {
+                    return isWebClient(s.client_platform || s.device_os, s.device_model || s.device_os, s.browser);
+                  }
                   return true;
                 });
 
@@ -1388,11 +1381,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   return (
                     <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
                       <Activity size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                      <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Sin conexiones de la app registradas para este filtro</p>
+                      <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Sin conexiones registradas para este filtro</p>
                       <p style={{ fontSize: '13px', marginTop: '4px' }}>
-                        {platformFilter === 'apps_only'
-                          ? 'Actualmente filtrando solo aplicaciones móviles y Windows (excluyendo Web).'
-                          : 'Prueba cambiando el filtro de plataforma.'}
+                        Prueba cambiando el filtro de plataforma.
                       </p>
                     </div>
                   );
