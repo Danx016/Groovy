@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../models/song.dart';
+import 'device_info_service.dart';
 
 class GroovyUser {
   final int id;
@@ -54,7 +56,9 @@ class AuthResponse {
 class GroovyApiService {
   static final GroovyApiService _instance = GroovyApiService._internal();
   factory GroovyApiService() => _instance;
-  GroovyApiService._internal();
+  GroovyApiService._internal() {
+    initDeviceInfo();
+  }
 
   static const String defaultBaseUrl = 'http://157.137.233.119/api';
   String _baseUrl = defaultBaseUrl;
@@ -63,6 +67,19 @@ class GroovyApiService {
 
   void setBaseUrl(String url) {
     _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+  }
+
+  ClientDeviceInfo? _cachedDeviceInfo;
+
+  void initDeviceInfo() {
+    DeviceInfoService().getDeviceInfo().then((info) {
+      _cachedDeviceInfo = info;
+    }).catchError((_) {});
+  }
+
+  Future<ClientDeviceInfo> _getDeviceInfo() async {
+    _cachedDeviceInfo ??= await DeviceInfoService().getDeviceInfo();
+    return _cachedDeviceInfo!;
   }
 
   String get _clientPlatformName {
@@ -83,12 +100,16 @@ class GroovyApiService {
   }
 
   Map<String, String> _headers([String? token]) {
-    final platform = _clientPlatformName;
+    final dev = _cachedDeviceInfo;
+    final platform = dev?.platform ?? _clientPlatformName;
     final map = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
       'X-Client-Platform': platform,
-      'User-Agent': 'GroovyApp/1.0 ($platform; Flutter)',
+      'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
+      'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
+      'X-App-Version': dev?.appVersion ?? '1.0.64',
+      'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
       map['Authorization'] = 'Bearer $token';
@@ -108,6 +129,7 @@ class GroovyApiService {
     int listenDeltaSeconds = 15,
   }) async {
     try {
+      final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/playback');
       await http.post(
         uri,
@@ -121,8 +143,10 @@ class GroovyApiService {
           'duration': song.duration ?? 0,
           'position': position,
           'isPlaying': isPlaying,
-          'platform': _clientPlatformName,
-          'deviceName': '$_clientPlatformName App',
+          'platform': dev.platform,
+          'deviceName': dev.deviceModel,
+          'deviceModel': dev.deviceModel,
+          'osVersion': dev.osVersion,
           'listenDeltaSeconds': listenDeltaSeconds,
         }),
       ).timeout(const Duration(seconds: 5));
@@ -133,12 +157,16 @@ class GroovyApiService {
 
   Future<void> pingSession(String token) async {
     try {
+      final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/ping');
       await http.post(
         uri,
         headers: _headers(token),
         body: jsonEncode({
-          'platform': _clientPlatformName,
+          'platform': dev.platform,
+          'deviceName': dev.deviceModel,
+          'deviceModel': dev.deviceModel,
+          'osVersion': dev.osVersion,
         }),
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
@@ -157,6 +185,7 @@ class GroovyApiService {
     String? avatarUrl,
   }) async {
     try {
+      final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/auth/register');
       final res = await http.post(
         uri,
@@ -166,6 +195,9 @@ class GroovyApiService {
           'email': email.trim().toLowerCase(),
           'password': password,
           if (avatarUrl != null) 'avatarUrl': avatarUrl,
+          'platform': dev.platform,
+          'deviceModel': dev.deviceModel,
+          'osVersion': dev.osVersion,
         }),
       ).timeout(const Duration(seconds: 12));
 
@@ -196,6 +228,7 @@ class GroovyApiService {
     required String password,
   }) async {
     try {
+      final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/auth/login');
       final res = await http.post(
         uri,
@@ -203,6 +236,9 @@ class GroovyApiService {
         body: jsonEncode({
           'email': email.trim().toLowerCase(),
           'password': password,
+          'platform': dev.platform,
+          'deviceModel': dev.deviceModel,
+          'osVersion': dev.osVersion,
         }),
       ).timeout(const Duration(seconds: 12));
 

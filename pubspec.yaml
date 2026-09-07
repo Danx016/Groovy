@@ -85,6 +85,7 @@ dependencies:
   mailer: ^7.2.0
   audio_service_win: ^0.0.3
   ffi: ^2.1.0
+  device_info_plus: ^12.4.0
 
 dependency_overrides:
   ffi: ^2.1.0

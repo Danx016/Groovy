@@ -20,6 +20,7 @@ import 'services/local_music_service.dart';
 import 'services/analytics_service.dart';
 import 'services/favorite_playlists_service.dart';
 import 'services/recent_searches_service.dart';
+import 'services/device_info_service.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -200,6 +201,16 @@ void main() async {
   final jukeboxService = JukeboxService();
   final themeService = ThemeService();
 
+  DeviceInfoService().getDeviceInfo().catchError((e) {
+    debugPrint('Failed to initialize device info: $e');
+    return ClientDeviceInfo(
+      platform: 'Unknown',
+      deviceModel: 'Groovy Device',
+      osVersion: 'Unknown',
+      appVersion: '1.0.64',
+      userAgent: 'GroovyApp/1.0',
+    );
+  });
   BpmAnalyzerService().initialize().catchError((e) {
     debugPrint('Failed to initialize BPM analyzer: $e');
   });
