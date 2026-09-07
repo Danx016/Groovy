@@ -2,7 +2,6 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { getPool } = require('../database');
 const { authenticateAdmin } = require('../middleware/auth');
-const { cleanIspAndLocation } = require('../utils/geoip');
 
 const router = express.Router();
 
@@ -79,68 +78,51 @@ router.get('/live-playback', async (req, res) => {
     return res.json({
       success: true,
       count: rows.length,
-      listeners: rows.map(r => {
-        const geo = cleanIspAndLocation({
-          country: r.country,
-          city: r.city,
-          ip: r.ip_address,
-        });
-        return {
-          userId: r.user_id,
-          userName: r.user_name,
-          userEmail: r.user_email,
-          userAvatar: r.user_avatar,
-          userRole: r.user_role,
-          songId: r.song_id,
-          title: r.title,
-          artist: r.artist,
-          album: r.album,
-          coverArt: r.cover_art,
-          duration: r.duration,
-          position: r.position,
-          isPlaying: r.is_playing === 1 && (r.seconds_since_ping < 90),
-          platform: r.platform || 'Desconocido',
-          deviceName: r.device_name,
-          ipAddress: r.ip_address,
-          deviceModel: r.device_model,
-          osVersion: r.os_version,
-          country: geo.country,
-          city: geo.city,
-          startedAt: r.started_at,
-          lastPingAt: r.last_ping_at,
-          secondsSincePing: r.seconds_since_ping,
-        };
-      }),
-      connectedUsers: connectedRows.map(s => {
-        const geo = cleanIspAndLocation({
-          isp: s.isp,
-          country: s.country,
-          countryCode: s.country_code,
-          city: s.city,
-          region: s.region,
-          ip: s.ip_address,
-        });
-        return {
-          sessionId: s.session_id,
-          userId: s.user_id,
-          userName: s.user_name,
-          userEmail: s.user_email,
-          userAvatar: s.user_avatar,
-          userRole: s.user_role,
-          platform: s.client_platform || s.device_os,
-          deviceModel: s.device_model || s.device_os,
-          osVersion: s.os_version,
-          ipAddress: s.ip_address,
-          country: geo.country,
-          countryCode: geo.countryCode,
-          city: geo.city,
-          region: geo.region,
-          isp: geo.isp,
-          durationSeconds: s.session_duration_seconds,
-          lastActiveAt: s.last_active_at,
-          secondsSinceActive: s.seconds_since_active,
-        };
-      }),
+      listeners: rows.map(r => ({
+        userId: r.user_id,
+        userName: r.user_name,
+        userEmail: r.user_email,
+        userAvatar: r.user_avatar,
+        userRole: r.user_role,
+        songId: r.song_id,
+        title: r.title,
+        artist: r.artist,
+        album: r.album,
+        coverArt: r.cover_art,
+        duration: r.duration,
+        position: r.position,
+        isPlaying: r.is_playing === 1 && (r.seconds_since_ping < 90),
+        platform: r.platform || 'Desconocido',
+        deviceName: r.device_name,
+        ipAddress: r.ip_address,
+        deviceModel: r.device_model,
+        osVersion: r.os_version,
+        country: r.country,
+        city: r.city,
+        startedAt: r.started_at,
+        lastPingAt: r.last_ping_at,
+        secondsSincePing: r.seconds_since_ping,
+      })),
+      connectedUsers: connectedRows.map(s => ({
+        sessionId: s.session_id,
+        userId: s.user_id,
+        userName: s.user_name,
+        userEmail: s.user_email,
+        userAvatar: s.user_avatar,
+        userRole: s.user_role,
+        platform: s.client_platform || s.device_os,
+        deviceModel: s.device_model || s.device_os,
+        osVersion: s.os_version,
+        ipAddress: s.ip_address,
+        country: s.country,
+        countryCode: s.country_code,
+        city: s.city,
+        region: s.region,
+        isp: s.isp,
+        durationSeconds: s.session_duration_seconds,
+        lastActiveAt: s.last_active_at,
+        secondsSinceActive: s.seconds_since_active,
+      })),
     });
   } catch (err) {
     console.error('[Admin Live Playback Error]:', err);
@@ -239,24 +221,7 @@ router.get('/metrics', async (req, res) => {
         totalPlaylists: playlistRows[0].count,
         totalPlays: historyRows[0].count,
         totalSessions: sessionRows[0].count,
-        recentSessions: recentSessions.map(s => {
-          const geo = cleanIspAndLocation({
-            isp: s.isp,
-            country: s.country,
-            countryCode: s.country_code,
-            city: s.city,
-            region: s.region,
-            ip: s.ip_address,
-          });
-          return {
-            ...s,
-            country: geo.country,
-            countryCode: geo.countryCode,
-            city: geo.city,
-            region: geo.region,
-            isp: geo.isp,
-          };
-        }),
+        recentSessions,
         topSongs,
       },
     });
@@ -271,7 +236,7 @@ router.get('/metrics', async (req, res) => {
 
 /**
  * GET /api/admin/users
- * List all users with aggregated telemetry, live playback, listening time, and last active dates
+ * List all users with actual stored telemetry, playback history, and device sessions
  */
 router.get('/users', async (req, res) => {
   try {
@@ -303,7 +268,7 @@ router.get('/users', async (req, res) => {
           NULLIF(u.last_login_ip, ''), 
           (SELECT s.ip_address FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1),
           (SELECT h.ip_address FROM playback_history h WHERE h.user_id = u.id ORDER BY h.id DESC LIMIT 1),
-          '181.78.21.43'
+          NULL
         ) as last_login_ip, 
         COALESCE(
           NULLIF(u.last_device_model, ''),
@@ -312,42 +277,42 @@ router.get('/users', async (req, res) => {
           (SELECT CONCAT(s.device_model, ' · ', s.os_version) FROM user_sessions s WHERE s.user_id = u.id AND s.device_model IS NOT NULL ORDER BY s.id DESC LIMIT 1),
           (SELECT h.device_name FROM playback_history h WHERE h.user_id = u.id AND h.device_name IS NOT NULL ORDER BY h.id DESC LIMIT 1),
           (SELECT h.platform FROM playback_history h WHERE h.user_id = u.id AND h.platform IS NOT NULL ORDER BY h.id DESC LIMIT 1),
-          'Dispositivo Registrado'
+          NULL
         ) as last_device, 
         COALESCE(
           NULLIF(u.last_country, ''), 
           (SELECT s.country FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1),
-          '🇨🇴 Colombia'
+          NULL
         ) as last_country,
         COALESCE(
           NULLIF(u.last_country_code, ''), 
           (SELECT s.country_code FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
-          'CO'
+          NULL
         ) as last_country_code,
         COALESCE(
           NULLIF(u.last_city, ''), 
           (SELECT s.city FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
-          'El Carmen de Bolívar'
+          NULL
         ) as last_city,
         COALESCE(
           NULLIF(u.last_region, ''), 
           (SELECT s.region FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
-          'Bolívar'
+          NULL
         ) as last_region,
         COALESCE(
           NULLIF(u.last_isp, ''), 
           (SELECT s.isp FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
-          'Gigared Telecomunicaciones / Ufinet Colombia'
+          NULL
         ) as last_isp,
         COALESCE(
           NULLIF(u.last_os_version, ''), 
           (SELECT s.os_version FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
-          ''
+          NULL
         ) as last_os_version,
         COALESCE(
           NULLIF(u.last_device_model, ''), 
           (SELECT s.device_model FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
-          ''
+          NULL
         ) as last_device_model,
         COALESCE(
           NULLIF(u.total_listen_seconds, 0),
@@ -403,61 +368,49 @@ router.get('/users', async (req, res) => {
 
     return res.json({
       success: true,
-      users: rows.map(u => {
-        const geo = cleanIspAndLocation({
-          isp: u.last_isp,
-          country: u.last_country,
-          countryCode: u.last_country_code,
-          city: u.last_city,
-          region: u.last_region,
-          ip: u.last_login_ip,
-        });
-        const cleanDevice = u.last_device_model || u.last_device || 'Dispositivo Registrado';
-
-        return {
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          avatarUrl: u.avatar_url,
-          role: u.role || 'user',
-          isBanned: u.is_banned === 1,
-          lastLoginAt: u.last_login_at || u.created_at,
-          lastActiveAt: u.last_active_at || u.last_login_at || u.created_at,
-          lastLoginIp: u.last_login_ip || '181.78.21.43',
-          lastDevice: cleanDevice,
-          lastCountry: geo.country,
-          lastCountryCode: geo.countryCode,
-          lastCity: geo.city,
-          lastRegion: geo.region,
-          lastIsp: geo.isp,
-          lastOsVersion: u.last_os_version,
-          lastDeviceModel: u.last_device_model || cleanDevice,
-          totalListenSeconds: u.total_listen_seconds || 0,
-          createdAt: u.created_at,
-          livePlayback: u.live_song_id ? {
-            songId: u.live_song_id,
-            title: u.live_title,
-            artist: u.live_artist,
-            coverArt: u.live_cover_art,
-            platform: u.live_platform,
-            device: u.live_device,
-            deviceModel: u.live_device_model,
-            osVersion: u.live_os_version,
-            country: geo.country,
-            city: geo.city,
-            isPlaying: u.live_is_playing === 1 && (u.live_seconds_ago < 45),
-            position: u.live_position,
-            duration: u.live_duration,
-            lastPingAt: u.live_last_ping,
-          } : null,
-          stats: {
-            favorites: u.favorites_count || 0,
-            playlists: u.playlists_count || 0,
-            plays: u.history_count || 0,
-            sessions: u.sessions_count || 0,
-          },
-        };
-      }),
+      users: rows.map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        avatarUrl: u.avatar_url,
+        role: u.role || 'user',
+        isBanned: u.is_banned === 1,
+        lastLoginAt: u.last_login_at || u.created_at,
+        lastActiveAt: u.last_active_at || u.last_login_at || u.created_at,
+        lastLoginIp: u.last_login_ip,
+        lastDevice: u.last_device_model || u.last_device,
+        lastCountry: u.last_country,
+        lastCountryCode: u.last_country_code,
+        lastCity: u.last_city,
+        lastRegion: u.last_region,
+        lastIsp: u.last_isp,
+        lastOsVersion: u.last_os_version,
+        lastDeviceModel: u.last_device_model,
+        totalListenSeconds: u.total_listen_seconds || 0,
+        createdAt: u.created_at,
+        livePlayback: u.live_song_id ? {
+          songId: u.live_song_id,
+          title: u.live_title,
+          artist: u.live_artist,
+          coverArt: u.live_cover_art,
+          platform: u.live_platform,
+          device: u.live_device,
+          deviceModel: u.live_device_model,
+          osVersion: u.live_os_version,
+          country: u.live_country,
+          city: u.live_city,
+          isPlaying: u.live_is_playing === 1 && (u.live_seconds_ago < 45),
+          position: u.live_position,
+          duration: u.live_duration,
+          lastPingAt: u.live_last_ping,
+        } : null,
+        stats: {
+          favorites: u.favorites_count || 0,
+          playlists: u.playlists_count || 0,
+          plays: u.history_count || 0,
+          sessions: u.sessions_count || 0,
+        },
+      })),
     });
   } catch (err) {
     console.error('[Admin Get Users Error]:', err);
@@ -504,32 +457,25 @@ router.get('/users/:id', async (req, res) => {
       ORDER BY last_ping_at DESC
     `, [id]);
 
-    const livePlaybacks = liveRows.map(r => {
-      const geo = cleanIspAndLocation({
-        country: r.country,
-        city: r.city,
-        ip: r.ip_address,
-      });
-      return {
-        songId: r.song_id,
-        title: r.title,
-        artist: r.artist,
-        album: r.album,
-        coverArt: r.cover_art,
-        duration: r.duration,
-        position: r.position,
-        isPlaying: r.is_playing === 1 && r.seconds_since_ping < 45,
-        platform: r.platform,
-        deviceName: r.device_name,
-        deviceModel: r.device_model,
-        osVersion: r.os_version,
-        country: geo.country,
-        city: geo.city,
-        ipAddress: r.ip_address,
-        startedAt: r.started_at,
-        lastPingAt: r.last_ping_at,
-      };
-    });
+    const livePlaybacks = liveRows.map(r => ({
+      songId: r.song_id,
+      title: r.title,
+      artist: r.artist,
+      album: r.album,
+      coverArt: r.cover_art,
+      duration: r.duration,
+      position: r.position,
+      isPlaying: r.is_playing === 1 && r.seconds_since_ping < 45,
+      platform: r.platform,
+      deviceName: r.device_name,
+      deviceModel: r.device_model,
+      osVersion: r.os_version,
+      country: r.country,
+      city: r.city,
+      ipAddress: r.ip_address,
+      startedAt: r.started_at,
+      lastPingAt: r.last_ping_at,
+    }));
 
     const livePlayback = livePlaybacks.length > 0 ? livePlaybacks[0] : null;
 
@@ -559,25 +505,6 @@ router.get('/users/:id', async (req, res) => {
       [id]
     );
 
-    const cleanedSessions = sessions.map(s => {
-      const geo = cleanIspAndLocation({
-        isp: s.isp,
-        country: s.country,
-        countryCode: s.country_code,
-        city: s.city,
-        region: s.region,
-        ip: s.ip_address,
-      });
-      return {
-        ...s,
-        country: geo.country,
-        countryCode: geo.countryCode,
-        city: geo.city,
-        region: geo.region,
-        isp: geo.isp,
-      };
-    });
-
     // User's playlists
     const [playlists] = await pool.query(
       'SELECT id, name, description, cover_art, created_at FROM playlists WHERE user_id = ? ORDER BY created_at DESC',
@@ -600,17 +527,6 @@ router.get('/users/:id', async (req, res) => {
       [id]
     );
 
-    const userGeo = cleanIspAndLocation({
-      isp: user.last_isp || cleanedSessions[0]?.isp,
-      country: user.last_country || cleanedSessions[0]?.country,
-      countryCode: user.last_country_code || cleanedSessions[0]?.country_code,
-      city: user.last_city || cleanedSessions[0]?.city,
-      region: user.last_region || cleanedSessions[0]?.region,
-      ip: user.last_login_ip || cleanedSessions[0]?.ip_address,
-    });
-
-    const fallbackDevice = user.last_device_model || user.last_device || cleanedSessions[0]?.device_model || history[0]?.device_name || 'Dispositivo Registrado';
-
     return res.json({
       success: true,
       user: {
@@ -620,17 +536,17 @@ router.get('/users/:id', async (req, res) => {
         avatarUrl: user.avatar_url,
         role: user.role || 'user',
         isBanned: user.is_banned === 1,
-        lastLoginAt: user.last_login_at || cleanedSessions[0]?.created_at || user.created_at,
-        lastActiveAt: user.last_active_at || user.last_login_at || cleanedSessions[0]?.last_active_at || history[0]?.played_at || user.created_at,
-        lastLoginIp: user.last_login_ip || cleanedSessions[0]?.ip_address || '181.78.21.43',
-        lastDevice: fallbackDevice,
-        lastCountry: userGeo.country,
-        lastCountryCode: userGeo.countryCode,
-        lastCity: userGeo.city,
-        lastRegion: userGeo.region,
-        lastIsp: userGeo.isp,
-        lastOsVersion: user.last_os_version || cleanedSessions[0]?.os_version || '',
-        lastDeviceModel: user.last_device_model || fallbackDevice,
+        lastLoginAt: user.last_login_at || sessions[0]?.created_at || user.created_at,
+        lastActiveAt: user.last_active_at || user.last_login_at || sessions[0]?.last_active_at || history[0]?.played_at || user.created_at,
+        lastLoginIp: user.last_login_ip || sessions[0]?.ip_address,
+        lastDevice: user.last_device_model || user.last_device || sessions[0]?.device_model || history[0]?.device_name,
+        lastCountry: user.last_country || sessions[0]?.country,
+        lastCountryCode: user.last_country_code || sessions[0]?.country_code,
+        lastCity: user.last_city || sessions[0]?.city,
+        lastRegion: user.last_region || sessions[0]?.region,
+        lastIsp: user.last_isp || sessions[0]?.isp,
+        lastOsVersion: user.last_os_version || sessions[0]?.os_version,
+        lastDeviceModel: user.last_device_model || sessions[0]?.device_model,
         totalListenSeconds: user.total_listen_seconds || 0,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
@@ -644,7 +560,7 @@ router.get('/users/:id', async (req, res) => {
       },
       livePlayback,
       livePlaybacks,
-      sessions: cleanedSessions,
+      sessions,
       playlists,
       favorites,
       history,
@@ -835,7 +751,7 @@ router.get('/sessions', async (req, res) => {
         s.region,
         s.isp,
         s.created_at, 
-        s.last_active_at,
+        s.last_active_at, 
         s.session_duration_seconds
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
@@ -846,24 +762,7 @@ router.get('/sessions', async (req, res) => {
     return res.json({
       success: true,
       count: rows.length,
-      sessions: rows.map(s => {
-        const geo = cleanIspAndLocation({
-          isp: s.isp,
-          country: s.country,
-          countryCode: s.country_code,
-          city: s.city,
-          region: s.region,
-          ip: s.ip_address,
-        });
-        return {
-          ...s,
-          country: geo.country,
-          countryCode: geo.countryCode,
-          city: geo.city,
-          region: geo.region,
-          isp: geo.isp,
-        };
-      }),
+      sessions: rows,
     });
   } catch (err) {
     console.error('[Admin Get Sessions Error]:', err);

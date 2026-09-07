@@ -1305,7 +1305,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
                           {getDeviceIcon(u.lastDeviceModel || u.lastDevice)}
                           <span style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {u.lastDeviceModel || u.lastDevice || 'Dispositivo Registrado'}
+                            {u.lastDeviceModel || u.lastDevice || 'Sin registrar'}
                           </span>
                         </div>
                         {(u.lastCountry || u.lastOsVersion) && (
@@ -1823,7 +1823,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#8E8E93' }}>Modelo de Dispositivo:</span>
                     <span style={{ color: '#fff', fontWeight: 600 }}>
-                      {selectedUser.user.lastDeviceModel || selectedUser.sessions?.[0]?.device_model || selectedUser.user.lastDevice || 'Dispositivo Estándar'}
+                      {selectedUser.user.lastDeviceModel || selectedUser.sessions?.[0]?.device_model || selectedUser.user.lastDevice || '—'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
