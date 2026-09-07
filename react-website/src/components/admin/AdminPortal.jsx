@@ -842,17 +842,11 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             </div>
           </div>
 
-          {/* TAB: LIVE STREAMING & PRESENCE (Native Mobile & Windows Apps Only) */}
+          {/* TAB: LIVE STREAMING & ESCUCHANDO AHORA (Native Mobile & Windows Apps Only) */}
           {(() => {
             const nativeLiveListeners = liveListeners.filter(l => 
               l.isPlaying && isNativeApp(l.platform, l.deviceName, l.deviceModel)
             );
-            const activeAppUsers = users.filter(u => {
-              if (!u.lastActiveAt) return false;
-              const diffSec = (Date.now() - new Date(u.lastActiveAt).getTime()) / 1000;
-              if (diffSec > 300) return false;
-              return isNativeApp(u.lastDeviceModel || u.lastDevice, '', u.lastOsVersion);
-            });
 
             return (
               <div style={{
@@ -871,7 +865,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       <div className="eq-bar" style={{ width: '3px' }} />
                     </div>
                     <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
-                      En Vivo: Apps Nativas (Móvil & Windows)
+                      Escuchando Ahora: Apps Nativas (Móvil & Windows)
                     </h3>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -885,8 +879,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 </div>
 
                 {/* Sub-section: Live Streaming Audio */}
-                {nativeLiveListeners.length > 0 && (
-                  <div style={{ marginBottom: '16px' }}>
+                {nativeLiveListeners.length > 0 ? (
+                  <div>
                     <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#34C759', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
                       Reproduciendo Música Ahora ({nativeLiveListeners.length})
@@ -984,86 +978,12 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       ))}
                     </div>
                   </div>
-                )}
-
-                {/* Sub-section: Users connected in mobile/desktop app (active presence) */}
-                {activeAppUsers.length > 0 && (
-                  <div>
-                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#00A4EF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00A4EF', display: 'inline-block' }} />
-                      Usuarios Conectados en la App ({activeAppUsers.length})
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      {activeAppUsers.map((u) => {
-                        const isStreaming = nativeLiveListeners.some(l => l.userId === u.id);
-                        return (
-                          <div
-                            key={u.id}
-                            style={{
-                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                              background: '#202020', borderRadius: '10px', padding: '10px 16px',
-                              border: '0.5px solid #333',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                              <div style={{
-                                width: '36px', height: '36px', borderRadius: '50%', background: '#282828',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: '14px', fontWeight: 700, color: '#fff', border: '1px solid #404040',
-                              }}>
-                                {u.name?.charAt(0).toUpperCase() || 'U'}
-                              </div>
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>{u.name}</span>
-                                  <span style={{
-                                    fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px',
-                                    background: isStreaming ? 'rgba(52,199,89,0.15)' : 'rgba(0,164,239,0.15)',
-                                    color: isStreaming ? '#34C759' : '#00A4EF',
-                                  }}>
-                                    {isStreaming ? '● Escuchando Música' : '● Activo en la App'}
-                                  </span>
-                                </div>
-                                <span style={{ fontSize: '12px', color: '#8E8E93' }}>{u.email}</span>
-                              </div>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                              <div style={{ textAlign: 'right' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
-                                  {getDeviceIcon(u.lastDeviceModel || u.lastDevice)}
-                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
-                                    {u.lastDeviceModel || u.lastDevice || 'Dispositivo'}
-                                  </span>
-                                </div>
-                                <span style={{ fontSize: '11px', color: '#8E8E93' }}>
-                                  {u.lastOsVersion || 'Groovy App'}
-                                </span>
-                              </div>
-                              <button
-                                onClick={() => handleOpenUserDetail(u.id)}
-                                style={{
-                                  padding: '5px 12px', borderRadius: '6px',
-                                  background: '#282828', border: '0.5px solid #404040', color: '#fff',
-                                  fontSize: '11px', fontWeight: 600, cursor: 'pointer',
-                                }}
-                              >
-                                Inspeccionar
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {nativeLiveListeners.length === 0 && activeAppUsers.length === 0 && (
+                ) : (
                   <div style={{ textAlign: 'center', padding: '28px', color: '#6B6B6B' }}>
                     <Radio size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
-                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios activos en la app móvil ni en Windows en este momento.</p>
+                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios escuchando música en la app móvil ni en Windows en este momento.</p>
                     <p style={{ fontSize: '12px', marginTop: '4px', color: '#8E8E93' }}>
-                      Cuando alguien inicie sesión o reproduzca canciones en la app móvil (Android/iOS) o en Windows, aparecerá aquí en tiempo real. (Los accesos desde la Web están excluidos).
+                      Cuando alguien reproduzca una canción en la app móvil (Android/iOS) o en Windows, aparecerá aquí inmediatamente con su carátula, canción y dispositivo en tiempo real.
                     </p>
                   </div>
                 )}
