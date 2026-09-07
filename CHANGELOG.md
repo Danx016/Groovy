@@ -5,6 +5,20 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.60] - 2026-09-06
+
+### Added & Improved
+- **Reproductor Pantalla Completa estilo Apple Music**:
+  - Diseño centrado vertical y horizontalmente cuando la canción no dispone de letras sincronizadas (o están ocultas), con carátula cuadrada con sombra suave, metadatos centrados, barra de scrubber y controles icónicos de Apple Music.
+  - Diseño dinámico de dos columnas cuando las letras sincronizadas están disponibles.
+  - Sincronización cromática nativa de la barra de título de Windows.
+  - Atajos de teclado para pantalla completa (F11 / Esc) y botones de cristal translúcidos.
+- **Instalador y Actualizador de Windows**:
+  - Elevación de permisos UAC automática (`RunAs`) en el instalador de actualizaciones.
+- **Estabilidad de Audio y Plataformas**:
+  - Corrección de la transición automática de canciones (evitando repetición de pistas finalizadas).
+  - Inicialización protegida en Android evitando dependencias no disponibles en móviles.
+
 ## [1.0.59] - 2026-09-06
 
 ### Fixed & Improved
