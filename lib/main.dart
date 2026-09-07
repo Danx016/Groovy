@@ -19,7 +19,6 @@ import 'services/local_music_service.dart';
 import 'services/analytics_service.dart';
 import 'services/favorite_playlists_service.dart';
 import 'services/recent_searches_service.dart';
-import 'widgets/privacy_policy_dialog.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -37,28 +36,6 @@ class AppScrollBehavior extends MaterialScrollBehavior {
         PointerDeviceKind.mouse,
         PointerDeviceKind.trackpad,
       };
-}
-
-/// Shows the privacy policy dialog on first launch
-Future<void> _showPrivacyPolicyIfNeeded() async {
-  if (await PrivacyPolicyDialog.shouldShow()) {
-    // Small delay to ensure UI is fully loaded
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (navigatorKey.currentContext != null) {
-      final result = await showDialog<bool>(
-        context: navigatorKey.currentContext!,
-        builder: (context) => const PrivacyPolicyDialog(),
-        barrierDismissible: false,
-      );
-
-      // If user declined, exit the application
-      if (result == false) {
-        exit(0);
-      } else {
-        await PrivacyPolicyDialog.markAccepted();
-      }
-    }
-  }
 }
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -370,21 +347,8 @@ class GroovyApp extends StatelessWidget {
   }
 }
 
-class AuthWrapper extends StatefulWidget {
+class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
-
-  @override
-  State<AuthWrapper> createState() => _AuthWrapperState();
-}
-
-class _AuthWrapperState extends State<AuthWrapper> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showPrivacyPolicyIfNeeded();
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
