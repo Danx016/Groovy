@@ -641,8 +641,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                overflow: 'hidden',
               }}>
-                {currentUser?.name?.charAt(0).toUpperCase() || 'A'}
+                {currentUser?.avatarUrl ? (
+                  <img src={currentUser.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                ) : (
+                  currentUser?.name?.charAt(0).toUpperCase() || 'A'
+                )}
               </div>
               <div style={{ minWidth: 0 }}>
                 <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -912,9 +917,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                             <div style={{
                               width: '44px', height: '44px', borderRadius: '50%', background: '#FA243C',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '16px', fontWeight: 700, color: '#fff',
+                              fontSize: '16px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                              overflow: 'hidden',
                             }}>
-                              {item.userName?.charAt(0).toUpperCase() || 'U'}
+                              {item.userAvatar ? (
+                                <img src={item.userAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                              ) : (
+                                item.userName?.charAt(0).toUpperCase() || 'U'
+                              )}
                             </div>
                             <div>
                               <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
@@ -948,9 +958,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
                           {/* Device, OS & Location */}
                           <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                               {getDeviceIcon(item.platform, item.deviceName)}
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
+                              <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
                                 {item.deviceModel || item.deviceName || `${item.platform} App`}
                               </span>
                             </div>
@@ -1014,9 +1024,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                             <div style={{
                               width: '44px', height: '44px', borderRadius: '50%', background: '#007AFF',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '16px', fontWeight: 700, color: '#fff',
+                              fontSize: '16px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                              overflow: 'hidden',
                             }}>
-                              {item.userName?.charAt(0).toUpperCase() || 'U'}
+                              {item.userAvatar ? (
+                                <img src={item.userAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                              ) : (
+                                item.userName?.charAt(0).toUpperCase() || 'U'
+                              )}
                             </div>
                             <div>
                               <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
@@ -1251,8 +1266,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           fontSize: '15px', fontWeight: 700, color: '#fff', flexShrink: 0,
                           border: u.role === 'admin' ? '2px solid rgba(250,36,60,0.5)' : '1px solid #333',
+                          overflow: 'hidden',
                         }}>
-                          {u.name?.charAt(0).toUpperCase() || 'U'}
+                          {u.avatarUrl ? (
+                            <img src={u.avatarUrl} alt={u.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                          ) : (
+                            u.name?.charAt(0).toUpperCase() || 'U'
+                          )}
                         </div>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1672,9 +1692,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 <div style={{
                   width: '56px', height: '56px', borderRadius: '50%', background: '#FA243C',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '24px', fontWeight: 700, color: '#fff',
+                  fontSize: '24px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                  overflow: 'hidden',
                 }}>
-                  {selectedUser.user.name?.charAt(0).toUpperCase() || 'U'}
+                  {selectedUser.user.avatarUrl ? (
+                    <img src={selectedUser.user.avatarUrl} alt={selectedUser.user.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                  ) : (
+                    selectedUser.user.name?.charAt(0).toUpperCase() || 'U'
+                  )}
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
