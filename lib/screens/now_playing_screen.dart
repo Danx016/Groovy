@@ -916,6 +916,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             : currentSong?.artist) ?? widget.artist;
         final album = currentSong?.album ?? '';
 
+        final hasLyrics = _fetchedLyrics.isNotEmpty && _showLyricsInLandscape;
+
         return Focus(
           autofocus: true,
           onKeyEvent: (node, event) {
@@ -929,165 +931,44 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           },
           child: Stack(
             children: [
-              // 1. Two-Column Apple Music Layout
+              // Main Apple Music View (2-Column if has lyrics, or Centered if no lyrics)
               Positioned.fill(
                 child: LayoutBuilder(
                   builder: (context, constraints) {
-                    final maxCoverSize = (constraints.maxHeight * 0.44).clamp(240.0, 380.0);
-
-                  return Row(
-                    children: [
-                      // LEFT COLUMN: Artwork + Metadata + Lossless + Scrubber + Controls
-                      Expanded(
-                        flex: 5,
-                        child: Center(
-                          child: SingleChildScrollView(
-                            physics: const BouncingScrollPhysics(),
-                            padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                // Album Cover with rounded corners and shadow
-                                Container(
-                                  width: maxCoverSize,
-                                  height: maxCoverSize,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.45),
-                                        blurRadius: 36,
-                                        spreadRadius: 2,
-                                        offset: const Offset(0, 18),
-                                      ),
-                                    ],
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(16),
-                                    child: Image(
-                                      image: _currentImageProvider ?? widget.image,
-                                      fit: BoxFit.cover,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 22),
-
-                                // Song Title
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 380),
-                                  child: Text(
-                                    title,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      fontSize: 23,
-                                      fontWeight: FontWeight.w700,
-                                      color: Colors.white,
-                                      letterSpacing: -0.4,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-
-                                // Artist — Album
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 380),
-                                  child: Text(
-                                    album.isNotEmpty &&
-                                            album != 'Album' &&
-                                            album != 'Álbum' &&
-                                            album != title
-                                        ? '$artist — $album'
-                                        : artist,
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.white.withValues(alpha: 0.70),
-                                      letterSpacing: -0.2,
-                                    ),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-
-                                // Lossless Badge
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.12),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.graphic_eq_rounded,
-                                        size: 13,
-                                        color: Colors.white.withValues(alpha: 0.85),
-                                      ),
-                                      const SizedBox(width: 4),
-                                      Text(
-                                        'Lossless',
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w600,
-                                          color: Colors.white.withValues(alpha: 0.85),
-                                          letterSpacing: 0.2,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-
-                                // Progress Slider
-                                ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 380),
-                                  child: PlaybackProgressSlider(
-                                    position: provider.position,
-                                    duration: duration,
-                                    bufferedPosition: provider.bufferedPosition,
-                                    isBuffering: provider.isBuffering,
-                                    positionStream: provider.positionStream,
-                                    bufferedPositionStream: provider.bufferedPositionStream,
-                                    isBufferingStream: provider.isBufferingStream,
-                                    accentColor: Colors.white,
-                                    onChanged: (val) => provider.seek(val),
-                                  ),
-                                ),
-                                const SizedBox(height: 6),
-
-                                // Playback Controls Row (Volume, More, Previous, Play/Pause, Next, Lyrics)
-                                _buildAppleMusicLandscapeControls(context, provider, isPlaying, currentSong),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-
-                      // RIGHT COLUMN: Apple Music Synchronized Lyrics
-                      Expanded(
-                        flex: 6,
-                        child: Container(
-                          padding: const EdgeInsets.fromLTRB(16.0, 32.0, 48.0, 32.0),
-                          child: _buildLandscapeRightPanel(context, provider),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                    if (hasLyrics) {
+                      return _buildTwoColumnLandscape(
+                        context,
+                        constraints,
+                        provider,
+                        isPlaying,
+                        duration,
+                        title,
+                        artist,
+                        album,
+                        currentSong,
+                      );
+                    } else {
+                      return _buildCenteredLandscape(
+                        context,
+                        constraints,
+                        provider,
+                        isPlaying,
+                        duration,
+                        title,
+                        artist,
+                        album,
+                        currentSong,
+                      );
+                    }
+                  },
+                ),
               ),
-            ),
 
-            // 2. Window Controls (Top Right: Close Fullscreen, Close)
-            Positioned(
-              top: 24,
-              right: 28,
-              child: Row(
+              // Window Controls (Top Right: Close Fullscreen, Close)
+              Positioned(
+                top: 24,
+                right: 28,
+                child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _GlassIconButton(
@@ -1112,6 +993,312 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     },
   );
 }
+
+  Widget _buildTwoColumnLandscape(
+    BuildContext context,
+    BoxConstraints constraints,
+    PlayerProvider provider,
+    bool isPlaying,
+    Duration duration,
+    String title,
+    String artist,
+    String album,
+    Song? currentSong,
+  ) {
+    final availableHeight = constraints.maxHeight;
+    final coverSize = (availableHeight * 0.44).clamp(180.0, 380.0);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 48.0, vertical: 24.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Left Column: Artwork, Metadata, Scrubber, Controls
+          Expanded(
+            flex: 5,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Album Art
+                Container(
+                  width: coverSize,
+                  height: coverSize,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.40),
+                        blurRadius: 30,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Hero(
+                      tag: 'now_playing_cover_${currentSong?.id ?? widget.song?.id ?? widget.title}',
+                      child: Image(
+                        image: _currentImageProvider ?? widget.image,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => Container(
+                          color: Colors.white10,
+                          child: const Icon(
+                            Icons.music_note_rounded,
+                            color: Colors.white38,
+                            size: 64,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 20),
+
+                // Title & Favorite
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          title,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.3,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Consumer<LibraryProvider>(
+                        builder: (context, lib, _) {
+                          final isFav = currentSong != null
+                              ? (lib.isSongStarred(currentSong.id) || (currentSong.starred ?? false))
+                              : false;
+                          return GestureDetector(
+                            onTap: () async {
+                              if (currentSong != null) {
+                                HapticFeedback.lightImpact();
+                                final newFav = await lib.toggleStarSong(currentSong);
+                                provider.updateSongStarred(currentSong.id, newFav);
+                              }
+                            },
+                            child: Icon(
+                              isFav ? Icons.star_rounded : Icons.star_outline_rounded,
+                              color: isFav ? const Color(0xFFFFD60A) : Colors.white38,
+                              size: 20,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                // Artist
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: Text(
+                    artist,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.65),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Progress Slider
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 380),
+                  child: PlaybackProgressSlider(
+                    position: provider.position,
+                    duration: duration,
+                    bufferedPosition: provider.bufferedPosition,
+                    isBuffering: provider.isBuffering,
+                    positionStream: provider.positionStream,
+                    bufferedPositionStream: provider.bufferedPositionStream,
+                    isBufferingStream: provider.isBufferingStream,
+                    accentColor: Colors.white,
+                    onChanged: (val) {
+                      provider.seek(val);
+                    },
+                  ),
+                ),
+
+                const SizedBox(height: 8),
+
+                // Apple Music Controls
+                _buildAppleMusicLandscapeControls(
+                  context,
+                  provider,
+                  isPlaying,
+                  currentSong,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(width: 32),
+
+          // Right Column: Lyrics or Queue
+          Expanded(
+            flex: 6,
+            child: _buildLandscapeRightPanel(context, provider),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCenteredLandscape(
+    BuildContext context,
+    BoxConstraints constraints,
+    PlayerProvider provider,
+    bool isPlaying,
+    Duration duration,
+    String title,
+    String artist,
+    String album,
+    Song? currentSong,
+  ) {
+    final availableHeight = constraints.maxHeight;
+    final coverSize = (availableHeight * 0.46).clamp(240.0, 440.0);
+    final displaySubtitle = album.isNotEmpty ? '$artist — $album' : artist;
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const ClampingScrollPhysics(),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              // 1. Centered Cover Art with rounded corners and drop shadow
+              Container(
+                width: coverSize,
+                height: coverSize,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.45),
+                      blurRadius: 36,
+                      spreadRadius: 4,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Hero(
+                    tag: 'now_playing_cover_${currentSong?.id ?? widget.song?.id ?? widget.title}',
+                    child: Image(
+                      image: _currentImageProvider ?? widget.image,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        color: Colors.white10,
+                        child: const Icon(
+                          Icons.music_note_rounded,
+                          color: Colors.white38,
+                          size: 72,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 28),
+
+              // 2. Track Title (Centered)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 550),
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // 3. Artist & Album (Centered)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 500),
+                child: Text(
+                  displaySubtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: -0.2,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // 4. Scrubber Progress Slider (Centered, max width 440)
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: PlaybackProgressSlider(
+                  position: provider.position,
+                  duration: duration,
+                  bufferedPosition: provider.bufferedPosition,
+                  isBuffering: provider.isBuffering,
+                  positionStream: provider.positionStream,
+                  bufferedPositionStream: provider.bufferedPositionStream,
+                  isBufferingStream: provider.isBufferingStream,
+                  accentColor: Colors.white,
+                  onChanged: (val) {
+                    provider.seek(val);
+                  },
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              // 5. Centered Apple Music Control Bar
+              _buildAppleMusicLandscapeControls(
+                context,
+                provider,
+                isPlaying,
+                currentSong,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildLandscapeRightPanel(BuildContext context, PlayerProvider provider) {
     if (!_showLyricsInLandscape) {
