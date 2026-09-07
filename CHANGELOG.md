@@ -5,6 +5,13 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.62] - 2026-09-06
+
+### Fixed
+- **Actualizador de Windows (Instalación automática)**:
+  - Corrección en el lanzamiento del instalador de actualización (`Groovy-Update-Setup.exe`) ejecutándolo directamente a través del Shell de Windows (`cmd.exe /c start`) para evitar bloqueos silenciosos de UAC o excepciones de PowerShell.
+  - Cierre y transición automática del diálogo de actualización una vez completada la descarga e iniciado el asistente.
+
 ## [1.0.61] - 2026-09-06
 
 ### Improved & Fixed

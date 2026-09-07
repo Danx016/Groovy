@@ -65,7 +65,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.61';
+  static String currentVersion = '1.0.62';
   static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
 
   static const String _apiUrl =
@@ -160,31 +160,14 @@ class UpdateService {
         await _channel.invokeMethod('installApk', {'filePath': filePath});
       } else if (!kIsWeb && Platform.isWindows) {
         try {
-          // Primary: Launch via PowerShell with RunAs verb (forces Windows UAC prompt)
           await Process.start(
-            'powershell.exe',
-            [
-              '-NoProfile',
-              '-NonInteractive',
-              '-WindowStyle',
-              'Hidden',
-              '-Command',
-              'Start-Process',
-              '-FilePath',
-              '"$filePath"',
-              '-Verb',
-              'RunAs'
-            ],
+            'cmd.exe',
+            ['/c', 'start', '""', filePath],
             mode: ProcessStartMode.detached,
           );
         } catch (_) {
           try {
-            // Fallback: Launch via Windows Shell Start command
-            await Process.start(
-              'cmd.exe',
-              ['/c', 'start', '""', '"$filePath"'],
-              mode: ProcessStartMode.detached,
-            );
+            await Process.start(filePath, [], mode: ProcessStartMode.detached);
           } catch (err) {
             debugPrint('Failed to launch Windows update installer: $err');
           }

@@ -383,8 +383,11 @@ class _MainScreenState extends State<MainScreen> {
                                     child: ElevatedButton.icon(
                                       onPressed: isDownloading
                                           ? () => Navigator.of(ctx).pop()
-                                          : () {
-                                              UpdateService.startDownload(release);
+                                          : () async {
+                                              await UpdateService.startDownload(release);
+                                              if (ctx.mounted && UpdateService.downloadErrorNotifier.value == null) {
+                                                Navigator.of(ctx).pop();
+                                              }
                                             },
                                       icon: Icon(
                                         isDownloading
