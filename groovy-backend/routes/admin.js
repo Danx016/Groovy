@@ -325,7 +325,7 @@ router.get('/users', async (req, res) => {
         ) as last_device_model,
         COALESCE(
           NULLIF(u.total_listen_seconds, 0),
-          (SELECT SUM(COALESCE(h.listen_seconds, h.duration, 180)) FROM playback_history h WHERE h.user_id = u.id),
+          (SELECT SUM(COALESCE(NULLIF(h.listen_seconds, 0), NULLIF(h.duration, 0), 180)) FROM playback_history h WHERE h.user_id = u.id),
           0
         ) as total_listen_seconds,
         u.created_at,

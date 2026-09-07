@@ -1185,7 +1185,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 {/* List Header */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(210px, 2fr) 130px 170px 140px 130px 140px',
+                  gridTemplateColumns: 'minmax(200px, 1.8fr) 110px minmax(210px, 1.8fr) 140px 140px 140px',
                   padding: '12px 20px',
                   borderBottom: '0.5px solid #282828',
                   fontSize: '11px',
@@ -1233,12 +1233,15 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
                   return filteredUsers.map((u) => {
                   const isLive = u.livePlayback?.isPlaying;
+                  const rawDev = (u.lastDeviceModel || u.lastDevice || '').trim();
+                  const cleanDev = rawDev ? rawDev.replace(/^(\w+)\s+\1\s+/i, '$1 ') : 'Sin registrar';
+
                   return (
                     <div
                       key={u.id}
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: 'minmax(210px, 2fr) 130px 170px 140px 130px 140px',
+                        gridTemplateColumns: 'minmax(200px, 1.8fr) 110px minmax(210px, 1.8fr) 140px 140px 140px',
                         alignItems: 'center',
                         padding: '14px 20px',
                         borderBottom: '0.5px solid #202020',
@@ -1312,10 +1315,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
                           {formatDateTime(u.lastActiveAt || u.lastLoginAt || u.createdAt)}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
-                          {getDeviceIcon(u.lastDeviceModel || u.lastDevice)}
-                          <span style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {u.lastDeviceModel || u.lastDevice || 'Sin registrar'}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                          {getDeviceIcon(u.lastOsVersion || cleanDev, '', cleanDev)}
+                          <span style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {cleanDev}
                           </span>
                         </div>
                         {(u.lastCountry || u.lastOsVersion) && (
@@ -1323,7 +1326,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                             {u.lastCountry && (
                               <span style={{ display: 'flex', alignItems: 'center' }}>
                                 {renderCountryFlag(u.lastCountry, u.lastCountryCode)}
-                                {formatCountryName(u.lastCountry)}{u.lastCity ? ` (${u.lastCity})` : ''}
+                                <span>{formatCountryName(u.lastCountry)}{u.lastCity ? ` (${u.lastCity})` : ''}</span>
                               </span>
                             )}
                             {u.lastOsVersion && <span>· {u.lastOsVersion}</span>}
@@ -1346,11 +1349,11 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '5px' }}>
                           <Music size={13} style={{ color: '#34C759' }} />
-                          <span>{u.stats?.plays || 0} canciones</span>
+                          <span>{u.stats?.plays ?? u.historyCount ?? 0} {(u.stats?.plays === 1 || u.historyCount === 1) ? 'canción' : 'canciones'}</span>
                         </div>
                         <div style={{ fontSize: '11px', color: '#B3B3B3', display: 'flex', gap: '8px', marginTop: '2px' }}>
-                          <span>❤️ {u.stats?.favorites || 0}</span>
-                          <span>📁 {u.stats?.playlists || 0}</span>
+                          <span>❤️ {u.stats?.favorites ?? u.favoritesCount ?? 0}</span>
+                          <span>📁 {u.stats?.playlists ?? u.playlistsCount ?? 0}</span>
                         </div>
                       </div>
 
