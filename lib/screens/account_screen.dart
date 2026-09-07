@@ -173,60 +173,7 @@ class AccountScreen extends StatelessWidget {
           ),
           Divider(color: dividerColor, height: 24),
 
-          // 4. Notificaciones
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: const Text(
-              'Notificaciones',
-              style: TextStyle(
-                color: AppTheme.appleMusicRed,
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-              ),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 6),
-            child: Text(
-              'Groovy asocia los datos de interacción y revisión de notificaciones con tu cuenta de Groovy.',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white60 : Colors.black54,
-                height: 1.35,
-              ),
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(
-              'Administrar notificaciones',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Notificaciones habilitadas')),
-              );
-            },
-          ),
-          Divider(color: dividerColor, height: 24),
-
-          // 5. Apps con acceso & Cerrar sesión
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(
-              'Apps con acceso',
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w500,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-            onTap: () {},
-          ),
+          // 4. Cerrar sesión
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text(

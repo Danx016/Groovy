@@ -5,6 +5,14 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.63] - 2026-09-06
+
+### Removed & Improved
+- **Pantalla de Cuenta (Limpieza de secciones no deseadas)**:
+  - Eliminación completa de la sección de *Notificaciones* y *Apps con acceso* en la pantalla de cuenta tanto en móviles como en Windows.
+- **Idioma Español por Defecto**:
+  - Configuración explícita del idioma español (`es`) como predeterminado y fallback en la resolución de idioma de la app.
+
 ## [1.0.62] - 2026-09-06
 
 ### Fixed

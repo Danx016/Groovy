@@ -341,9 +341,22 @@ class GroovyApp extends StatelessWidget {
           themeMode: themeService.themeMode,
           scrollBehavior: AppScrollBehavior(),
           navigatorKey: navigatorKey,
-          locale: localeService.currentLocale,
+          locale: localeService.currentLocale ?? const Locale('es'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
+          localeResolutionCallback: (locale, supportedLocales) {
+            if (localeService.currentLocale != null) {
+              return localeService.currentLocale;
+            }
+            if (locale != null) {
+              for (var supportedLocale in supportedLocales) {
+                if (supportedLocale.languageCode == locale.languageCode) {
+                  return supportedLocale;
+                }
+              }
+            }
+            return const Locale('es');
+          },
           home: const AuthWrapper(),
           navigatorObservers: [AnalyticsNavigatorObserver()],
           builder: (context, child) {
