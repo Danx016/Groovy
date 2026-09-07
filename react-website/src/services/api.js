@@ -64,7 +64,7 @@ export const authApi = {
       body: JSON.stringify({ name, email, password }),
     }),
 
-  getProfile: () => authFetch('/auth/profile'),
+  getProfile: () => authFetch('/auth/me'),
 };
 
 // Library API Endpoints (MySQL)
