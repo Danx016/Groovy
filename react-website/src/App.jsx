@@ -15,6 +15,7 @@ import { SearchView } from './components/views/SearchView';
 import { PlaylistDetailView } from './components/views/PlaylistDetailView';
 import { AccountView } from './components/views/AccountView';
 import { SettingsView } from './components/views/SettingsView';
+import { AdminPortal } from './components/admin/AdminPortal';
 
 /* Global layout + responsive styles */
 const layoutStyles = `
@@ -52,10 +53,52 @@ function MainApp() {
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
 
+  // Standalone Admin Route check: /admin, /#admin, or #admin
+  const [isAdminPage, setIsAdminPage] = useState(() => {
+    return window.location.pathname.startsWith('/admin') ||
+      window.location.hash === '#admin' ||
+      window.location.search.includes('admin=true');
+  });
+
+  React.useEffect(() => {
+    const handleLocationChange = () => {
+      const isAdm = window.location.pathname.startsWith('/admin') ||
+        window.location.hash === '#admin' ||
+        window.location.search.includes('admin=true');
+      setIsAdminPage(isAdm);
+    };
+
+    window.addEventListener('popstate', handleLocationChange);
+    window.addEventListener('hashchange', handleLocationChange);
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange);
+      window.removeEventListener('hashchange', handleLocationChange);
+    };
+  }, []);
+
   const switchTab = (tab) => {
+    if (tab === 'admin') {
+      window.location.hash = 'admin';
+      setIsAdminPage(true);
+      return;
+    }
     setSelectedPlaylist(null);
     setActiveTab(tab);
   };
+
+  // If visiting Admin Portal: Render pure standalone page without player
+  if (isAdminPage) {
+    return (
+      <AdminPortal
+        onBackToPlayer={() => {
+          window.location.hash = '';
+          window.history.pushState({}, '', '/');
+          setIsAdminPage(false);
+          setActiveTab('home');
+        }}
+      />
+    );
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#000', color: '#fff' }}>
@@ -78,7 +121,7 @@ function MainApp() {
               {activeTab === 'home'    && <HomeView setActiveTab={switchTab} />}
               {activeTab === 'library' && <LibraryView onSelectPlaylist={setSelectedPlaylist} onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)} />}
               {activeTab === 'search'  && <SearchView />}
-              {activeTab === 'account' && <AccountView />}
+              {activeTab === 'account' && <AccountView setActiveTab={switchTab} />}
               {activeTab === 'settings' && <SettingsView />}
             </>
           )}

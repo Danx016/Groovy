@@ -6,6 +6,7 @@ require('dotenv').config();
 const { initDatabase } = require('./database');
 const authRoutes = require('./routes/auth');
 const libraryRoutes = require('./routes/library');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -28,6 +29,7 @@ app.get('/api/health', (req, res) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/library', libraryRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Root greeting
 app.get('/', (req, res) => {

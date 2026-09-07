@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Compass, Library, User, Settings, PlusCircle, Heart, ListMusic } from 'lucide-react';
+import { Home, Compass, Library, User, Settings, PlusCircle, Heart, ListMusic, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { usePlayer } from '../../context/PlayerContext';
@@ -16,6 +16,8 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
   const { isAuthenticated, openAuthModal } = useAuth();
   const { playlists, favorites } = useLibrary();
   const { isPlaying } = usePlayer();
+
+  const allNavItems = NAV_ITEMS;
 
   return (
     <aside style={{
@@ -51,7 +53,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
 
       {/* Main Nav */}
       <nav style={{ marginBottom: '16px' }}>
-        {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+        {allNavItems.map(({ id, label, icon: Icon }) => {
           const isActive = activeTab === id;
           return (
             <button
@@ -68,7 +70,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
               onMouseEnter={e => { if (!isActive) e.currentTarget.style.color = '#fff'; }}
               onMouseLeave={e => { if (!isActive) e.currentTarget.style.color = '#B3B3B3'; }}
             >
-              <Icon size={20} style={{ color: isActive ? '#FA243C' : '#B3B3B3', flexShrink: 0 }} />
+              <Icon size={20} style={{ color: isActive ? '#FA243C' : (id === 'admin' ? '#FF9500' : '#B3B3B3'), flexShrink: 0 }} />
               {label}
             </button>
           );

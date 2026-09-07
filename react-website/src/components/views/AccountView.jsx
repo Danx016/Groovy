@@ -3,8 +3,8 @@ import { User, Database, Server, ShieldCheck, LogOut, Mail, Calendar, RefreshCw,
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 
-export const AccountView = () => {
-  const { user, logout, openAuthModal, isAuthenticated } = useAuth();
+export const AccountView = ({ setActiveTab }) => {
+  const { user, logout, openAuthModal, isAuthenticated, isAdmin } = useAuth();
   const { favorites, playlists, refreshLibrary, isLoading } = useLibrary();
 
   if (!isAuthenticated) {
@@ -45,6 +45,34 @@ export const AccountView = () => {
     <div style={{ maxWidth: '640px', paddingBottom: '148px' }}>
       <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '24px' }}>Mi Cuenta</h1>
 
+      {/* Admin Panel Card if Admin */}
+      {isAdmin && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(255,149,0,0.15), rgba(250,36,60,0.15))',
+          borderRadius: '16px', border: '1px solid rgba(255,149,0,0.3)',
+          padding: '20px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '42px', height: '42px', borderRadius: '10px', background: '#FF9500', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+              <ShieldCheck size={24} />
+            </div>
+            <div>
+              <h3 style={{ fontSize: '16px', fontWeight: 700 }}>Panel de Administración</h3>
+              <p style={{ fontSize: '12px', color: '#A1A1A6' }}>Gestión de usuarios, auditoría de IPs y dispositivos</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab?.('admin')}
+            style={{
+              padding: '10px 18px', borderRadius: '10px', background: '#FF9500', color: '#000',
+              fontWeight: 700, fontSize: '13px', border: 'none', cursor: 'pointer',
+            }}
+          >
+            Abrir Panel
+          </button>
+        </div>
+      )}
+
       {/* Profile card */}
       <div style={{ background: '#181818', borderRadius: '16px', border: '0.5px solid #282828', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -62,6 +90,11 @@ export const AccountView = () => {
               <span style={{ background: 'rgba(52,199,89,0.15)', border: '0.5px solid rgba(52,199,89,0.3)', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: 700, color: '#34C759', whiteSpace: 'nowrap' }}>
                 ● Activo
               </span>
+              {isAdmin && (
+                <span style={{ background: 'rgba(255,149,0,0.15)', border: '0.5px solid rgba(255,149,0,0.3)', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: 700, color: '#FF9500', whiteSpace: 'nowrap' }}>
+                  👑 Admin
+                </span>
+              )}
             </div>
             <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
               <Mail size={13} /> {user?.email}

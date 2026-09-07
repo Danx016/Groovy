@@ -69,7 +69,7 @@ export const Header = ({ onSearchClick, activeTab, setActiveTab }) => {
               border: `0.5px solid ${activeTab === 'account' ? '#FA243C' : '#404040'}`,
               borderRadius: '20px', padding: '5px 12px 5px 5px',
               color: '#fff', fontSize: '13px', fontWeight: 600,
-              transition: 'all 0.2s',
+              cursor: 'pointer', transition: 'all 0.2s',
             }}
           >
             <div style={{

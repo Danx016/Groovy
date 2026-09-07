@@ -53,9 +53,59 @@ async function runMigrations(conn) {
       email VARCHAR(255) NOT NULL UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       avatar_url TEXT,
+      role VARCHAR(50) DEFAULT 'user',
+      is_banned TINYINT(1) DEFAULT 0,
+      last_login_at TIMESTAMP NULL,
+      last_login_ip VARCHAR(100) NULL,
+      last_device VARCHAR(255) NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_email (email)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // Safe check to add missing columns to users if the table already existed
+  const addColIfNotExists = async (columnName, columnDef) => {
+    try {
+      const [rows] = await conn.query(`
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = 'users' 
+          AND COLUMN_NAME = ?
+      `, [columnName]);
+      if (rows[0].count === 0) {
+        await conn.query(`ALTER TABLE users ADD COLUMN ${columnName} ${columnDef}`);
+        console.log(`[Database] Added column users.${columnName}`);
+      }
+    } catch (e) {
+      console.warn(`[Database] Warning adding column ${columnName}:`, e.message);
+    }
+  };
+
+  await addColIfNotExists('role', "VARCHAR(50) DEFAULT 'user'");
+  await addColIfNotExists('is_banned', 'TINYINT(1) DEFAULT 0');
+  await addColIfNotExists('last_login_at', 'TIMESTAMP NULL');
+  await addColIfNotExists('last_login_ip', 'VARCHAR(100) NULL');
+  await addColIfNotExists('last_device', 'VARCHAR(255) NULL');
+
+  // 1b. User Sessions / Activity Logs table
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NOT NULL,
+      ip_address VARCHAR(100),
+      user_agent TEXT,
+      device_os VARCHAR(100),
+      browser VARCHAR(100),
+      device_type VARCHAR(50),
+      client_platform VARCHAR(100),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_active_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      is_active TINYINT(1) DEFAULT 1,
+      INDEX idx_session_user (user_id),
+      INDEX idx_session_created (created_at DESC),
+      CONSTRAINT fk_session_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
@@ -126,6 +176,18 @@ async function runMigrations(conn) {
       CONSTRAINT fk_hist_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // Promote danilorodelo355@gmail.com and initial admin to admin role
+  try {
+    await conn.query("UPDATE users SET role = 'admin' WHERE email = 'danilorodelo355@gmail.com'");
+    const [adminCheck] = await conn.query("SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    if (adminCheck.length === 0) {
+      await conn.query("UPDATE users SET role = 'admin' ORDER BY id ASC LIMIT 1");
+    }
+    console.log('[Database] 👑 Admin roles verified.');
+  } catch (e) {
+    console.warn('[Database] Admin role setup:', e.message);
+  }
 
   console.log('[Database] ✅ All MySQL tables verified and ready.');
 }

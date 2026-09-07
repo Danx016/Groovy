@@ -138,3 +138,38 @@ export const libraryApi = {
       }),
     }),
 };
+
+// Admin API Endpoints (MySQL Telemetry & Control)
+export const adminApi = {
+  getMetrics: () => authFetch('/admin/metrics'),
+
+  getUsers: (params = {}) => {
+    const query = new URLSearchParams();
+    if (params.q) query.append('q', params.q);
+    if (params.role) query.append('role', params.role);
+    if (params.status) query.append('status', params.status);
+    const queryString = query.toString();
+    return authFetch(`/admin/users${queryString ? `?${queryString}` : ''}`);
+  },
+
+  getUserDetails: (userId) => authFetch(`/admin/users/${userId}`),
+
+  updateUser: (userId, data) =>
+    authFetch(`/admin/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  toggleBanUser: (userId, isBanned) =>
+    authFetch(`/admin/users/${userId}/ban`, {
+      method: 'PUT',
+      body: JSON.stringify({ isBanned }),
+    }),
+
+  deleteUser: (userId) =>
+    authFetch(`/admin/users/${userId}`, {
+      method: 'DELETE',
+    }),
+
+  getSessions: (limit = 100) => authFetch(`/admin/sessions?limit=${limit}`),
+};

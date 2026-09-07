@@ -8,9 +8,10 @@ function generateToken(user) {
       id: user.id,
       email: user.email,
       name: user.name,
+      role: user.role || 'user',
     },
     JWT_SECRET,
-    { expiresIn: '90d' } // 90 days token validity for mobile apps
+    { expiresIn: '90d' } // 90 days token validity
   );
 }
 
@@ -37,8 +38,21 @@ function authenticateToken(req, res, next) {
   });
 }
 
+function authenticateAdmin(req, res, next) {
+  authenticateToken(req, res, () => {
+    if (req.user && (req.user.role === 'admin' || req.user.email === 'danilorodelo355@gmail.com')) {
+      return next();
+    }
+    return res.status(403).json({
+      success: false,
+      error: 'Acceso denegado. Se requieren permisos de administrador.',
+    });
+  });
+}
+
 module.exports = {
   generateToken,
   authenticateToken,
+  authenticateAdmin,
   JWT_SECRET,
 };
