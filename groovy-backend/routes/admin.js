@@ -201,13 +201,22 @@ router.get('/metrics', async (req, res) => {
       LIMIT 8
     `);
 
-    // Top played songs
+    // Top played songs (Ranking global de las 25 canciones más escuchadas)
     const [topSongs] = await pool.query(`
-      SELECT song_id, title, artist, cover_art, COUNT(*) as play_count
+      SELECT 
+        song_id, 
+        MAX(title) as title, 
+        MAX(artist) as artist, 
+        MAX(album) as album, 
+        MAX(cover_art) as cover_art, 
+        MAX(duration) as duration, 
+        COUNT(*) as play_count, 
+        COUNT(DISTINCT user_id) as unique_listeners, 
+        MAX(played_at) as last_played_at
       FROM playback_history
-      GROUP BY song_id, title, artist, cover_art
+      GROUP BY song_id
       ORDER BY play_count DESC
-      LIMIT 5
+      LIMIT 25
     `);
 
     return res.json({

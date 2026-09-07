@@ -1626,58 +1626,133 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               background: '#181818',
               borderRadius: '16px',
               border: '0.5px solid #282828',
-              padding: '24px',
+              overflow: 'hidden',
             }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px', marginBottom: '6px' }}>
-                Canciones Más Populares
-              </h3>
-              <p style={{ fontSize: '13px', color: '#B3B3B3', marginBottom: '20px' }}>
-                Ranking global de canciones más escuchadas en Groovy Cloud por todos los usuarios.
-              </p>
+              <div style={{ padding: '24px 24px 16px', borderBottom: '0.5px solid #282828' }}>
+                <h3 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px', marginBottom: '6px' }}>
+                  Canciones Más Populares (Top 25)
+                </h3>
+                <p style={{ fontSize: '13px', color: '#B3B3B3' }}>
+                  Ranking global en tiempo real de las canciones con mayor número de reproducciones en Groovy Cloud por todos los usuarios.
+                </p>
+              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {metrics?.topSongs?.map((song, i) => (
-                  <div
-                    key={song.song_id || i}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '16px',
-                      padding: '10px 14px', borderRadius: '10px',
-                      background: 'transparent', transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#282828'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    <span style={{ fontSize: '15px', fontWeight: 700, color: i < 3 ? '#FA243C' : '#6B6B6B', width: '24px', textAlign: 'center' }}>
-                      {i + 1}
-                    </span>
-                    {song.cover_art ? (
-                      <img src={song.cover_art} alt={song.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
-                    ) : (
-                      <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Music size={20} style={{ color: '#6B6B6B' }} />
+              {/* Table Header */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '50px minmax(220px, 2fr) minmax(140px, 1.2fr) 110px 140px 130px',
+                padding: '12px 24px',
+                borderBottom: '0.5px solid #282828',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#6B6B6B',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                alignItems: 'center',
+              }}>
+                <div style={{ textAlign: 'center' }}>#</div>
+                <div>Canción & Artista</div>
+                <div>Álbum</div>
+                <div>Oyentes</div>
+                <div>Última Vez</div>
+                <div style={{ textAlign: 'right' }}>Reproducciones</div>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {metrics?.topSongs?.map((song, i) => {
+                  const coverImg = (song.cover_art && song.cover_art.startsWith('http')) 
+                    ? song.cover_art 
+                    : (song.song_id ? `https://i.ytimg.com/vi/${song.song_id}/hqdefault.jpg` : null);
+
+                  return (
+                    <div
+                      key={song.song_id || i}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '50px minmax(220px, 2fr) minmax(140px, 1.2fr) 110px 140px 130px',
+                        alignItems: 'center',
+                        padding: '12px 24px',
+                        borderBottom: '0.5px solid #202020',
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#202020'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {/* Rank */}
+                      <div style={{ textAlign: 'center' }}>
+                        {i === 0 ? (
+                          <span style={{ fontSize: '16px' }} title="Puesto 1">🥇</span>
+                        ) : i === 1 ? (
+                          <span style={{ fontSize: '16px' }} title="Puesto 2">🥈</span>
+                        ) : i === 2 ? (
+                          <span style={{ fontSize: '16px' }} title="Puesto 3">🥉</span>
+                        ) : (
+                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#6B6B6B' }}>
+                            {i + 1}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '15px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {song.title}
-                      </p>
-                      <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                        {song.artist}
-                      </p>
+
+                      {/* Song Title, Artist & Cover */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, paddingRight: '12px' }}>
+                        {coverImg ? (
+                          <img
+                            src={coverImg}
+                            alt={song.title}
+                            style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
+                            onError={e => { e.currentTarget.style.display = 'none'; }}
+                          />
+                        ) : (
+                          <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Music size={18} style={{ color: '#6B6B6B' }} />
+                          </div>
+                        )}
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {song.title}
+                          </p>
+                          <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                            {song.artist || 'Artista Desconocido'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Album */}
+                      <div style={{ minWidth: 0, paddingRight: '12px' }}>
+                        <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {song.album || '—'}
+                        </p>
+                      </div>
+
+                      {/* Unique Listeners */}
+                      <div style={{ fontSize: '12px', color: '#B3B3B3' }}>
+                        {song.unique_listeners || 1} {song.unique_listeners === 1 ? 'usuario' : 'usuarios'}
+                      </div>
+
+                      {/* Last Played */}
+                      <div style={{ fontSize: '11px', color: '#8E8E93' }}>
+                        {formatDateTime(song.last_played_at)}
+                      </div>
+
+                      {/* Play Count */}
+                      <div style={{ textAlign: 'right' }}>
+                        <span style={{
+                          fontSize: '12px', fontWeight: 700, color: '#34C759',
+                          background: 'rgba(52,199,89,0.12)', padding: '4px 10px', borderRadius: '12px',
+                          display: 'inline-block',
+                        }}>
+                          {song.play_count} {song.play_count === 1 ? 'reproducción' : 'reproducciones'}
+                        </span>
+                      </div>
                     </div>
-                    <div style={{
-                      fontSize: '13px', fontWeight: 700, color: '#34C759',
-                      background: 'rgba(52,199,89,0.1)', padding: '4px 10px', borderRadius: '12px',
-                    }}>
-                      {song.play_count} reproducciones
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {(!metrics?.topSongs || metrics.topSongs.length === 0) && (
-                  <div style={{ padding: '36px', textAlign: 'center', color: '#6B6B6B' }}>
-                    <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>Aún no hay reproducciones registradas en la nube.</p>
+                  <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
+                    <Music size={36} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Aún no hay reproducciones registradas en la nube.</p>
+                    <p style={{ fontSize: '13px', marginTop: '4px' }}>Las canciones que los usuarios escuchen en la app aparecerán automáticamente aquí.</p>
                   </div>
                 )}
               </div>
