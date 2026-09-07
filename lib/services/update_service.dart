@@ -160,17 +160,14 @@ class UpdateService {
         await _channel.invokeMethod('installApk', {'filePath': filePath});
       } else if (!kIsWeb && Platform.isWindows) {
         try {
-          // Launch via ShellExecute (cmd start) to invoke Windows UAC elevation prompt
-          await Process.start(
-            'cmd.exe',
-            ['/c', 'start', '', filePath],
-            mode: ProcessStartMode.detached,
-          );
-        } catch (_) {
+          // Primary: Launch via PowerShell with RunAs verb (forces Windows UAC prompt)
           await Process.start(
             'powershell.exe',
             [
               '-NoProfile',
+              '-NonInteractive',
+              '-WindowStyle',
+              'Hidden',
               '-Command',
               'Start-Process',
               '-FilePath',
@@ -180,6 +177,17 @@ class UpdateService {
             ],
             mode: ProcessStartMode.detached,
           );
+        } catch (_) {
+          try {
+            // Fallback: Launch via Windows Shell Start command
+            await Process.start(
+              'cmd.exe',
+              ['/c', 'start', '""', '"$filePath"'],
+              mode: ProcessStartMode.detached,
+            );
+          } catch (err) {
+            debugPrint('Failed to launch Windows update installer: $err');
+          }
         }
       } else if (!kIsWeb && Platform.isLinux) {
         await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
