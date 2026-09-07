@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../models/models.dart';
@@ -22,14 +23,36 @@ class AuthProvider extends ChangeNotifier {
   GroovyUser? _currentUser;
   String? _token;
   bool _disposed = false;
+  Timer? _heartbeatTimer;
 
   AuthProvider([dynamic legacyParam, StorageService? storageService])
       : _storageService = (storageService ?? (legacyParam is StorageService ? legacyParam : StorageService())) {
     _loadSavedSession();
   }
 
+  void _startSessionHeartbeat() {
+    _heartbeatTimer?.cancel();
+    if (_token == null || _token!.isEmpty) return;
+    
+    // Immediate ping on active session
+    _apiService.pingSession(_token!);
+
+    // Periodic heartbeat every 25 seconds while app is open and connected
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+      if (_token != null && _token!.isNotEmpty && !_disposed) {
+        _apiService.pingSession(_token!);
+      }
+    });
+  }
+
+  void _stopSessionHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   @override
   void dispose() {
+    _stopSessionHeartbeat();
     _disposed = true;
     super.dispose();
   }
@@ -63,6 +86,9 @@ class AuthProvider extends ChangeNotifier {
         _state = AuthState.authenticated;
         notifyListeners();
 
+        // Start real-time presence heartbeat
+        _startSessionHeartbeat();
+
         // Refresh user profile and cloud data in background
         _refreshUserProfile();
         syncUserDataFromCloud();
@@ -80,7 +106,6 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _refreshUserProfile() async {
     if (_token == null) return;
     try {
-      _apiService.pingSession(_token!);
       final user = await _apiService.getMe(_token!);
       if (user != null) {
         _currentUser = user;
@@ -134,6 +159,7 @@ class AuthProvider extends ChangeNotifier {
 
       _state = AuthState.authenticated;
       notifyListeners();
+      _startSessionHeartbeat();
       syncUserDataFromCloud();
       return true;
     } else {
@@ -164,6 +190,7 @@ class AuthProvider extends ChangeNotifier {
 
       _state = AuthState.authenticated;
       notifyListeners();
+      _startSessionHeartbeat();
       syncUserDataFromCloud();
       return true;
     } else {
@@ -221,6 +248,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    _stopSessionHeartbeat();
     final offlineService = OfflineService();
     if (offlineService.isBackgroundDownloadActive) {
       offlineService.cancelBackgroundDownload();

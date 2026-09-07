@@ -5,6 +5,18 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.65] - 2026-09-07
+
+### Added & Improved
+- **Telemetría Nativa y Presencia en Tiempo Real (Móvil & Windows)**:
+  - Implementación de latido de sesión continuo (`_startSessionHeartbeat`) cada 25 segundos en `AuthProvider` para reportar presencia activa en la app incluso mientras se navega sin reproducir música.
+  - Detección de hardware y modelo comercial real del dispositivo en Android (marca, modelo) y Windows (nombre del equipo, build y versión del SO).
+  - Envío automático de telemetría y metadatos de hardware nativo al backend de Groovy Cloud.
+- **Portal de Administración (Admin Portal)**:
+  - Exclusión completa de clientes Web en la vista de streaming en vivo; ahora solo muestra usuarios reales de las apps nativas (Android y Windows).
+  - Detección dual en vivo: usuarios escuchando música y usuarios conectados activamente navegando en la app.
+  - Filtros dedicados por plataforma (`📱 / 💻 Apps Nativas`, `📱 Solo Android`, `💻 Solo Windows`).
+
 ## [1.0.64] - 2026-09-06
 
 ### Fixed

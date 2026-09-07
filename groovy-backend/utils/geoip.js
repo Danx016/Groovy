@@ -237,7 +237,7 @@ function parseFullClientInfo(req) {
     browserVersion = m ? m[1] : '';
   } else if (/dart|flutter/i.test(ua)) {
     browser = 'Groovy Native App';
-    browserVersion = '1.0.64';
+    browserVersion = '1.0.65';
   }
 
   const deviceType = (os === 'Android' || os === 'iOS' || /mobile/i.test(ua)) ? 'Mobile' : 'Desktop';

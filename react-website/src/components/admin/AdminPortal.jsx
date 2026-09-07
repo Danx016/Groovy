@@ -56,6 +56,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [platformFilter, setPlatformFilter] = useState('apps_only'); // 'apps_only' | 'mobile' | 'windows' | 'all'
 
   // Modals / Inspector
   const [selectedUser, setSelectedUser] = useState(null);
@@ -264,10 +265,32 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     if (str.includes('mac') || str.includes('darwin')) {
       return <Laptop size={16} style={{ color: '#fff' }} />;
     }
-    if (str.includes('linux')) {
-      return <Laptop size={16} style={{ color: '#FCC624' }} />;
-    }
     return <Globe size={16} style={{ color: '#B3B3B3' }} />;
+  };
+
+  const isWebClient = (platform = '', device = '', browser = '') => {
+    const str = `${platform || ''} ${device || ''} ${browser || ''}`.toLowerCase().trim();
+    if (!str) return false;
+    if (str === 'web' || str.startsWith('web ') || str.includes('web player') || str.includes('web browser') || str.includes('web client')) {
+      return true;
+    }
+    return false;
+  };
+
+  const isNativeApp = (platform = '', device = '', browser = '') => {
+    if (isWebClient(platform, device, browser)) return false;
+    const str = `${platform || ''} ${device || ''} ${browser || ''}`.toLowerCase();
+    return (
+      str.includes('android') ||
+      str.includes('windows') ||
+      str.includes('ios') ||
+      str.includes('iphone') ||
+      str.includes('mac') ||
+      str.includes('linux') ||
+      str.includes('groovy') ||
+      str.includes('flutter') ||
+      (!str.includes('web') && !str.includes('browser'))
+    );
   };
 
   const formatListeningTime = (totalSeconds = 0) => {
@@ -819,134 +842,234 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             </div>
           </div>
 
-          {/* TAB: LIVE STREAMING (Who is listening to music right this second) */}
-          {(activeTab === 'live' || liveListeners.some(l => l.isPlaying)) && (
-            <div style={{
-              background: '#181818',
-              borderRadius: '16px',
-              border: '0.5px solid #282828',
-              padding: '24px',
-              marginBottom: '28px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '16px' }}>
-                    <div className="eq-bar" style={{ width: '3px' }} />
-                    <div className="eq-bar" style={{ width: '3px' }} />
-                    <div className="eq-bar" style={{ width: '3px' }} />
-                    <div className="eq-bar" style={{ width: '3px' }} />
+          {/* TAB: LIVE STREAMING & PRESENCE (Native Mobile & Windows Apps Only) */}
+          {(() => {
+            const nativeLiveListeners = liveListeners.filter(l => 
+              l.isPlaying && isNativeApp(l.platform, l.deviceName, l.deviceModel)
+            );
+            const activeAppUsers = users.filter(u => {
+              if (!u.lastActiveAt) return false;
+              const diffSec = (Date.now() - new Date(u.lastActiveAt).getTime()) / 1000;
+              if (diffSec > 300) return false;
+              return isNativeApp(u.lastDeviceModel || u.lastDevice, '', u.lastOsVersion);
+            });
+
+            return (
+              <div style={{
+                background: '#181818',
+                borderRadius: '16px',
+                border: '0.5px solid #282828',
+                padding: '24px',
+                marginBottom: '28px',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '16px' }}>
+                      <div className="eq-bar" style={{ width: '3px' }} />
+                      <div className="eq-bar" style={{ width: '3px' }} />
+                      <div className="eq-bar" style={{ width: '3px' }} />
+                      <div className="eq-bar" style={{ width: '3px' }} />
+                    </div>
+                    <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
+                      En Vivo: Apps Nativas (Móvil & Windows)
+                    </h3>
                   </div>
-                  <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
-                    En Vivo: Usuarios Escuchando Música Ahora
-                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span style={{ fontSize: '11px', background: 'rgba(52,199,89,0.15)', color: '#34C759', padding: '3px 9px', borderRadius: '12px', fontWeight: 700 }}>
+                      📱 Móvil & 💻 Windows (Web Excluida)
+                    </span>
+                    <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600 }}>
+                      Actualización en tiempo real (cada 10s)
+                    </span>
+                  </div>
                 </div>
-                <span style={{ fontSize: '12px', color: '#34C759', fontWeight: 600 }}>
-                  Actualización en tiempo real (cada 10s)
-                </span>
-              </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {liveListeners.filter(l => l.isPlaying).map((item) => (
-                  <div
-                    key={item.userId}
-                    style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: '#202020', borderRadius: '12px', padding: '14px 18px',
-                      border: '0.5px solid rgba(52,199,89,0.3)',
-                    }}
-                  >
-                    {/* User Profile */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
-                      <div style={{
-                        width: '44px', height: '44px', borderRadius: '50%', background: '#FA243C',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '16px', fontWeight: 700, color: '#fff',
-                      }}>
-                        {item.userName?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <div>
-                        <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
-                        <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail}</p>
-                      </div>
-                    </div>
+                {/* Sub-section: Live Streaming Audio */}
+                {nativeLiveListeners.length > 0 && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#34C759', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
+                      Reproduciendo Música Ahora ({nativeLiveListeners.length})
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {nativeLiveListeners.map((item) => (
+                        <div
+                          key={item.userId}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            background: '#202020', borderRadius: '12px', padding: '14px 18px',
+                            border: '0.5px solid rgba(52,199,89,0.3)',
+                          }}
+                        >
+                          {/* User Profile */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
+                            <div style={{
+                              width: '44px', height: '44px', borderRadius: '50%', background: '#FA243C',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '16px', fontWeight: 700, color: '#fff',
+                            }}>
+                              {item.userName?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
+                              <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail}</p>
+                            </div>
+                          </div>
 
-                    {/* Song Playing */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, margin: '0 24px', minWidth: 0 }}>
-                      {item.coverArt ? (
-                        <img src={item.coverArt} alt={item.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
-                      ) : (
-                        <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Music size={20} style={{ color: '#FA243C' }} />
+                          {/* Song Playing */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, margin: '0 24px', minWidth: 0 }}>
+                            {item.coverArt ? (
+                              <img src={item.coverArt} alt={item.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
+                            ) : (
+                              <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Music size={20} style={{ color: '#FA243C' }} />
+                              </div>
+                            )}
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {item.title}
+                                </p>
+                                <span style={{ fontSize: '10px', color: '#34C759', fontWeight: 700, background: 'rgba(52,199,89,0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                                  EN REPRODUCCIÓN
+                                </span>
+                              </div>
+                              <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {item.artist}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Device, OS & Location */}
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {getDeviceIcon(item.platform, item.deviceName)}
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
+                                {item.deviceModel || item.deviceName || `${item.platform} App`}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#B3B3B3' }}>
+                              {item.osVersion ? `${item.platform} · ${item.osVersion}` : `${item.platform} App`}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                              {item.country && (
+                                <span style={{ fontSize: '11px', color: '#9E9E9E', display: 'flex', alignItems: 'center' }}>
+                                  {renderCountryFlag(item.country, item.countryCode)}
+                                  {formatCountryName(item.country)}{item.city ? ` · ${item.city}` : ''}
+                                </span>
+                              )}
+                              <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
+                                {item.ipAddress || 'IP no reg.'}
+                              </code>
+                              <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
+                                hace {item.secondsSincePing || 0}s
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* View Details Button */}
+                          <button
+                            onClick={() => handleOpenUserDetail(item.userId)}
+                            style={{
+                              marginLeft: '16px', padding: '7px 14px', borderRadius: '8px',
+                              background: '#282828', border: '0.5px solid #404040', color: '#fff',
+                              fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#282828'}
+                          >
+                            Ver Usuario
+                          </button>
                         </div>
-                      )}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {item.title}
-                          </p>
-                          <span style={{ fontSize: '10px', color: '#34C759', fontWeight: 700, background: 'rgba(52,199,89,0.15)', padding: '1px 6px', borderRadius: '4px' }}>
-                            REPRODUCIENDO
-                          </span>
-                        </div>
-                        <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {item.artist}
-                        </p>
-                      </div>
+                      ))}
                     </div>
-
-                    {/* Device, OS & Location */}
-                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        {getDeviceIcon(item.platform, item.deviceName)}
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
-                          {item.deviceModel || item.deviceName || `${item.platform} App`}
-                        </span>
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#B3B3B3' }}>
-                        {item.osVersion ? `${item.platform} · ${item.osVersion}` : `${item.platform} App`}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                        {item.country && (
-                          <span style={{ fontSize: '11px', color: '#9E9E9E', display: 'flex', alignItems: 'center' }}>
-                            {renderCountryFlag(item.country, item.countryCode)}
-                            {formatCountryName(item.country)}{item.city ? ` · ${item.city}` : ''}
-                          </span>
-                        )}
-                        <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
-                          {item.ipAddress || 'IP no reg.'}
-                        </code>
-                        <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
-                          hace {item.secondsSincePing || 0}s
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* View Details Button */}
-                    <button
-                      onClick={() => handleOpenUserDetail(item.userId)}
-                      style={{
-                        marginLeft: '16px', padding: '7px 14px', borderRadius: '8px',
-                        background: '#282828', border: '0.5px solid #404040', color: '#fff',
-                        fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#333'}
-                      onMouseLeave={e => e.currentTarget.style.background = '#282828'}
-                    >
-                      Ver Usuario
-                    </button>
                   </div>
-                ))}
+                )}
 
-                {liveListeners.filter(l => l.isPlaying).length === 0 && (
+                {/* Sub-section: Users connected in mobile/desktop app (active presence) */}
+                {activeAppUsers.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#00A4EF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00A4EF', display: 'inline-block' }} />
+                      Usuarios Conectados en la App ({activeAppUsers.length})
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {activeAppUsers.map((u) => {
+                        const isStreaming = nativeLiveListeners.some(l => l.userId === u.id);
+                        return (
+                          <div
+                            key={u.id}
+                            style={{
+                              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                              background: '#202020', borderRadius: '10px', padding: '10px 16px',
+                              border: '0.5px solid #333',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                              <div style={{
+                                width: '36px', height: '36px', borderRadius: '50%', background: '#282828',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '14px', fontWeight: 700, color: '#fff', border: '1px solid #404040',
+                              }}>
+                                {u.name?.charAt(0).toUpperCase() || 'U'}
+                              </div>
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                  <span style={{ fontSize: '14px', fontWeight: 600, color: '#fff' }}>{u.name}</span>
+                                  <span style={{
+                                    fontSize: '10px', fontWeight: 700, padding: '1px 6px', borderRadius: '4px',
+                                    background: isStreaming ? 'rgba(52,199,89,0.15)' : 'rgba(0,164,239,0.15)',
+                                    color: isStreaming ? '#34C759' : '#00A4EF',
+                                  }}>
+                                    {isStreaming ? '● Escuchando Música' : '● Activo en la App'}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '12px', color: '#8E8E93' }}>{u.email}</span>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '5px', justifyContent: 'flex-end' }}>
+                                  {getDeviceIcon(u.lastDeviceModel || u.lastDevice)}
+                                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
+                                    {u.lastDeviceModel || u.lastDevice || 'Dispositivo'}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '11px', color: '#8E8E93' }}>
+                                  {u.lastOsVersion || 'Groovy App'}
+                                </span>
+                              </div>
+                              <button
+                                onClick={() => handleOpenUserDetail(u.id)}
+                                style={{
+                                  padding: '5px 12px', borderRadius: '6px',
+                                  background: '#282828', border: '0.5px solid #404040', color: '#fff',
+                                  fontSize: '11px', fontWeight: 600, cursor: 'pointer',
+                                }}
+                              >
+                                Inspeccionar
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {nativeLiveListeners.length === 0 && activeAppUsers.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '28px', color: '#6B6B6B' }}>
                     <Radio size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
-                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios escuchando música en este momento.</p>
-                    <p style={{ fontSize: '12px', marginTop: '2px' }}>Cuando alguien reproduzca en Android, Windows o Web, aparecerá aquí inmediatamente.</p>
+                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios activos en la app móvil ni en Windows en este momento.</p>
+                    <p style={{ fontSize: '12px', marginTop: '4px', color: '#8E8E93' }}>
+                      Cuando alguien inicie sesión o reproduzca canciones en la app móvil (Android/iOS) o en Windows, aparecerá aquí en tiempo real. (Los accesos desde la Web están excluidos).
+                    </p>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* TAB 1: USERS LIST & TELEMETRY */}
           {activeTab === 'users' && (
@@ -975,7 +1098,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   ))}
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                   {[
                     { id: 'all', label: 'Cualquier Estado' },
                     { id: 'active', label: 'Activos' },
@@ -993,6 +1116,32 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       }}
                     >
                       {filter.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Platform Filter (Exclude Web by default) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plataforma:</span>
+                  {[
+                    { id: 'apps_only', label: '📱 / 💻 Solo Apps Nativas' },
+                    { id: 'mobile', label: '📱 Solo Android' },
+                    { id: 'windows', label: '💻 Solo Windows' },
+                    { id: 'all', label: 'Todas las Plataformas' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setPlatformFilter(p.id)}
+                      style={{
+                        padding: '5px 12px', borderRadius: '16px', fontSize: '11px', fontWeight: 600,
+                        background: platformFilter === p.id ? '#FA243C' : '#282828',
+                        color: platformFilter === p.id ? '#fff' : '#B3B3B3',
+                        border: `0.5px solid ${platformFilter === p.id ? '#FA243C' : '#404040'}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p.label}
                     </button>
                   ))}
                 </div>
@@ -1026,7 +1175,37 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 </div>
 
                 {/* User Rows */}
-                {users.map((u) => {
+                {(() => {
+                  const filteredUsers = users.filter(u => {
+                    if (platformFilter === 'apps_only') {
+                      return isNativeApp(u.lastDeviceModel || u.lastDevice, '', u.lastOsVersion);
+                    }
+                    if (platformFilter === 'mobile') {
+                      const s = `${u.lastDeviceModel} ${u.lastDevice} ${u.lastOsVersion}`.toLowerCase();
+                      return s.includes('android') || s.includes('ios') || s.includes('iphone');
+                    }
+                    if (platformFilter === 'windows') {
+                      const s = `${u.lastDeviceModel} ${u.lastDevice} ${u.lastOsVersion}`.toLowerCase();
+                      return s.includes('windows');
+                    }
+                    return true;
+                  });
+
+                  if (filteredUsers.length === 0 && !isLoading) {
+                    return (
+                      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
+                        <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                        <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>No se encontraron usuarios en la app para este filtro</p>
+                        <p style={{ fontSize: '13px', marginTop: '4px' }}>
+                          {platformFilter === 'apps_only'
+                            ? 'Actualmente filtrando solo aplicaciones móviles y Windows (excluyendo Web).'
+                            : 'Prueba cambiando los filtros de plataforma o estado.'}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filteredUsers.map((u) => {
                   const isLive = u.livePlayback?.isPlaying;
                   return (
                     <div
@@ -1199,15 +1378,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       </div>
                     </div>
                   );
-                })}
-
-                {users.length === 0 && !isLoading && (
-                  <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
-                    <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                    <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>No se encontraron usuarios</p>
-                    <p style={{ fontSize: '13px', marginTop: '4px' }}>Prueba con otro término de búsqueda o cambia los filtros.</p>
-                  </div>
-                )}
+                });
+              })()}
               </div>
             </div>
           )}
@@ -1220,11 +1392,38 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               border: '0.5px solid #282828',
               overflow: 'hidden',
             }}>
-              <div style={{ padding: '18px 24px', borderBottom: '0.5px solid #282828' }}>
-                <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.3px' }}>Registro de Conexiones en Vivo</h3>
-                <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '3px' }}>
-                  Auditoría completa con marcas de tiempo exactas, duración de cada inicio de sesión, dispositivo (Windows / Android) y dirección IP.
-                </p>
+              <div style={{ padding: '18px 24px', borderBottom: '0.5px solid #282828', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+                <div>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.3px' }}>Registro de Conexiones en Vivo</h3>
+                  <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '3px' }}>
+                    Auditoría completa con marcas de tiempo exactas, duración de cada inicio de sesión, hardware real (Android / Windows) y dirección IP.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plataforma:</span>
+                  {[
+                    { id: 'apps_only', label: '📱 / 💻 Solo Apps Nativas' },
+                    { id: 'mobile', label: '📱 Solo Android' },
+                    { id: 'windows', label: '💻 Solo Windows' },
+                    { id: 'all', label: 'Todas las Conexiones' },
+                  ].map(p => (
+                    <button
+                      key={p.id}
+                      onClick={() => setPlatformFilter(p.id)}
+                      style={{
+                        padding: '5px 12px', borderRadius: '16px', fontSize: '11px', fontWeight: 600,
+                        background: platformFilter === p.id ? '#FA243C' : '#282828',
+                        color: platformFilter === p.id ? '#fff' : '#B3B3B3',
+                        border: `0.5px solid ${platformFilter === p.id ? '#FA243C' : '#404040'}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               {/* Table header */}
@@ -1249,7 +1448,37 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               </div>
 
               {/* Sessions list */}
-              {sessions.map((s) => (
+              {(() => {
+                const filteredSessions = sessions.filter(s => {
+                  if (platformFilter === 'apps_only') {
+                    return isNativeApp(s.client_platform || s.device_os, s.device_model || s.device_os, s.browser);
+                  }
+                  if (platformFilter === 'mobile') {
+                    const str = `${s.client_platform} ${s.device_os} ${s.device_model}`.toLowerCase();
+                    return str.includes('android') || str.includes('ios') || str.includes('iphone') || s.device_type === 'Mobile';
+                  }
+                  if (platformFilter === 'windows') {
+                    const str = `${s.client_platform} ${s.device_os} ${s.device_model}`.toLowerCase();
+                    return str.includes('windows');
+                  }
+                  return true;
+                });
+
+                if (filteredSessions.length === 0 && !isLoading) {
+                  return (
+                    <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
+                      <Activity size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                      <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Sin conexiones de la app registradas para este filtro</p>
+                      <p style={{ fontSize: '13px', marginTop: '4px' }}>
+                        {platformFilter === 'apps_only'
+                          ? 'Actualmente filtrando solo aplicaciones móviles y Windows (excluyendo Web).'
+                          : 'Prueba cambiando el filtro de plataforma.'}
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filteredSessions.map((s) => (
                 <div
                   key={s.id}
                   style={{
@@ -1336,15 +1565,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     {formatDateTime(s.created_at)}
                   </div>
                 </div>
-              ))}
-
-              {sessions.length === 0 && (
-                <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
-                  <Activity size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-                  <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Sin conexiones registradas</p>
-                  <p style={{ fontSize: '13px', marginTop: '4px' }}>Los inicios de sesión quedarán auditados aquí automáticamente.</p>
-                </div>
-              )}
+              ));
+            })()}
             </div>
           )}
 

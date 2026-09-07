@@ -207,7 +207,7 @@ void main() async {
       platform: 'Unknown',
       deviceModel: 'Groovy Device',
       osVersion: 'Unknown',
-      appVersion: '1.0.64',
+      appVersion: '1.0.65',
       userAgent: 'GroovyApp/1.0',
     );
   });
