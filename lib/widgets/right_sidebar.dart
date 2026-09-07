@@ -233,14 +233,26 @@ class _RightSidebarState extends State<RightSidebar> {
         ? CachedNetworkImageProvider(coverUrl)
         : const AssetImage('assets/default_cover.png') as ImageProvider;
 
-    NavigationHelper.push(
-      context,
-      NowPlayingScreen(
-        image: imageProvider,
-        title: song.title,
-        artist: song.artist ?? '',
-        heroTag: 'sidebar_fs_${song.id}',
-        song: song,
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (ctx, anim, secondaryAnim) => NowPlayingScreen(
+          image: imageProvider,
+          title: song.title,
+          artist: (song.artistParticipants?.isNotEmpty == true
+                  ? song.artistParticipants!.map((a) => a.name).join(', ')
+                  : song.artist) ??
+              '',
+          heroTag: 'sidebar_fs_${song.id}',
+          song: song,
+        ),
+        transitionsBuilder: (ctx, anim, secondaryAnim, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 250),
       ),
     );
   }

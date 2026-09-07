@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../l10n/app_localizations.dart';
 import '../models/song.dart';
 import '../models/radio_station.dart';
 import '../models/artist.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
+import '../services/youtube_service.dart';
 import '../theme/app_theme.dart';
 import '../screens/artist_screen.dart';
+import '../screens/now_playing_screen.dart';
 
 import 'album_artwork.dart';
 
@@ -57,7 +60,38 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
     }
   }
 
+  void _openFullscreenNowPlaying(BuildContext context, Song song) {
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+    final coverUrl = song.coverArt != null
+        ? youtubeService.getCoverArtUrl(song.coverArt, size: 600)
+        : null;
+    final imageProvider = coverUrl != null
+        ? CachedNetworkImageProvider(coverUrl)
+        : const AssetImage('assets/default_cover.png') as ImageProvider;
 
+    Navigator.of(context, rootNavigator: true).push(
+      PageRouteBuilder(
+        opaque: false,
+        pageBuilder: (ctx, anim, secondaryAnim) => NowPlayingScreen(
+          image: imageProvider,
+          title: song.title,
+          artist: (song.artistParticipants?.isNotEmpty == true
+                  ? song.artistParticipants!.map((a) => a.name).join(', ')
+                  : song.artist) ??
+              '',
+          heroTag: 'desktop_bar_fs_${song.id}',
+          song: song,
+        ),
+        transitionsBuilder: (ctx, anim, secondaryAnim, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeOutCubic),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 250),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -257,36 +291,42 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
             flex: 3,
             child: Row(
               children: [
-                Consumer<LibraryProvider>(
-                  builder: (context, lib, _) {
-                    final isFav = lib.isSongStarred(currentSong.id) || currentSong.starred == true;
-                    return Stack(
-                      children: [
-                        AlbumArtwork(
-                          coverArt: currentSong.coverArt,
-                          size: 56,
-                          borderRadius: 4,
-                        ),
-                        if (isFav)
-                          Positioned(
-                            bottom: 2,
-                            right: 2,
-                            child: Container(
-                              padding: const EdgeInsets.all(2.5),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.75),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.favorite_rounded,
-                                size: 10,
-                                color: AppTheme.appleMusicRed,
-                              ),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => _openFullscreenNowPlaying(context, currentSong),
+                    child: Consumer<LibraryProvider>(
+                      builder: (context, lib, _) {
+                        final isFav = lib.isSongStarred(currentSong.id) || currentSong.starred == true;
+                        return Stack(
+                          children: [
+                            AlbumArtwork(
+                              coverArt: currentSong.coverArt,
+                              size: 56,
+                              borderRadius: 4,
                             ),
-                          ),
-                      ],
-                    );
-                  },
+                            if (isFav)
+                              Positioned(
+                                bottom: 2,
+                                right: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.75),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.favorite_rounded,
+                                    size: 10,
+                                    color: AppTheme.appleMusicRed,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -415,6 +455,18 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   ),
                   onPressed: widget.onToggleQueue,
                   tooltip: 'Cola de reproducción',
+                ),
+                IconButton(
+                  icon: Icon(
+                    Icons.open_in_full_rounded,
+                    size: 18,
+                    color: isDark
+                        ? const Color(0xFFB3B3B3)
+                        : const Color(0xFF6B6B6B),
+                  ),
+                  onPressed: () =>
+                      _openFullscreenNowPlaying(context, currentSong),
+                  tooltip: 'Pantalla completa',
                 ),
                 const SizedBox(width: 8),
                 const _VolumeControl(),

@@ -64,6 +64,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   Song? _lastSong;
   ImageProvider? _currentImageProvider;
   bool _showLyricsControls = true;
+  bool _showLyricsInLandscape = true;
   Timer? _colorDebounceTimer;
   Timer? _lyricsDebounceTimer;
 
@@ -884,209 +885,358 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildLandscapeLayout(BuildContext context, Color accentColor) {
-    return Selector<PlayerProvider, (Song?, bool)>(
-      selector: (_, p) => (p.currentSong, p.isPlaying),
+    return Selector<PlayerProvider, (Song?, bool, Duration)>(
+      selector: (_, p) => (p.currentSong, p.isPlaying, p.duration),
       builder: (context, data, child) {
         final provider = Provider.of<PlayerProvider>(context, listen: false);
         final currentSong = data.$1 ?? widget.song;
         final isPlaying = data.$2;
+        final duration = data.$3;
         final title = currentSong?.title ?? widget.title;
-        final artist = currentSong?.artist ?? widget.artist;
-        final isStarred = currentSong?.starred ?? false;
+        final artist = (currentSong?.artistParticipants?.isNotEmpty == true
+            ? currentSong!.artistParticipants!.map((a) => a.name).join(', ')
+            : currentSong?.artist) ?? widget.artist;
+        final album = currentSong?.album ?? '';
 
-        return Row(
+        return Stack(
           children: [
-            // Left: Album Art or Middle page
-            Expanded(
-              flex: 5,
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(32.0, 32.0, 16.0, 24.0),
-                  child: AspectRatio(
-                    aspectRatio: 1.0,
-                    child: AlbumArtView(
-                      image: _currentImageProvider ?? widget.image,
-                      tag: currentSong?.id ?? widget.heroTag,
-                      isPlaying: isPlaying,
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            // 1. Two-Column Apple Music Layout
+            Positioned.fill(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final maxCoverSize = (constraints.maxHeight * 0.44).clamp(240.0, 380.0);
 
-            // Right: Controls & Details
-            Expanded(
-              flex: 6,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16.0, 24.0, 32.0, 16.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Title & Artist
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: GestureDetector(
-                            behavior: HitTestBehavior.opaque,
-                            onTap: () {
-                              TrackNavigationBottomSheet.show(
-                                context,
-                                song: currentSong,
-                                coverProvider: _currentImageProvider ?? widget.image,
-                              );
-                            },
+                  return Row(
+                    children: [
+                      // LEFT COLUMN: Artwork + Metadata + Lossless + Scrubber + Controls
+                      Expanded(
+                        flex: 5,
+                        child: Center(
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
                             child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                MarqueeText(
-                                  text: title,
-                                  style: const TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.white,
-                                    letterSpacing: -0.3,
+                                // Album Cover with rounded corners and shadow
+                                Container(
+                                  width: maxCoverSize,
+                                  height: maxCoverSize,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.45),
+                                        blurRadius: 36,
+                                        spreadRadius: 2,
+                                        offset: const Offset(0, 18),
+                                      ),
+                                    ],
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Image(
+                                      image: _currentImageProvider ?? widget.image,
+                                      fit: BoxFit.cover,
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  artist,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.white.withValues(alpha: 0.65),
+                                const SizedBox(height: 22),
+
+                                // Song Title
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 380),
+                                  child: Text(
+                                    title,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      fontSize: 23,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                      letterSpacing: -0.4,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
+                                const SizedBox(height: 4),
+
+                                // Artist — Album
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 380),
+                                  child: Text(
+                                    album.isNotEmpty &&
+                                            album != 'Album' &&
+                                            album != 'Álbum' &&
+                                            album != title
+                                        ? '$artist — $album'
+                                        : artist,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.white.withValues(alpha: 0.70),
+                                      letterSpacing: -0.2,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+
+                                // Lossless Badge
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2.5),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.graphic_eq_rounded,
+                                        size: 13,
+                                        color: Colors.white.withValues(alpha: 0.85),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Lossless',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: Colors.white.withValues(alpha: 0.85),
+                                          letterSpacing: 0.2,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+
+                                // Progress Slider
+                                ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 380),
+                                  child: PlaybackProgressSlider(
+                                    position: provider.position,
+                                    duration: duration,
+                                    bufferedPosition: provider.bufferedPosition,
+                                    isBuffering: provider.isBuffering,
+                                    positionStream: provider.positionStream,
+                                    bufferedPositionStream: provider.bufferedPositionStream,
+                                    isBufferingStream: provider.isBufferingStream,
+                                    accentColor: Colors.white,
+                                    onChanged: (val) => provider.seek(val),
+                                  ),
+                                ),
+                                const SizedBox(height: 6),
+
+                                // Playback Controls Row (Volume, More, Previous, Play/Pause, Next, Lyrics)
+                                _buildAppleMusicLandscapeControls(context, provider, isPlaying, currentSong),
                               ],
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        Consumer<LibraryProvider>(
-                          builder: (context, lib, _) {
-                            final isFav = currentSong != null
-                                ? (lib.isSongStarred(currentSong.id) || (currentSong.starred ?? false))
-                                : isStarred;
-                            return _CircleActionButton(
-                              onTap: () async {
-                                if (currentSong != null) {
-                                  HapticFeedback.lightImpact();
-                                  final newFav = await lib.toggleStarSong(currentSong);
-                                  provider.updateSongStarred(currentSong.id, newFav);
-                                }
-                              },
-                              icon: Icon(
-                                isFav ? Icons.star_rounded : Icons.star_outline_rounded,
-                                color: isFav ? const Color(0xFFFFD600) : Colors.white,
-                                size: 20,
-                              ),
-                            );
-                          },
+                      ),
+
+                      // RIGHT COLUMN: Apple Music Synchronized Lyrics
+                      Expanded(
+                        flex: 6,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(16.0, 32.0, 48.0, 32.0),
+                          child: _buildLandscapeRightPanel(context, provider),
                         ),
-                        const SizedBox(width: 8),
-                        _CircleActionButton(
-                          onTap: () {
-                            showModalBottomSheet(
-                              context: context,
-                              backgroundColor: Colors.transparent,
-                              isScrollControlled: true,
-                              useRootNavigator: true,
-                              builder: (context) => NowPlayingMoreMenu(
-                                song: currentSong,
-                                imageProvider: _currentImageProvider ?? widget.image,
-                                onNavigateToLyrics: () => _pageController.animateToPage(
-                                  1,
-                                  duration: const Duration(milliseconds: 300),
-                                  curve: Curves.easeInOut,
-                                ),
-                              ),
-                            );
-                          },
-                          icon: const Icon(
-                            Icons.more_vert_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ),
 
-                    // Progress Slider
-                    StreamBuilder<Duration>(
-                      stream: provider.positionStream,
-                      initialData: provider.position,
-                      builder: (context, snapshot) {
-                        return StreamBuilder<Duration>(
-                          stream: provider.bufferedPositionStream,
-                          initialData: provider.bufferedPosition,
-                          builder: (context, bufSnap) {
-                            return StreamBuilder<bool>(
-                              stream: provider.isBufferingStream,
-                              initialData: provider.isBuffering,
-                              builder: (context, buffSnap) {
-                                return PlaybackProgressSlider(
-                                  position: snapshot.data ?? Duration.zero,
-                                  duration: provider.duration,
-                                  bufferedPosition: bufSnap.data ?? Duration.zero,
-                                  isBuffering: buffSnap.data ?? false,
-                                  accentColor: Colors.white,
-                                  onChanged: (val) {
-                                    provider.seek(val);
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        );
-                      },
+            // 2. Window Controls (Top Right: Minimize/Close Fullscreen, Close)
+            Positioned(
+              top: 18,
+              right: 22,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_fullscreen_rounded,
+                      color: Colors.white70,
+                      size: 20,
                     ),
-                    const SizedBox(height: 8),
-
-                    // Playback Controls
-                    PlaybackControls(
-                      isPlaying: provider.isPlaying,
-                      isShuffleEnabled: provider.shuffleEnabled,
-                      isRepeatEnabled: provider.repeatMode != RepeatMode.off,
-                      accentColor: accentColor,
-                      onPlayPause: () => provider.togglePlayPause(),
-                      onNext: () => provider.skipNext(),
-                      onPrevious: () => provider.skipPrevious(),
-                      onShuffleToggle: () => provider.toggleShuffle(),
-                      onRepeatToggle: () => provider.toggleRepeat(),
+                    tooltip: 'Salir de pantalla completa',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  const SizedBox(width: 4),
+                  IconButton(
+                    icon: const Icon(
+                      Icons.close_rounded,
+                      color: Colors.white70,
+                      size: 22,
                     ),
-                    const SizedBox(height: 8),
-
-                    // Bottom Actions
-                    NowPlayingBottomActions(
-                      isLyricsActive: _currentPage == 1,
-                      isQueueActive: _currentPage == 2,
-                      accentColor: accentColor,
-                      onLyricsTap: () {
-                        if (_currentPage == 1) {
-                          _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                        } else {
-                          _pageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                        }
-                      },
-                      onQueueTap: () {
-                        if (_currentPage == 2) {
-                          _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                        } else {
-                          _pageController.animateToPage(2, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                        }
-                      },
-                    ),
-                  ],
-                ),
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
               ),
             ),
           ],
         );
       },
+    );
+  }
+
+  Widget _buildLandscapeRightPanel(BuildContext context, PlayerProvider provider) {
+    if (!_showLyricsInLandscape) {
+      return const QueueView();
+    }
+
+    if (_isLoadingLyrics) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Colors.white,
+          strokeWidth: 2.5,
+        ),
+      );
+    }
+
+    if (_fetchedLyrics.isNotEmpty) {
+      return LyricsListView(
+        lyrics: _fetchedLyrics,
+        positionStream: provider.positionStream,
+        initialPosition: provider.position,
+        isActive: true,
+        onSeek: (duration) => provider.seek(duration),
+      );
+    }
+
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lyrics_outlined,
+            size: 56,
+            color: Colors.white.withValues(alpha: 0.35),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Letra no disponible',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.70),
+              fontSize: 22,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppleMusicLandscapeControls(
+    BuildContext context,
+    PlayerProvider provider,
+    bool isPlaying,
+    Song? currentSong,
+  ) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 380),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Volume Popup Button
+          _VolumePopupButton(provider: provider),
+
+          // More Options (...)
+          IconButton(
+            icon: const Icon(
+              Icons.more_horiz_rounded,
+              color: Colors.white70,
+              size: 22,
+            ),
+            tooltip: 'Más opciones',
+            onPressed: () {
+              if (currentSong != null) {
+                showModalBottomSheet(
+                  context: context,
+                  backgroundColor: Colors.transparent,
+                  isScrollControlled: true,
+                  useRootNavigator: true,
+                  builder: (ctx) => NowPlayingMoreMenu(
+                    song: currentSong,
+                    imageProvider: _currentImageProvider ?? widget.image,
+                    onNavigateToLyrics: () {
+                      setState(() {
+                        _showLyricsInLandscape = true;
+                      });
+                    },
+                  ),
+                );
+              }
+            },
+          ),
+
+          // Previous Track
+          IconButton(
+            icon: const Icon(
+              Icons.fast_rewind_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+            tooltip: 'Anterior',
+            onPressed: () => provider.skipPrevious(),
+          ),
+
+          // Play / Pause Prominent Button
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.16),
+              shape: BoxShape.circle,
+            ),
+            child: IconButton(
+              icon: Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                color: Colors.white,
+                size: 30,
+              ),
+              tooltip: isPlaying ? 'Pausar' : 'Reproducir',
+              onPressed: () => provider.togglePlayPause(),
+            ),
+          ),
+
+          // Next Track
+          IconButton(
+            icon: const Icon(
+              Icons.fast_forward_rounded,
+              color: Colors.white,
+              size: 32,
+            ),
+            tooltip: 'Siguiente',
+            onPressed: () => provider.skipNext(),
+          ),
+
+          // Lyrics / Queue Toggle
+          IconButton(
+            icon: Icon(
+              Icons.chat_bubble_outline_rounded,
+              color: _showLyricsInLandscape ? Colors.white : Colors.white38,
+              size: 22,
+            ),
+            tooltip: 'Letras',
+            onPressed: () {
+              setState(() {
+                _showLyricsInLandscape = !_showLyricsInLandscape;
+              });
+            },
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1162,4 +1312,73 @@ class _KeepAlivePageState extends State<_KeepAlivePage>
     return widget.child;
   }
 }
+
+class _VolumePopupButton extends StatelessWidget {
+  final PlayerProvider provider;
+  const _VolumePopupButton({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final vol = provider.volume;
+    final isMuted = vol == 0;
+    final icon = isMuted
+        ? Icons.volume_off_rounded
+        : vol < 0.5
+            ? Icons.volume_down_rounded
+            : Icons.volume_up_rounded;
+
+    return PopupMenuButton<double>(
+      icon: Icon(icon, color: Colors.white70, size: 22),
+      tooltip: 'Volumen',
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: const Color(0xFF1E1E1E),
+      offset: const Offset(0, -60),
+      itemBuilder: (ctx) => [
+        PopupMenuItem<double>(
+          enabled: false,
+          child: StatefulBuilder(
+            builder: (context, setMenuState) {
+              return SizedBox(
+                width: 160,
+                child: Row(
+                  children: [
+                    Icon(
+                      provider.volume == 0
+                          ? Icons.volume_off_rounded
+                          : Icons.volume_up_rounded,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
+                    Expanded(
+                      child: SliderTheme(
+                        data: const SliderThemeData(
+                          trackHeight: 3,
+                          thumbShape:
+                              RoundSliderThumbShape(enabledThumbRadius: 6),
+                          overlayShape:
+                              RoundSliderOverlayShape(overlayRadius: 12),
+                          activeTrackColor: Colors.white,
+                          inactiveTrackColor: Colors.white24,
+                          thumbColor: Colors.white,
+                        ),
+                        child: Slider(
+                          value: provider.volume.clamp(0.0, 1.0),
+                          onChanged: (v) {
+                            setMenuState(() {});
+                            provider.setVolume(v);
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 
