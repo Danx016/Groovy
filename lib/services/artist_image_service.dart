@@ -128,28 +128,38 @@ class ArtistImageService {
     return null;
   }
 
-  /// Query Deezer artist search API
+  /// Query Deezer artist search API with strict artist name verification
   Future<String?> _queryDeezer(String query) async {
     try {
-      final url = 'https://api.deezer.com/search/artist?q=${Uri.encodeComponent(query)}&limit=1';
+      final url = 'https://api.deezer.com/search/artist?q=${Uri.encodeComponent(query)}&limit=5';
       final response = await _dio.get(url);
 
       if (response.statusCode == 200 && response.data != null) {
         final data = response.data;
         final list = data is Map ? data['data'] : null;
         if (list is List && list.isNotEmpty) {
-          final first = list.first;
-          if (first is Map) {
-            final picXl = first['picture_xl'] as String?;
-            final picBig = first['picture_big'] as String?;
-            final picMed = first['picture_medium'] as String?;
-            final pic = first['picture'] as String?;
+          final cleanQuery = _normalize(query);
+          for (final item in list) {
+            if (item is Map) {
+              final artistName = item['name'] as String?;
+              if (artistName == null) continue;
+              final cleanName = _normalize(artistName);
+              // Ensure artist name matches query
+              if (cleanName == cleanQuery ||
+                  cleanName.startsWith(cleanQuery) ||
+                  cleanQuery.startsWith(cleanName)) {
+                final picXl = item['picture_xl'] as String?;
+                final picBig = item['picture_big'] as String?;
+                final picMed = item['picture_medium'] as String?;
+                final pic = item['picture'] as String?;
 
-            final candidate = picXl ?? picBig ?? picMed ?? pic;
-            if (candidate != null &&
-                candidate.isNotEmpty &&
-                !candidate.contains('/artist//')) {
-              return candidate;
+                final candidate = picXl ?? picBig ?? picMed ?? pic;
+                if (candidate != null &&
+                    candidate.isNotEmpty &&
+                    !candidate.contains('/artist//')) {
+                  return candidate;
+                }
+              }
             }
           }
         }
@@ -163,18 +173,28 @@ class ArtistImageService {
   /// Query iTunes search API for fallback artwork
   Future<String?> _queryItunes(String query) async {
     try {
-      final url = 'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=1';
+      final url = 'https://itunes.apple.com/search?term=${Uri.encodeComponent(query)}&entity=song&limit=5';
       final response = await _dio.get(url);
 
       if (response.statusCode == 200 && response.data != null) {
         final raw = response.data;
         final data = raw is String ? json.decode(raw) : raw;
         if (data is Map && data['results'] is List && (data['results'] as List).isNotEmpty) {
-          final first = (data['results'] as List).first;
-          if (first is Map) {
-            final art100 = first['artworkUrl100'] as String?;
-            if (art100 != null && art100.isNotEmpty) {
-              return art100.replaceAll('100x100bb', '600x600bb');
+          final cleanQuery = _normalize(query);
+          for (final item in (data['results'] as List)) {
+            if (item is Map) {
+              final artistName = item['artistName'] as String?;
+              if (artistName != null) {
+                final cleanName = _normalize(artistName);
+                if (cleanName == cleanQuery ||
+                    cleanName.startsWith(cleanQuery) ||
+                    cleanQuery.startsWith(cleanName)) {
+                  final art100 = item['artworkUrl100'] as String?;
+                  if (art100 != null && art100.isNotEmpty) {
+                    return art100.replaceAll('100x100bb', '600x600bb');
+                  }
+                }
+              }
             }
           }
         }
@@ -197,8 +217,25 @@ class ArtistImageService {
         if (list is List && list.isNotEmpty) {
           final result = <Album>[];
           final seenTitles = <String>{};
+          final cleanArtist = _normalize(artistName);
+          final cleanQuery = _normalize(query);
+
           for (final item in list) {
             if (item is Map) {
+              final artistObj = item['artist'];
+              if (artistObj is Map) {
+                final aName = (artistObj['name'] as String?);
+                if (aName != null) {
+                  final cleanAName = _normalize(aName);
+                  if (cleanAName != cleanArtist &&
+                      cleanAName != cleanQuery &&
+                      !cleanAName.contains(cleanQuery) &&
+                      !cleanQuery.contains(cleanAName)) {
+                    continue; // Skip albums from unrelated artist
+                  }
+                }
+              }
+
               final title = (item['title'] as String?)?.trim();
               if (title == null || title.isEmpty) continue;
               final lower = title.toLowerCase();

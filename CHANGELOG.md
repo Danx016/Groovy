@@ -5,6 +5,14 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.64] - 2026-09-06
+
+### Fixed
+- **Resolución de Artistas y Discografía**:
+  - Corrección de la pantalla de artista donde se reemplazaba el nombre del artista seleccionado por el de la primera canción devuelta por la búsqueda en YouTube.
+  - Validación estricta en el servicio de imágenes de artistas (`Deezer` / `iTunes`) para verificar que el nombre del resultado coincida verdaderamente con el artista consultado antes de asignarle su foto.
+  - Filtrado y validación de autoría en la carga de álbumes y discografía (`getArtistAlbums`) para evitar mostrar álbumes pertenecientes a otros artistas con nombres similares.
+
 ## [1.0.63] - 2026-09-06
 
 ### Removed & Improved

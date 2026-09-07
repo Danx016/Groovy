@@ -1,6 +1,4 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 import 'package:groovy/models/song.dart';
 import 'package:groovy/providers/player_provider.dart';
 import 'package:groovy/services/youtube_service.dart';
@@ -14,8 +12,6 @@ import '../test_helpers.dart';
 import '../bootstrap.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
-
-import 'package:groovy/l10n/app_localizations.dart';
 
 void main() {
   initializeTestEnvironment();

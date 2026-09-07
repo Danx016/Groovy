@@ -123,29 +123,38 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       }
 
+      // Keep the original reliable artist name (never override with random search result artist)
+      final reliableArtistName = (widget.artist?.name != null &&
+              widget.artist!.name.isNotEmpty &&
+              !widget.artist!.name.toLowerCase().startsWith('artist_') &&
+              !widget.artist!.name.toLowerCase().startsWith('local_artist_'))
+          ? widget.artist!.name
+          : cleanArtistQuery;
+
       // If artist was not found in local DB or has no top songs, fetch online via YouTube
       if (artist == null || topSongs.isEmpty) {
         artist ??= Artist(
           id: widget.artistId,
-          name: cleanArtistQuery,
+          name: reliableArtistName,
         );
 
         try {
           final ytResult =
-              await YoutubeService().search(cleanArtistQuery, songCount: 30);
+              await YoutubeService().search(reliableArtistName, songCount: 30);
           if (ytResult.songs.isNotEmpty) {
-            topSongs = ytResult.songs;
+            final cleanLower = reliableArtistName.toLowerCase().trim();
+            final matchingSongs = ytResult.songs.where((s) {
+              final a = s.artist?.toLowerCase().trim();
+              if (a == null) return false;
+              return a.contains(cleanLower) || cleanLower.contains(a);
+            }).toList();
+
+            topSongs = matchingSongs.isNotEmpty ? matchingSongs : ytResult.songs;
             albums = ytResult.albums;
-            final realArtistName = (widget.artist?.name != null &&
-                    widget.artist!.name.isNotEmpty &&
-                    !widget.artist!.name.toLowerCase().startsWith('artist_') &&
-                    !widget.artist!.name.toLowerCase().startsWith('local_artist_'))
-                ? widget.artist!.name
-                : (topSongs.first.artist ?? cleanArtistQuery);
             artist = Artist(
               id: artist.id,
-              name: realArtistName,
-              coverArt: artist.coverArt ?? topSongs.first.coverArt,
+              name: reliableArtistName,
+              coverArt: artist.coverArt,
             );
           }
         } catch (ytErr) {
@@ -153,27 +162,11 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       }
 
-      // Final guarantee: ensure artist name is clean and readable, never an internal ID
-      if (artist != null &&
-          (artist.name.toLowerCase().startsWith('artist_') ||
-              artist.name.toLowerCase().startsWith('local_artist_') ||
-              artist.name.contains('__') ||
-              artist.name == widget.artistId)) {
-        String resolvedName = cleanArtistQuery;
-        if (topSongs.isNotEmpty &&
-            topSongs.first.artist != null &&
-            topSongs.first.artist!.isNotEmpty &&
-            !topSongs.first.artist!.toLowerCase().startsWith('artist_')) {
-          resolvedName = topSongs.first.artist!;
-        } else if (widget.artist?.name != null &&
-            widget.artist!.name.isNotEmpty &&
-            !widget.artist!.name.toLowerCase().startsWith('artist_')) {
-          resolvedName = widget.artist!.name;
-        }
-
+      // Final guarantee: always keep the reliable artist name
+      if (artist != null) {
         artist = Artist(
           id: artist.id,
-          name: resolvedName,
+          name: reliableArtistName,
           coverArt: artist.coverArt,
           albumCount: artist.albumCount,
           artistImageUrl: artist.artistImageUrl,
