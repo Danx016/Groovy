@@ -191,27 +191,28 @@ router.post('/ping', async (req, res) => {
     const platform = req.body?.platform || client.os;
     const deviceSummary = client.deviceSummary;
 
-    // Check if there is a session logged FOR THIS SPECIFIC DEVICE / PLATFORM in the last 4 hours
+    // Check if there is an active session in the last 10 minutes for THIS SPECIFIC DEVICE / PLATFORM
     const [recentSession] = await pool.query(`
       SELECT id, created_at, last_active_at 
       FROM user_sessions 
-      WHERE user_id = ? AND client_platform = ? AND (device_model = ? OR device_os = ?) AND created_at >= NOW() - INTERVAL 4 HOUR 
+      WHERE user_id = ? AND client_platform = ? AND (device_model = ? OR device_os = ?) AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 10 MINUTE 
       ORDER BY id DESC LIMIT 1
     `, [userId, client.clientPlatform, client.deviceModel, client.os]);
 
     if (recentSession.length > 0) {
-      // Update session last active time for this device
+      // Update ongoing session last active time & duration for this device
       await pool.query(`
         UPDATE user_sessions 
         SET last_active_at = CURRENT_TIMESTAMP,
             session_duration_seconds = TIMESTAMPDIFF(SECOND, created_at, CURRENT_TIMESTAMP),
-            device_model = COALESCE(device_model, ?),
-            os_version = COALESCE(os_version, ?),
-            country = COALESCE(country, ?),
-            city = COALESCE(city, ?),
-            isp = COALESCE(isp, ?)
+            ip_address = ?,
+            device_model = COALESCE(?, device_model),
+            os_version = COALESCE(?, os_version),
+            country = COALESCE(?, country),
+            city = COALESCE(?, city),
+            isp = COALESCE(?, isp)
         WHERE id = ?
-      `, [client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, recentSession[0].id]);
+      `, [client.ip, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, recentSession[0].id]);
     } else {
       // Record new session with full device & geolocation for this device
       await pool.query(`

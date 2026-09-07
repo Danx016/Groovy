@@ -276,10 +276,10 @@ router.get('/me', authenticateToken, async (req, res) => {
       req.user.id,
     ]);
 
-    // Check if session exists in last 2 hours, else record a new session
+    // Check if session exists in last 10 minutes, else record a new session
     const [recentSession] = await pool.query(`
       SELECT id FROM user_sessions 
-      WHERE user_id = ? AND created_at >= NOW() - INTERVAL 2 HOUR 
+      WHERE user_id = ? AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 10 MINUTE 
       ORDER BY id DESC LIMIT 1
     `, [req.user.id]);
 

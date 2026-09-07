@@ -94,11 +94,15 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const fetchLivePlayback = useCallback(async () => {
     if (!isAuthorized) return;
     try {
-      const res = await adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] }));
-      if (res?.listeners) setLiveListeners(res.listeners);
-      if (res?.connectedUsers) setConnectedUsers(res.connectedUsers);
+      const [liveRes, sessionsRes] = await Promise.all([
+        adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] })),
+        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
+      ]);
+      if (liveRes?.listeners) setLiveListeners(liveRes.listeners);
+      if (liveRes?.connectedUsers) setConnectedUsers(liveRes.connectedUsers);
+      if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
     } catch (e) {
-      console.warn('Error fetching live playback:', e);
+      console.warn('Error fetching live playback / sessions:', e);
     }
   }, [isAuthorized]);
 
@@ -1532,13 +1536,27 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   {/* User */}
-                  <div style={{ minWidth: 0, paddingRight: '12px' }}>
-                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.user_name}
-                    </p>
-                    <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.user_email}
-                    </p>
+                  <div style={{ minWidth: 0, paddingRight: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{
+                      width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                      overflow: 'hidden',
+                    }}>
+                      {s.avatar_url ? (
+                        <img src={s.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                      ) : (
+                        s.user_name?.charAt(0).toUpperCase() || 'U'
+                      )}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.user_name}
+                      </p>
+                      <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.user_email}
+                      </p>
+                    </div>
                   </div>
 
                   {/* IP */}
@@ -1600,8 +1618,15 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   </div>
 
                   {/* Exact Timestamp */}
-                  <div style={{ fontSize: '12px', color: '#B3B3B3' }}>
-                    {formatDateTime(s.created_at)}
+                  <div style={{ fontSize: '12px' }}>
+                    <p style={{ color: '#fff', fontWeight: 500 }}>
+                      {formatDateTime(s.last_active_at || s.created_at)}
+                    </p>
+                    {s.last_active_at && s.last_active_at !== s.created_at && (
+                      <p style={{ fontSize: '10px', color: '#8E8E93', marginTop: '2px' }}>
+                        Inició: {formatDateTime(s.created_at)}
+                      </p>
+                    )}
                   </div>
                 </div>
               ));
@@ -1956,7 +1981,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                         {s.ip_address}
                       </code>
                       <span style={{ color: '#6B6B6B', fontSize: '11px' }}>
-                        {formatDateTime(s.created_at)}
+                        {formatDateTime(s.last_active_at || s.created_at)}
                       </span>
                     </div>
                   </div>

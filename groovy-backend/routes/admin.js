@@ -737,6 +737,7 @@ router.get('/sessions', async (req, res) => {
         s.user_id, 
         u.name as user_name, 
         u.email as user_email, 
+        u.avatar_url,
         s.ip_address, 
         s.device_os, 
         s.browser, 
@@ -755,7 +756,7 @@ router.get('/sessions', async (req, res) => {
         s.session_duration_seconds
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      ORDER BY s.created_at DESC
+      ORDER BY COALESCE(s.last_active_at, s.created_at) DESC
       LIMIT ?
     `, [limit]);
 
