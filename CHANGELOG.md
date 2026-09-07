@@ -7,7 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.0.61] - 2026-09-06
 
-### Improved
+### Improved & Fixed
+- **Cuadrícula y Carátulas de Álbumes**:
+  - Corrección del aspecto de las carátulas en la vista de Álbumes (fijando proporción cuadrada `1:1` con `AspectRatio` para evitar estiramiento o deformaciones).
+  - Cuadrícula responsiva con cálculo dinámico de columnas tanto en escritorio como en dispositivos móviles.
 - **Letras estilo Apple Music**:
   - Ajuste de tipografía, tamaño de letra aumentado (`36px` activa / `30px` inactivas) y peso `FontWeight.w800`.
   - Espaciado generoso entre versos (`18px` vertical) y ajuste fino de interlineado y kerning estilo Apple Music.
