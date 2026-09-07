@@ -336,37 +336,53 @@ router.get('/users/:id', async (req, res) => {
 
     const user = userRows[0];
 
-    // Live playback presence
+    // Live playback presence (all active devices for this user)
     const [liveRows] = await pool.query(`
       SELECT song_id, title, artist, album, cover_art, duration, position, is_playing, 
              platform, device_name, device_model, os_version, country, city, ip_address, started_at, last_ping_at,
              TIMESTAMPDIFF(SECOND, last_ping_at, NOW()) as seconds_since_ping
       FROM user_live_playback 
       WHERE user_id = ? AND last_ping_at >= NOW() - INTERVAL 120 SECOND
-      LIMIT 1
+      ORDER BY last_ping_at DESC
     `, [id]);
 
-    const livePlayback = liveRows.length > 0 ? {
-      songId: liveRows[0].song_id,
-      title: liveRows[0].title,
-      artist: liveRows[0].artist,
-      album: liveRows[0].album,
-      coverArt: liveRows[0].cover_art,
-      duration: liveRows[0].duration,
-      position: liveRows[0].position,
-      isPlaying: liveRows[0].is_playing === 1 && liveRows[0].seconds_since_ping < 45,
-      platform: liveRows[0].platform,
-      deviceName: liveRows[0].device_name,
-      deviceModel: liveRows[0].device_model,
-      osVersion: liveRows[0].os_version,
-      country: liveRows[0].country,
-      city: liveRows[0].city,
-      ipAddress: liveRows[0].ip_address,
-      startedAt: liveRows[0].started_at,
-      lastPingAt: liveRows[0].last_ping_at,
-    } : null;
+    const livePlaybacks = liveRows.map(r => ({
+      songId: r.song_id,
+      title: r.title,
+      artist: r.artist,
+      album: r.album,
+      coverArt: r.cover_art,
+      duration: r.duration,
+      position: r.position,
+      isPlaying: r.is_playing === 1 && r.seconds_since_ping < 45,
+      platform: r.platform,
+      deviceName: r.device_name,
+      deviceModel: r.device_model,
+      osVersion: r.os_version,
+      country: r.country,
+      city: r.city,
+      ipAddress: r.ip_address,
+      startedAt: r.started_at,
+      lastPingAt: r.last_ping_at,
+    }));
 
-    // Login sessions / devices / IPs (last 50)
+    const livePlayback = livePlaybacks.length > 0 ? livePlaybacks[0] : null;
+
+    // Real aggregate counts directly from tables
+    const [countRows] = await pool.query(`
+      SELECT 
+        (SELECT COUNT(*) FROM playback_history WHERE user_id = ?) as total_plays,
+        (SELECT COUNT(*) FROM favorites WHERE user_id = ?) as total_favorites,
+        (SELECT COUNT(*) FROM playlists WHERE user_id = ?) as total_playlists,
+        (SELECT COUNT(*) FROM user_sessions WHERE user_id = ?) as total_sessions
+    `, [id, id, id, id]);
+
+    const totalPlays = countRows[0]?.total_plays || 0;
+    const totalFavorites = countRows[0]?.total_favorites || 0;
+    const totalPlaylists = countRows[0]?.total_playlists || 0;
+    const totalSessions = countRows[0]?.total_sessions || 0;
+
+    // Login sessions / devices / IPs (last 100)
     const [sessions] = await pool.query(
       `SELECT id, ip_address, device_os, browser, device_type, client_platform, 
               device_model, os_version, browser_version, country, country_code, city, region, isp,
@@ -374,7 +390,7 @@ router.get('/users/:id', async (req, res) => {
        FROM user_sessions 
        WHERE user_id = ? 
        ORDER BY created_at DESC 
-       LIMIT 50`,
+       LIMIT 100`,
       [id]
     );
 
@@ -384,19 +400,19 @@ router.get('/users/:id', async (req, res) => {
       [id]
     );
 
-    // User's favorites (last 50)
+    // User's favorites (last 100)
     const [favorites] = await pool.query(
-      'SELECT id, song_id, title, artist, album, cover_art, duration, created_at FROM favorites WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+      'SELECT id, song_id, title, artist, album, cover_art, duration, created_at FROM favorites WHERE user_id = ? ORDER BY created_at DESC LIMIT 100',
       [id]
     );
 
-    // User's playback history (last 50)
+    // User's playback history (last 100)
     const [history] = await pool.query(
       `SELECT id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address, played_at 
        FROM playback_history 
        WHERE user_id = ? 
        ORDER BY played_at DESC 
-       LIMIT 50`,
+       LIMIT 100`,
       [id]
     );
 
@@ -423,8 +439,16 @@ router.get('/users/:id', async (req, res) => {
         totalListenSeconds: user.total_listen_seconds || 0,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
+        totalPlays,
+      },
+      stats: {
+        plays: totalPlays,
+        favorites: totalFavorites,
+        playlists: totalPlaylists,
+        sessions: totalSessions,
       },
       livePlayback,
+      livePlaybacks,
       sessions,
       playlists,
       favorites,

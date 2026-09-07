@@ -40,30 +40,21 @@ router.post('/playback', async (req, res) => {
     const pool = getPool();
     const userId = req.user.id;
 
-    // 1. Upsert into user_live_playback
+    // 1. Log playback to user_live_playback without wiping other devices (Android vs Windows)
+    const deviceKey = `${userId}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
+
+    // Delete existing entry for this specific device if any, then insert fresh live state
+    await pool.query(`
+      DELETE FROM user_live_playback 
+      WHERE user_id = ? AND platform = ? AND (device_model = ? OR device_name = ? OR device_key = ?)
+    `, [userId, resolvedPlatform, client.deviceModel, resolvedDevice, deviceKey]);
+
     await pool.query(`
       INSERT INTO user_live_playback (
         user_id, song_id, title, artist, album, cover_art, duration, position, 
-        is_playing, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at
+        is_playing, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON DUPLICATE KEY UPDATE
-        song_id = VALUES(song_id),
-        title = VALUES(title),
-        artist = VALUES(artist),
-        album = VALUES(album),
-        cover_art = VALUES(cover_art),
-        duration = VALUES(duration),
-        position = VALUES(position),
-        is_playing = VALUES(is_playing),
-        platform = VALUES(platform),
-        device_name = VALUES(device_name),
-        ip_address = VALUES(ip_address),
-        device_model = VALUES(device_model),
-        os_version = VALUES(os_version),
-        country = VALUES(country),
-        city = VALUES(city),
-        last_ping_at = CURRENT_TIMESTAMP
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
     `, [
       userId,
       String(songId),
@@ -81,10 +72,32 @@ router.post('/playback', async (req, res) => {
       client.osVersion,
       geo.country,
       geo.city,
+      deviceKey,
     ]);
 
-    // 2. Accumulate listening seconds in users and active session if music is playing
+    // Cleanup stale live sessions older than 2 minutes
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 120 SECOND').catch(() => {});
+
+    // 2. Automatically log to playback_history if new song started
     const delta = Math.min(Math.max(parseInt(listenDeltaSeconds, 10) || 0, 0), 60);
+    if (isPlaying) {
+      try {
+        const [recentHistory] = await pool.query(
+          'SELECT id FROM playback_history WHERE user_id = ? AND song_id = ? AND played_at >= NOW() - INTERVAL 45 SECOND LIMIT 1',
+          [userId, String(songId)]
+        );
+        if (recentHistory.length === 0) {
+          await pool.query(
+            'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address, listen_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [userId, String(songId), title, artist || '', album || '', coverArt || '', parseInt(duration, 10) || 0, resolvedPlatform, resolvedDevice, client.ip, delta || 15]
+          );
+        }
+      } catch (histErr) {
+        console.warn('[Telemetry History Log Warning]:', histErr.message);
+      }
+    }
+
+    // 3. Accumulate listening seconds in users and active session if music is playing
     if (isPlaying && delta > 0) {
       await pool.query(`
         UPDATE users 
@@ -121,10 +134,11 @@ router.post('/playback', async (req, res) => {
             device_model = COALESCE(device_model, ?),
             os_version = COALESCE(os_version, ?),
             country = COALESCE(country, ?),
-            city = COALESCE(city, ?)
-        WHERE user_id = ? 
+            city = COALESCE(city, ?),
+            isp = COALESCE(isp, ?)
+        WHERE user_id = ? AND client_platform = ?
         ORDER BY id DESC LIMIT 1
-      `, [delta, client.deviceModel, client.osVersion, geo.country, geo.city, userId]);
+      `, [delta, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, userId, client.clientPlatform]);
     } else {
       await pool.query(`
         UPDATE users 
@@ -165,16 +179,16 @@ router.post('/ping', async (req, res) => {
     const platform = req.body?.platform || client.os;
     const deviceSummary = client.deviceSummary;
 
-    // Check if there is a session logged in the last 2 hours
+    // Check if there is a session logged FOR THIS SPECIFIC DEVICE / PLATFORM in the last 4 hours
     const [recentSession] = await pool.query(`
       SELECT id, created_at, last_active_at 
       FROM user_sessions 
-      WHERE user_id = ? AND created_at >= NOW() - INTERVAL 2 HOUR 
+      WHERE user_id = ? AND client_platform = ? AND (device_model = ? OR device_os = ?) AND created_at >= NOW() - INTERVAL 4 HOUR 
       ORDER BY id DESC LIMIT 1
-    `, [userId]);
+    `, [userId, client.clientPlatform, client.deviceModel, client.os]);
 
     if (recentSession.length > 0) {
-      // Update session last active time
+      // Update session last active time for this device
       await pool.query(`
         UPDATE user_sessions 
         SET last_active_at = CURRENT_TIMESTAMP,
@@ -182,11 +196,12 @@ router.post('/ping', async (req, res) => {
             device_model = COALESCE(device_model, ?),
             os_version = COALESCE(os_version, ?),
             country = COALESCE(country, ?),
-            city = COALESCE(city, ?)
+            city = COALESCE(city, ?),
+            isp = COALESCE(isp, ?)
         WHERE id = ?
-      `, [client.deviceModel, client.osVersion, geo.country, geo.city, recentSession[0].id]);
+      `, [client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, recentSession[0].id]);
     } else {
-      // Record new session with full device & geolocation
+      // Record new session with full device & geolocation for this device
       await pool.query(`
         INSERT INTO user_sessions (
           user_id, ip_address, user_agent, device_os, browser, device_type, client_platform,

@@ -42,34 +42,62 @@ const COUNTRY_NAMES = {
   IT: 'Italia',
 };
 
+let publicServerGeoCache = null;
+
 /**
- * Resolve location, city, country, region, and ISP from IP address
+ * Resolve location, city, country, region, and ISP from IP address with high-accuracy real-time provider lookup
  */
 async function resolveIpLocation(ip) {
   if (!ip) {
-    return { country: 'Desconocido', countryCode: 'XX', flag: '🌐', city: 'Desconocido', region: '', isp: '' };
+    return { country: 'Desconocido', countryCode: 'XX', flag: '🌐', city: 'Desconocido', region: '', isp: 'Desconocido' };
   }
 
-  // Handle local / private networks
   const cleanIp = ip.replace('::ffff:', '').trim();
-  if (
+  const isPrivateIp = 
     cleanIp === '127.0.0.1' ||
     cleanIp === '::1' ||
     cleanIp === 'localhost' ||
     cleanIp.startsWith('192.168.') ||
     cleanIp.startsWith('10.') ||
-    cleanIp.startsWith('172.16.') ||
-    cleanIp.startsWith('172.17.') ||
-    cleanIp.startsWith('172.18.') ||
-    cleanIp.startsWith('172.19.')
-  ) {
+    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(cleanIp);
+
+  // If local / private LAN IP, resolve through public network egress IP so admin sees real ISP & City
+  if (isPrivateIp) {
+    if (publicServerGeoCache) {
+      return { ...publicServerGeoCache, isLocalLan: true };
+    }
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch('https://ipwho.is/', { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success !== false) {
+          const flag = data.flag?.emoji || getCountryFlag(data.country_code);
+          const countryName = COUNTRY_NAMES[data.country_code] || data.country;
+          const ispName = data.connection?.isp || data.connection?.org || 'Proveedor Local';
+          publicServerGeoCache = {
+            country: `${flag} ${countryName}`,
+            countryCode: data.country_code,
+            flag,
+            city: data.city || 'Local',
+            region: data.region || '',
+            isp: ispName,
+          };
+          return { ...publicServerGeoCache, isLocalLan: true };
+        }
+      }
+    } catch (_) {}
+
     return {
-      country: 'Red Local / Servidor',
+      country: 'Red Local',
       countryCode: 'LAN',
       flag: '🏠',
       city: 'Localhost',
       region: 'Intranet',
-      isp: 'Red Local Privada',
+      isp: 'Red Local Wi-Fi',
+      isLocalLan: true,
     };
   }
 
@@ -80,34 +108,63 @@ async function resolveIpLocation(ip) {
 
   let locationData = null;
 
-  // 1. Try ip-api.com (has ISP, City, and Region name)
+  // 1. Try ipwho.is (Secure HTTPS, accurate ISP / Organization, City, Country, Region)
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 2000);
-    const res = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp`, {
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    const res = await fetch(`https://ipwho.is/${cleanIp}`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
     if (res.ok) {
       const data = await res.json();
-      if (data.status === 'success') {
-        const flag = getCountryFlag(data.countryCode);
-        const countryName = COUNTRY_NAMES[data.countryCode] || data.country;
+      if (data.success !== false) {
+        const flag = data.flag?.emoji || getCountryFlag(data.country_code);
+        const countryName = COUNTRY_NAMES[data.country_code] || data.country;
+        const ispName = data.connection?.isp || data.connection?.org || data.connection?.domain || '';
         locationData = {
           country: `${flag} ${countryName}`,
-          countryCode: data.countryCode,
+          countryCode: data.country_code,
           flag,
           city: data.city || 'Desconocido',
-          region: data.regionName || '',
-          isp: data.isp || '',
+          region: data.region || '',
+          isp: ispName,
         };
       }
     }
   } catch (e) {
-    // Network timeout or offline, fallback to geoip-lite below
+    // Fallback to secondary APIs
   }
 
-  // 2. Offline fallback with geoip-lite
+  // 2. Try ip-api.com as secondary provider
+  if (!locationData) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          const flag = getCountryFlag(data.countryCode);
+          const countryName = COUNTRY_NAMES[data.countryCode] || data.country;
+          const ispName = data.isp || data.org || '';
+          locationData = {
+            country: `${flag} ${countryName}`,
+            countryCode: data.countryCode,
+            flag,
+            city: data.city || 'Desconocido',
+            region: data.regionName || '',
+            isp: ispName,
+          };
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Offline fallback with geoip-lite
   if (!locationData) {
     try {
       const geo = geoip.lookup(cleanIp);
@@ -120,7 +177,7 @@ async function resolveIpLocation(ip) {
           flag,
           city: geo.city || 'Desconocido',
           region: geo.region || '',
-          isp: '',
+          isp: 'Proveedor de Internet',
         };
       }
     } catch (_) {}
@@ -133,7 +190,7 @@ async function resolveIpLocation(ip) {
       flag: '🌐',
       city: 'Desconocido',
       region: '',
-      isp: '',
+      isp: 'Desconocido',
     };
   }
 
@@ -146,8 +203,12 @@ async function resolveIpLocation(ip) {
  * Brand, Model, OS, OS Version, Browser, Client Platform
  */
 function parseFullClientInfo(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  let ip = forwarded ? forwarded.split(',')[0].trim() : (req.headers['x-real-ip'] || req.socket?.remoteAddress || '127.0.0.1');
+  const forwarded = req.headers['cf-connecting-ip'] || 
+                    req.headers['x-real-ip'] || 
+                    req.headers['x-client-ip'] || 
+                    req.headers['true-client-ip'] || 
+                    (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : null);
+  let ip = forwarded || req.socket?.remoteAddress || '127.0.0.1';
   if (ip.startsWith('::ffff:')) {
     ip = ip.replace('::ffff:', '');
   }

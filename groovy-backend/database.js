@@ -253,6 +253,21 @@ async function runMigrations(conn) {
   await addColToTable('user_live_playback', 'os_version', 'VARCHAR(255) NULL');
   await addColToTable('user_live_playback', 'country', 'VARCHAR(100) NULL');
   await addColToTable('user_live_playback', 'city', 'VARCHAR(100) NULL');
+  await addColToTable('user_live_playback', 'device_key', 'VARCHAR(255) NULL');
+
+  // Migrate user_live_playback to support simultaneous devices per user (Android + Windows)
+  try {
+    const [pkRows] = await conn.query(`
+      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_live_playback' AND CONSTRAINT_NAME = 'PRIMARY'
+    `);
+    if (pkRows.length === 1 && pkRows[0].COLUMN_NAME === 'user_id') {
+      await conn.query('ALTER TABLE user_live_playback DROP PRIMARY KEY, ADD PRIMARY KEY (user_id, platform, device_name)');
+      console.log('[Database] Migrated user_live_playback to multi-device composite key');
+    }
+  } catch (e) {
+    // Already migrated or managed
+  }
 
   // Promote danilorodelo355@gmail.com and initial admin to admin role
   try {

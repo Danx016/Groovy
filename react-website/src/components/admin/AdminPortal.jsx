@@ -892,9 +892,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       Reproduciendo Música Ahora ({nativeLiveListeners.length})
                     </h4>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {nativeLiveListeners.map((item) => (
+                      {nativeLiveListeners.map((item, idx) => (
                         <div
-                          key={item.userId}
+                          key={`${item.userId}_${item.platform}_${item.deviceModel || item.deviceName || idx}`}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                             background: '#202020', borderRadius: '12px', padding: '14px 18px',
@@ -1682,34 +1682,36 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               </button>
             </div>
 
-            {/* Live Playback Banner in Modal */}
-            {selectedUser.livePlayback?.isPlaying && (
-              <div style={{
-                background: 'linear-gradient(135deg, rgba(52,199,89,0.15), rgba(24,24,24,0.9))',
-                border: '1px solid rgba(52,199,89,0.4)', borderRadius: '12px',
-                padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  {selectedUser.livePlayback.coverArt ? (
-                    <img src={selectedUser.livePlayback.coverArt} alt="" style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Music size={20} color="#34C759" />
+            {/* Live Playback Banner(s) in Modal */}
+            {(selectedUser.livePlaybacks?.length > 0 ? selectedUser.livePlaybacks : (selectedUser.livePlayback ? [selectedUser.livePlayback] : []))
+              .filter(lp => lp?.isPlaying)
+              .map((lp, idx) => (
+                <div key={idx} style={{
+                  background: 'linear-gradient(135deg, rgba(52,199,89,0.15), rgba(24,24,24,0.9))',
+                  border: '1px solid rgba(52,199,89,0.4)', borderRadius: '12px',
+                  padding: '14px 18px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    {lp.coverArt ? (
+                      <img src={lp.coverArt} alt="" style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
+                    ) : (
+                      <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Music size={20} color="#34C759" />
+                      </div>
+                    )}
+                    <div>
+                      <span style={{ fontSize: '11px', color: '#34C759', fontWeight: 700, textTransform: 'uppercase' }}>
+                        🟢 Reproduciendo en vivo en {lp.platform} {lp.deviceModel ? `· ${lp.deviceModel}` : ''}
+                      </span>
+                      <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{lp.title}</p>
+                      <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{lp.artist}</p>
                     </div>
-                  )}
-                  <div>
-                    <span style={{ fontSize: '11px', color: '#34C759', fontWeight: 700, textTransform: 'uppercase' }}>
-                      Reproduciendo en vivo en {selectedUser.livePlayback.platform}
-                    </span>
-                    <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{selectedUser.livePlayback.title}</p>
-                    <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{selectedUser.livePlayback.artist}</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <span style={{ fontSize: '12px', color: '#B3B3B3' }}>IP: <code>{lp.ipAddress}</code></span>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <span style={{ fontSize: '12px', color: '#B3B3B3' }}>IP: <code>{selectedUser.livePlayback.ipAddress}</code></span>
-                </div>
-              </div>
-            )}
+              ))}
 
             {/* Detailed Metadata Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
@@ -1723,7 +1725,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
                 <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Canciones Escuchadas</span>
                 <p style={{ fontSize: '15px', fontWeight: 700, marginTop: '3px', color: '#34C759' }}>
-                  {selectedUser.history?.length || 0} tracks
+                  {selectedUser.stats?.plays ?? selectedUser.user?.totalPlays ?? selectedUser.history?.length ?? 0} canciones
                 </p>
               </div>
 
@@ -1831,7 +1833,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                 <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Historial de Canciones Escuchadas ({selectedUser.history?.length || 0})
+                  Historial de Canciones Escuchadas ({selectedUser.stats?.plays ?? selectedUser.user?.totalPlays ?? selectedUser.history?.length ?? 0} totales registradas)
                 </h4>
               </div>
               <div style={{ background: '#282828', borderRadius: '10px', maxHeight: '170px', overflowY: 'auto' }}>
