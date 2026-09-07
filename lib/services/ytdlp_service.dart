@@ -524,8 +524,18 @@ class YtDlpService {
     if (_detectionDone || Platform.isAndroid || Platform.isIOS) return;
     _detectionDone = true;
 
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
     final ytDlpCandidates = <String>[
-      'yt-dlp',
+      if (Platform.isWindows) ...[
+        '$exeDir/yt-dlp.exe',
+        '${Directory.current.path}/yt-dlp.exe',
+        'yt-dlp.exe',
+      ],
+      if (Platform.isLinux || Platform.isMacOS) ...[
+        '$exeDir/yt-dlp',
+        '${Directory.current.path}/yt-dlp',
+        'yt-dlp',
+      ],
       if (Platform.isMacOS) ...[
         '/opt/homebrew/bin/yt-dlp',
         '/usr/local/bin/yt-dlp',
@@ -538,9 +548,6 @@ class YtDlpService {
         '/usr/bin/yt-dlp',
         '/usr/local/bin/yt-dlp',
         '~/.local/bin/yt-dlp',
-      ],
-      if (Platform.isWindows) ...[
-        'yt-dlp.exe',
       ],
     ];
 
@@ -655,7 +662,42 @@ class YtDlpService {
       }
     }
 
-    // 2. Direct, lightning-fast pure-Dart Innertube manifest resolution
+    // 2. Desktop with bundled/detected yt-dlp: execute with resilient client args
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
+      try {
+        final result = await _runYtDlp([
+          '-j',
+          '-f',
+          'ba/b[acodec!=none]/best',
+          '--extractor-args',
+          'youtube:player_client=ios,android,mweb',
+          '--no-warnings',
+          '--no-check-certificates',
+          targetUrl,
+        ], timeout: const Duration(seconds: 10));
+
+        if (result != null && result.exitCode == 0) {
+          final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
+          final url = json['url'] as String?;
+          if (url != null && url.isNotEmpty) {
+            final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
+            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+            final ext = json['ext'] as String? ?? 'mp4';
+
+            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
+            _streamInfoCache[cleanId] = info;
+            _streamCacheTime[cleanId] = DateTime.now();
+            debugPrint('[yt-dlp/Desktop] Successfully resolved direct stream info for $cleanId');
+            return info;
+          }
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Desktop] Subprocess stream resolution error: $e');
+      }
+    }
+
+    // 3. Pure-Dart Innertube manifest resolution fallback
     final clientSets = [
       [yt.YoutubeApiClient.androidMusic, yt.YoutubeApiClient.mweb],
       [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],
@@ -688,40 +730,6 @@ class YtDlpService {
       } catch (e) {
         debugPrint('[yt-dlp] Innertube getManifest attempt error for $cleanId: $e');
       }
-    }
-
-    // 3. Fallback to subprocess (yt-dlp / Python) if available
-    final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
-    try {
-      final result = await _runYtDlp([
-        '-j',
-        '-f',
-        (!kIsWeb && Platform.isWindows)
-            ? 'ba[ext=m4a]/ba[ext=mp4]/ba/bestaudio'
-            : 'ba/b[acodec!=none]/bestaudio/best',
-        '--extractor-args', 'youtube:player_client=android_music,android,ios,mweb',
-        '--no-warnings',
-        '--no-check-certificates',
-        targetUrl,
-      ], timeout: const Duration(seconds: 10));
-
-      if (result != null && result.exitCode == 0) {
-        final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
-        final url = json['url'] as String?;
-        if (url != null && url.isNotEmpty) {
-          final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
-          final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
-          final ext = json['ext'] as String? ?? 'mp4';
-
-          final info = YtStreamInfo(url: url, headers: headers, ext: ext);
-          _streamInfoCache[cleanId] = info;
-          _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/Desktop Python] Successfully resolved stream info for $cleanId');
-          return info;
-        }
-      }
-    } catch (e) {
-      debugPrint('[yt-dlp/Desktop Python] Subprocess stream resolution error: $e');
     }
 
     throw Exception('No audio streams available for video $cleanId');

@@ -146,6 +146,10 @@ jobs:
       - name: Install NSIS
         run: choco install nsis -y
 
+      - name: Download bundled yt-dlp binary
+        run: |
+          curl.exe -L -o build\windows\x64\runner\Release\yt-dlp.exe https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+
       - name: Build NSIS Installer
         run: |
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
@@ -200,6 +204,11 @@ jobs:
             flutter build linux --release
           fi
       
+      - name: Download bundled yt-dlp for Linux
+        run: |
+          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o build/linux/x64/release/bundle/yt-dlp
+          sudo chmod a+rx build/linux/x64/release/bundle/yt-dlp
+
       - name: Upload Linux Build
         uses: actions/upload-artifact@v4
         with:

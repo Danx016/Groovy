@@ -308,11 +308,24 @@ class YoutubeService {
       final q = (song.artist != null && song.artist!.isNotEmpty)
           ? '${song.title} ${song.artist}'
           : song.title;
-      final results = await search(q, songCount: 1);
-      if (results.songs.isNotEmpty) {
-        return results.songs.first.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+      final dual = await _ytdlp.searchDual(q, limit: 5);
+      final musicList = dual['music'] ?? [];
+      for (final item in musicList) {
+        final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+          return id;
+        }
       }
-    } catch (_) {}
+      final ytList = dual['youtube'] ?? [];
+      for (final item in ytList) {
+        final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+          return id;
+        }
+      }
+    } catch (e) {
+      debugPrint('[YouTube] _resolvePlayableVideoId error for "${song.title}": $e');
+    }
     return cleanId;
   }
 
