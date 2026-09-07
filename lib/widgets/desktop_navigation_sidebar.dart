@@ -12,6 +12,7 @@ import '../screens/artists_screen.dart';
 import '../screens/albums_screen.dart';
 import '../screens/all_songs_screen.dart';
 import '../screens/account_screen.dart';
+import 'user_avatar.dart';
 
 class DesktopNavigationSidebar extends StatefulWidget {
   final int selectedIndex;
@@ -600,15 +601,6 @@ class _UserProfileBottomRow extends StatelessWidget {
     required this.onTap,
   });
 
-  String _getInitials(String name) {
-    if (name.trim().isEmpty) return 'U';
-    final parts = name.trim().split(RegExp(r'\s+'));
-    if (parts.length >= 2) {
-      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
-    }
-    return parts[0][0].toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -621,7 +613,6 @@ class _UserProfileBottomRow extends StatelessWidget {
             ? user.email.split('@').first
             : 'Leidy Francisco';
 
-    final initials = _getInitials(displayName);
     final hoverBg = isDark
         ? Colors.white.withValues(alpha: 0.08)
         : Colors.black.withValues(alpha: 0.06);
@@ -635,17 +626,10 @@ class _UserProfileBottomRow extends StatelessWidget {
           child: Container(
             height: 56,
             alignment: Alignment.center,
-            child: CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFF2A2B30),
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+            child: UserAvatar(
+              avatarUrl: user?.avatarUrl,
+              name: displayName,
+              size: 36,
             ),
           ),
         ),
@@ -660,17 +644,10 @@ class _UserProfileBottomRow extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 16),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFF2A2B30),
-              child: Text(
-                initials,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+            UserAvatar(
+              avatarUrl: user?.avatarUrl,
+              name: displayName,
+              size: 36,
             ),
             const SizedBox(width: 12),
             Expanded(
