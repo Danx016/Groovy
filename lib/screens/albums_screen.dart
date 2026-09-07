@@ -128,61 +128,68 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                           ),
                         ),
                       )
-                    : GridView.builder(
-                        padding: const EdgeInsets.all(16).copyWith(bottom: 120),
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 18.0,
-                          crossAxisSpacing: 16.0,
-                          childAspectRatio: 0.78,
-                        ),
-                        itemCount: displayed.length,
-                        itemBuilder: (context, index) {
-                          final album = displayed[index];
-                          return GestureDetector(
-                            onTap: () {
-                              NavigationHelper.push(
-                                context,
-                                AlbumScreen(albumId: album.id, album: album),
+                    : LayoutBuilder(
+                        builder: (context, constraints) {
+                          final width = constraints.maxWidth;
+                          final crossAxisCount = (width / 180).floor().clamp(2, 8);
+                          return GridView.builder(
+                            padding: const EdgeInsets.all(16).copyWith(bottom: 120),
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              mainAxisSpacing: 20.0,
+                              crossAxisSpacing: 16.0,
+                              childAspectRatio: 0.76,
+                            ),
+                            itemCount: displayed.length,
+                            itemBuilder: (context, index) {
+                              final album = displayed[index];
+                              return GestureDetector(
+                                onTap: () {
+                                  NavigationHelper.push(
+                                    context,
+                                    AlbumScreen(albumId: album.id, album: album),
+                                  );
+                                },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    AspectRatio(
+                                      aspectRatio: 1.0,
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child: AlbumArtwork(
+                                          coverArt: album.coverArt,
+                                          size: double.infinity,
+                                          borderRadius: 10,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      album.name,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: isDark ? Colors.white : Colors.black87,
+                                        letterSpacing: -0.2,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      album.artist ?? 'Varios Artistas',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        color: isDark ? Colors.white60 : Colors.black54,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
+                                ),
                               );
                             },
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: AlbumArtwork(
-                                      coverArt: album.coverArt,
-                                      size: double.infinity,
-                                      borderRadius: 10,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  album.name,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: isDark ? Colors.white : Colors.black87,
-                                    letterSpacing: -0.2,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 2),
-                                Text(
-                                  album.artist ?? 'Varios Artistas',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: isDark ? Colors.white60 : Colors.black54,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
                           );
                         },
                       ),

@@ -116,10 +116,11 @@ class AlbumArtwork extends StatelessWidget {
     String shadowLevel,
     String shadowColor,
   ) {
-    final validSize = size.isFinite && !size.isNaN ? size : 150.0;
+    final bool isFlexible = !size.isFinite || size.isNaN;
+    final validSize = isFlexible ? 150.0 : size;
 
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final cacheSize = (validSize * dpr).toInt().clamp(300, 1200);
+    final cacheSize = ((isFlexible ? 350.0 : validSize) * dpr).toInt().clamp(300, 1200);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final resolvedShadow = _resolvedShadow(
@@ -132,7 +133,7 @@ class AlbumArtwork extends StatelessWidget {
 
     if (preserveAspectRatio) {
       return Container(
-        constraints: BoxConstraints(maxWidth: validSize),
+        constraints: isFlexible ? null : BoxConstraints(maxWidth: validSize),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(resolvedRadius),
           boxShadow: resolvedShadow != null ? [resolvedShadow] : null,
@@ -145,12 +146,11 @@ class AlbumArtwork extends StatelessWidget {
     }
 
     return Container(
-      width: validSize,
-      height: validSize,
+      width: isFlexible ? double.infinity : validSize,
+      height: isFlexible ? double.infinity : validSize,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(resolvedRadius),
-
-        boxShadow: resolvedShadow != null && validSize > 60
+        boxShadow: resolvedShadow != null && (isFlexible || validSize > 60)
             ? [resolvedShadow]
             : null,
       ),
@@ -291,6 +291,7 @@ class AlbumArtwork extends StatelessWidget {
   }
 
   Widget _buildPlaceholder(bool isDark) {
+    final iconSize = size.isFinite ? (size / 3).clamp(16.0, 60.0) : 48.0;
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -304,7 +305,7 @@ class AlbumArtwork extends StatelessWidget {
       child: Center(
         child: Icon(
           Icons.music_note_rounded,
-          size: (size / 3).clamp(16.0, 60.0),
+          size: iconSize,
           color: isDark ? Colors.white24 : Colors.black12,
         ),
       ),

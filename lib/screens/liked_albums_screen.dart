@@ -84,26 +84,32 @@ class _LikedAlbumsScreenState extends State<LikedAlbumsScreen> {
   }
 
   Widget _buildAlbumsGrid() {
-    return GridView.builder(
-      padding: const EdgeInsets.all(16).copyWith(bottom: 150),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: _likedAlbums.length,
-      itemBuilder: (context, index) {
-        final album = _likedAlbums[index];
-        return AlbumCard(
-          album: album,
-          size: double.infinity,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AlbumScreen(albumId: album.id, album: album),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = (width / 180).floor().clamp(2, 8);
+        return GridView.builder(
+          padding: const EdgeInsets.all(16).copyWith(bottom: 150),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 20,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.76,
           ),
+          itemCount: _likedAlbums.length,
+          itemBuilder: (context, index) {
+            final album = _likedAlbums[index];
+            return AlbumCard(
+              album: album,
+              size: double.infinity,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AlbumScreen(albumId: album.id, album: album),
+                ),
+              ),
+            );
+          },
         );
       },
     );

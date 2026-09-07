@@ -39,7 +39,7 @@ class _AlbumCardState extends State<AlbumCard> {
         child: GestureDetector(
           onTap: widget.onTap,
           child: SizedBox(
-            width: widget.size,
+            width: widget.size.isFinite ? widget.size : null,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -61,25 +61,30 @@ class _AlbumCardState extends State<AlbumCard> {
                             ]
                           : [],
                     ),
-                  child: Stack(
-                    children: [
-                      AlbumArtwork(
-                        coverArt: widget.album.coverArt,
-                        size: widget.size,
-                        borderRadius: 8,
-                      ),
-                      if (_isHovered && widget.onPlayPressed != null)
-                        Positioned(
-                          bottom: 8,
-                          right: 8,
-                          child: _PlayButton(
-                            onPressed: widget.onPlayPressed!,
+                    child: AspectRatio(
+                      aspectRatio: 1.0,
+                      child: Stack(
+                        children: [
+                          Positioned.fill(
+                            child: AlbumArtwork(
+                              coverArt: widget.album.coverArt,
+                              size: widget.size,
+                              borderRadius: 8,
+                            ),
                           ),
-                        ),
-                    ],
+                          if (_isHovered && widget.onPlayPressed != null)
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: _PlayButton(
+                                onPressed: widget.onPlayPressed!,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
               const SizedBox(height: 8),
               Row(
                 children: [
