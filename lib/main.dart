@@ -13,6 +13,7 @@ import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 import 'l10n/app_localizations.dart';
 import 'services/services.dart';
+import 'services/windows_title_bar_service.dart';
 import 'services/audio_handler.dart';
 import 'services/transcoding_service.dart';
 import 'services/local_music_service.dart';
@@ -171,6 +172,10 @@ void main() async {
       await windowManager.setTitle('Groovy');
       await windowManager.show();
       await windowManager.focus();
+      if (Platform.isWindows) {
+        WindowsTitleBarService().initialize();
+        WindowsTitleBarService().updateTheme(isDark: true);
+      }
     });
   }
 
@@ -341,6 +346,17 @@ class GroovyApp extends StatelessWidget {
           supportedLocales: AppLocalizations.supportedLocales,
           home: const AuthWrapper(),
           navigatorObservers: [AnalyticsNavigatorObserver()],
+          builder: (context, child) {
+            if (!kIsWeb && Platform.isWindows) {
+              final isDark = Theme.of(context).brightness == Brightness.dark;
+              WindowsTitleBarService().updateTheme(
+                isDark: isDark,
+                customBackgroundColor:
+                    isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+              );
+            }
+            return child ?? const SizedBox.shrink();
+          },
         );
       },
     );

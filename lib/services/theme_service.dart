@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'windows_title_bar_service.dart';
+
 enum AccentColor {
   red,
   pink,
@@ -98,6 +100,12 @@ class ThemeService extends ChangeNotifier {
 
   Future<void> setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
+    final isDark = mode == ThemeMode.dark;
+    WindowsTitleBarService().updateTheme(
+      isDark: isDark,
+      customBackgroundColor:
+          isDark ? const Color(0xFF000000) : const Color(0xFFFFFFFF),
+    );
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyThemeMode, _themeModeToKey(mode));
