@@ -251,22 +251,13 @@ function parseFullClientInfo(req) {
   // 3. Detect Real Device Model (from custom headers sent by app or extracted from UA)
   let deviceModel = customDeviceModel || '';
   if (!deviceModel) {
-    // Check if UA contains explicit device model (e.g. "; Android 13; Infinix X678B Build/...")
     const androidModelMatch = ua.match(/;\s*([^;]+?)\s*Build\//i);
     if (androidModelMatch && androidModelMatch[1]) {
       deviceModel = androidModelMatch[1].trim();
-    } else if (/iphone/i.test(ua)) {
-      deviceModel = 'iPhone';
-    } else if (/ipad/i.test(ua)) {
-      deviceModel = 'iPad';
-    } else if (os === 'Windows') {
-      deviceModel = 'Windows PC';
-    } else if (os === 'macOS') {
-      deviceModel = 'Mac';
-    } else if (os === 'Linux') {
-      deviceModel = 'Linux PC';
+    } else if (os) {
+      deviceModel = os;
     } else {
-      deviceModel = `${os} Device`;
+      deviceModel = 'Desconocido';
     }
   }
 
