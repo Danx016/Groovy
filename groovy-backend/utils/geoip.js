@@ -13,18 +13,6 @@ function getCountryFlag(countryCode) {
   return String.fromCodePoint(...codePoints);
 }
 
-function cleanIspName(isp = '', org = '', countryCode = '') {
-  let name = (org && org !== 'Desconocido' ? org : isp) || 'Desconocido';
-  if (countryCode === 'CO' || /colombia/i.test(name)) {
-    if (/ufinet/i.test(name)) {
-      return 'Ufinet Colombia';
-    }
-  }
-  name = name.replace(/\bPANAMA\s+S\.?A\.?/i, '').replace(/\bCOLOMBIA,\s*S\.?\s*A\.?/i, 'Colombia').trim();
-  if (!name) name = isp || org || 'Desconocido';
-  return name;
-}
-
 let publicServerGeoCache = null;
 
 /**
@@ -65,14 +53,13 @@ async function resolveIpLocation(ip) {
         const data = await res.json();
         if (data.status === 'success') {
           const flag = getCountryFlag(data.countryCode);
-          const ispClean = cleanIspName(data.isp, data.org, data.countryCode);
           publicServerGeoCache = {
             country: `${flag} ${data.country}`,
             countryCode: data.countryCode,
             flag,
             city: data.city || 'Desconocido',
             region: data.regionName || '',
-            isp: ispClean,
+            isp: data.org || data.isp || 'Desconocido',
             realIp: data.query,
             isLocalLan: true,
           };
@@ -90,14 +77,13 @@ async function resolveIpLocation(ip) {
         const data = await res.json();
         if (data.success !== false) {
           const flag = data.flag?.emoji || getCountryFlag(data.country_code);
-          const ispClean = cleanIspName(data.connection?.isp, data.connection?.org, data.country_code);
           publicServerGeoCache = {
             country: `${flag} ${data.country}`,
             countryCode: data.country_code,
             flag,
             city: data.city || 'Desconocido',
             region: data.region || '',
-            isp: ispClean,
+            isp: data.connection?.org || data.connection?.isp || 'Desconocido',
             realIp: data.ip,
             isLocalLan: true,
           };
@@ -136,14 +122,13 @@ async function resolveIpLocation(ip) {
       const data = await res.json();
       if (data.status === 'success') {
         const flag = getCountryFlag(data.countryCode);
-        const ispClean = cleanIspName(data.isp, data.org, data.countryCode);
         locationData = {
           country: `${flag} ${data.country}`,
           countryCode: data.countryCode,
           flag,
           city: data.city || 'Desconocido',
           region: data.regionName || '',
-          isp: ispClean,
+          isp: data.org || data.isp || 'Desconocido',
         };
       }
     }
@@ -162,14 +147,13 @@ async function resolveIpLocation(ip) {
         const data = await res.json();
         if (data.success !== false) {
           const flag = data.flag?.emoji || getCountryFlag(data.country_code);
-          const ispClean = cleanIspName(data.connection?.isp, data.connection?.org, data.country_code);
           locationData = {
             country: `${flag} ${data.country}`,
             countryCode: data.country_code,
             flag,
             city: data.city || 'Desconocido',
             region: data.region || '',
-            isp: ispClean,
+            isp: data.connection?.org || data.connection?.isp || 'Desconocido',
           };
         }
       }
