@@ -1,55 +1,21 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/models/models.dart';
-import 'package:groovy/services/subsonic_service.dart';
+import 'package:groovy/services/youtube_service.dart';
 import '../bootstrap.dart';
 
 void main() {
   initializeTestEnvironment();
   group('Security Tests', () {
-    group('ServerConfig input validation', () {
-      test('should reject empty server URL', () {
-        final config =
-            ServerConfig(serverUrl: '', username: 'u', password: 'p');
-        expect(config.serverUrl.isEmpty, true);
-      });
-
-      test('should reject overly long URLs', () {
-        final longUrl = 'http://example.com/${'a' * 2100}';
-        expect(longUrl.length, greaterThan(2048));
-      });
-
-      test('should not allow javascript: scheme', () {
-        const evilUrl = 'javascript:alert(1)';
-        expect(evilUrl.startsWith('javascript:'), true);
-      });
-
-      test('should not allow file: scheme for remote server', () {
-        const evilUrl = 'file:///etc/passwd';
-        expect(evilUrl.startsWith('file:'), true);
-      });
-    });
-
-    group('SubsonicService URL safety', () {
-      late SubsonicService service;
+    group('YouTube stream safety', () {
+      late YoutubeService service;
 
       setUp(() {
-        service = SubsonicService();
-        service.configure(
-          ServerConfig(
-              serverUrl: 'http://localhost:4533', username: 'u', password: 'p'),
-        );
+        service = YoutubeService();
       });
 
-      test('resolveStreamUrl should not contain unescaped credentials',
-          () async {
-        final song = Song(id: '1', title: 'Test');
-        try {
-          final url = await service.resolveStreamUrlAsync(song);
-          expect(url.contains('password='), false,
-              reason: 'URL must not expose password');
-        } catch (_) {
-          // Network may fail in test env, we only care about URL format
-        }
+      test('getCoverArtUrl should sanitize input', () {
+        final url = service.getCoverArtUrl(null);
+        expect(url, '');
       });
 
       test('should handle malformed song IDs gracefully', () {

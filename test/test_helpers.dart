@@ -39,21 +39,26 @@ class FakeCastService extends CastService {
 
 Widget createTestApp({
   required Widget child,
-  SubsonicService? subsonicService,
+  YoutubeService? youtubeService,
   StorageService? storageService,
   PlayerProvider? playerProvider,
   LibraryProvider? libraryProvider,
   AuthProvider? authProvider,
 }) {
-  final service = subsonicService ?? SubsonicService();
+  final service = youtubeService ?? YoutubeService();
   final storage = storageService ?? StorageService();
 
   return MultiProvider(
     providers: [
-      Provider<SubsonicService>.value(value: service),
+      Provider<YoutubeService>.value(value: service),
       Provider<StorageService>.value(value: storage),
+      ChangeNotifierProvider<ThemeService>(create: (_) => ThemeService()),
+      ChangeNotifierProvider<LocaleService>(create: (_) => LocaleService()),
+      ChangeNotifierProvider<RecommendationService>(
+        create: (_) => RecommendationService(),
+      ),
       ChangeNotifierProvider<AuthProvider>(
-        create: (_) => authProvider ?? AuthProvider(service, storage),
+        create: (_) => authProvider ?? AuthProvider(storage),
       ),
       ChangeNotifierProvider<PlayerProvider>(
         create: (_) =>

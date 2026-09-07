@@ -146,7 +146,6 @@ class _MainScreenState extends State<MainScreen> {
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final changelog = UpdateService.stripMarkdown(release.body);
-    final apkUrl = release.apkDownloadUrl;
 
     showDialog<void>(
       context: context,

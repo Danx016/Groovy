@@ -195,7 +195,7 @@ class _LyricsListViewState extends State<LyricsListView> {
       if (keyContext != null) {
         final renderObject = keyContext.findRenderObject();
         if (renderObject is RenderBox && _scrollController.hasClients && renderObject.attached) {
-          final viewport = RenderAbstractViewport.of(renderObject);
+          final viewport = RenderAbstractViewport.maybeOf(renderObject);
           if (viewport == null) return;
           final targetOffset = viewport.getOffsetToReveal(renderObject, 0.24).offset;
           final clamped = targetOffset.clamp(

@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:groovy/models/song.dart';
 import 'package:groovy/providers/player_provider.dart';
-import 'package:groovy/services/subsonic_service.dart';
+import 'package:groovy/services/youtube_service.dart';
 import 'package:groovy/services/storage_service.dart';
 import 'package:groovy/services/upnp_service.dart';
 import 'package:groovy/services/audio_handler.dart';
@@ -15,17 +15,19 @@ import '../bootstrap.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:groovy/l10n/app_localizations.dart';
+
 void main() {
   initializeTestEnvironment();
   group('SongTile', () {
-    late SubsonicService subsonicService;
+    late YoutubeService youtubeService;
     late PlayerProvider playerProvider;
 
     setUp(() {
       SharedPreferences.setMockInitialValues({});
-      subsonicService = SubsonicService();
+      youtubeService = YoutubeService();
       playerProvider = PlayerProvider(
-        subsonicService,
+        youtubeService,
         StorageService(),
         FakeCastService(),
         UpnpService(),
@@ -33,10 +35,6 @@ void main() {
         JukeboxService(),
         TranscodingService(),
       );
-    });
-
-    tearDown(() {
-      playerProvider.dispose();
     });
 
     testWidgets('should display song information', (tester) async {
@@ -49,14 +47,10 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            Provider<SubsonicService>.value(value: subsonicService),
-            ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
-          ],
-          child: MaterialApp(
-            home: Scaffold(body: SongTile(song: song, showArtist: true)),
-          ),
+        createTestApp(
+          youtubeService: youtubeService,
+          playerProvider: playerProvider,
+          child: SongTile(song: song, showArtist: true),
         ),
       );
 
@@ -73,14 +67,10 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            Provider<SubsonicService>.value(value: subsonicService),
-            ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
-          ],
-          child: MaterialApp(
-            home: Scaffold(body: SongTile(song: song, showDuration: true)),
-          ),
+        createTestApp(
+          youtubeService: youtubeService,
+          playerProvider: playerProvider,
+          child: SongTile(song: song, showDuration: true),
         ),
       );
 
@@ -96,16 +86,10 @@ void main() {
       );
 
       await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            Provider<SubsonicService>.value(value: subsonicService),
-            ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
-          ],
-          child: MaterialApp(
-            home: Scaffold(
-              body: SongTile(song: song, showArtist: true, showAlbum: true),
-            ),
-          ),
+        createTestApp(
+          youtubeService: youtubeService,
+          playerProvider: playerProvider,
+          child: SongTile(song: song, showArtist: true, showAlbum: true),
         ),
       );
 

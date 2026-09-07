@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/models/song.dart';
 import 'package:groovy/providers/player_provider.dart';
-import 'package:groovy/services/subsonic_service.dart';
+import 'package:groovy/services/youtube_service.dart';
 import 'package:groovy/services/storage_service.dart';
 import 'package:groovy/services/upnp_service.dart';
 import 'package:groovy/services/audio_handler.dart';
@@ -14,14 +14,14 @@ import '../bootstrap.dart';
 void main() {
   initializeTestEnvironment();
   group('PlayerProvider', () {
-    late SubsonicService subsonicService;
+    late YoutubeService youtubeService;
     late PlayerProvider playerProvider;
 
     setUp(() {
       SharedPreferences.setMockInitialValues({});
-      subsonicService = SubsonicService();
+      youtubeService = YoutubeService();
       playerProvider = PlayerProvider(
-        subsonicService,
+        youtubeService,
         StorageService(),
         FakeCastService(),
         UpnpService(),

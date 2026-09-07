@@ -3,8 +3,6 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../services/groovy_api_service.dart';
-import '../services/library_database_service.dart';
-import '../services/recommendation_service.dart';
 
 enum AuthState {
   unknown,
@@ -23,10 +21,24 @@ class AuthProvider extends ChangeNotifier {
   String? _error;
   GroovyUser? _currentUser;
   String? _token;
+  bool _disposed = false;
 
-  AuthProvider([dynamic _, StorageService? storageService])
-      : _storageService = (storageService ?? (_ is StorageService ? _ : StorageService())) {
+  AuthProvider([dynamic legacyParam, StorageService? storageService])
+      : _storageService = (storageService ?? (legacyParam is StorageService ? legacyParam : StorageService())) {
     _loadSavedSession();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+
+  @override
+  void notifyListeners() {
+    if (!_disposed) {
+      super.notifyListeners();
+    }
   }
 
   AuthState get state => _state;

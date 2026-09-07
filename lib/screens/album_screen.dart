@@ -247,11 +247,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
     }
   }
 
-  Future<void> _cancelDownload() async {
-    if (_album == null) return;
-    await OfflineService().cancelPlaylistDownload(_album!.id);
-  }
-
   Future<void> _removeDownloads() async {
     if (_songs.isEmpty || _album == null) return;
     final confirmed = await showDialog<bool>(
@@ -272,32 +267,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
       await OfflineService().cancelPlaylistDownload(_album!.id);
       await OfflineService().deletePlaylistDownloads(_songs);
     }
-  }
-
-  Widget _buildDownloadButton(BuildContext context) {
-    if (_allDownloaded) {
-      return IconButton(
-        tooltip: 'Downloaded — tap to remove',
-        onPressed: _removeDownloads,
-        icon: const Icon(Icons.cloud_done, color: Colors.green),
-      );
-    }
-    if (_isQueued) {
-      return IconButton(
-        tooltip: 'Downloading — tap to cancel',
-        onPressed: _cancelDownload,
-        icon: const SizedBox(
-          width: 20,
-          height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
-      );
-    }
-    return IconButton(
-      tooltip: 'Download album',
-      onPressed: _downloadAlbum,
-      icon: const Icon(CupertinoIcons.cloud_download),
-    );
   }
 
   Future<void> _toggleLike() async {
@@ -698,9 +667,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
     );
     final hours = totalDuration ~/ 3600;
     final minutes = (totalDuration % 3600) ~/ 60;
-
-    final isOffline = Provider.of<AuthProvider>(context, listen: false).state ==
-        AuthState.offlineMode;
 
     return Scaffold(
       body: Stack(

@@ -1,3 +1,4 @@
+// ignore_for_file: experimental_member_use
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -113,12 +114,22 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   }
 
   StreamAudioResponse _buildResponse(HttpClientResponse resp, int start, String ext) {
-    final total = resp.contentLength >= 0 ? resp.contentLength + start : null;
+    int? sourceLength;
+    final contentRange = resp.headers.value('content-range');
+    if (contentRange != null) {
+      final slashIndex = contentRange.lastIndexOf('/');
+      if (slashIndex != -1) {
+        final totalStr = contentRange.substring(slashIndex + 1).trim();
+        sourceLength = int.tryParse(totalStr);
+      }
+    }
+    sourceLength ??= resp.contentLength >= 0 ? resp.contentLength + start : null;
+
     final isWebm = (ext == 'webm' || ext == 'opus');
     final type = isWebm ? 'audio/webm' : 'audio/mp4';
 
     return StreamAudioResponse(
-      sourceLength: total,
+      sourceLength: sourceLength,
       contentLength: resp.contentLength >= 0 ? resp.contentLength : null,
       offset: start,
       stream: resp,

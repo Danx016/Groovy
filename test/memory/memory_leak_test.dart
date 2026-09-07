@@ -18,10 +18,10 @@ void main() {
     testWidgets('PlayerProvider should dispose without leaking', (
       WidgetTester tester,
     ) async {
-      final subsonic = SubsonicService();
+      final youtube = YoutubeService();
       final storage = StorageService();
       final provider = PlayerProvider(
-        subsonic,
+        youtube,
         storage,
         FakeCastService(),
         UpnpService(),
@@ -45,9 +45,8 @@ void main() {
     testWidgets('AuthProvider should dispose cleanly', (
       WidgetTester tester,
     ) async {
-      final subsonic = SubsonicService();
       final storage = StorageService();
-      final provider = AuthProvider(subsonic, storage);
+      final provider = AuthProvider(storage);
 
       await tester.pumpWidget(
         ChangeNotifierProvider<AuthProvider>.value(
@@ -63,8 +62,8 @@ void main() {
     testWidgets('LibraryProvider should dispose cleanly', (
       WidgetTester tester,
     ) async {
-      final subsonic = SubsonicService();
-      final provider = LibraryProvider(subsonic, MuslyAudioHandler());
+      final youtube = YoutubeService();
+      final provider = LibraryProvider(youtube, MuslyAudioHandler());
 
       await tester.pumpWidget(
         ChangeNotifierProvider<LibraryProvider>.value(

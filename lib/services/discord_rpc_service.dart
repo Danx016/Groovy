@@ -3,7 +3,6 @@ import 'package:flutter/foundation.dart';
 import 'storage_service.dart';
 
 class DiscordRpcService {
-  static const String _applicationId = '1465763539246645252';
   final StorageService _storageService;
 
   bool _initialized = false;
@@ -16,16 +15,11 @@ class DiscordRpcService {
         (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       try {
         _enabled = await _storageService.getDiscordRpcEnabled();
+        _initialized = true;
       } catch (e) {
         debugPrint('Discord RPC initialization failed: $e');
       }
     }
-  }
-
-  void _startRpc() {
-    if (_initialized) return;
-    _initialized = true;
-    debugPrint('Discord RPC started');
   }
 
   void shutdown() {
@@ -57,7 +51,7 @@ class DiscordRpcService {
         !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       return;
     }
-    if (!_enabled) return;
+    if (!_initialized || !_enabled) return;
   }
 
   void clearPresence() {
@@ -65,6 +59,7 @@ class DiscordRpcService {
         !(Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       return;
     }
+    if (!_initialized || !_enabled) return;
     debugPrint('Clearing Discord Presence');
   }
 }

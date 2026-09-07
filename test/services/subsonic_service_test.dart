@@ -1,98 +1,35 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:groovy/models/server_config.dart';
-import 'package:groovy/services/subsonic_service.dart';
+import 'package:groovy/services/youtube_service.dart';
 
 void main() {
-  group('SubsonicService', () {
-    late SubsonicService service;
+  group('YoutubeService', () {
+    late YoutubeService service;
 
     setUp(() {
       TestWidgetsFlutterBinding.ensureInitialized();
       SharedPreferences.setMockInitialValues({});
-      service = SubsonicService();
+      service = YoutubeService();
     });
 
-    test('should initialize without configuration', () {
-      expect(service.isConfigured, false);
-      expect(service.config, isNull);
+    test('should initialize and be configured for YouTube', () {
+      expect(service.isYoutube, isTrue);
+      expect(service.isConfigured, isTrue);
     });
 
-    test('should configure with ServerConfig', () async {
-      final config = ServerConfig(
-        serverUrl: 'https://demo.navidrome.org',
-        username: 'demo',
-        password: 'demo',
-      );
-
-      await service.configure(config);
-
-      expect(service.isConfigured, true);
-      expect(service.config, isNotNull);
-      expect(service.config?.serverUrl, config.serverUrl);
+    test('should build cover art URL correctly for YouTube video ID', () {
+      final url = service.getCoverArtUrl('dQw4w9WgXcQ', size: 300);
+      expect(url, equals('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'));
     });
 
-    test('should build cover art URL', () async {
-      final config = ServerConfig(
-        serverUrl: 'https://demo.navidrome.org',
-        username: 'demo',
-        password: 'demo',
-      );
-
-      await service.configure(config);
-
-      final url = service.getCoverArtUrl('art123', size: 300);
-
-      expect(url, contains('https://demo.navidrome.org/rest/getCoverArt'));
-      expect(url, contains('id=art123'));
-      expect(url, contains('size=300'));
+    test('should return original URL if already full HTTP URL', () {
+      const input = 'https://lh3.googleusercontent.com/test=w120-h120';
+      final url = service.getCoverArtUrl(input);
+      expect(url, contains('https://lh3.googleusercontent.com/test'));
     });
-
-    test('should return empty URL when coverArt is null', () async {
-      final config = ServerConfig(
-        serverUrl: 'https://demo.navidrome.org',
-        username: 'demo',
-        password: 'demo',
-      );
-
-      await service.configure(config);
-
+    test('should return empty URL when coverArt is null', () {
       final url = service.getCoverArtUrl(null);
       expect(url, '');
-    });
-
-    test('should build stream URL', () async {
-      final config = ServerConfig(
-        serverUrl: 'https://demo.navidrome.org',
-        username: 'demo',
-        password: 'demo',
-      );
-
-      await service.configure(config);
-
-      final url = service.getStreamUrl('song123');
-
-      expect(url, contains('https://demo.navidrome.org/rest/stream'));
-      expect(url, contains('id=song123'));
-    });
-
-    test('should include maxBitRate in stream URL when specified', () async {
-      final config = ServerConfig(
-        serverUrl: 'https://demo.navidrome.org',
-        username: 'demo',
-        password: 'demo',
-      );
-
-      await service.configure(config);
-
-      final url = service.getStreamUrl('song123', maxBitRate: 320);
-
-      expect(url, contains('maxBitRate=320'));
-    });
-
-    test('should throw when not configured', () {
-      expect(() => service.getCoverArtUrl('art123'), returnsNormally);
-      expect(() => service.getStreamUrl('song123'), throwsException);
     });
   });
 }

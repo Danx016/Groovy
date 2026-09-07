@@ -12,7 +12,6 @@ import 'package:safe_device/safe_device.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 import 'l10n/app_localizations.dart';
-import 'models/server_config.dart';
 import 'services/services.dart';
 import 'services/audio_handler.dart';
 import 'services/transcoding_service.dart';
@@ -379,6 +378,14 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showPrivacyPolicyIfNeeded();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
