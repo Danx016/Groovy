@@ -255,21 +255,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
   const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
     const str = `${os} ${browser} ${deviceType}`.toLowerCase();
-    if (
-      str.includes('android') ||
-      str.includes('infinix') ||
-      str.includes('samsung') ||
-      str.includes('xiaomi') ||
-      str.includes('redmi') ||
-      str.includes('huawei') ||
-      str.includes('pixel') ||
-      str.includes('motorola') ||
-      str.includes('oppo') ||
-      str.includes('vivo') ||
-      str.includes('realme') ||
-      str.includes('phone') ||
-      str.includes('mobile')
-    ) {
+    if (str.includes('android') || str.includes('phone') || str.includes('mobile')) {
       return <Smartphone size={16} style={{ color: '#34C759' }} />;
     }
     if (str.includes('ios') || str.includes('iphone')) {
