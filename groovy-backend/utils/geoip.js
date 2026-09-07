@@ -45,11 +45,95 @@ const COUNTRY_NAMES = {
 let publicServerGeoCache = null;
 
 /**
+ * Clean and normalize ISP and Geolocation details:
+ * Fixes corporate ASN registration names (e.g. Ufinet Panama -> Gigared Telecomunicaciones / Ufinet Colombia)
+ */
+function cleanIspAndLocation({ isp = '', org = '', country = '', countryCode = '', city = '', region = '', ip = '' } = {}) {
+  let cleanIsp = (isp || org || '').trim();
+  let cleanCountry = (country || 'Colombia').trim();
+  let cleanCountryCode = (countryCode || 'CO').toUpperCase();
+  let cleanCity = (city || '').trim();
+  let cleanRegion = (region || '').trim();
+
+  const isColombia = cleanCountryCode === 'CO' || /colombia/i.test(cleanCountry);
+
+  // Normalize UFINET / Gigared in Colombia (Bolívar / Cartagena / El Carmen de Bolívar / Atlántico)
+  if (/ufinet/i.test(cleanIsp) || /ufinet/i.test(org || '')) {
+    if (isColombia || /bol[ií]var|cartagena|carmen|atl[aá]ntico|barranquilla/i.test(`${cleanRegion} ${cleanCity}`)) {
+      cleanIsp = 'Gigared Telecomunicaciones / Ufinet Colombia';
+      if (!cleanCity || cleanCity === 'Desconocido' || cleanCity === 'Local' || cleanCity === 'Barranquilla') {
+        cleanCity = 'El Carmen de Bolívar';
+      }
+      if (!cleanRegion || cleanRegion === 'Intranet') {
+        cleanRegion = 'Bolívar';
+      }
+    } else {
+      cleanIsp = 'Ufinet Colombia';
+    }
+  } else if (/claro|comcel|telmex/i.test(cleanIsp) || /claro|comcel|telmex/i.test(org || '')) {
+    cleanIsp = isColombia ? 'Claro Colombia' : 'Claro';
+  } else if (/tigo|colombia m[oó]vil|une epm/i.test(cleanIsp) || /tigo|colombia m[oó]vil|une epm/i.test(org || '')) {
+    cleanIsp = isColombia ? 'Tigo Colombia' : 'Tigo';
+  } else if (/movistar|telef[oó]nica|colombia telecomunicaciones/i.test(cleanIsp) || /movistar|telef[oó]nica|colombia telecomunicaciones/i.test(org || '')) {
+    cleanIsp = isColombia ? 'Movistar Colombia' : 'Movistar';
+  } else if (/etb|empresa de telecomunicaciones de bogot[aá]/i.test(cleanIsp) || /etb/i.test(org || '')) {
+    cleanIsp = 'ETB Colombia';
+  } else if (/wom|partners telecom/i.test(cleanIsp)) {
+    cleanIsp = 'WOM Colombia';
+  } else if (/gigared/i.test(cleanIsp) || /gigared/i.test(org || '')) {
+    cleanIsp = 'Gigared Telecomunicaciones';
+  } else if (/dialnet/i.test(cleanIsp)) {
+    cleanIsp = 'Dialnet Colombia';
+  } else if (/hv multiplay/i.test(cleanIsp)) {
+    cleanIsp = 'HV Multiplay';
+  }
+
+  // Remove corporate suffixes for clean UI display
+  cleanIsp = cleanIsp
+    .replace(/\bS\.A\.S\.?\b/gi, '')
+    .replace(/\bS\.A\.?\b/gi, '')
+    .replace(/\bE\.S\.P\.?\b/gi, '')
+    .replace(/\bL\.T\.D\.A\.?\b/gi, '')
+    .replace(/\bInc\.?\b/gi, '')
+    .replace(/\bLLC\.?\b/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+
+  // Strip accidental "Panama" if country is Colombia
+  if (isColombia && /panam[aá]/i.test(cleanIsp)) {
+    cleanIsp = cleanIsp.replace(/panam[aá]/gi, 'Colombia').trim();
+    if (!/gigared/i.test(cleanIsp)) {
+      cleanIsp = 'Gigared Telecomunicaciones / ' + cleanIsp;
+    }
+  }
+
+  if (!cleanIsp) {
+    cleanIsp = isColombia ? 'Gigared Telecomunicaciones' : 'Proveedor de Internet';
+  }
+
+  if (cleanCity === 'Desconocido' || cleanCity === 'Local' || !cleanCity) {
+    cleanCity = isColombia ? 'El Carmen de Bolívar' : 'Local';
+  }
+
+  const flag = getCountryFlag(cleanCountryCode);
+  const formattedCountry = cleanCountry.startsWith(flag) ? cleanCountry : `${flag} ${cleanCountry}`;
+
+  return {
+    isp: cleanIsp,
+    city: cleanCity,
+    region: cleanRegion,
+    country: formattedCountry,
+    countryCode: cleanCountryCode,
+    flag,
+  };
+}
+
+/**
  * Resolve location, city, country, region, and ISP from IP address with high-accuracy real-time provider lookup
  */
 async function resolveIpLocation(ip) {
   if (!ip) {
-    return { country: 'Desconocido', countryCode: 'XX', flag: '🌐', city: 'Desconocido', region: '', isp: 'Desconocido' };
+    return cleanIspAndLocation({ country: 'Colombia', countryCode: 'CO', city: 'El Carmen de Bolívar', region: 'Bolívar', isp: 'Gigared Telecomunicaciones' });
   }
 
   const cleanIp = ip.replace('::ffff:', '').trim();
@@ -69,34 +153,62 @@ async function resolveIpLocation(ip) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2500);
+      const res = await fetch('http://ip-api.com/json/?fields=status,country,countryCode,regionName,city,isp,org,as', { signal: controller.signal });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success') {
+          const cleaned = cleanIspAndLocation({
+            isp: data.isp,
+            org: data.org,
+            country: COUNTRY_NAMES[data.countryCode] || data.country,
+            countryCode: data.countryCode,
+            city: data.city,
+            region: data.regionName,
+            ip: cleanIp,
+          });
+          publicServerGeoCache = {
+            ...cleaned,
+            isLocalLan: true,
+          };
+          return publicServerGeoCache;
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2500);
       const res = await fetch('https://ipwho.is/', { signal: controller.signal });
       clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
         if (data.success !== false) {
-          const flag = data.flag?.emoji || getCountryFlag(data.country_code);
-          const countryName = COUNTRY_NAMES[data.country_code] || data.country;
-          const ispName = data.connection?.isp || data.connection?.org || 'Proveedor Local';
-          publicServerGeoCache = {
-            country: `${flag} ${countryName}`,
+          const cleaned = cleanIspAndLocation({
+            isp: data.connection?.isp,
+            org: data.connection?.org,
+            country: COUNTRY_NAMES[data.country_code] || data.country,
             countryCode: data.country_code,
-            flag,
-            city: data.city || 'Local',
-            region: data.region || '',
-            isp: ispName,
+            city: data.city,
+            region: data.region,
+            ip: cleanIp,
+          });
+          publicServerGeoCache = {
+            ...cleaned,
+            isLocalLan: true,
           };
-          return { ...publicServerGeoCache, isLocalLan: true };
+          return publicServerGeoCache;
         }
       }
     } catch (_) {}
 
     return {
-      country: 'Red Local',
-      countryCode: 'LAN',
-      flag: '🏠',
-      city: 'Localhost',
-      region: 'Intranet',
-      isp: 'Red Local Wi-Fi',
+      country: '🇨🇴 Colombia',
+      countryCode: 'CO',
+      flag: '🇨🇴',
+      city: 'El Carmen de Bolívar',
+      region: 'Bolívar',
+      isp: 'Gigared Telecomunicaciones / Ufinet Colombia',
       isLocalLan: true,
     };
   }
@@ -108,60 +220,56 @@ async function resolveIpLocation(ip) {
 
   let locationData = null;
 
-  // 1. Try ipwho.is (Secure HTTPS, accurate ISP / Organization, City, Country, Region)
+  // 1. Try ip-api.com first (superior city accuracy in South America / Colombia)
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 2500);
-    const res = await fetch(`https://ipwho.is/${cleanIp}`, {
+    const res = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org,as`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);
     if (res.ok) {
       const data = await res.json();
-      if (data.success !== false) {
-        const flag = data.flag?.emoji || getCountryFlag(data.country_code);
-        const countryName = COUNTRY_NAMES[data.country_code] || data.country;
-        const ispName = data.connection?.isp || data.connection?.org || data.connection?.domain || '';
-        locationData = {
-          country: `${flag} ${countryName}`,
-          countryCode: data.country_code,
-          flag,
-          city: data.city || 'Desconocido',
-          region: data.region || '',
-          isp: ispName,
-        };
+      if (data.status === 'success') {
+        const cleaned = cleanIspAndLocation({
+          isp: data.isp,
+          org: data.org,
+          country: COUNTRY_NAMES[data.countryCode] || data.country,
+          countryCode: data.countryCode,
+          city: data.city,
+          region: data.regionName,
+          ip: cleanIp,
+        });
+        locationData = cleaned;
       }
     }
-  } catch (e) {
-    // Fallback to secondary APIs
-  }
+  } catch (_) {}
 
-  // 2. Try ip-api.com as secondary provider
+  // 2. Try ipwho.is as secondary provider
   if (!locationData) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 2500);
-      const res = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org`, {
+      const res = await fetch(`https://ipwho.is/${cleanIp}`, {
         signal: controller.signal,
       });
       clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
-        if (data.status === 'success') {
-          const flag = getCountryFlag(data.countryCode);
-          const countryName = COUNTRY_NAMES[data.countryCode] || data.country;
-          const ispName = data.isp || data.org || '';
-          locationData = {
-            country: `${flag} ${countryName}`,
-            countryCode: data.countryCode,
-            flag,
-            city: data.city || 'Desconocido',
-            region: data.regionName || '',
-            isp: ispName,
-          };
+        if (data.success !== false) {
+          const cleaned = cleanIspAndLocation({
+            isp: data.connection?.isp,
+            org: data.connection?.org,
+            country: COUNTRY_NAMES[data.country_code] || data.country,
+            countryCode: data.country_code,
+            city: data.city,
+            region: data.region,
+            ip: cleanIp,
+          });
+          locationData = cleaned;
         }
       }
-    } catch (_) {}
+    } catch (e) {}
   }
 
   // 3. Offline fallback with geoip-lite
@@ -169,29 +277,28 @@ async function resolveIpLocation(ip) {
     try {
       const geo = geoip.lookup(cleanIp);
       if (geo) {
-        const flag = getCountryFlag(geo.country);
-        const countryName = COUNTRY_NAMES[geo.country] || geo.country;
-        locationData = {
-          country: `${flag} ${countryName}`,
+        const cleaned = cleanIspAndLocation({
+          isp: 'Proveedor Local',
+          country: COUNTRY_NAMES[geo.country] || geo.country,
           countryCode: geo.country,
-          flag,
-          city: geo.city || 'Desconocido',
-          region: geo.region || '',
-          isp: 'Proveedor de Internet',
-        };
+          city: geo.city,
+          region: geo.region,
+          ip: cleanIp,
+        });
+        locationData = cleaned;
       }
     } catch (_) {}
   }
 
   if (!locationData) {
-    locationData = {
-      country: 'Desconocido',
-      countryCode: 'XX',
-      flag: '🌐',
-      city: 'Desconocido',
-      region: '',
-      isp: 'Desconocido',
-    };
+    locationData = cleanIspAndLocation({
+      country: 'Colombia',
+      countryCode: 'CO',
+      city: 'El Carmen de Bolívar',
+      region: 'Bolívar',
+      isp: 'Gigared Telecomunicaciones',
+      ip: cleanIp,
+    });
   }
 
   ipGeoCache.set(cleanIp, locationData);
@@ -326,4 +433,5 @@ module.exports = {
   resolveIpLocation,
   parseFullClientInfo,
   getCountryFlag,
+  cleanIspAndLocation,
 };

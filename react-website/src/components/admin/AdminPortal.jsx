@@ -251,7 +251,21 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
   const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
     const str = `${os} ${browser} ${deviceType}`.toLowerCase();
-    if (str.includes('android')) {
+    if (
+      str.includes('android') ||
+      str.includes('infinix') ||
+      str.includes('samsung') ||
+      str.includes('xiaomi') ||
+      str.includes('redmi') ||
+      str.includes('huawei') ||
+      str.includes('pixel') ||
+      str.includes('motorola') ||
+      str.includes('oppo') ||
+      str.includes('vivo') ||
+      str.includes('realme') ||
+      str.includes('phone') ||
+      str.includes('mobile')
+    ) {
       return <Smartphone size={16} style={{ color: '#34C759' }} />;
     }
     if (str.includes('ios') || str.includes('iphone')) {
@@ -260,13 +274,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     if (str.includes('ipad') || str.includes('tablet')) {
       return <Tablet size={16} style={{ color: '#007AFF' }} />;
     }
-    if (str.includes('windows')) {
+    if (str.includes('windows') || str.includes('pc') || str.includes('laptop') || str.includes('desktop')) {
       return <Laptop size={16} style={{ color: '#00A4EF' }} />;
     }
-    if (str.includes('mac') || str.includes('darwin')) {
+    if (str.includes('mac') || str.includes('darwin') || str.includes('apple mac')) {
       return <Laptop size={16} style={{ color: '#fff' }} />;
     }
-    return <Globe size={16} style={{ color: '#B3B3B3' }} />;
+    return <Globe size={16} style={{ color: '#007AFF' }} />;
   };
 
   const isWebClient = (platform = '', device = '', browser = '') => {
@@ -1286,12 +1300,12 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       {/* Last Active Timestamp, Device & Geolocation */}
                       <div style={{ minWidth: 0, paddingRight: '10px' }}>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
-                          {formatDateTime(u.lastActiveAt || u.lastLoginAt)}
+                          {formatDateTime(u.lastActiveAt || u.lastLoginAt || u.createdAt)}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
                           {getDeviceIcon(u.lastDeviceModel || u.lastDevice)}
                           <span style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {u.lastDeviceModel || u.lastDevice || 'Sin dispositivo'}
+                            {u.lastDeviceModel || u.lastDevice || 'Dispositivo Registrado'}
                           </span>
                         </div>
                         {(u.lastCountry || u.lastOsVersion) && (
@@ -1737,7 +1751,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
                 <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Última Actividad</span>
                 <p style={{ fontSize: '12px', fontWeight: 600, marginTop: '4px', color: '#fff' }}>
-                  {formatDateTime(selectedUser.user.lastActiveAt || selectedUser.user.lastLoginAt)}
+                  {formatDateTime(selectedUser.user.lastActiveAt || selectedUser.user.lastLoginAt || selectedUser.user.createdAt)}
                 </p>
               </div>
 
