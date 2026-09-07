@@ -15,6 +15,7 @@ router.use(authenticateAdmin);
 router.get('/live-playback', async (req, res) => {
   try {
     const pool = getPool();
+    // 1. Users actively streaming/playing music
     const [rows] = await pool.query(`
       SELECT 
         lp.user_id,
@@ -46,6 +47,34 @@ router.get('/live-playback', async (req, res) => {
       ORDER BY lp.last_ping_at DESC
     `);
 
+    // 2. Users active/connected in the app right now (within last 3 minutes)
+    const [connectedRows] = await pool.query(`
+      SELECT 
+        s.id as session_id,
+        s.user_id,
+        u.name as user_name,
+        u.email as user_email,
+        u.avatar_url as user_avatar,
+        u.role as user_role,
+        s.client_platform,
+        s.device_model,
+        s.device_os,
+        s.os_version,
+        s.ip_address,
+        s.country,
+        s.country_code,
+        s.city,
+        s.region,
+        s.isp,
+        s.session_duration_seconds,
+        s.last_active_at,
+        TIMESTAMPDIFF(SECOND, s.last_active_at, NOW()) as seconds_since_active
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.last_active_at >= NOW() - INTERVAL 180 SECOND
+      ORDER BY s.last_active_at DESC
+    `);
+
     return res.json({
       success: true,
       count: rows.length,
@@ -73,6 +102,26 @@ router.get('/live-playback', async (req, res) => {
         startedAt: r.started_at,
         lastPingAt: r.last_ping_at,
         secondsSincePing: r.seconds_since_ping,
+      })),
+      connectedUsers: connectedRows.map(s => ({
+        sessionId: s.session_id,
+        userId: s.user_id,
+        userName: s.user_name,
+        userEmail: s.user_email,
+        userAvatar: s.user_avatar,
+        userRole: s.user_role,
+        platform: s.client_platform || s.device_os,
+        deviceModel: s.device_model || s.device_os,
+        osVersion: s.os_version,
+        ipAddress: s.ip_address,
+        country: s.country,
+        countryCode: s.country_code,
+        city: s.city,
+        region: s.region,
+        isp: s.isp,
+        durationSeconds: s.session_duration_seconds,
+        lastActiveAt: s.last_active_at,
+        secondsSinceActive: s.seconds_since_active,
       })),
     });
   } catch (err) {

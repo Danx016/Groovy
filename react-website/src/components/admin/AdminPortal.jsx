@@ -52,6 +52,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [users, setUsers] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [liveListeners, setLiveListeners] = useState([]);
+  const [connectedUsers, setConnectedUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -93,10 +94,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const fetchLivePlayback = useCallback(async () => {
     if (!isAuthorized) return;
     try {
-      const res = await adminApi.getLivePlayback().catch(() => ({ listeners: [] }));
-      if (res?.listeners) {
-        setLiveListeners(res.listeners);
-      }
+      const res = await adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] }));
+      if (res?.listeners) setLiveListeners(res.listeners);
+      if (res?.connectedUsers) setConnectedUsers(res.connectedUsers);
     } catch (e) {
       console.warn('Error fetching live playback:', e);
     }
@@ -111,13 +111,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         adminApi.getMetrics().catch(() => ({ metrics: null })),
         adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
         adminApi.getSessions(100).catch(() => ({ sessions: [] })),
-        adminApi.getLivePlayback().catch(() => ({ listeners: [] })),
+        adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] })),
       ]);
 
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
       if (usersRes?.users) setUsers(usersRes.users);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
       if (liveRes?.listeners) setLiveListeners(liveRes.listeners);
+      if (liveRes?.connectedUsers) setConnectedUsers(liveRes.connectedUsers);
     } catch (err) {
       console.error('Error fetching admin data:', err);
       setActionMessage({ type: 'error', text: 'Error al conectar con la base de datos: ' + err.message });
@@ -450,6 +451,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   }
 
   const activeLiveCount = liveListeners.filter(l => l.isPlaying).length;
+  const activeConnectedCount = connectedUsers.length;
+  const totalOnlineAppCount = activeLiveCount + connectedUsers.filter(u => !liveListeners.some(l => l.isPlaying && l.userId === u.userId)).length;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#000000', color: '#ffffff' }}>
@@ -509,14 +512,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Radio size={19} style={{ color: activeTab === 'live' ? '#34C759' : '#34C759', flexShrink: 0 }} />
-              <span>Escuchando Ahora</span>
+              <span>En Vivo en la App</span>
             </div>
-            {activeLiveCount > 0 ? (
+            {totalOnlineAppCount > 0 ? (
               <span style={{
                 fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '10px',
                 background: '#34C759', color: '#000',
               }}>
-                {activeLiveCount} EN VIVO
+                {totalOnlineAppCount} EN VIVO
               </span>
             ) : (
               <span style={{ fontSize: '11px', color: '#6B6B6B' }}>0</span>
@@ -597,35 +600,33 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         <div style={{ height: '0.5px', background: '#282828', margin: '0 12px 16px' }} />
 
         {/* Return to Music Player action */}
-        {onBackToPlayer && (
-          <button
-            onClick={onBackToPlayer}
+        <div style={{ padding: '0 8px', marginBottom: 'auto' }}>
+          <a
+            href="/"
             style={{
-              display: 'flex', alignItems: 'center', gap: '12px',
-              width: '100%', padding: '10px 12px', borderRadius: '8px',
-              fontSize: '14px', fontWeight: 500, color: '#B3B3B3',
-              background: 'transparent', textAlign: 'left', transition: 'all 0.15s',
+              display: 'flex', alignItems: 'center', gap: '10px',
+              padding: '9px 12px', borderRadius: '8px', fontSize: '13px',
+              color: '#B3B3B3', textDecoration: 'none', transition: 'all 0.15s',
             }}
             onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = '#181818'; }}
             onMouseLeave={e => { e.currentTarget.style.color = '#B3B3B3'; e.currentTarget.style.background = 'transparent'; }}
           >
-            <ArrowLeft size={18} style={{ color: '#FA243C', flexShrink: 0 }} />
-            <span>Volver a Groovy</span>
-          </button>
-        )}
+            <ArrowLeft size={16} />
+            <span>Abrir Reproductor Web</span>
+          </a>
+        </div>
 
-        {/* Bottom: Current Admin Profile Card */}
-        <div style={{ marginTop: 'auto', padding: '12px 8px', borderTop: '0.5px solid #282828' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '8px 10px', background: '#181818', borderRadius: '10px',
-            border: '0.5px solid #282828',
-          }}>
+        {/* Current Admin User Footprint */}
+        <div style={{
+          padding: '12px', borderRadius: '10px', background: '#181818',
+          border: '0.5px solid #282828',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
               <div style={{
                 width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 700, fontSize: '13px', color: '#fff', flexShrink: 0,
+                fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
               }}>
                 {currentUser?.name?.charAt(0).toUpperCase() || 'A'}
               </div>
@@ -672,9 +673,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             flex: 1, maxWidth: '420px',
             display: 'flex', alignItems: 'center', gap: '10px',
             background: '#282828', borderRadius: '8px', padding: '8px 14px',
-            border: '0.5px solid #404040',
           }}>
-            <Search size={15} style={{ color: '#B3B3B3', flexShrink: 0 }} />
+            <Search size={16} style={{ color: '#6B6B6B', flexShrink: 0 }} />
             <input
               type="text"
               placeholder="Buscar por usuario, IP, correo o dispositivo..."
@@ -695,7 +695,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           {/* Right Header items */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Live Streaming Pill */}
-            {activeLiveCount > 0 && (
+            {totalOnlineAppCount > 0 && (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 background: 'rgba(52,199,89,0.15)', border: '0.5px solid rgba(52,199,89,0.4)',
@@ -707,7 +707,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
                   <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
                 </div>
-                <span>{activeLiveCount} Escuchando en vivo</span>
+                <span>{totalOnlineAppCount} en la App en Vivo</span>
               </div>
             )}
 
@@ -718,8 +718,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               borderRadius: '20px', padding: '5px 12px',
               fontSize: '12px', color: '#B3B3B3',
             }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759' }} />
-              <span style={{ fontWeight: 500 }}>MySQL Cloud 8.0</span>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
+              <span>VPS MySQL Online</span>
             </div>
 
             {/* Refresh Button */}
@@ -748,7 +748,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           {/* Header Title Section */}
           <div style={{ marginBottom: '24px' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '6px' }}>
-              {activeTab === 'live' && 'Reproducción en Vivo (Streaming en Tiempo Real)'}
+              {activeTab === 'live' && 'En Vivo: Telemetría y Streaming en Tiempo Real'}
               {activeTab === 'users' && 'Usuarios y Telemetría de Dispositivos'}
               {activeTab === 'sessions' && 'Auditoría de Inicios de Sesión e IPs'}
               {activeTab === 'metrics' && 'Top Canciones en Streaming'}
@@ -801,13 +801,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               padding: '18px 20px',
             }}>
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Escuchando Ahora
+                En Vivo en la App
               </span>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: activeLiveCount > 0 ? '#34C759' : '#fff', marginTop: '6px' }}>
-                {activeLiveCount}
+              <div style={{ fontSize: '28px', fontWeight: 700, color: totalOnlineAppCount > 0 ? '#34C759' : '#fff', marginTop: '6px' }}>
+                {totalOnlineAppCount}
               </div>
               <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
-                {activeLiveCount > 0 ? 'En streaming en este momento' : 'Ningún usuario escuchando'}
+                {activeLiveCount > 0 ? `${activeLiveCount} reproduciendo música` : totalOnlineAppCount > 0 ? 'Conectados en la app' : 'Sin usuarios activos'}
               </p>
             </div>
 
@@ -845,6 +845,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           {/* TAB: LIVE STREAMING & ESCUCHANDO AHORA */}
           {(() => {
             const activeLiveListeners = liveListeners.filter(l => l.isPlaying);
+            const playingUserIds = new Set(activeLiveListeners.map(l => l.userId));
+            const browsingUsers = connectedUsers.filter(u => !playingUserIds.has(u.userId));
+            const hasAnyLive = activeLiveListeners.length > 0 || browsingUsers.length > 0;
 
             return (
               <div style={{
@@ -863,7 +866,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       <div className="eq-bar" style={{ width: '3px' }} />
                     </div>
                     <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
-                      En Vivo: Escuchando Ahora
+                      En Vivo: Actividad en Tiempo Real
                     </h3>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -873,9 +876,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   </div>
                 </div>
 
-                {/* Sub-section: Live Streaming Audio */}
-                {activeLiveListeners.length > 0 ? (
-                  <div>
+                {/* Sub-section 1: Streaming Audio */}
+                {activeLiveListeners.length > 0 && (
+                  <div style={{ marginBottom: browsingUsers.length > 0 ? '24px' : '0' }}>
                     <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#34C759', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
                       Reproduciendo Música Ahora ({activeLiveListeners.length})
@@ -973,12 +976,103 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       ))}
                     </div>
                   </div>
-                ) : (
+                )}
+
+                {/* Sub-section 2: Connected Users in App (Browsing / Online) */}
+                {browsingUsers.length > 0 && (
+                  <div>
+                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#007AFF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#007AFF', display: 'inline-block' }} />
+                      Usuarios Conectados en la App ({browsingUsers.length})
+                    </h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {browsingUsers.map((item, idx) => (
+                        <div
+                          key={`${item.userId}_${item.platform}_${item.deviceModel || idx}`}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            background: '#202020', borderRadius: '12px', padding: '14px 18px',
+                            border: '0.5px solid rgba(0,122,255,0.3)',
+                          }}
+                        >
+                          {/* User Profile */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
+                            <div style={{
+                              width: '44px', height: '44px', borderRadius: '50%', background: '#007AFF',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '16px', fontWeight: 700, color: '#fff',
+                            }}>
+                              {item.userName?.charAt(0).toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
+                              <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail}</p>
+                            </div>
+                          </div>
+
+                          {/* App Status */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, margin: '0 24px', minWidth: 0 }}>
+                            <span style={{ fontSize: '11px', color: '#007AFF', fontWeight: 700, background: 'rgba(0,122,255,0.15)', padding: '3px 8px', borderRadius: '6px' }}>
+                              📱 ACTIVO EN LA APP
+                            </span>
+                            <span style={{ fontSize: '12px', color: '#B3B3B3' }}>
+                              Navegando · Sesión activa: {formatSessionDuration(item.durationSeconds || 0)}
+                            </span>
+                          </div>
+
+                          {/* Device, OS & Location */}
+                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              {getDeviceIcon(item.platform, item.deviceModel)}
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
+                                {item.deviceModel || `${item.platform} App`}
+                              </span>
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#B3B3B3' }}>
+                              {item.osVersion ? `${item.platform} · ${item.osVersion}` : `${item.platform} App`}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                              {item.country && (
+                                <span style={{ fontSize: '11px', color: '#9E9E9E', display: 'flex', alignItems: 'center' }}>
+                                  {renderCountryFlag(item.country, item.countryCode)}
+                                  {formatCountryName(item.country)}{item.city ? ` · ${item.city}` : ''}
+                                </span>
+                              )}
+                              <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
+                                {item.ipAddress || 'IP no reg.'}
+                              </code>
+                              <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
+                                hace {item.secondsSinceActive || 0}s
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* View Details Button */}
+                          <button
+                            onClick={() => handleOpenUserDetail(item.userId)}
+                            style={{
+                              marginLeft: '16px', padding: '7px 14px', borderRadius: '8px',
+                              background: '#282828', border: '0.5px solid #404040', color: '#fff',
+                              fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                            }}
+                            onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                            onMouseLeave={e => e.currentTarget.style.background = '#282828'}
+                          >
+                            Ver Usuario
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty State */}
+                {!hasAnyLive && (
                   <div style={{ textAlign: 'center', padding: '28px', color: '#6B6B6B' }}>
                     <Radio size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
-                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios escuchando música en la app móvil ni en Windows en este momento.</p>
+                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios activos en la app en este momento.</p>
                     <p style={{ fontSize: '12px', marginTop: '4px', color: '#8E8E93' }}>
-                      Cuando alguien reproduzca una canción en la app móvil (Android/iOS) o en Windows, aparecerá aquí inmediatamente con su carátula, canción y dispositivo en tiempo real.
+                      Cuando alguien abra la app en Android o Windows o reproduzca una canción, aparecerá aquí inmediatamente en tiempo real.
                     </p>
                   </div>
                 )}
