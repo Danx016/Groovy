@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:flutter_displaymode/flutter_displaymode.dart';
+import 'package:window_manager/window_manager.dart';
 import '../widgets/blurred_gradient_background.dart';
 import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
@@ -88,12 +89,17 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       FlutterDisplayMode.setHighRefreshRate().catchError((_) {});
     }
 
-    // 3. Extract palette immediately (runs async, caches instantly)
+    // 3. Enter true OS fullscreen on desktop for borderless Apple Music experience
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      windowManager.setFullScreen(true).catchError((_) {});
+    }
+
+    // 4. Extract palette immediately (runs async, caches instantly)
     if (_bgColors.isEmpty) {
       _extractColors();
     }
 
-    // 4. Defer network lyrics fetch slightly (160ms) to ensure 120Hz smooth entry
+    // 5. Defer network lyrics fetch slightly (160ms) to ensure 120Hz smooth entry
     if (_fetchedLyrics.isEmpty) {
       Future.delayed(const Duration(milliseconds: 160), () {
         if (mounted) _fetchLyrics();
@@ -286,8 +292,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
   }
 
+  void _exitFullScreen() async {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      await windowManager.setFullScreen(false).catchError((_) {});
+    }
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
   @override
   void dispose() {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      windowManager.setFullScreen(false).catchError((_) {});
+    }
     _playerProvider?.removeListener(_onPlayerChanged);
     _colorDebounceTimer?.cancel();
     _lyricsDebounceTimer?.cancel();
@@ -898,13 +916,24 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             : currentSong?.artist) ?? widget.artist;
         final album = currentSong?.album ?? '';
 
-        return Stack(
-          children: [
-            // 1. Two-Column Apple Music Layout
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final maxCoverSize = (constraints.maxHeight * 0.44).clamp(240.0, 380.0);
+        return Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent &&
+                (event.logicalKey == LogicalKeyboardKey.escape ||
+                    event.logicalKey == LogicalKeyboardKey.f11)) {
+              _exitFullScreen();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          child: Stack(
+            children: [
+              // 1. Two-Column Apple Music Layout
+              Positioned.fill(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final maxCoverSize = (constraints.maxHeight * 0.44).clamp(240.0, 380.0);
 
                   return Row(
                     children: [
@@ -1054,40 +1083,35 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
             ),
 
-            // 2. Window Controls (Top Right: Minimize/Close Fullscreen, Close)
+            // 2. Window Controls (Top Right: Close Fullscreen, Close)
             Positioned(
-              top: 18,
-              right: 22,
+              top: 24,
+              right: 28,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: const Icon(
-                      Icons.close_fullscreen_rounded,
-                      color: Colors.white70,
-                      size: 20,
-                    ),
-                    tooltip: 'Salir de pantalla completa',
-                    onPressed: () => Navigator.of(context).pop(),
+                  _GlassIconButton(
+                    icon: Icons.close_fullscreen_rounded,
+                    size: 18,
+                    tooltip: 'Salir de pantalla completa (Esc)',
+                    onTap: _exitFullScreen,
                   ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    icon: const Icon(
-                      Icons.close_rounded,
-                      color: Colors.white70,
-                      size: 22,
-                    ),
+                  const SizedBox(width: 8),
+                  _GlassIconButton(
+                    icon: Icons.close_rounded,
+                    size: 20,
                     tooltip: 'Cerrar',
-                    onPressed: () => Navigator.of(context).pop(),
+                    onTap: _exitFullScreen,
                   ),
                 ],
               ),
             ),
           ],
-        );
-      },
-    );
-  }
+        ),
+      );
+    },
+  );
+}
 
   Widget _buildLandscapeRightPanel(BuildContext context, PlayerProvider provider) {
     if (!_showLyricsInLandscape) {
@@ -1380,5 +1404,60 @@ class _VolumePopupButton extends StatelessWidget {
     );
   }
 }
+
+class _GlassIconButton extends StatefulWidget {
+  final IconData icon;
+  final double size;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _GlassIconButton({
+    required this.icon,
+    this.size = 18,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  State<_GlassIconButton> createState() => _GlassIconButtonState();
+}
+
+class _GlassIconButtonState extends State<_GlassIconButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _isHovered
+                  ? Colors.white.withValues(alpha: 0.28)
+                  : Colors.white.withValues(alpha: 0.12),
+            ),
+            child: Icon(
+              widget.icon,
+              size: widget.size,
+              color: _isHovered
+                  ? Colors.white
+                  : Colors.white.withValues(alpha: 0.75),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 
