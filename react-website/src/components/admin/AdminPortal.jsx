@@ -512,7 +512,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Radio size={19} style={{ color: activeTab === 'live' ? '#34C759' : '#34C759', flexShrink: 0 }} />
-              <span>En Vivo en la App</span>
+              <span>Escuchando Ahora</span>
             </div>
             {totalOnlineAppCount > 0 ? (
               <span style={{
@@ -842,8 +842,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             </div>
           </div>
 
-          {/* TAB: LIVE STREAMING & ESCUCHANDO AHORA */}
-          {(() => {
+          {/* TAB 0: LIVE STREAMING & ESCUCHANDO AHORA (Only visible when activeTab === 'live') */}
+          {activeTab === 'live' && (() => {
             const activeLiveListeners = liveListeners.filter(l => l.isPlaying);
             const playingUserIds = new Set(activeLiveListeners.map(l => l.userId));
             const browsingUsers = connectedUsers.filter(u => !playingUserIds.has(u.userId));
