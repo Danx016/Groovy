@@ -521,7 +521,7 @@ class YtDlpService {
   // ── Binary Detection (Desktop) ──────────────────────────────────────────────
 
   Future<void> _detectBinaries() async {
-    if (_detectionDone || Platform.isAndroid || Platform.isIOS) return;
+    if (kIsWeb || _detectionDone || Platform.isAndroid || Platform.isIOS) return;
     _detectionDone = true;
 
     final exeDir = File(Platform.resolvedExecutable).parent.path;

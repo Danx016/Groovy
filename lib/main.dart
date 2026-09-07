@@ -175,10 +175,16 @@ void main() async {
     }
   }
 
-  MediaKit.ensureInitialized();
-  JustAudioMediaKit.title = 'Groovy';
-  JustAudioMediaKit.prefetchPlaylist = false;
-  JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+    try {
+      MediaKit.ensureInitialized();
+      JustAudioMediaKit.title = 'Groovy';
+      JustAudioMediaKit.prefetchPlaylist = false;
+      JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
+    } catch (e) {
+      debugPrint('MediaKit init error: $e');
+    }
+  }
 
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
