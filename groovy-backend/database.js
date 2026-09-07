@@ -171,11 +171,66 @@ async function runMigrations(conn) {
       album VARCHAR(255),
       cover_art TEXT,
       duration INT DEFAULT 0,
+      listen_seconds INT DEFAULT 0,
+      platform VARCHAR(100) NULL,
+      device_name VARCHAR(255) NULL,
+      ip_address VARCHAR(100) NULL,
       played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_user_hist (user_id, played_at DESC),
       CONSTRAINT fk_hist_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  // 6. User Live Playback Presence table (Who is currently playing music in real time)
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS user_live_playback (
+      user_id INT PRIMARY KEY,
+      song_id VARCHAR(255) NOT NULL,
+      title VARCHAR(255) NOT NULL,
+      artist VARCHAR(255),
+      album VARCHAR(255),
+      cover_art TEXT,
+      duration INT DEFAULT 0,
+      position INT DEFAULT 0,
+      is_playing TINYINT(1) DEFAULT 1,
+      platform VARCHAR(100) DEFAULT 'Desconocido',
+      device_name VARCHAR(255) DEFAULT 'Groovy App',
+      ip_address VARCHAR(100),
+      started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      last_ping_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_live_ping (last_ping_at DESC),
+      CONSTRAINT fk_live_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // Extra column migrations
+  await addColIfNotExists('total_listen_seconds', 'INT DEFAULT 0');
+  await addColIfNotExists('last_active_at', 'TIMESTAMP NULL');
+
+  const addColToTable = async (tableName, columnName, columnDef) => {
+    try {
+      const [rows] = await conn.query(`
+        SELECT COUNT(*) as count 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+          AND TABLE_NAME = ? 
+          AND COLUMN_NAME = ?
+      `, [tableName, columnName]);
+      if (rows[0].count === 0) {
+        await conn.query(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDef}`);
+        console.log(`[Database] Added column ${tableName}.${columnName}`);
+      }
+    } catch (e) {
+      console.warn(`[Database] Warning adding column ${tableName}.${columnName}:`, e.message);
+    }
+  };
+
+  await addColToTable('user_sessions', 'session_duration_seconds', 'INT DEFAULT 0');
+  await addColToTable('user_sessions', 'last_ping_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+  await addColToTable('playback_history', 'platform', 'VARCHAR(100) NULL');
+  await addColToTable('playback_history', 'device_name', 'VARCHAR(255) NULL');
+  await addColToTable('playback_history', 'ip_address', 'VARCHAR(100) NULL');
+  await addColToTable('playback_history', 'listen_seconds', 'INT DEFAULT 0');
 
   // Promote danilorodelo355@gmail.com and initial admin to admin role
   try {

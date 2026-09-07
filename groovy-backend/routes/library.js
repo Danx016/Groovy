@@ -269,16 +269,33 @@ router.get('/history', async (req, res) => {
 // POST /api/library/history
 router.post('/history', async (req, res) => {
   try {
-    const { songId, title, artist, album, coverArt, duration } = req.body;
+    const { songId, title, artist, album, coverArt, duration, platform, deviceName } = req.body;
     if (!songId || !title) {
       return res.status(400).json({ success: false, error: 'songId y title requeridos' });
     }
 
+    const forwarded = req.headers['x-forwarded-for'];
+    let ip = forwarded ? forwarded.split(',')[0].trim() : (req.headers['x-real-ip'] || req.socket?.remoteAddress || '127.0.0.1');
+    if (ip.startsWith('::ffff:')) ip = ip.replace('::ffff:', '');
+    const clientPlatform = platform || req.headers['x-client-platform'] || 'Web';
+    const clientDevice = deviceName || `${clientPlatform} Client`;
+
     const pool = getPool();
     await pool.query(
-      'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, songId, title, artist || '', album || '', coverArt || '', duration || 0]
+      'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [req.user.id, songId, title, artist || '', album || '', coverArt || '', duration || 0, clientPlatform, clientDevice, ip]
     );
+
+    // Update user active timestamp and listening time (minimum 30s)
+    const listenAdd = Math.max(parseInt(duration, 10) || 30, 30);
+    await pool.query(`
+      UPDATE users 
+      SET last_active_at = CURRENT_TIMESTAMP,
+          total_listen_seconds = total_listen_seconds + ?,
+          last_login_ip = ?,
+          last_device = ?
+      WHERE id = ?
+    `, [listenAdd, ip, clientDevice, req.user.id]);
 
     return res.status(201).json({
       success: true,

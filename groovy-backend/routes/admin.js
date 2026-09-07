@@ -9,6 +9,71 @@ const router = express.Router();
 router.use(authenticateAdmin);
 
 /**
+ * GET /api/admin/live-playback
+ * Real-time list of all users currently listening to music right now
+ */
+router.get('/live-playback', async (req, res) => {
+  try {
+    const pool = getPool();
+    const [rows] = await pool.query(`
+      SELECT 
+        lp.user_id,
+        u.name as user_name,
+        u.email as user_email,
+        u.avatar_url as user_avatar,
+        u.role as user_role,
+        lp.song_id,
+        lp.title,
+        lp.artist,
+        lp.album,
+        lp.cover_art,
+        lp.duration,
+        lp.position,
+        lp.is_playing,
+        lp.platform,
+        lp.device_name,
+        lp.ip_address,
+        lp.started_at,
+        lp.last_ping_at,
+        TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as seconds_since_ping
+      FROM user_live_playback lp
+      JOIN users u ON lp.user_id = u.id
+      WHERE lp.last_ping_at >= NOW() - INTERVAL 120 SECOND
+      ORDER BY lp.last_ping_at DESC
+    `);
+
+    return res.json({
+      success: true,
+      count: rows.length,
+      listeners: rows.map(r => ({
+        userId: r.user_id,
+        userName: r.user_name,
+        userEmail: r.user_email,
+        userAvatar: r.user_avatar,
+        userRole: r.user_role,
+        songId: r.song_id,
+        title: r.title,
+        artist: r.artist,
+        album: r.album,
+        coverArt: r.cover_art,
+        duration: r.duration,
+        position: r.position,
+        isPlaying: r.is_playing === 1 && r.seconds_since_ping < 45,
+        platform: r.platform || 'Desconocido',
+        deviceName: r.device_name,
+        ipAddress: r.ip_address,
+        startedAt: r.started_at,
+        lastPingAt: r.last_ping_at,
+        secondsSincePing: r.seconds_since_ping,
+      })),
+    });
+  } catch (err) {
+    console.error('[Admin Live Playback Error]:', err);
+    return res.status(500).json({ success: false, error: 'Error al consultar reproducción en vivo.' });
+  }
+});
+
+/**
  * GET /api/admin/metrics
  * System-wide metrics & telemetry overview
  */
@@ -24,23 +89,37 @@ router.get('/metrics', async (req, res) => {
     const [activeTodayRows] = await pool.query(`
       SELECT COUNT(DISTINCT user_id) as count 
       FROM user_sessions 
-      WHERE created_at >= NOW() - INTERVAL 1 DAY
+      WHERE created_at >= NOW() - INTERVAL 1 DAY OR last_active_at >= NOW() - INTERVAL 1 DAY
     `);
     const activeToday = activeTodayRows[0].count;
 
-    // Total Favorites & Playlists
+    // Currently active listeners (playing right now)
+    const [activeListenersRows] = await pool.query(`
+      SELECT COUNT(*) as count 
+      FROM user_live_playback 
+      WHERE is_playing = 1 AND last_ping_at >= NOW() - INTERVAL 60 SECOND
+    `);
+    const activeListeners = activeListenersRows[0].count;
+
+    // Total listen time in seconds across all users
+    const [listenTimeRows] = await pool.query(`
+      SELECT COALESCE(SUM(total_listen_seconds), 0) as total_seconds FROM users
+    `);
+    const totalListenSeconds = listenTimeRows[0].total_seconds;
+
+    // Total Favorites & Playlists & Plays & Sessions
     const [favRows] = await pool.query('SELECT COUNT(*) as count FROM favorites');
     const [playlistRows] = await pool.query('SELECT COUNT(*) as count FROM playlists');
     const [historyRows] = await pool.query('SELECT COUNT(*) as count FROM playback_history');
     const [sessionRows] = await pool.query('SELECT COUNT(*) as count FROM user_sessions');
 
-    // Recent 6 logins
+    // Recent sessions
     const [recentSessions] = await pool.query(`
-      SELECT s.id, s.user_id, u.name as user_name, u.email as user_email, s.ip_address, s.device_os, s.browser, s.client_platform, s.created_at
+      SELECT s.id, s.user_id, u.name as user_name, u.email as user_email, s.ip_address, s.device_os, s.browser, s.client_platform, s.created_at, s.last_active_at, s.session_duration_seconds
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       ORDER BY s.created_at DESC
-      LIMIT 6
+      LIMIT 8
     `);
 
     // Top played songs
@@ -57,6 +136,8 @@ router.get('/metrics', async (req, res) => {
       metrics: {
         totalUsers,
         activeToday,
+        activeListeners,
+        totalListenSeconds,
         totalFavorites: favRows[0].count,
         totalPlaylists: playlistRows[0].count,
         totalPlays: historyRows[0].count,
@@ -76,7 +157,7 @@ router.get('/metrics', async (req, res) => {
 
 /**
  * GET /api/admin/users
- * List all users with aggregated telemetry (favorites, playlists, history, last IP, last device)
+ * List all users with aggregated telemetry, live playback, listening time, and last active dates
  */
 router.get('/users', async (req, res) => {
   try {
@@ -92,14 +173,28 @@ router.get('/users', async (req, res) => {
         u.role, 
         u.is_banned, 
         u.last_login_at, 
+        u.last_active_at,
         u.last_login_ip, 
         u.last_device, 
+        u.total_listen_seconds,
         u.created_at,
         (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) as favorites_count,
         (SELECT COUNT(*) FROM playlists p WHERE p.user_id = u.id) as playlists_count,
         (SELECT COUNT(*) FROM playback_history h WHERE h.user_id = u.id) as history_count,
-        (SELECT COUNT(*) FROM user_sessions s WHERE s.user_id = u.id) as sessions_count
+        (SELECT COUNT(*) FROM user_sessions s WHERE s.user_id = u.id) as sessions_count,
+        lp.song_id as live_song_id,
+        lp.title as live_title,
+        lp.artist as live_artist,
+        lp.cover_art as live_cover_art,
+        lp.platform as live_platform,
+        lp.device_name as live_device,
+        lp.is_playing as live_is_playing,
+        lp.position as live_position,
+        lp.duration as live_duration,
+        lp.last_ping_at as live_last_ping,
+        TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as live_seconds_ago
       FROM users u
+      LEFT JOIN user_live_playback lp ON lp.user_id = u.id AND lp.last_ping_at >= NOW() - INTERVAL 120 SECOND
       WHERE 1=1
     `;
     const params = [];
@@ -135,9 +230,23 @@ router.get('/users', async (req, res) => {
         role: u.role || 'user',
         isBanned: u.is_banned === 1,
         lastLoginAt: u.last_login_at,
+        lastActiveAt: u.last_active_at,
         lastLoginIp: u.last_login_ip,
         lastDevice: u.last_device,
+        totalListenSeconds: u.total_listen_seconds || 0,
         createdAt: u.created_at,
+        livePlayback: u.live_song_id ? {
+          songId: u.live_song_id,
+          title: u.live_title,
+          artist: u.live_artist,
+          coverArt: u.live_cover_art,
+          platform: u.live_platform,
+          device: u.live_device,
+          isPlaying: u.live_is_playing === 1 && (u.live_seconds_ago < 45),
+          position: u.live_position,
+          duration: u.live_duration,
+          lastPingAt: u.live_last_ping,
+        } : null,
         stats: {
           favorites: u.favorites_count || 0,
           playlists: u.playlists_count || 0,
@@ -165,7 +274,7 @@ router.get('/users/:id', async (req, res) => {
     const pool = getPool();
 
     const [userRows] = await pool.query(
-      'SELECT id, name, email, avatar_url, role, is_banned, last_login_at, last_login_ip, last_device, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, name, email, avatar_url, role, is_banned, last_login_at, last_active_at, last_login_ip, last_device, total_listen_seconds, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
       [id]
     );
 
@@ -178,9 +287,38 @@ router.get('/users/:id', async (req, res) => {
 
     const user = userRows[0];
 
+    // Live playback presence
+    const [liveRows] = await pool.query(`
+      SELECT song_id, title, artist, album, cover_art, duration, position, is_playing, platform, device_name, ip_address, started_at, last_ping_at,
+             TIMESTAMPDIFF(SECOND, last_ping_at, NOW()) as seconds_since_ping
+      FROM user_live_playback 
+      WHERE user_id = ? AND last_ping_at >= NOW() - INTERVAL 120 SECOND
+      LIMIT 1
+    `, [id]);
+
+    const livePlayback = liveRows.length > 0 ? {
+      songId: liveRows[0].song_id,
+      title: liveRows[0].title,
+      artist: liveRows[0].artist,
+      album: liveRows[0].album,
+      coverArt: liveRows[0].cover_art,
+      duration: liveRows[0].duration,
+      position: liveRows[0].position,
+      isPlaying: liveRows[0].is_playing === 1 && liveRows[0].seconds_since_ping < 45,
+      platform: liveRows[0].platform,
+      deviceName: liveRows[0].device_name,
+      ipAddress: liveRows[0].ip_address,
+      startedAt: liveRows[0].started_at,
+      lastPingAt: liveRows[0].last_ping_at,
+    } : null;
+
     // Login sessions / devices / IPs (last 50)
     const [sessions] = await pool.query(
-      'SELECT id, ip_address, device_os, browser, device_type, client_platform, user_agent, created_at, last_active_at FROM user_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 50',
+      `SELECT id, ip_address, device_os, browser, device_type, client_platform, user_agent, created_at, last_active_at, session_duration_seconds 
+       FROM user_sessions 
+       WHERE user_id = ? 
+       ORDER BY created_at DESC 
+       LIMIT 50`,
       [id]
     );
 
@@ -198,7 +336,11 @@ router.get('/users/:id', async (req, res) => {
 
     // User's playback history (last 50)
     const [history] = await pool.query(
-      'SELECT id, song_id, title, artist, album, cover_art, duration, played_at FROM playback_history WHERE user_id = ? ORDER BY played_at DESC LIMIT 50',
+      `SELECT id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address, played_at 
+       FROM playback_history 
+       WHERE user_id = ? 
+       ORDER BY played_at DESC 
+       LIMIT 50`,
       [id]
     );
 
@@ -212,11 +354,14 @@ router.get('/users/:id', async (req, res) => {
         role: user.role || 'user',
         isBanned: user.is_banned === 1,
         lastLoginAt: user.last_login_at,
+        lastActiveAt: user.last_active_at,
         lastLoginIp: user.last_login_ip,
         lastDevice: user.last_device,
+        totalListenSeconds: user.total_listen_seconds || 0,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
       },
+      livePlayback,
       sessions,
       playlists,
       favorites,
@@ -268,9 +413,8 @@ router.put('/users/:id', async (req, res) => {
       passwordHash = await bcrypt.hash(password.trim(), salt);
     }
 
-    let query = 'UPDATE users SET ';
-    const params = [];
     const updates = [];
+    const params = [];
 
     if (name) {
       updates.push('name = ?');
@@ -300,42 +444,33 @@ router.put('/users/:id', async (req, res) => {
       });
     }
 
-    query += updates.join(', ') + ' WHERE id = ?';
     params.push(id);
-
-    await pool.query(query, params);
-
-    const [updatedRows] = await pool.query(
-      'SELECT id, name, email, avatar_url, role, is_banned, last_login_ip, last_device, created_at FROM users WHERE id = ?',
-      [id]
-    );
+    await pool.query(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, params);
 
     return res.json({
       success: true,
-      message: 'Usuario actualizado exitosamente',
-      user: updatedRows[0],
+      message: 'Usuario actualizado exitosamente.',
     });
   } catch (err) {
     console.error('[Admin Update User Error]:', err);
     return res.status(500).json({
       success: false,
-      error: 'Error al actualizar el usuario.',
+      error: 'Error al actualizar usuario: ' + err.message,
     });
   }
 });
 
 /**
- * PUT /api/admin/users/:id/ban
- * Ban or unban a user
+ * PATCH /api/admin/users/:id/ban
+ * Toggle account ban / suspension status
  */
-router.put('/users/:id/ban', async (req, res) => {
+router.patch('/users/:id/ban', async (req, res) => {
   try {
     const { id } = req.params;
     const { isBanned } = req.body;
     const pool = getPool();
 
-    // Prevent banning oneself
-    if (parseInt(id, 10) === req.user.id && isBanned) {
+    if (parseInt(id, 10) === req.user.id) {
       return res.status(400).json({
         success: false,
         error: 'No puedes suspender tu propia cuenta de administrador.',
@@ -346,21 +481,21 @@ router.put('/users/:id/ban', async (req, res) => {
 
     return res.json({
       success: true,
-      message: isBanned ? 'Usuario suspendido correctamente' : 'Usuario reactivado correctamente',
+      message: isBanned ? 'Cuenta suspendida correctamente.' : 'Cuenta reactivada correctamente.',
       isBanned: !!isBanned,
     });
   } catch (err) {
     console.error('[Admin Ban User Error]:', err);
     return res.status(500).json({
       success: false,
-      error: 'Error al cambiar estado de suspensión.',
+      error: 'Error al cambiar estado de la cuenta.',
     });
   }
 });
 
 /**
  * DELETE /api/admin/users/:id
- * Permanently delete a user and cascade all their data
+ * Permanently delete a user account and cascade data
  */
 router.delete('/users/:id', async (req, res) => {
   try {
@@ -374,19 +509,11 @@ router.delete('/users/:id', async (req, res) => {
       });
     }
 
-    const [existing] = await pool.query('SELECT name FROM users WHERE id = ?', [id]);
-    if (existing.length === 0) {
-      return res.status(404).json({
-        success: false,
-        error: 'Usuario no encontrado.',
-      });
-    }
-
     await pool.query('DELETE FROM users WHERE id = ?', [id]);
 
     return res.json({
       success: true,
-      message: `Usuario ${existing[0].name} eliminado permanentemente.`,
+      message: 'Usuario eliminado permanentemente de la base de datos.',
     });
   } catch (err) {
     console.error('[Admin Delete User Error]:', err);
@@ -399,43 +526,43 @@ router.delete('/users/:id', async (req, res) => {
 
 /**
  * GET /api/admin/sessions
- * Global recent sessions / IP audit trail
+ * List all login sessions and device logs across all users
  */
 router.get('/sessions', async (req, res) => {
   try {
-    const { limit = 100 } = req.query;
+    const limit = parseInt(req.query.limit || '100', 10);
     const pool = getPool();
 
-    const [sessions] = await pool.query(`
+    const [rows] = await pool.query(`
       SELECT 
-        s.id,
-        s.user_id,
-        u.name as user_name,
-        u.email as user_email,
-        u.avatar_url as user_avatar,
-        s.ip_address,
-        s.user_agent,
-        s.device_os,
-        s.browser,
-        s.device_type,
-        s.client_platform,
-        s.created_at,
-        s.last_active_at
+        s.id, 
+        s.user_id, 
+        u.name as user_name, 
+        u.email as user_email, 
+        s.ip_address, 
+        s.device_os, 
+        s.browser, 
+        s.device_type, 
+        s.client_platform, 
+        s.created_at, 
+        s.last_active_at,
+        s.session_duration_seconds
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       ORDER BY s.created_at DESC
       LIMIT ?
-    `, [parseInt(limit, 10) || 100]);
+    `, [limit]);
 
     return res.json({
       success: true,
-      sessions,
+      count: rows.length,
+      sessions: rows,
     });
   } catch (err) {
     console.error('[Admin Get Sessions Error]:', err);
     return res.status(500).json({
       success: false,
-      error: 'Error al obtener auditoría de sesiones e IPs.',
+      error: 'Error al consultar sesiones.',
     });
   }
 });

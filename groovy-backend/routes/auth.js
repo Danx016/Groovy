@@ -18,15 +18,17 @@ function parseClientInfo(req) {
   const ua = req.headers['user-agent'] || '';
   const clientPlatformHeader = req.headers['x-client-platform'];
 
-  let os = 'Unknown OS';
-  if (/windows/i.test(ua)) os = 'Windows';
-  else if (/android/i.test(ua)) os = 'Android';
-  else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
-  else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
-  else if (/linux/i.test(ua)) os = 'Linux';
-  else if (/cros/i.test(ua)) os = 'ChromeOS';
+  let os = clientPlatformHeader || 'Unknown OS';
+  if (!clientPlatformHeader) {
+    if (/windows/i.test(ua)) os = 'Windows';
+    else if (/android/i.test(ua)) os = 'Android';
+    else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
+    else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
+    else if (/linux/i.test(ua)) os = 'Linux';
+    else if (/cros/i.test(ua)) os = 'ChromeOS';
+  }
 
-  let browser = 'Unknown Browser';
+  let browser = 'Web Client';
   if (/edg/i.test(ua)) browser = 'Edge';
   else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
   else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
@@ -34,14 +36,10 @@ function parseClientInfo(req) {
   else if (/opera|opr/i.test(ua)) browser = 'Opera';
   else if (/dart|flutter/i.test(ua)) browser = 'Groovy App Client';
 
-  let deviceType = 'Desktop';
-  if (/mobile/i.test(ua) || /android/i.test(ua) || /iphone/i.test(ua)) {
-    deviceType = 'Mobile';
-  } else if (/ipad|tablet/i.test(ua)) {
-    deviceType = 'Tablet';
-  }
+  let deviceType = (os === 'Android' || os === 'iOS' || /mobile/i.test(ua)) ? 'Mobile' : 'Desktop';
+  if (/ipad|tablet/i.test(ua)) deviceType = 'Tablet';
 
-  let clientPlatform = clientPlatformHeader || (deviceType === 'Mobile' ? `${os} Mobile` : `${os} Web`);
+  let clientPlatform = clientPlatformHeader ? `Groovy (${clientPlatformHeader})` : (deviceType === 'Mobile' ? `${os} Mobile` : `${os} Web`);
   if (/dart|flutter/i.test(ua)) {
     clientPlatform = `Groovy App (${os})`;
   }
@@ -265,8 +263,37 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
+    const clientInfo = parseClientInfo(req);
+
+    // Update last_active_at and check session
+    await pool.query(`
+      UPDATE users 
+      SET last_active_at = CURRENT_TIMESTAMP,
+          last_login_ip = COALESCE(?, last_login_ip),
+          last_device = COALESCE(?, last_device)
+      WHERE id = ?
+    `, [clientInfo.ip, clientInfo.deviceSummary, req.user.id]);
+
+    // Check if session exists in last 2 hours, else record a new session
+    const [recentSession] = await pool.query(`
+      SELECT id FROM user_sessions 
+      WHERE user_id = ? AND created_at >= NOW() - INTERVAL 2 HOUR 
+      ORDER BY id DESC LIMIT 1
+    `, [req.user.id]);
+
+    if (recentSession.length === 0) {
+      await recordSession(pool, req.user.id, clientInfo);
+    } else {
+      await pool.query(`
+        UPDATE user_sessions 
+        SET last_active_at = CURRENT_TIMESTAMP,
+            session_duration_seconds = TIMESTAMPDIFF(SECOND, created_at, CURRENT_TIMESTAMP)
+        WHERE id = ?
+      `, [recentSession[0].id]);
+    }
+
     const [rows] = await pool.query(
-      'SELECT id, name, email, avatar_url, role, is_banned, created_at, last_login_at, last_login_ip, last_device FROM users WHERE id = ? LIMIT 1',
+      'SELECT id, name, email, avatar_url, role, is_banned, created_at, last_login_at, last_active_at, last_login_ip, last_device, total_listen_seconds FROM users WHERE id = ? LIMIT 1',
       [req.user.id]
     );
 
@@ -296,8 +323,10 @@ router.get('/me', authenticateToken, async (req, res) => {
         role: dbUser.role || 'user',
         isBanned: dbUser.is_banned === 1,
         lastLoginAt: dbUser.last_login_at,
+        lastActiveAt: dbUser.last_active_at,
         lastLoginIp: dbUser.last_login_ip,
         lastDevice: dbUser.last_device,
+        totalListenSeconds: dbUser.total_listen_seconds || 0,
         createdAt: dbUser.created_at,
       },
     });

@@ -98,6 +98,31 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final FadeSettingsService _fadeSettingsService = FadeSettingsService();
   Timer? _fadeTimer;
   bool _isFading = false;
+  Timer? _telemetryTimer;
+
+  void _startTelemetryHeartbeat() {
+    _telemetryTimer?.cancel();
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      _sendTelemetryHeartbeat();
+    });
+  }
+
+  void _sendTelemetryHeartbeat({bool? overridePlaying}) {
+    final song = _currentSong;
+    if (song == null) return;
+    final isPl = overridePlaying ?? _isPlaying;
+    StorageService().getUserToken().then((token) {
+      if (token != null && token.isNotEmpty) {
+        GroovyApiService().reportPlaybackState(
+          token: token,
+          song: song,
+          isPlaying: isPl,
+          position: _position.inSeconds,
+          listenDeltaSeconds: isPl ? 15 : 0,
+        );
+      }
+    }).catchError((_) {});
+  }
 
   final JukeboxService _jukeboxService;
   final TranscodingService _transcodingService;
@@ -1757,6 +1782,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       StorageService().getUserToken().then((token) {
         if (token != null && token.isNotEmpty) {
           GroovyApiService().recordHistory(token, song);
+          GroovyApiService().reportPlaybackState(
+            token: token,
+            song: song,
+            isPlaying: true,
+            position: _position.inSeconds,
+            listenDeltaSeconds: 0,
+          );
+          _startTelemetryHeartbeat();
         }
       }).catchError((_) {});
 
@@ -1894,10 +1927,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _isPlaying = true;
       notifyListeners();
       _updateAndroidAuto();
+      _startTelemetryHeartbeat();
+      _sendTelemetryHeartbeat(overridePlaying: true);
     }
   }
 
   Future<void> pause() async {
+    _telemetryTimer?.cancel();
+    _sendTelemetryHeartbeat(overridePlaying: false);
     if (_jukeboxService.enabled) {
       await _jukeboxService.pause(_youtubeService);
       _isPlaying = false;
@@ -1929,6 +1966,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> stop() async {
+    _telemetryTimer?.cancel();
+    _sendTelemetryHeartbeat(overridePlaying: false);
     if (_castService.isConnected) {
       await _castService.stop();
     } else if (_upnpService.isConnected) {

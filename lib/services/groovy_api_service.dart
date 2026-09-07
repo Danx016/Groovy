@@ -65,15 +65,85 @@ class GroovyApiService {
     _baseUrl = url.endsWith('/') ? url.substring(0, url.length - 1) : url;
   }
 
+  String get _clientPlatformName {
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.android:
+        return 'Android';
+      case TargetPlatform.windows:
+        return 'Windows';
+      case TargetPlatform.iOS:
+        return 'iOS';
+      case TargetPlatform.macOS:
+        return 'macOS';
+      case TargetPlatform.linux:
+        return 'Linux';
+      default:
+        return 'Flutter';
+    }
+  }
+
   Map<String, String> _headers([String? token]) {
+    final platform = _clientPlatformName;
     final map = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-Client-Platform': platform,
+      'User-Agent': 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
       map['Authorization'] = 'Bearer $token';
     }
     return map;
+  }
+
+  // ----------------------------------------------------
+  // TELEMETRY & LIVE PLAYBACK PRESENCE
+  // ----------------------------------------------------
+
+  Future<void> reportPlaybackState({
+    required String token,
+    required Song song,
+    required bool isPlaying,
+    int position = 0,
+    int listenDeltaSeconds = 15,
+  }) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/telemetry/playback');
+      await http.post(
+        uri,
+        headers: _headers(token),
+        body: jsonEncode({
+          'songId': song.id,
+          'title': song.title,
+          'artist': song.artist ?? '',
+          'album': song.album ?? '',
+          'coverArt': song.coverArt ?? '',
+          'duration': song.duration ?? 0,
+          'position': position,
+          'isPlaying': isPlaying,
+          'platform': _clientPlatformName,
+          'deviceName': '$_clientPlatformName App',
+          'listenDeltaSeconds': listenDeltaSeconds,
+        }),
+      ).timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('[GroovyApiService] reportPlaybackState note: $e');
+    }
+  }
+
+  Future<void> pingSession(String token) async {
+    try {
+      final uri = Uri.parse('$_baseUrl/telemetry/ping');
+      await http.post(
+        uri,
+        headers: _headers(token),
+        body: jsonEncode({
+          'platform': _clientPlatformName,
+        }),
+      ).timeout(const Duration(seconds: 5));
+    } catch (e) {
+      debugPrint('[GroovyApiService] pingSession note: $e');
+    }
   }
 
   // ----------------------------------------------------
@@ -432,6 +502,8 @@ class GroovyApiService {
           'album': song.album ?? '',
           'coverArt': song.coverArt ?? '',
           'duration': song.duration ?? 0,
+          'platform': _clientPlatformName,
+          'deviceName': '$_clientPlatformName App',
         }),
       ).timeout(const Duration(seconds: 5));
     } catch (e) {

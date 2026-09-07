@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Users,
   Radio,
@@ -29,6 +29,8 @@ import {
   ChevronRight,
   ExternalLink,
   Info,
+  Play,
+  Volume2,
 } from 'lucide-react';
 import { adminApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -36,7 +38,7 @@ import { useAuth } from '../../context/AuthContext';
 export const AdminPortal = ({ onBackToPlayer }) => {
   const { user: currentUser, isAdmin, isAuthenticated, login, logout } = useAuth();
 
-  // Navigation tab in Admin Sidebar: 'users' | 'sessions' | 'metrics'
+  // Navigation tab: 'live' | 'users' | 'sessions' | 'metrics'
   const [activeTab, setActiveTab] = useState('users');
 
   // Login form state
@@ -49,6 +51,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [metrics, setMetrics] = useState(null);
   const [users, setUsers] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [liveListeners, setLiveListeners] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -86,20 +89,34 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     }
   };
 
+  const fetchLivePlayback = useCallback(async () => {
+    if (!isAuthorized) return;
+    try {
+      const res = await adminApi.getLivePlayback().catch(() => ({ listeners: [] }));
+      if (res?.listeners) {
+        setLiveListeners(res.listeners);
+      }
+    } catch (e) {
+      console.warn('Error fetching live playback:', e);
+    }
+  }, [isAuthorized]);
+
   const fetchData = useCallback(async () => {
     if (!isAuthorized) return;
     setIsLoading(true);
     setActionMessage(null);
     try {
-      const [metricsRes, usersRes, sessionsRes] = await Promise.all([
+      const [metricsRes, usersRes, sessionsRes, liveRes] = await Promise.all([
         adminApi.getMetrics().catch(() => ({ metrics: null })),
         adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
         adminApi.getSessions(100).catch(() => ({ sessions: [] })),
+        adminApi.getLivePlayback().catch(() => ({ listeners: [] })),
       ]);
 
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
       if (usersRes?.users) setUsers(usersRes.users);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
+      if (liveRes?.listeners) setLiveListeners(liveRes.listeners);
     } catch (err) {
       console.error('Error fetching admin data:', err);
       setActionMessage({ type: 'error', text: 'Error al conectar con la base de datos: ' + err.message });
@@ -111,8 +128,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   useEffect(() => {
     if (isAuthorized) {
       fetchData();
+      // Auto-refresh live presence every 10 seconds
+      const interval = setInterval(() => {
+        fetchLivePlayback();
+      }, 10000);
+      return () => clearInterval(interval);
     }
-  }, [isAuthorized, fetchData]);
+  }, [isAuthorized, fetchData, fetchLivePlayback]);
 
   const handleOpenUserDetail = async (userId) => {
     setIsLoadingDetail(true);
@@ -188,7 +210,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       if (selectedUser?.user?.id === userToDelete.id) {
         setSelectedUser(null);
       }
-      setActionMessage({ type: 'success', text: `Usuario ${userToDelete.name} eliminado.` });
+      setActionMessage({ type: 'success', text: `Usuario ${userToDelete.name} eliminado permanentemente.` });
       fetchData();
     } catch (err) {
       alert('Error al eliminar: ' + err.message);
@@ -198,17 +220,65 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   };
 
   const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
-    const osLower = (os || '').toLowerCase();
-    if (osLower.includes('android') || osLower.includes('ios') || osLower.includes('iphone') || deviceType === 'Mobile') {
-      return <Smartphone size={16} style={{ color: '#FA243C' }} />;
+    const str = `${os} ${browser} ${deviceType}`.toLowerCase();
+    if (str.includes('android')) {
+      return <Smartphone size={16} style={{ color: '#34C759' }} />;
     }
-    if (osLower.includes('ipad') || deviceType === 'Tablet') {
-      return <Tablet size={16} style={{ color: '#FA243C' }} />;
+    if (str.includes('ios') || str.includes('iphone')) {
+      return <Smartphone size={16} style={{ color: '#007AFF' }} />;
     }
-    if (osLower.includes('windows') || osLower.includes('mac') || osLower.includes('linux')) {
-      return <Laptop size={16} style={{ color: '#FA243C' }} />;
+    if (str.includes('ipad') || str.includes('tablet')) {
+      return <Tablet size={16} style={{ color: '#007AFF' }} />;
+    }
+    if (str.includes('windows')) {
+      return <Laptop size={16} style={{ color: '#00A4EF' }} />;
+    }
+    if (str.includes('mac') || str.includes('darwin')) {
+      return <Laptop size={16} style={{ color: '#fff' }} />;
+    }
+    if (str.includes('linux')) {
+      return <Laptop size={16} style={{ color: '#FCC624' }} />;
     }
     return <Globe size={16} style={{ color: '#B3B3B3' }} />;
+  };
+
+  const formatListeningTime = (totalSeconds = 0) => {
+    const sec = parseInt(totalSeconds, 10) || 0;
+    if (sec < 60) return `${sec} seg`;
+    const hours = Math.floor(sec / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    if (hours > 0) {
+      return `${hours} h ${minutes} min`;
+    }
+    return `${minutes} min`;
+  };
+
+  const formatSessionDuration = (seconds = 0) => {
+    const sec = parseInt(seconds, 10) || 0;
+    if (sec < 60) return '< 1 min';
+    const hours = Math.floor(sec / 3600);
+    const minutes = Math.floor((sec % 3600) / 60);
+    if (hours > 0) return `${hours} h ${minutes} min`;
+    return `${minutes} min`;
+  };
+
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return '—';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleString('es-ES', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true,
+      });
+    } catch {
+      return '—';
+    }
   };
 
   // Auth Guard Screen (matches Groovy's AccountView / AuthModal)
@@ -243,7 +313,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             Panel de Administración
           </h1>
           <p style={{ fontSize: '14px', color: '#B3B3B3', marginTop: '8px', marginBottom: '24px', lineHeight: 1.4 }}>
-            Inicia sesión con tu cuenta de administrador de Groovy para acceder a la gestión de usuarios.
+            Inicia sesión con tu cuenta de administrador de Groovy para acceder a la gestión y telemetría.
           </p>
 
           {loginError && (
@@ -328,9 +398,11 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     );
   }
 
+  const activeLiveCount = liveListeners.filter(l => l.isPlaying).length;
+
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#000000', color: '#ffffff' }}>
-      {/* 1. GROOVY NATIVE SIDEBAR (Matches Sidebar.jsx exactly) */}
+      {/* 1. GROOVY NATIVE SIDEBAR (Matches Sidebar.jsx) */}
       <aside style={{
         width: '240px',
         flexShrink: 0,
@@ -357,7 +429,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 ADMIN
               </span>
             </div>
-            <p style={{ fontSize: '11px', color: '#B3B3B3', marginTop: '1px' }}>Gestión de Nube</p>
+            <p style={{ fontSize: '11px', color: '#B3B3B3', marginTop: '1px' }}>Telemetría en Vivo</p>
           </div>
         </div>
 
@@ -368,8 +440,38 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           </span>
         </div>
 
-        {/* Navigation Items (Exact Groovy style) */}
+        {/* Navigation Items */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '16px' }}>
+          {/* Live Now Listening Tab */}
+          <button
+            onClick={() => setActiveTab('live')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              width: '100%', padding: '10px 12px', borderRadius: '8px',
+              fontSize: '14px', fontWeight: activeTab === 'live' ? 700 : 500,
+              color: activeTab === 'live' ? '#fff' : '#B3B3B3',
+              background: activeTab === 'live' ? '#282828' : 'transparent',
+              textAlign: 'left', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (activeTab !== 'live') e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={e => { if (activeTab !== 'live') e.currentTarget.style.color = '#B3B3B3'; }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Radio size={19} style={{ color: activeTab === 'live' ? '#34C759' : '#34C759', flexShrink: 0 }} />
+              <span>Escuchando Ahora</span>
+            </div>
+            {activeLiveCount > 0 ? (
+              <span style={{
+                fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '10px',
+                background: '#34C759', color: '#000',
+              }}>
+                {activeLiveCount} EN VIVO
+              </span>
+            ) : (
+              <span style={{ fontSize: '11px', color: '#6B6B6B' }}>0</span>
+            )}
+          </button>
+
           <button
             onClick={() => setActiveTab('users')}
             style={{
@@ -500,7 +602,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
       {/* 2. MAIN CONTENT AREA */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', overflowY: 'auto' }}>
-        {/* Top Header (Matches Header.jsx exactly) */}
+        {/* Top Header */}
         <header style={{
           height: '56px',
           background: 'rgba(0,0,0,0.92)',
@@ -514,7 +616,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           top: 0,
           zIndex: 10,
         }}>
-          {/* Search bar (styled exactly like desktop-search in Header.jsx) */}
+          {/* Search bar */}
           <div style={{
             flex: 1, maxWidth: '420px',
             display: 'flex', alignItems: 'center', gap: '10px',
@@ -524,7 +626,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             <Search size={15} style={{ color: '#B3B3B3', flexShrink: 0 }} />
             <input
               type="text"
-              placeholder="Buscar por nombre, correo, IP o dispositivo..."
+              placeholder="Buscar por usuario, IP, correo o dispositivo..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               style={{
@@ -541,6 +643,23 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
           {/* Right Header items */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Live Streaming Pill */}
+            {activeLiveCount > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: 'rgba(52,199,89,0.15)', border: '0.5px solid rgba(52,199,89,0.4)',
+                borderRadius: '20px', padding: '5px 12px',
+                fontSize: '12px', color: '#34C759', fontWeight: 600,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '12px' }}>
+                  <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
+                  <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
+                  <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
+                </div>
+                <span>{activeLiveCount} Escuchando en vivo</span>
+              </div>
+            )}
+
             {/* Live VPS MySQL Connection Status pill */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '6px',
@@ -549,7 +668,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               fontSize: '12px', color: '#B3B3B3',
             }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759' }} />
-              <span style={{ fontWeight: 500 }}>MySQL Cloud Conectado</span>
+              <span style={{ fontWeight: 500 }}>MySQL Cloud 8.0</span>
             </div>
 
             {/* Refresh Button */}
@@ -574,16 +693,17 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         </header>
 
         {/* Content Body */}
-        <main style={{ padding: '32px', maxWidth: '1200px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+        <main style={{ padding: '32px', maxWidth: '1240px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
           {/* Header Title Section */}
           <div style={{ marginBottom: '24px' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '6px' }}>
-              {activeTab === 'users' && 'Usuarios Registrados'}
-              {activeTab === 'sessions' && 'Auditoría de Dispositivos e IPs'}
+              {activeTab === 'live' && 'Reproducción en Vivo (Streaming en Tiempo Real)'}
+              {activeTab === 'users' && 'Usuarios y Telemetría de Dispositivos'}
+              {activeTab === 'sessions' && 'Auditoría de Inicios de Sesión e IPs'}
               {activeTab === 'metrics' && 'Top Canciones en Streaming'}
             </h1>
             <p style={{ fontSize: '14px', color: '#B3B3B3' }}>
-              Base de datos en tiempo real de Groovy en el servidor de producción.
+              Monitoreo en tiempo real de usuarios, dispositivos Windows / Android, IPs y tiempos de escucha.
             </p>
           </div>
 
@@ -603,10 +723,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             </div>
           )}
 
-          {/* GROOVY METRICS STRIP (Cohesive & Clean, Apple Music / Spotify for Artists style) */}
+          {/* GROOVY METRICS STRIP (Expanded with Listening Time & Live Listeners) */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
             gap: '12px',
             marginBottom: '28px',
           }}>
@@ -615,7 +735,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               padding: '18px 20px',
             }}>
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Usuarios Totales
+                Usuarios Registrados
               </span>
               <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
                 {metrics?.totalUsers ?? users.length}
@@ -630,13 +750,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               padding: '18px 20px',
             }}>
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Sesiones Registradas
+                Escuchando Ahora
               </span>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
-                {metrics?.totalSessions ?? sessions.length}
+              <div style={{ fontSize: '28px', fontWeight: 700, color: activeLiveCount > 0 ? '#34C759' : '#fff', marginTop: '6px' }}>
+                {activeLiveCount}
               </div>
               <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
-                Inicios de sesión con IP y dispositivo
+                {activeLiveCount > 0 ? 'En streaming en este momento' : 'Ningún usuario escuchando'}
               </p>
             </div>
 
@@ -645,13 +765,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               padding: '18px 20px',
             }}>
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Favoritos en Nube
+                Tiempo Total de Música
               </span>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
-                {metrics?.totalFavorites ?? 0}
+              <div style={{ fontSize: '24px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
+                {formatListeningTime(metrics?.totalListenSeconds ?? 0)}
               </div>
               <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
-                Canciones guardadas por usuarios
+                Reproducido por los usuarios
               </p>
             </div>
 
@@ -660,21 +780,141 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               padding: '18px 20px',
             }}>
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Reproducciones
+                Canciones Reproducidas
               </span>
               <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
                 {metrics?.totalPlays ?? 0}
               </div>
               <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
-                Streams totales sincronizados
+                Historial de reproducciones en nube
               </p>
             </div>
           </div>
 
-          {/* TAB 1: USERS */}
+          {/* TAB: LIVE STREAMING (Who is listening to music right this second) */}
+          {(activeTab === 'live' || liveListeners.some(l => l.isPlaying)) && (
+            <div style={{
+              background: '#181818',
+              borderRadius: '16px',
+              border: '0.5px solid #282828',
+              padding: '24px',
+              marginBottom: '28px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '16px' }}>
+                    <div className="eq-bar" style={{ width: '3px' }} />
+                    <div className="eq-bar" style={{ width: '3px' }} />
+                    <div className="eq-bar" style={{ width: '3px' }} />
+                    <div className="eq-bar" style={{ width: '3px' }} />
+                  </div>
+                  <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
+                    En Vivo: Usuarios Escuchando Música Ahora
+                  </h3>
+                </div>
+                <span style={{ fontSize: '12px', color: '#34C759', fontWeight: 600 }}>
+                  Actualización en tiempo real (cada 10s)
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {liveListeners.filter(l => l.isPlaying).map((item) => (
+                  <div
+                    key={item.userId}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      background: '#202020', borderRadius: '12px', padding: '14px 18px',
+                      border: '0.5px solid rgba(52,199,89,0.3)',
+                    }}
+                  >
+                    {/* User Profile */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
+                      <div style={{
+                        width: '44px', height: '44px', borderRadius: '50%', background: '#FA243C',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '16px', fontWeight: 700, color: '#fff',
+                      }}>
+                        {item.userName?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div>
+                        <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
+                        <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail}</p>
+                      </div>
+                    </div>
+
+                    {/* Song Playing */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, margin: '0 24px', minWidth: 0 }}>
+                      {item.coverArt ? (
+                        <img src={item.coverArt} alt={item.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Music size={20} style={{ color: '#FA243C' }} />
+                        </div>
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {item.title}
+                          </p>
+                          <span style={{ fontSize: '10px', color: '#34C759', fontWeight: 700, background: 'rgba(52,199,89,0.15)', padding: '1px 6px', borderRadius: '4px' }}>
+                            REPRODUCIENDO
+                          </span>
+                        </div>
+                        <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {item.artist}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Device & IP */}
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        {getDeviceIcon(item.platform, item.deviceName)}
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
+                          {item.platform} App
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
+                          {item.ipAddress || 'IP no reg.'}
+                        </code>
+                        <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
+                          hace {item.secondsSincePing || 0}s
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* View Details Button */}
+                    <button
+                      onClick={() => handleOpenUserDetail(item.userId)}
+                      style={{
+                        marginLeft: '16px', padding: '7px 14px', borderRadius: '8px',
+                        background: '#282828', border: '0.5px solid #404040', color: '#fff',
+                        fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#282828'}
+                    >
+                      Ver Usuario
+                    </button>
+                  </div>
+                ))}
+
+                {liveListeners.filter(l => l.isPlaying).length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '28px', color: '#6B6B6B' }}>
+                    <Radio size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios escuchando música en este momento.</p>
+                    <p style={{ fontSize: '12px', marginTop: '2px' }}>Cuando alguien reproduzca en Android, Windows o Web, aparecerá aquí inmediatamente.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 1: USERS LIST & TELEMETRY */}
           {activeTab === 'users' && (
             <div>
-              {/* Segmented Filter Pills (exact Apple Music / LibraryView style) */}
+              {/* Segmented Filter Pills */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {[
@@ -721,7 +961,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 </div>
               </div>
 
-              {/* Users List (Styled as Groovy Music Rows / Apple Music Tracklist) */}
+              {/* Users List (Styled as Groovy Music Rows) */}
               <div style={{
                 background: '#181818',
                 borderRadius: '16px',
@@ -731,7 +971,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 {/* List Header */}
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'minmax(220px, 2fr) 130px 180px 140px 160px',
+                  gridTemplateColumns: 'minmax(210px, 2fr) 130px 170px 140px 130px 140px',
                   padding: '12px 20px',
                   borderBottom: '0.5px solid #282828',
                   fontSize: '11px',
@@ -742,172 +982,176 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 }}>
                   <div>Usuario</div>
                   <div>Rol y Estado</div>
-                  <div>Última IP y Dispositivo</div>
-                  <div>Biblioteca</div>
+                  <div>Última Actividad</div>
+                  <div>Tiempo de Escucha</div>
+                  <div>Canciones</div>
                   <div style={{ textAlign: 'right' }}>Acciones</div>
                 </div>
 
                 {/* User Rows */}
-                {users.map((u) => (
-                  <div
-                    key={u.id}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'minmax(220px, 2fr) 130px 180px 140px 160px',
-                      alignItems: 'center',
-                      padding: '14px 20px',
-                      borderBottom: '0.5px solid #202020',
-                      transition: 'background 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.background = '#202020'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
-                    {/* User profile & email */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, paddingRight: '12px' }}>
-                      <div style={{
-                        width: '40px', height: '40px', borderRadius: '50%',
-                        background: u.role === 'admin' ? '#FA243C' : '#282828',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '15px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                        border: u.role === 'admin' ? '2px solid rgba(250,36,60,0.5)' : '1px solid #333',
-                      }}>
-                        {u.name?.charAt(0).toUpperCase() || 'U'}
-                      </div>
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {u.name}
-                          </span>
-                          {currentUser?.id === u.id && (
-                            <span style={{ fontSize: '10px', color: '#B3B3B3', background: '#282828', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
-                              Tú
-                            </span>
-                          )}
-                        </div>
-                        <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                          {u.email}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Role & Status */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <span style={{
-                          fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px',
-                          background: u.role === 'admin' ? 'rgba(250,36,60,0.15)' : '#282828',
-                          color: u.role === 'admin' ? '#FA243C' : '#B3B3B3',
-                          border: `0.5px solid ${u.role === 'admin' ? 'rgba(250,36,60,0.3)' : '#333'}`,
+                {users.map((u) => {
+                  const isLive = u.livePlayback?.isPlaying;
+                  return (
+                    <div
+                      key={u.id}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(210px, 2fr) 130px 170px 140px 130px 140px',
+                        alignItems: 'center',
+                        padding: '14px 20px',
+                        borderBottom: '0.5px solid #202020',
+                        transition: 'background 0.15s',
+                        background: isLive ? 'rgba(52,199,89,0.03)' : 'transparent',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = isLive ? 'rgba(52,199,89,0.06)' : '#202020'}
+                      onMouseLeave={e => e.currentTarget.style.background = isLive ? 'rgba(52,199,89,0.03)' : 'transparent'}
+                    >
+                      {/* User profile & email */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, paddingRight: '12px' }}>
+                        <div style={{
+                          width: '40px', height: '40px', borderRadius: '50%',
+                          background: u.role === 'admin' ? '#FA243C' : '#282828',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '15px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                          border: u.role === 'admin' ? '2px solid rgba(250,36,60,0.5)' : '1px solid #333',
                         }}>
-                          {u.role === 'admin' ? 'Admin' : 'Usuario'}
-                        </span>
+                          {u.name?.charAt(0).toUpperCase() || 'U'}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {u.name}
+                            </span>
+                            {currentUser?.id === u.id && (
+                              <span style={{ fontSize: '10px', color: '#B3B3B3', background: '#282828', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                Tú
+                              </span>
+                            )}
+                            {isLive && (
+                              <span style={{
+                                fontSize: '10px', color: '#34C759', background: 'rgba(52,199,89,0.15)',
+                                padding: '1px 6px', borderRadius: '4px', fontWeight: 700,
+                              }}>
+                                ● En Vivo
+                              </span>
+                            )}
+                          </div>
+                          <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                            {u.email}
+                          </p>
+                        </div>
                       </div>
-                      <div style={{ fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', color: u.isBanned ? '#FF3B30' : '#34C759' }}>
-                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: u.isBanned ? '#FF3B30' : '#34C759' }} />
-                        <span>{u.isBanned ? 'Suspendido' : 'Activo'}</span>
-                      </div>
-                    </div>
 
-                    {/* IP & Device */}
-                    <div style={{ minWidth: 0, paddingRight: '12px' }}>
-                      {u.lastLoginIp ? (
+                      {/* Role & Status */}
+                      <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                           <span style={{
-                            fontFamily: 'monospace', fontSize: '12px', background: '#282828',
-                            padding: '2px 6px', borderRadius: '4px', color: '#fff',
+                            fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px',
+                            background: u.role === 'admin' ? 'rgba(250,36,60,0.15)' : '#282828',
+                            color: u.role === 'admin' ? '#FA243C' : '#B3B3B3',
+                            border: `0.5px solid ${u.role === 'admin' ? 'rgba(250,36,60,0.3)' : '#333'}`,
                           }}>
-                            {u.lastLoginIp}
+                            {u.role === 'admin' ? 'Admin' : 'Usuario'}
                           </span>
-                          <button
-                            onClick={() => copyToClipboard(u.lastLoginIp)}
-                            title="Copiar dirección IP"
-                            style={{ color: '#6B6B6B', padding: '2px' }}
-                            onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#6B6B6B'}
-                          >
-                            {copiedIp === u.lastLoginIp ? <Check size={12} style={{ color: '#34C759' }} /> : <Copy size={12} />}
-                          </button>
                         </div>
-                      ) : (
-                        <span style={{ fontSize: '12px', color: '#6B6B6B' }}>Sin registros</span>
-                      )}
+                        <div style={{ fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', color: u.isBanned ? '#FF3B30' : '#34C759' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: u.isBanned ? '#FF3B30' : '#34C759' }} />
+                          <span>{u.isBanned ? 'Suspendido' : 'Activo'}</span>
+                        </div>
+                      </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
-                        {getDeviceIcon(u.lastDevice)}
-                        <span style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          {u.lastDevice || 'Dispositivo no reg.'}
+                      {/* Last Active Timestamp & Device */}
+                      <div style={{ minWidth: 0, paddingRight: '10px' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
+                          {formatDateTime(u.lastActiveAt || u.lastLoginAt)}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
+                          {getDeviceIcon(u.lastDevice)}
+                          <span style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.lastDevice || 'Sin dispositivo'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Listening Time */}
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Clock size={13} style={{ color: '#FA243C' }} />
+                          <span>{formatListeningTime(u.totalListenSeconds)}</span>
+                        </div>
+                        <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
+                          tiempo acumulado
                         </span>
                       </div>
-                    </div>
 
-                    {/* Library Stats */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#B3B3B3' }}>
-                      <span title="Favoritos" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Heart size={13} style={{ color: '#FF375F' }} /> {u.stats?.favorites || 0}
-                      </span>
-                      <span title="Playlists" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <ListMusic size={13} style={{ color: '#FA243C' }} /> {u.stats?.playlists || 0}
-                      </span>
-                      <span title="Plays" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Music size={13} style={{ color: '#AF52DE' }} /> {u.stats?.plays || 0}
-                      </span>
-                    </div>
+                      {/* Total Songs Listened */}
+                      <div>
+                        <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <Music size={13} style={{ color: '#34C759' }} />
+                          <span>{u.stats?.plays || 0} canciones</span>
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#B3B3B3', display: 'flex', gap: '8px', marginTop: '2px' }}>
+                          <span>❤️ {u.stats?.favorites || 0}</span>
+                          <span>📁 {u.stats?.playlists || 0}</span>
+                        </div>
+                      </div>
 
-                    {/* Actions */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                      <button
-                        onClick={() => handleOpenUserDetail(u.id)}
-                        style={{
-                          padding: '6px 12px', borderRadius: '8px', background: '#282828',
-                          border: '0.5px solid #404040', color: '#fff', fontSize: '12px', fontWeight: 600,
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = '#333'}
-                        onMouseLeave={e => e.currentTarget.style.background = '#282828'}
-                      >
-                        Detalles
-                      </button>
-
-                      <button
-                        onClick={() => handleOpenEdit(u)}
-                        title="Editar usuario"
-                        style={{
-                          padding: '7px', borderRadius: '8px', background: '#282828',
-                          border: '0.5px solid #404040', color: '#B3B3B3',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                        onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
-                      >
-                        <Edit2 size={13} />
-                      </button>
-
-                      {currentUser?.id !== u.id && (
+                      {/* Actions */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
                         <button
-                          onClick={() => handleToggleBan(u)}
-                          title={u.isBanned ? 'Reactivar acceso' : 'Suspender acceso'}
+                          onClick={() => handleOpenUserDetail(u.id)}
+                          style={{
+                            padding: '6px 12px', borderRadius: '8px', background: '#282828',
+                            border: '0.5px solid #404040', color: '#fff', fontSize: '12px', fontWeight: 600,
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                          onMouseLeave={e => e.currentTarget.style.background = '#282828'}
+                        >
+                          Detalles
+                        </button>
+
+                        <button
+                          onClick={() => handleOpenEdit(u)}
+                          title="Editar usuario"
                           style={{
                             padding: '7px', borderRadius: '8px', background: '#282828',
-                            border: '0.5px solid #404040', color: u.isBanned ? '#34C759' : '#FF9500',
+                            border: '0.5px solid #404040', color: '#B3B3B3',
                           }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
                         >
-                          <Ban size={13} />
+                          <Edit2 size={13} />
                         </button>
-                      )}
 
-                      {currentUser?.id !== u.id && (
-                        <button
-                          onClick={() => setUserToDelete(u)}
-                          title="Eliminar usuario"
-                          style={{
-                            padding: '7px', borderRadius: '8px', background: 'rgba(255,59,48,0.1)',
-                            border: '0.5px solid rgba(255,59,48,0.25)', color: '#FF3B30',
-                          }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
+                        {currentUser?.id !== u.id && (
+                          <button
+                            onClick={() => handleToggleBan(u)}
+                            title={u.isBanned ? 'Reactivar acceso' : 'Suspender acceso'}
+                            style={{
+                              padding: '7px', borderRadius: '8px', background: '#282828',
+                              border: '0.5px solid #404040', color: u.isBanned ? '#34C759' : '#FF9500',
+                            }}
+                          >
+                            <Ban size={13} />
+                          </button>
+                        )}
+
+                        {currentUser?.id !== u.id && (
+                          <button
+                            onClick={() => setUserToDelete(u)}
+                            title="Eliminar usuario"
+                            style={{
+                              padding: '7px', borderRadius: '8px', background: 'rgba(255,59,48,0.1)',
+                              border: '0.5px solid rgba(255,59,48,0.25)', color: '#FF3B30',
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {users.length === 0 && !isLoading && (
                   <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
@@ -920,7 +1164,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             </div>
           )}
 
-          {/* TAB 2: SESSIONS & IP AUDIT */}
+          {/* TAB 2: SESSIONS & IP AUDIT (With Session Duration & Exact Timestamps) */}
           {activeTab === 'sessions' && (
             <div style={{
               background: '#181818',
@@ -931,14 +1175,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <div style={{ padding: '18px 24px', borderBottom: '0.5px solid #282828' }}>
                 <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.3px' }}>Registro de Conexiones en Vivo</h3>
                 <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '3px' }}>
-                  Auditoría completa de direcciones IP, sistemas operativos, navegadores y marcas de tiempo de cada usuario.
+                  Auditoría completa con marcas de tiempo exactas, duración de cada inicio de sesión, dispositivo (Windows / Android) y dirección IP.
                 </p>
               </div>
 
               {/* Table header */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(200px, 1.8fr) 160px 180px 140px 160px',
+                gridTemplateColumns: 'minmax(180px, 1.6fr) 150px 170px 130px 180px',
                 padding: '12px 24px',
                 borderBottom: '0.5px solid #282828',
                 fontSize: '11px',
@@ -950,8 +1194,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 <div>Usuario</div>
                 <div>Dirección IP</div>
                 <div>Dispositivo & SO</div>
-                <div>Navegador</div>
-                <div>Fecha y Hora</div>
+                <div>Tiempo de Sesión</div>
+                <div>Fecha y Hora Exacta</div>
               </div>
 
               {/* Sessions list */}
@@ -960,7 +1204,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   key={s.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(200px, 1.8fr) 160px 180px 140px 160px',
+                    gridTemplateColumns: 'minmax(180px, 1.6fr) 150px 170px 130px 180px',
                     alignItems: 'center',
                     padding: '14px 24px',
                     borderBottom: '0.5px solid #202020',
@@ -1001,19 +1245,20 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   {/* Device & OS */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                     {getDeviceIcon(s.device_os, s.browser, s.device_type)}
-                    <span style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.device_os || 'Desconocido'}
-                    </span>
+                    <div>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{s.device_os || 'Desconocido'}</p>
+                      <p style={{ fontSize: '11px', color: '#B3B3B3' }}>{s.client_platform || s.browser || 'App'}</p>
+                    </div>
                   </div>
 
-                  {/* Browser */}
-                  <div style={{ fontSize: '13px', color: '#B3B3B3' }}>
-                    {s.browser || 'Web Client'}
+                  {/* Session Duration */}
+                  <div style={{ fontSize: '13px', color: '#34C759', fontWeight: 600 }}>
+                    {formatSessionDuration(s.session_duration_seconds)}
                   </div>
 
-                  {/* Timestamp */}
-                  <div style={{ fontSize: '12px', color: '#6B6B6B' }}>
-                    {s.created_at ? new Date(s.created_at).toLocaleString() : '—'}
+                  {/* Exact Timestamp */}
+                  <div style={{ fontSize: '12px', color: '#B3B3B3' }}>
+                    {formatDateTime(s.created_at)}
                   </div>
                 </div>
               ))}
@@ -1094,7 +1339,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         </main>
       </div>
 
-      {/* 3. CUPERTINO MODAL: USER DETAILS INSPECTOR ("Ver Todo") */}
+      {/* 3. CUPERTINO MODAL: USER DETAILS INSPECTOR ("Ver Todo / Detalles") */}
       {selectedUser && (
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
@@ -1102,21 +1347,31 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         }}>
           <div style={{
             background: '#181818', border: '0.5px solid #282828', borderRadius: '20px',
-            width: '100%', maxWidth: '720px', maxHeight: '88vh', overflowY: 'auto', padding: '28px',
+            width: '100%', maxWidth: '820px', maxHeight: '90vh', overflowY: 'auto', padding: '28px',
             boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
           }}>
             {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{
-                  width: '52px', height: '52px', borderRadius: '50%', background: '#FA243C',
+                  width: '56px', height: '56px', borderRadius: '50%', background: '#FA243C',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '22px', fontWeight: 700, color: '#fff',
+                  fontSize: '24px', fontWeight: 700, color: '#fff',
                 }}>
                   {selectedUser.user.name?.charAt(0).toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.3px' }}>{selectedUser.user.name}</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h2 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px' }}>{selectedUser.user.name}</h2>
+                    {selectedUser.livePlayback?.isPlaying && (
+                      <span style={{
+                        fontSize: '11px', color: '#34C759', background: 'rgba(52,199,89,0.15)',
+                        padding: '2px 8px', borderRadius: '6px', fontWeight: 700,
+                      }}>
+                        ● Escuchando Ahora
+                      </span>
+                    )}
+                  </div>
                   <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '2px' }}>{selectedUser.user.email}</p>
                 </div>
               </div>
@@ -1130,38 +1385,119 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               </button>
             </div>
 
-            {/* Quick Meta Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
+            {/* Live Playback Banner in Modal */}
+            {selectedUser.livePlayback?.isPlaying && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(52,199,89,0.15), rgba(24,24,24,0.9))',
+                border: '1px solid rgba(52,199,89,0.4)', borderRadius: '12px',
+                padding: '14px 18px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  {selectedUser.livePlayback.coverArt ? (
+                    <img src={selectedUser.livePlayback.coverArt} alt="" style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Music size={20} color="#34C759" />
+                    </div>
+                  )}
+                  <div>
+                    <span style={{ fontSize: '11px', color: '#34C759', fontWeight: 700, textTransform: 'uppercase' }}>
+                      Reproduciendo en vivo en {selectedUser.livePlayback.platform}
+                    </span>
+                    <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{selectedUser.livePlayback.title}</p>
+                    <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{selectedUser.livePlayback.artist}</p>
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <span style={{ fontSize: '12px', color: '#B3B3B3' }}>IP: <code>{selectedUser.livePlayback.ipAddress}</code></span>
+                </div>
+              </div>
+            )}
+
+            {/* Detailed Metadata Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '20px' }}>
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
-                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Rol</span>
-                <p style={{ fontSize: '14px', fontWeight: 700, marginTop: '3px', color: selectedUser.user.role === 'admin' ? '#FA243C' : '#fff' }}>
-                  {selectedUser.user.role === 'admin' ? 'Administrador' : 'Usuario'}
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Tiempo Total</span>
+                <p style={{ fontSize: '15px', fontWeight: 700, marginTop: '3px', color: '#fff' }}>
+                  {formatListeningTime(selectedUser.user.totalListenSeconds)}
                 </p>
               </div>
+
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
-                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Estado</span>
-                <p style={{ fontSize: '14px', fontWeight: 700, marginTop: '3px', color: selectedUser.user.isBanned ? '#FF3B30' : '#34C759' }}>
-                  {selectedUser.user.isBanned ? 'Suspendido' : 'Activo'}
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Canciones Escuchadas</span>
+                <p style={{ fontSize: '15px', fontWeight: 700, marginTop: '3px', color: '#34C759' }}>
+                  {selectedUser.history?.length || 0} tracks
                 </p>
               </div>
+
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
-                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Última IP</span>
-                <p style={{ fontSize: '13px', fontWeight: 700, marginTop: '3px', fontFamily: 'monospace' }}>
-                  {selectedUser.user.lastLoginIp || '—'}
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Última Actividad</span>
+                <p style={{ fontSize: '12px', fontWeight: 600, marginTop: '4px', color: '#fff' }}>
+                  {formatDateTime(selectedUser.user.lastActiveAt || selectedUser.user.lastLoginAt)}
                 </p>
               </div>
+
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
-                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Registro</span>
-                <p style={{ fontSize: '13px', fontWeight: 700, marginTop: '3px' }}>
-                  {new Date(selectedUser.user.createdAt).toLocaleDateString()}
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Fecha Registro</span>
+                <p style={{ fontSize: '12px', fontWeight: 600, marginTop: '4px', color: '#fff' }}>
+                  {formatDateTime(selectedUser.user.createdAt)}
                 </p>
               </div>
             </div>
 
-            {/* Sessions / Devices list */}
-            <div style={{ marginBottom: '24px' }}>
+            {/* Playback History Table (Exact Songs Listened) */}
+            <div style={{ marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Historial de Canciones Escuchadas ({selectedUser.history?.length || 0})
+                </h4>
+              </div>
+              <div style={{ background: '#282828', borderRadius: '10px', maxHeight: '170px', overflowY: 'auto' }}>
+                {selectedUser.history?.map((h) => (
+                  <div key={h.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '8px 14px', borderBottom: '0.5px solid #333', fontSize: '13px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      {h.cover_art ? (
+                        <img src={h.cover_art} alt="" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: '#202020', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Music size={14} color="#B3B3B3" />
+                        </div>
+                      )}
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {h.title}
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {h.artist}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '11px', background: '#181818', padding: '2px 7px', borderRadius: '10px', color: '#B3B3B3' }}>
+                        {h.platform || 'Groovy App'}
+                      </span>
+                      <span style={{ color: '#6B6B6B', fontSize: '12px' }}>
+                        {formatDateTime(h.played_at)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {(!selectedUser.history || selectedUser.history.length === 0) && (
+                  <p style={{ padding: '18px', textAlign: 'center', color: '#6B6B6B', fontSize: '13px' }}>
+                    Sin historial de reproducciones registrado.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Sessions / Devices list (Exact Login & Duration) */}
+            <div style={{ marginBottom: '20px' }}>
               <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
-                Dispositivos e IPs Utilizados ({selectedUser.sessions?.length || 0})
+                Historial de Inicios de Sesión & Dispositivos ({selectedUser.sessions?.length || 0})
               </h4>
               <div style={{ background: '#282828', borderRadius: '10px', maxHeight: '160px', overflowY: 'auto' }}>
                 {selectedUser.sessions?.map((s) => (
@@ -1170,13 +1506,20 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     padding: '10px 14px', borderBottom: '0.5px solid #333', fontSize: '13px',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      {getDeviceIcon(s.device_os)}
+                      {getDeviceIcon(s.device_os, s.browser, s.device_type)}
                       <span style={{ fontWeight: 600, color: '#fff' }}>{s.device_os || 'Dispositivo'}</span>
-                      <span style={{ color: '#B3B3B3', fontSize: '12px' }}>({s.browser || 'Web'})</span>
+                      <span style={{ color: '#B3B3B3', fontSize: '12px' }}>({s.client_platform || s.browser || 'App'})</span>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <code style={{ fontSize: '12px', background: '#181818', padding: '2px 6px', borderRadius: '4px' }}>{s.ip_address}</code>
-                      <span style={{ color: '#6B6B6B', fontSize: '11px' }}>{new Date(s.created_at).toLocaleDateString()}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '12px', color: '#34C759', fontWeight: 600 }}>
+                        {formatSessionDuration(s.session_duration_seconds)}
+                      </span>
+                      <code style={{ fontSize: '12px', background: '#181818', padding: '2px 6px', borderRadius: '4px' }}>
+                        {s.ip_address}
+                      </code>
+                      <span style={{ color: '#6B6B6B', fontSize: '11px' }}>
+                        {formatDateTime(s.created_at)}
+                      </span>
                     </div>
                   </div>
                 ))}

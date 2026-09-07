@@ -80,6 +80,7 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _refreshUserProfile() async {
     if (_token == null) return;
     try {
+      _apiService.pingSession(_token!);
       final user = await _apiService.getMe(_token!);
       if (user != null) {
         _currentUser = user;

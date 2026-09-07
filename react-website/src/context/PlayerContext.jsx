@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { musicService } from '../services/musicService';
+import { telemetryApi } from '../services/api';
 import { useLibrary } from './LibraryContext';
 
 const PlayerContext = createContext(null);
@@ -23,6 +24,58 @@ export const PlayerProvider = ({ children }) => {
   // Lyrics state
   const [lyrics, setLyrics] = useState({ syncedLyrics: null, plainLyrics: null });
   const [isLyricsLoading, setIsLyricsLoading] = useState(false);
+
+  // Live Playback Telemetry Heartbeat (Web Player)
+  useEffect(() => {
+    if (!currentSong || !isPlaying) return;
+
+    telemetryApi.reportPlayback({
+      songId: currentSong.id,
+      title: currentSong.title,
+      artist: currentSong.artist || '',
+      album: currentSong.album || '',
+      coverArt: currentSong.coverArt || '',
+      duration: Math.round(duration || currentSong.duration || 0),
+      position: Math.round(currentTime || 0),
+      isPlaying: true,
+      platform: 'Web',
+      deviceName: 'Web Player',
+      listenDeltaSeconds: 0,
+    }).catch(() => {});
+
+    const interval = setInterval(() => {
+      telemetryApi.reportPlayback({
+        songId: currentSong.id,
+        title: currentSong.title,
+        artist: currentSong.artist || '',
+        album: currentSong.album || '',
+        coverArt: currentSong.coverArt || '',
+        duration: Math.round(duration || currentSong.duration || 0),
+        position: Math.round(audioRef.current?.currentTime || 0),
+        isPlaying: true,
+        platform: 'Web',
+        deviceName: 'Web Player',
+        listenDeltaSeconds: 15,
+      }).catch(() => {});
+    }, 15000);
+
+    return () => {
+      clearInterval(interval);
+      telemetryApi.reportPlayback({
+        songId: currentSong.id,
+        title: currentSong.title,
+        artist: currentSong.artist || '',
+        album: currentSong.album || '',
+        coverArt: currentSong.coverArt || '',
+        duration: Math.round(duration || currentSong.duration || 0),
+        position: Math.round(audioRef.current?.currentTime || 0),
+        isPlaying: false,
+        platform: 'Web',
+        deviceName: 'Web Player',
+        listenDeltaSeconds: 0,
+      }).catch(() => {});
+    };
+  }, [currentSong, isPlaying]);
 
   // Initialize Audio element handlers
   useEffect(() => {

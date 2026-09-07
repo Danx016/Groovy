@@ -143,6 +143,8 @@ export const libraryApi = {
 export const adminApi = {
   getMetrics: () => authFetch('/admin/metrics'),
 
+  getLivePlayback: () => authFetch('/admin/live-playback'),
+
   getUsers: (params = {}) => {
     const query = new URLSearchParams();
     if (params.q) query.append('q', params.q);
@@ -162,7 +164,7 @@ export const adminApi = {
 
   toggleBanUser: (userId, isBanned) =>
     authFetch(`/admin/users/${userId}/ban`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify({ isBanned }),
     }),
 
@@ -172,4 +174,19 @@ export const adminApi = {
     }),
 
   getSessions: (limit = 100) => authFetch(`/admin/sessions?limit=${limit}`),
+};
+
+// Telemetry API Endpoints (Realtime Live Playback Heartbeat)
+export const telemetryApi = {
+  reportPlayback: (data) =>
+    authFetch('/telemetry/playback', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  ping: (platform = 'Web') =>
+    authFetch('/telemetry/ping', {
+      method: 'POST',
+      body: JSON.stringify({ platform }),
+    }),
 };
