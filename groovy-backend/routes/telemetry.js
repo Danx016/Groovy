@@ -40,14 +40,8 @@ router.post('/playback', async (req, res) => {
     const pool = getPool();
     const userId = req.user.id;
 
-    // 1. Log playback to user_live_playback without wiping other devices (Android vs Windows)
+    // 1. Log playback to user_live_playback with atomic upsert
     const deviceKey = `${userId}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
-
-    // Delete existing entry for this specific device if any, then insert fresh live state
-    await pool.query(`
-      DELETE FROM user_live_playback 
-      WHERE user_id = ? AND platform = ? AND (device_model = ? OR device_name = ? OR device_key = ?)
-    `, [userId, resolvedPlatform, client.deviceModel, resolvedDevice, deviceKey]);
 
     await pool.query(`
       INSERT INTO user_live_playback (
@@ -55,6 +49,24 @@ router.post('/playback', async (req, res) => {
         is_playing, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      ON DUPLICATE KEY UPDATE
+        song_id = VALUES(song_id),
+        title = VALUES(title),
+        artist = VALUES(artist),
+        album = VALUES(album),
+        cover_art = VALUES(cover_art),
+        duration = VALUES(duration),
+        position = VALUES(position),
+        is_playing = VALUES(is_playing),
+        platform = VALUES(platform),
+        device_name = VALUES(device_name),
+        ip_address = VALUES(ip_address),
+        device_model = VALUES(device_model),
+        os_version = VALUES(os_version),
+        country = VALUES(country),
+        city = VALUES(city),
+        last_ping_at = CURRENT_TIMESTAMP,
+        device_key = VALUES(device_key)
     `, [
       userId,
       String(songId),
@@ -75,8 +87,8 @@ router.post('/playback', async (req, res) => {
       deviceKey,
     ]);
 
-    // Cleanup stale live sessions older than 2 minutes
-    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 120 SECOND').catch(() => {});
+    // Cleanup stale live sessions older than 3 minutes
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 180 SECOND').catch(() => {});
 
     // 2. Automatically log to playback_history if new song started
     const delta = Math.min(Math.max(parseInt(listenDeltaSeconds, 10) || 0, 0), 60);

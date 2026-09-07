@@ -150,6 +150,14 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
     size: 42000000,
   };
 
+  const scrollToSection = (e, sectionId) => {
+    if (e && e.preventDefault) e.preventDefault();
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   const versionTag = releaseInfo?.tag_name || 'v1.0.65';
 
   const faqs = [
@@ -204,16 +212,40 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
           </div>
 
           <nav style={{ display: 'flex', alignItems: 'center', gap: '22px' }}>
-            <a href="#descargas" style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}>
+            <a
+              href="#descargas"
+              onClick={(e) => scrollToSection(e, 'descargas')}
+              style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}
+            >
               Descargas
             </a>
-            <a href="#interfaz" style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}>
+            <a
+              href="#interfaz"
+              onClick={(e) => scrollToSection(e, 'interfaz')}
+              style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}
+            >
               Interfaz
             </a>
-            <a href="#funciones" style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}>
+            <a
+              href="#funciones"
+              onClick={(e) => scrollToSection(e, 'funciones')}
+              style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}
+            >
               Características
             </a>
-            <a href="#preguntas" style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s' }} onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}>
+            <a
+              href="#preguntas"
+              onClick={(e) => scrollToSection(e, 'preguntas')}
+              style={{ color: '#a1a1aa', textDecoration: 'none', fontSize: '13px', fontWeight: 500, transition: 'color 0.15s', cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#a1a1aa'}
+            >
               FAQ
             </a>
           </nav>
@@ -319,12 +351,13 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
 
           <a
             href="#descargas"
+            onClick={(e) => scrollToSection(e, 'descargas')}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: '8px',
               padding: '14px 22px', borderRadius: '12px',
               background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
               color: '#f4f4f5', fontSize: '14px', fontWeight: 500,
-              textDecoration: 'none', transition: 'background 0.15s',
+              textDecoration: 'none', transition: 'background 0.15s', cursor: 'pointer',
             }}
             onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
             onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}

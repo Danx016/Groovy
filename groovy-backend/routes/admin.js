@@ -150,19 +150,23 @@ router.get('/metrics', async (req, res) => {
     `);
     const activeToday = activeTodayRows[0].count;
 
-    // Currently active listeners (playing right now)
+    // Currently active listeners (playing right now within 180s)
     const [activeListenersRows] = await pool.query(`
       SELECT COUNT(*) as count 
       FROM user_live_playback 
-      WHERE is_playing = 1 AND last_ping_at >= NOW() - INTERVAL 60 SECOND
+      WHERE is_playing = 1 AND last_ping_at >= NOW() - INTERVAL 180 SECOND
     `);
     const activeListeners = activeListenersRows[0].count;
 
-    // Total listen time in seconds across all users
+    // Total listen time in seconds across all users (sum of users table or playback_history)
     const [listenTimeRows] = await pool.query(`
-      SELECT COALESCE(SUM(total_listen_seconds), 0) as total_seconds FROM users
+      SELECT COALESCE(
+        NULLIF(SUM(u.total_listen_seconds), 0),
+        (SELECT SUM(COALESCE(h.listen_seconds, h.duration, 180)) FROM playback_history h),
+        0
+      ) as total_seconds FROM users u
     `);
-    const totalListenSeconds = listenTimeRows[0].total_seconds;
+    const totalListenSeconds = parseInt(listenTimeRows[0]?.total_seconds || 0, 10);
 
     // Total Favorites & Playlists & Plays & Sessions
     const [favRows] = await pool.query('SELECT COUNT(*) as count FROM favorites');
@@ -245,18 +249,22 @@ router.get('/users', async (req, res) => {
         u.avatar_url, 
         u.role, 
         u.is_banned, 
-        u.last_login_at, 
-        u.last_active_at,
-        u.last_login_ip, 
-        u.last_device, 
-        u.last_country,
-        u.last_country_code,
-        u.last_city,
-        u.last_region,
-        u.last_isp,
-        u.last_os_version,
-        u.last_device_model,
-        u.total_listen_seconds,
+        COALESCE(u.last_login_at, (SELECT s.created_at FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), u.created_at) as last_login_at, 
+        COALESCE(u.last_active_at, u.last_login_at, (SELECT s.last_active_at FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), u.created_at) as last_active_at,
+        COALESCE(NULLIF(u.last_login_ip, ''), (SELECT s.ip_address FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), '127.0.0.1') as last_login_ip, 
+        COALESCE(NULLIF(u.last_device, ''), (SELECT CONCAT(COALESCE(s.device_model, s.device_os), ' · ', COALESCE(s.os_version, s.device_os)) FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 'Sin dispositivo') as last_device, 
+        COALESCE(NULLIF(u.last_country, ''), (SELECT s.country FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 'Colombia') as last_country,
+        COALESCE(NULLIF(u.last_country_code, ''), (SELECT s.country_code FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 'CO') as last_country_code,
+        COALESCE(NULLIF(u.last_city, ''), (SELECT s.city FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 'Local') as last_city,
+        COALESCE(NULLIF(u.last_region, ''), (SELECT s.region FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), '') as last_region,
+        COALESCE(NULLIF(u.last_isp, ''), (SELECT s.isp FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 'Proveedor Local') as last_isp,
+        COALESCE(NULLIF(u.last_os_version, ''), (SELECT s.os_version FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), '') as last_os_version,
+        COALESCE(NULLIF(u.last_device_model, ''), (SELECT s.device_model FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), '') as last_device_model,
+        COALESCE(
+          NULLIF(u.total_listen_seconds, 0),
+          (SELECT SUM(COALESCE(h.listen_seconds, h.duration, 180)) FROM playback_history h WHERE h.user_id = u.id),
+          0
+        ) as total_listen_seconds,
         u.created_at,
         (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) as favorites_count,
         (SELECT COUNT(*) FROM playlists p WHERE p.user_id = u.id) as playlists_count,
@@ -278,7 +286,7 @@ router.get('/users', async (req, res) => {
         lp.last_ping_at as live_last_ping,
         TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as live_seconds_ago
       FROM users u
-      LEFT JOIN user_live_playback lp ON lp.user_id = u.id AND lp.last_ping_at >= NOW() - INTERVAL 120 SECOND
+      LEFT JOIN user_live_playback lp ON lp.user_id = u.id AND lp.last_ping_at >= NOW() - INTERVAL 180 SECOND
       WHERE 1=1
     `;
     const params = [];

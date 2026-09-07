@@ -56,13 +56,18 @@ function MainApp() {
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
 
-  // Standalone Route checks:
+  const isDownloadRoute = (h, p, s) => {
+    if (p.startsWith('/download') || s.includes('download=true')) return true;
+    const downloadHashes = ['#download', '#descargas', '#interfaz', '#funciones', '#preguntas', '#faq', '#caracteristicas', '#capturas'];
+    return downloadHashes.some(dh => h.toLowerCase().startsWith(dh));
+  };
+
   const [currentRoute, setCurrentRoute] = useState(() => {
     const p = window.location.pathname;
     const h = window.location.hash;
     const s = window.location.search;
     if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) return 'admin';
-    if (p.startsWith('/download') || h === '#download' || h === '#descargas' || s.includes('download=true')) return 'download';
+    if (isDownloadRoute(h, p, s)) return 'download';
     return 'player';
   });
 
@@ -73,7 +78,7 @@ function MainApp() {
       const s = window.location.search;
       if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) {
         setCurrentRoute('admin');
-      } else if (p.startsWith('/download') || h === '#download' || h === '#descargas' || s.includes('download=true')) {
+      } else if (isDownloadRoute(h, p, s)) {
         setCurrentRoute('download');
       } else {
         setCurrentRoute('player');

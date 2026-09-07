@@ -280,7 +280,13 @@ function parseFullClientInfo(req) {
   // Detect Browser & Version
   let browser = 'Web Client';
   let browserVersion = '';
-  if (/edg\/(\d+(\.\d+)?)/i.test(ua)) {
+  const isNativeApp = /groovyapp|flutter|dart/i.test(ua) || customPlatform === 'Android' || customPlatform === 'Windows' || customPlatform === 'Linux';
+
+  if (isNativeApp) {
+    const appVersion = req.headers['x-app-version'] || req.body?.appVersion || '1.0.65';
+    browser = `Groovy App (${customPlatform || os})`;
+    browserVersion = appVersion;
+  } else if (/edg\/(\d+(\.\d+)?)/i.test(ua)) {
     const m = ua.match(/edg\/(\d+(\.\d+)?)/i);
     browser = 'Microsoft Edge';
     browserVersion = m ? m[1] : '';
@@ -296,13 +302,10 @@ function parseFullClientInfo(req) {
     const m = ua.match(/version\/(\d+(\.\d+)?)/i);
     browser = 'Apple Safari';
     browserVersion = m ? m[1] : '';
-  } else if (/dart|flutter/i.test(ua)) {
-    browser = 'Groovy Native App';
-    browserVersion = '1.0.65';
   }
 
   const deviceType = (os === 'Android' || os === 'iOS' || /mobile/i.test(ua)) ? 'Mobile' : 'Desktop';
-  const clientPlatform = customPlatform ? `Groovy (${customPlatform})` : (deviceType === 'Mobile' ? `${os} Mobile` : `${os} Web`);
+  const clientPlatform = isNativeApp ? `Groovy (${customPlatform || os})` : (deviceType === 'Mobile' ? `${os} Mobile` : `${os} Web`);
   const deviceSummary = `${deviceModel} · ${osVersion}`;
 
   return {

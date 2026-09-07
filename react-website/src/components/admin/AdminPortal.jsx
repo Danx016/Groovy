@@ -1545,7 +1545,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       {s.os_version || s.device_os || 'Desconocido'}
                     </p>
                     <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.browser} {s.browser_version ? `v${s.browser_version}` : ''}
+                      {(s.client_platform?.includes('Android') || s.device_os === 'Android') ? 'Groovy Android App' : (s.client_platform?.includes('Windows') && s.browser?.includes('Native') ? 'Groovy Windows App' : `${s.browser || 'Web Client'} ${s.browser_version ? `v${s.browser_version}` : ''}`)}
                     </p>
                   </div>
 
