@@ -43,11 +43,11 @@ router.get('/live-playback', async (req, res) => {
         TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as seconds_since_ping
       FROM user_live_playback lp
       JOIN users u ON lp.user_id = u.id
-      WHERE lp.last_ping_at >= NOW() - INTERVAL 300 SECOND
+      WHERE lp.last_ping_at >= NOW() - INTERVAL 600 SECOND
       ORDER BY lp.last_ping_at DESC
     `);
 
-    // 2. Users active/connected in the app right now (within last 5 minutes)
+    // 2. Users active/connected in the app right now (within last 10 minutes)
     const [connectedRows] = await pool.query(`
       SELECT 
         s.id as session_id,
@@ -71,7 +71,7 @@ router.get('/live-playback', async (req, res) => {
         TIMESTAMPDIFF(SECOND, COALESCE(s.last_active_at, s.created_at), NOW()) as seconds_since_active
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.last_active_at >= NOW() - INTERVAL 300 SECOND OR s.created_at >= NOW() - INTERVAL 300 SECOND
+      WHERE s.last_active_at >= NOW() - INTERVAL 600 SECOND OR s.created_at >= NOW() - INTERVAL 600 SECOND
       ORDER BY s.last_active_at DESC
     `);
 
