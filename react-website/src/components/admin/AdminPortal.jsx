@@ -219,6 +219,34 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     }
   };
 
+  const renderCountryFlag = (country = '', countryCode = '') => {
+    let code = (countryCode || '').toLowerCase();
+    if (!code || code === 'xx') {
+      const match = (country || '').match(/\b([A-Za-z]{2})\b/);
+      if (match) code = match[1].toLowerCase();
+    }
+    if (code && code.length === 2 && code !== 'xx' && code !== 'la') {
+      return (
+        <img
+          src={`https://flagcdn.com/20x15/${code}.png`}
+          alt={code.toUpperCase()}
+          style={{ width: '18px', height: '13px', borderRadius: '2px', objectFit: 'cover', display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }}
+          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+        />
+      );
+    }
+    return <span style={{ marginRight: '5px' }}>🌐</span>;
+  };
+
+  const formatCountryName = (country = '') => {
+    if (!country) return 'Desconocido';
+    return country
+      .replace(/^[\u{1F1E6}-\u{1F1FF}]{2}\s*/u, '')
+      .replace(/^🌐\s*/, '')
+      .replace(/^[a-zA-Z]{2}\s+/i, '')
+      .trim() || country;
+  };
+
   const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
     const str = `${os} ${browser} ${deviceType}`.toLowerCase();
     if (str.includes('android')) {
@@ -866,15 +894,24 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       </div>
                     </div>
 
-                    {/* Device & IP */}
-                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    {/* Device, OS & Location */}
+                    <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         {getDeviceIcon(item.platform, item.deviceName)}
                         <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
-                          {item.platform} App
+                          {item.deviceModel || item.deviceName || `${item.platform} App`}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ fontSize: '11px', color: '#B3B3B3' }}>
+                        {item.osVersion ? `${item.platform} · ${item.osVersion}` : `${item.platform} App`}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
+                        {item.country && (
+                          <span style={{ fontSize: '11px', color: '#9E9E9E', display: 'flex', alignItems: 'center' }}>
+                            {renderCountryFlag(item.country, item.countryCode)}
+                            {formatCountryName(item.country)}{item.city ? ` · ${item.city}` : ''}
+                          </span>
+                        )}
                         <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
                           {item.ipAddress || 'IP no reg.'}
                         </code>
@@ -1060,17 +1097,28 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                         </div>
                       </div>
 
-                      {/* Last Active Timestamp & Device */}
+                      {/* Last Active Timestamp, Device & Geolocation */}
                       <div style={{ minWidth: 0, paddingRight: '10px' }}>
                         <div style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
                           {formatDateTime(u.lastActiveAt || u.lastLoginAt)}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '3px' }}>
-                          {getDeviceIcon(u.lastDevice)}
+                          {getDeviceIcon(u.lastDeviceModel || u.lastDevice)}
                           <span style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {u.lastDevice || 'Sin dispositivo'}
+                            {u.lastDeviceModel || u.lastDevice || 'Sin dispositivo'}
                           </span>
                         </div>
+                        {(u.lastCountry || u.lastOsVersion) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '2px', fontSize: '11px', color: '#8E8E93', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.lastCountry && (
+                              <span style={{ display: 'flex', alignItems: 'center' }}>
+                                {renderCountryFlag(u.lastCountry, u.lastCountryCode)}
+                                {formatCountryName(u.lastCountry)}{u.lastCity ? ` (${u.lastCity})` : ''}
+                              </span>
+                            )}
+                            {u.lastOsVersion && <span>· {u.lastOsVersion}</span>}
+                          </div>
+                        )}
                       </div>
 
                       {/* Listening Time */}
@@ -1182,7 +1230,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               {/* Table header */}
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'minmax(180px, 1.6fr) 150px 170px 130px 180px',
+                gridTemplateColumns: 'minmax(160px, 1.3fr) 130px 160px 160px 180px 100px 140px',
                 padding: '12px 24px',
                 borderBottom: '0.5px solid #282828',
                 fontSize: '11px',
@@ -1193,9 +1241,11 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               }}>
                 <div>Usuario</div>
                 <div>Dirección IP</div>
-                <div>Dispositivo & SO</div>
-                <div>Tiempo de Sesión</div>
-                <div>Fecha y Hora Exacta</div>
+                <div>Dispositivo</div>
+                <div>Sistema Operativo</div>
+                <div>Ubicación & ISP</div>
+                <div>Duración</div>
+                <div>Fecha y Hora</div>
               </div>
 
               {/* Sessions list */}
@@ -1204,7 +1254,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   key={s.id}
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'minmax(180px, 1.6fr) 150px 170px 130px 180px',
+                    gridTemplateColumns: 'minmax(160px, 1.3fr) 130px 160px 160px 180px 100px 140px',
                     alignItems: 'center',
                     padding: '14px 24px',
                     borderBottom: '0.5px solid #202020',
@@ -1242,13 +1292,38 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     </button>
                   </div>
 
-                  {/* Device & OS */}
+                  {/* Device & Hardware */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                     {getDeviceIcon(s.device_os, s.browser, s.device_type)}
-                    <div>
-                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{s.device_os || 'Desconocido'}</p>
-                      <p style={{ fontSize: '11px', color: '#B3B3B3' }}>{s.client_platform || s.browser || 'App'}</p>
+                    <div style={{ minWidth: 0 }}>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.device_model || (s.device_type === 'Mobile' ? 'Dispositivo Móvil' : 'PC / Laptop')}
+                      </p>
+                      <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {s.client_platform || s.device_type || 'App'}
+                      </p>
                     </div>
+                  </div>
+
+                  {/* OS & Version */}
+                  <div style={{ minWidth: 0 }}>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.os_version || s.device_os || 'Desconocido'}
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.browser} {s.browser_version ? `v${s.browser_version}` : ''}
+                    </p>
+                  </div>
+
+                  {/* Geolocation & ISP */}
+                  <div style={{ minWidth: 0, paddingRight: '8px' }}>
+                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center' }}>
+                      {renderCountryFlag(s.country, s.country_code)}
+                      <span>{s.country ? `${formatCountryName(s.country)}${s.city ? ` · ${s.city}` : ''}` : 'Ubicación no reg.'}</span>
+                    </p>
+                    <p style={{ fontSize: '11px', color: '#8E8E93', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.isp || s.region || 'Red Privada / LAN'}
+                    </p>
                   </div>
 
                   {/* Session Duration */}
@@ -1445,6 +1520,91 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               </div>
             </div>
 
+            {/* Geolocation & Device Deep-Dive Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '20px' }}>
+              {/* Geolocation Card */}
+              <div style={{ background: '#222222', border: '0.5px solid #333333', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Globe size={16} style={{ color: '#007AFF' }} />
+                  <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Ubicación Geográfica & Conexión IP
+                  </h4>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#8E8E93' }}>País & Bandera:</span>
+                    <span style={{ color: '#fff', fontWeight: 600, display: 'flex', alignItems: 'center' }}>
+                      {renderCountryFlag(selectedUser.user.lastCountry || selectedUser.sessions?.[0]?.country, selectedUser.user.lastCountryCode || selectedUser.sessions?.[0]?.country_code)}
+                      <span>{formatCountryName(selectedUser.user.lastCountry || selectedUser.sessions?.[0]?.country || 'Desconocido')}</span>
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8E8E93' }}>Ciudad / Región:</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>
+                      {selectedUser.user.lastCity || selectedUser.sessions?.[0]?.city || '—'}
+                      {(selectedUser.user.lastRegion || selectedUser.sessions?.[0]?.region) ? `, ${selectedUser.user.lastRegion || selectedUser.sessions?.[0]?.region}` : ''}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8E8E93' }}>Proveedor de Red (ISP):</span>
+                    <span style={{ color: '#34C759', fontWeight: 600 }}>
+                      {selectedUser.user.lastIsp || selectedUser.sessions?.[0]?.isp || 'Red Local / ISP'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#8E8E93' }}>Dirección IP:</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <code style={{ fontSize: '12px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#fff' }}>
+                        {selectedUser.user.lastLoginIp || selectedUser.sessions?.[0]?.ip_address || '—'}
+                      </code>
+                      <button
+                        onClick={() => copyToClipboard(selectedUser.user.lastLoginIp || selectedUser.sessions?.[0]?.ip_address)}
+                        style={{ color: '#8E8E93', padding: '2px' }}
+                      >
+                        <Copy size={12} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hardware & OS Card */}
+              <div style={{ background: '#222222', border: '0.5px solid #333333', borderRadius: '12px', padding: '16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                  <Laptop size={16} style={{ color: '#FA243C' }} />
+                  <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Hardware & Sistema Operativo
+                  </h4>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8E8E93' }}>Modelo de Dispositivo:</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>
+                      {selectedUser.user.lastDeviceModel || selectedUser.sessions?.[0]?.device_model || selectedUser.user.lastDevice || 'Dispositivo Estándar'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8E8E93' }}>Sistema Operativo:</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>
+                      {selectedUser.user.lastOsVersion || selectedUser.sessions?.[0]?.os_version || '—'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8E8E93' }}>Navegador / App:</span>
+                    <span style={{ color: '#fff', fontWeight: 600 }}>
+                      {selectedUser.sessions?.[0]?.browser ? `${selectedUser.sessions[0].browser} ${selectedUser.sessions[0].browser_version ? `v${selectedUser.sessions[0].browser_version}` : ''}` : 'Groovy App Client'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#8E8E93' }}>Tipo de Cliente:</span>
+                    <span style={{ color: '#007AFF', fontWeight: 600 }}>
+                      {selectedUser.sessions?.[0]?.client_platform || 'Groovy Cloud Player'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Playback History Table (Exact Songs Listened) */}
             <div style={{ marginBottom: '20px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
@@ -1499,7 +1659,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
                 Historial de Inicios de Sesión & Dispositivos ({selectedUser.sessions?.length || 0})
               </h4>
-              <div style={{ background: '#282828', borderRadius: '10px', maxHeight: '160px', overflowY: 'auto' }}>
+              <div style={{ background: '#282828', borderRadius: '10px', maxHeight: '180px', overflowY: 'auto' }}>
                 {selectedUser.sessions?.map((s) => (
                   <div key={s.id} style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -1507,8 +1667,18 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       {getDeviceIcon(s.device_os, s.browser, s.device_type)}
-                      <span style={{ fontWeight: 600, color: '#fff' }}>{s.device_os || 'Dispositivo'}</span>
-                      <span style={{ color: '#B3B3B3', fontSize: '12px' }}>({s.client_platform || s.browser || 'App'})</span>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 600, color: '#fff' }}>{s.device_model || s.device_os || 'Dispositivo'}</span>
+                          <span style={{ color: '#B3B3B3', fontSize: '11px' }}>({s.os_version || s.client_platform || s.browser || 'App'})</span>
+                        </div>
+                        {s.country && (
+                          <span style={{ fontSize: '11px', color: '#8E8E93', display: 'flex', alignItems: 'center', marginTop: '2px' }}>
+                            {renderCountryFlag(s.country, s.country_code)}
+                            {formatCountryName(s.country)}{s.city ? ` · ${s.city}` : ''} {s.isp ? `(${s.isp})` : ''}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <span style={{ fontSize: '12px', color: '#34C759', fontWeight: 600 }}>

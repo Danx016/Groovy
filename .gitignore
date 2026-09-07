@@ -18,6 +18,8 @@ Groovy-Setup*.exe
 .claude/
 /discord_sdk_temp
 # lib/services/analytics_service.dart
+node_modules/
+**/node_modules/
 .env
 test_server_config.json
 

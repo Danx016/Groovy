@@ -227,10 +227,32 @@ async function runMigrations(conn) {
 
   await addColToTable('user_sessions', 'session_duration_seconds', 'INT DEFAULT 0');
   await addColToTable('user_sessions', 'last_ping_at', 'TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP');
+  await addColToTable('user_sessions', 'device_model', 'VARCHAR(255) NULL');
+  await addColToTable('user_sessions', 'os_version', 'VARCHAR(255) NULL');
+  await addColToTable('user_sessions', 'browser_version', 'VARCHAR(100) NULL');
+  await addColToTable('user_sessions', 'country', 'VARCHAR(100) NULL');
+  await addColToTable('user_sessions', 'country_code', 'VARCHAR(10) NULL');
+  await addColToTable('user_sessions', 'city', 'VARCHAR(100) NULL');
+  await addColToTable('user_sessions', 'region', 'VARCHAR(100) NULL');
+  await addColToTable('user_sessions', 'isp', 'VARCHAR(255) NULL');
+
   await addColToTable('playback_history', 'platform', 'VARCHAR(100) NULL');
   await addColToTable('playback_history', 'device_name', 'VARCHAR(255) NULL');
   await addColToTable('playback_history', 'ip_address', 'VARCHAR(100) NULL');
   await addColToTable('playback_history', 'listen_seconds', 'INT DEFAULT 0');
+
+  await addColToTable('users', 'last_country', 'VARCHAR(100) NULL');
+  await addColToTable('users', 'last_country_code', 'VARCHAR(10) NULL');
+  await addColToTable('users', 'last_city', 'VARCHAR(100) NULL');
+  await addColToTable('users', 'last_region', 'VARCHAR(100) NULL');
+  await addColToTable('users', 'last_isp', 'VARCHAR(255) NULL');
+  await addColToTable('users', 'last_os_version', 'VARCHAR(255) NULL');
+  await addColToTable('users', 'last_device_model', 'VARCHAR(255) NULL');
+
+  await addColToTable('user_live_playback', 'device_model', 'VARCHAR(255) NULL');
+  await addColToTable('user_live_playback', 'os_version', 'VARCHAR(255) NULL');
+  await addColToTable('user_live_playback', 'country', 'VARCHAR(100) NULL');
+  await addColToTable('user_live_playback', 'city', 'VARCHAR(100) NULL');
 
   // Promote danilorodelo355@gmail.com and initial admin to admin role
   try {
@@ -245,6 +267,42 @@ async function runMigrations(conn) {
   }
 
   console.log('[Database] ✅ All MySQL tables verified and ready.');
+
+  // Background backfill for past sessions without location
+  setTimeout(async () => {
+    try {
+      const { resolveIpLocation } = require('./utils/geoip');
+      const [sessionsToEnrich] = await pool.query(`
+        SELECT id, ip_address FROM user_sessions 
+        WHERE (country IS NULL OR country = '' OR country = 'Desconocido') AND ip_address IS NOT NULL
+        LIMIT 50
+      `);
+      for (const s of sessionsToEnrich) {
+        const geo = await resolveIpLocation(s.ip_address);
+        await pool.query(`
+          UPDATE user_sessions 
+          SET country = ?, country_code = ?, city = ?, region = ?, isp = ?
+          WHERE id = ?
+        `, [geo.country, geo.countryCode, geo.city, geo.region, geo.isp, s.id]);
+      }
+      
+      const [usersToEnrich] = await pool.query(`
+        SELECT id, last_login_ip FROM users 
+        WHERE (last_country IS NULL OR last_country = '' OR last_country = 'Desconocido') AND last_login_ip IS NOT NULL
+        LIMIT 20
+      `);
+      for (const u of usersToEnrich) {
+        const geo = await resolveIpLocation(u.last_login_ip);
+        await pool.query(`
+          UPDATE users 
+          SET last_country = ?, last_country_code = ?, last_city = ?, last_region = ?, last_isp = ?
+          WHERE id = ?
+        `, [geo.country, geo.countryCode, geo.city, geo.region, geo.isp, u.id]);
+      }
+    } catch (err) {
+      console.warn('[Database] Geo backfill notice:', err.message);
+    }
+  }, 1000);
 }
 
 function getPool() {

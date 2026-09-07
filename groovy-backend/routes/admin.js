@@ -33,6 +33,10 @@ router.get('/live-playback', async (req, res) => {
         lp.platform,
         lp.device_name,
         lp.ip_address,
+        lp.device_model,
+        lp.os_version,
+        lp.country,
+        lp.city,
         lp.started_at,
         lp.last_ping_at,
         TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as seconds_since_ping
@@ -62,6 +66,10 @@ router.get('/live-playback', async (req, res) => {
         platform: r.platform || 'Desconocido',
         deviceName: r.device_name,
         ipAddress: r.ip_address,
+        deviceModel: r.device_model,
+        osVersion: r.os_version,
+        country: r.country,
+        city: r.city,
         startedAt: r.started_at,
         lastPingAt: r.last_ping_at,
         secondsSincePing: r.seconds_since_ping,
@@ -115,7 +123,23 @@ router.get('/metrics', async (req, res) => {
 
     // Recent sessions
     const [recentSessions] = await pool.query(`
-      SELECT s.id, s.user_id, u.name as user_name, u.email as user_email, s.ip_address, s.device_os, s.browser, s.client_platform, s.created_at, s.last_active_at, s.session_duration_seconds
+      SELECT 
+        s.id, 
+        s.user_id, 
+        u.name as user_name, 
+        u.email as user_email, 
+        s.ip_address, 
+        s.device_os, 
+        s.browser, 
+        s.client_platform, 
+        s.device_model,
+        s.os_version,
+        s.country,
+        s.city,
+        s.isp,
+        s.created_at, 
+        s.last_active_at, 
+        s.session_duration_seconds
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       ORDER BY s.created_at DESC
@@ -176,6 +200,13 @@ router.get('/users', async (req, res) => {
         u.last_active_at,
         u.last_login_ip, 
         u.last_device, 
+        u.last_country,
+        u.last_country_code,
+        u.last_city,
+        u.last_region,
+        u.last_isp,
+        u.last_os_version,
+        u.last_device_model,
         u.total_listen_seconds,
         u.created_at,
         (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) as favorites_count,
@@ -188,6 +219,10 @@ router.get('/users', async (req, res) => {
         lp.cover_art as live_cover_art,
         lp.platform as live_platform,
         lp.device_name as live_device,
+        lp.device_model as live_device_model,
+        lp.os_version as live_os_version,
+        lp.country as live_country,
+        lp.city as live_city,
         lp.is_playing as live_is_playing,
         lp.position as live_position,
         lp.duration as live_duration,
@@ -233,6 +268,13 @@ router.get('/users', async (req, res) => {
         lastActiveAt: u.last_active_at,
         lastLoginIp: u.last_login_ip,
         lastDevice: u.last_device,
+        lastCountry: u.last_country,
+        lastCountryCode: u.last_country_code,
+        lastCity: u.last_city,
+        lastRegion: u.last_region,
+        lastIsp: u.last_isp,
+        lastOsVersion: u.last_os_version,
+        lastDeviceModel: u.last_device_model,
         totalListenSeconds: u.total_listen_seconds || 0,
         createdAt: u.created_at,
         livePlayback: u.live_song_id ? {
@@ -242,6 +284,10 @@ router.get('/users', async (req, res) => {
           coverArt: u.live_cover_art,
           platform: u.live_platform,
           device: u.live_device,
+          deviceModel: u.live_device_model,
+          osVersion: u.live_os_version,
+          country: u.live_country,
+          city: u.live_city,
           isPlaying: u.live_is_playing === 1 && (u.live_seconds_ago < 45),
           position: u.live_position,
           duration: u.live_duration,
@@ -274,7 +320,10 @@ router.get('/users/:id', async (req, res) => {
     const pool = getPool();
 
     const [userRows] = await pool.query(
-      'SELECT id, name, email, avatar_url, role, is_banned, last_login_at, last_active_at, last_login_ip, last_device, total_listen_seconds, created_at, updated_at FROM users WHERE id = ? LIMIT 1',
+      `SELECT id, name, email, avatar_url, role, is_banned, last_login_at, last_active_at, 
+              last_login_ip, last_device, last_country, last_country_code, last_city, last_region, 
+              last_isp, last_os_version, last_device_model, total_listen_seconds, created_at, updated_at 
+       FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
 
@@ -289,7 +338,8 @@ router.get('/users/:id', async (req, res) => {
 
     // Live playback presence
     const [liveRows] = await pool.query(`
-      SELECT song_id, title, artist, album, cover_art, duration, position, is_playing, platform, device_name, ip_address, started_at, last_ping_at,
+      SELECT song_id, title, artist, album, cover_art, duration, position, is_playing, 
+             platform, device_name, device_model, os_version, country, city, ip_address, started_at, last_ping_at,
              TIMESTAMPDIFF(SECOND, last_ping_at, NOW()) as seconds_since_ping
       FROM user_live_playback 
       WHERE user_id = ? AND last_ping_at >= NOW() - INTERVAL 120 SECOND
@@ -307,6 +357,10 @@ router.get('/users/:id', async (req, res) => {
       isPlaying: liveRows[0].is_playing === 1 && liveRows[0].seconds_since_ping < 45,
       platform: liveRows[0].platform,
       deviceName: liveRows[0].device_name,
+      deviceModel: liveRows[0].device_model,
+      osVersion: liveRows[0].os_version,
+      country: liveRows[0].country,
+      city: liveRows[0].city,
       ipAddress: liveRows[0].ip_address,
       startedAt: liveRows[0].started_at,
       lastPingAt: liveRows[0].last_ping_at,
@@ -314,7 +368,9 @@ router.get('/users/:id', async (req, res) => {
 
     // Login sessions / devices / IPs (last 50)
     const [sessions] = await pool.query(
-      `SELECT id, ip_address, device_os, browser, device_type, client_platform, user_agent, created_at, last_active_at, session_duration_seconds 
+      `SELECT id, ip_address, device_os, browser, device_type, client_platform, 
+              device_model, os_version, browser_version, country, country_code, city, region, isp,
+              user_agent, created_at, last_active_at, session_duration_seconds 
        FROM user_sessions 
        WHERE user_id = ? 
        ORDER BY created_at DESC 
@@ -357,6 +413,13 @@ router.get('/users/:id', async (req, res) => {
         lastActiveAt: user.last_active_at,
         lastLoginIp: user.last_login_ip,
         lastDevice: user.last_device,
+        lastCountry: user.last_country,
+        lastCountryCode: user.last_country_code,
+        lastCity: user.last_city,
+        lastRegion: user.last_region,
+        lastIsp: user.last_isp,
+        lastOsVersion: user.last_os_version,
+        lastDeviceModel: user.last_device_model,
         totalListenSeconds: user.total_listen_seconds || 0,
         createdAt: user.created_at,
         updatedAt: user.updated_at,
@@ -544,6 +607,14 @@ router.get('/sessions', async (req, res) => {
         s.browser, 
         s.device_type, 
         s.client_platform, 
+        s.device_model,
+        s.os_version,
+        s.browser_version,
+        s.country,
+        s.country_code,
+        s.city,
+        s.region,
+        s.isp,
         s.created_at, 
         s.last_active_at,
         s.session_duration_seconds

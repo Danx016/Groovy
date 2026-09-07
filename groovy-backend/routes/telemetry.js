@@ -1,43 +1,12 @@
 const express = require('express');
 const { getPool } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { resolveIpLocation, parseFullClientInfo } = require('../utils/geoip');
 
 const router = express.Router();
 
 // Apply auth middleware
 router.use(authenticateToken);
-
-/**
- * Helper to parse client details
- */
-function parseClient(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  let ip = forwarded ? forwarded.split(',')[0].trim() : (req.headers['x-real-ip'] || req.socket?.remoteAddress || '127.0.0.1');
-  if (ip.startsWith('::ffff:')) {
-    ip = ip.replace('::ffff:', '');
-  }
-
-  const ua = req.headers['user-agent'] || '';
-  const customPlatform = req.headers['x-client-platform'] || req.body?.platform;
-
-  let os = customPlatform || 'Unknown';
-  if (!customPlatform || customPlatform === 'Unknown') {
-    if (/windows/i.test(ua)) os = 'Windows';
-    else if (/android/i.test(ua)) os = 'Android';
-    else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
-    else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
-    else if (/linux/i.test(ua)) os = 'Linux';
-  }
-
-  let browser = 'Web Client';
-  if (/edg/i.test(ua)) browser = 'Edge';
-  else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
-  else if (/firefox/i.test(ua)) browser = 'Firefox';
-  else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
-  else if (/dart|flutter/i.test(ua)) browser = 'Groovy Native App';
-
-  return { ip, os, browser, ua };
-}
 
 /**
  * POST /api/telemetry/playback
@@ -63,9 +32,11 @@ router.post('/playback', async (req, res) => {
       return res.status(400).json({ success: false, error: 'songId y title son obligatorios' });
     }
 
-    const client = parseClient(req);
+    const client = parseFullClientInfo(req);
+    const geo = await resolveIpLocation(client.ip);
+
     const resolvedPlatform = platform || client.os;
-    const resolvedDevice = deviceName || `${resolvedPlatform} (${client.browser})`;
+    const resolvedDevice = deviceName || client.deviceSummary;
     const pool = getPool();
     const userId = req.user.id;
 
@@ -73,9 +44,9 @@ router.post('/playback', async (req, res) => {
     await pool.query(`
       INSERT INTO user_live_playback (
         user_id, song_id, title, artist, album, cover_art, duration, position, 
-        is_playing, platform, device_name, ip_address, last_ping_at
+        is_playing, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
       ON DUPLICATE KEY UPDATE
         song_id = VALUES(song_id),
         title = VALUES(title),
@@ -88,6 +59,10 @@ router.post('/playback', async (req, res) => {
         platform = VALUES(platform),
         device_name = VALUES(device_name),
         ip_address = VALUES(ip_address),
+        device_model = VALUES(device_model),
+        os_version = VALUES(os_version),
+        country = VALUES(country),
+        city = VALUES(city),
         last_ping_at = CURRENT_TIMESTAMP
     `, [
       userId,
@@ -102,6 +77,10 @@ router.post('/playback', async (req, res) => {
       resolvedPlatform,
       resolvedDevice,
       client.ip,
+      client.deviceModel,
+      client.osVersion,
+      geo.country,
+      geo.city,
     ]);
 
     // 2. Accumulate listening seconds in users and active session if music is playing
@@ -112,17 +91,40 @@ router.post('/playback', async (req, res) => {
         SET total_listen_seconds = total_listen_seconds + ?, 
             last_active_at = CURRENT_TIMESTAMP,
             last_login_ip = ?,
-            last_device = ?
+            last_device = ?,
+            last_country = COALESCE(?, last_country),
+            last_country_code = COALESCE(?, last_country_code),
+            last_city = COALESCE(?, last_city),
+            last_region = COALESCE(?, last_region),
+            last_isp = COALESCE(?, last_isp),
+            last_os_version = COALESCE(?, last_os_version),
+            last_device_model = COALESCE(?, last_device_model)
         WHERE id = ?
-      `, [delta, client.ip, resolvedDevice, userId]);
+      `, [
+        delta,
+        client.ip,
+        resolvedDevice,
+        geo.country,
+        geo.countryCode,
+        geo.city,
+        geo.region,
+        geo.isp,
+        client.osVersion,
+        client.deviceModel,
+        userId,
+      ]);
 
       await pool.query(`
         UPDATE user_sessions 
         SET session_duration_seconds = session_duration_seconds + ?,
-            last_active_at = CURRENT_TIMESTAMP
+            last_active_at = CURRENT_TIMESTAMP,
+            device_model = COALESCE(device_model, ?),
+            os_version = COALESCE(os_version, ?),
+            country = COALESCE(country, ?),
+            city = COALESCE(city, ?)
         WHERE user_id = ? 
         ORDER BY id DESC LIMIT 1
-      `, [delta, userId]);
+      `, [delta, client.deviceModel, client.osVersion, geo.country, geo.city, userId]);
     } else {
       await pool.query(`
         UPDATE users 
@@ -136,6 +138,13 @@ router.post('/playback', async (req, res) => {
       status: isPlaying ? 'playing' : 'paused',
       platform: resolvedPlatform,
       device: resolvedDevice,
+      deviceModel: client.deviceModel,
+      osVersion: client.osVersion,
+      location: {
+        city: geo.city,
+        country: geo.country,
+        isp: geo.isp,
+      },
     });
   } catch (err) {
     console.error('[Telemetry Playback Error]:', err);
@@ -149,11 +158,12 @@ router.post('/playback', async (req, res) => {
  */
 router.post('/ping', async (req, res) => {
   try {
-    const client = parseClient(req);
+    const client = parseFullClientInfo(req);
+    const geo = await resolveIpLocation(client.ip);
     const pool = getPool();
     const userId = req.user.id;
     const platform = req.body?.platform || client.os;
-    const deviceSummary = `${platform} (${client.browser})`;
+    const deviceSummary = client.deviceSummary;
 
     // Check if there is a session logged in the last 2 hours
     const [recentSession] = await pool.query(`
@@ -168,22 +178,37 @@ router.post('/ping', async (req, res) => {
       await pool.query(`
         UPDATE user_sessions 
         SET last_active_at = CURRENT_TIMESTAMP,
-            session_duration_seconds = TIMESTAMPDIFF(SECOND, created_at, CURRENT_TIMESTAMP)
+            session_duration_seconds = TIMESTAMPDIFF(SECOND, created_at, CURRENT_TIMESTAMP),
+            device_model = COALESCE(device_model, ?),
+            os_version = COALESCE(os_version, ?),
+            country = COALESCE(country, ?),
+            city = COALESCE(city, ?)
         WHERE id = ?
-      `, [recentSession[0].id]);
+      `, [client.deviceModel, client.osVersion, geo.country, geo.city, recentSession[0].id]);
     } else {
-      // Record new session
+      // Record new session with full device & geolocation
       await pool.query(`
-        INSERT INTO user_sessions (user_id, ip_address, user_agent, device_os, browser, device_type, client_platform)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO user_sessions (
+          user_id, ip_address, user_agent, device_os, browser, device_type, client_platform,
+          device_model, os_version, browser_version, country, country_code, city, region, isp
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         userId,
         client.ip,
-        client.ua,
-        platform,
+        client.userAgent,
+        client.os,
         client.browser,
-        platform === 'Android' || platform === 'iOS' ? 'Mobile' : 'Desktop',
-        `Groovy (${platform})`,
+        client.deviceType,
+        client.clientPlatform,
+        client.deviceModel,
+        client.osVersion,
+        client.browserVersion,
+        geo.country,
+        geo.countryCode,
+        geo.city,
+        geo.region,
+        geo.isp,
       ]);
     }
 
@@ -193,11 +218,37 @@ router.post('/ping', async (req, res) => {
       SET last_active_at = CURRENT_TIMESTAMP,
           last_login_at = COALESCE(last_login_at, CURRENT_TIMESTAMP),
           last_login_ip = ?,
-          last_device = ?
+          last_device = ?,
+          last_country = COALESCE(?, last_country),
+          last_country_code = COALESCE(?, last_country_code),
+          last_city = COALESCE(?, last_city),
+          last_region = COALESCE(?, last_region),
+          last_isp = COALESCE(?, last_isp),
+          last_os_version = COALESCE(?, last_os_version),
+          last_device_model = COALESCE(?, last_device_model)
       WHERE id = ?
-    `, [client.ip, deviceSummary, userId]);
+    `, [
+      client.ip,
+      deviceSummary,
+      geo.country,
+      geo.countryCode,
+      geo.city,
+      geo.region,
+      geo.isp,
+      client.osVersion,
+      client.deviceModel,
+      userId,
+    ]);
 
-    return res.json({ success: true, timestamp: new Date().toISOString() });
+    return res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      location: {
+        city: geo.city,
+        country: geo.country,
+        isp: geo.isp,
+      },
+    });
   } catch (err) {
     console.error('[Telemetry Ping Error]:', err);
     return res.status(500).json({ success: false, error: 'Error al procesar ping.' });

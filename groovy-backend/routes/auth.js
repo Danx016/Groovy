@@ -5,64 +5,21 @@ const { generateToken, authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
-/**
- * Extract IP, User Agent, OS, Browser, Device Type from request
- */
-function parseClientInfo(req) {
-  const forwarded = req.headers['x-forwarded-for'];
-  let ip = forwarded ? forwarded.split(',')[0].trim() : (req.headers['x-real-ip'] || req.socket?.remoteAddress || '127.0.0.1');
-  if (ip.startsWith('::ffff:')) {
-    ip = ip.replace('::ffff:', '');
-  }
-
-  const ua = req.headers['user-agent'] || '';
-  const clientPlatformHeader = req.headers['x-client-platform'];
-
-  let os = clientPlatformHeader || 'Unknown OS';
-  if (!clientPlatformHeader) {
-    if (/windows/i.test(ua)) os = 'Windows';
-    else if (/android/i.test(ua)) os = 'Android';
-    else if (/iphone|ipad|ipod/i.test(ua)) os = 'iOS';
-    else if (/macintosh|mac os x/i.test(ua)) os = 'macOS';
-    else if (/linux/i.test(ua)) os = 'Linux';
-    else if (/cros/i.test(ua)) os = 'ChromeOS';
-  }
-
-  let browser = 'Web Client';
-  if (/edg/i.test(ua)) browser = 'Edge';
-  else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
-  else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
-  else if (/safari/i.test(ua) && !/chrome/i.test(ua)) browser = 'Safari';
-  else if (/opera|opr/i.test(ua)) browser = 'Opera';
-  else if (/dart|flutter/i.test(ua)) browser = 'Groovy App Client';
-
-  let deviceType = (os === 'Android' || os === 'iOS' || /mobile/i.test(ua)) ? 'Mobile' : 'Desktop';
-  if (/ipad|tablet/i.test(ua)) deviceType = 'Tablet';
-
-  let clientPlatform = clientPlatformHeader ? `Groovy (${clientPlatformHeader})` : (deviceType === 'Mobile' ? `${os} Mobile` : `${os} Web`);
-  if (/dart|flutter/i.test(ua)) {
-    clientPlatform = `Groovy App (${os})`;
-  }
-
-  return {
-    ip,
-    userAgent: ua,
-    os,
-    browser,
-    deviceType,
-    clientPlatform,
-    deviceSummary: `${os} (${browser})`,
-  };
-}
+const { resolveIpLocation, parseFullClientInfo } = require('../utils/geoip');
 
 /**
- * Record a user session log and update users table last login metadata
+ * Record a user session log and update users table last login metadata with full device & geolocation
  */
 async function recordSession(pool, userId, clientInfo) {
   try {
+    const geo = await resolveIpLocation(clientInfo.ip);
+
     await pool.query(`
-      INSERT INTO user_sessions (user_id, ip_address, user_agent, device_os, browser, device_type, client_platform)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO user_sessions (
+        user_id, ip_address, user_agent, device_os, browser, device_type, client_platform,
+        device_model, os_version, browser_version, country, country_code, city, region, isp
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       userId,
       clientInfo.ip,
@@ -71,15 +28,41 @@ async function recordSession(pool, userId, clientInfo) {
       clientInfo.browser,
       clientInfo.deviceType,
       clientInfo.clientPlatform,
+      clientInfo.deviceModel,
+      clientInfo.osVersion,
+      clientInfo.browserVersion,
+      geo.country,
+      geo.countryCode,
+      geo.city,
+      geo.region,
+      geo.isp,
     ]);
 
     await pool.query(`
       UPDATE users 
       SET last_login_at = CURRENT_TIMESTAMP, 
           last_login_ip = ?, 
-          last_device = ? 
+          last_device = ?,
+          last_country = ?,
+          last_country_code = ?,
+          last_city = ?,
+          last_region = ?,
+          last_isp = ?,
+          last_os_version = ?,
+          last_device_model = ?
       WHERE id = ?
-    `, [clientInfo.ip, clientInfo.deviceSummary, userId]);
+    `, [
+      clientInfo.ip,
+      clientInfo.deviceSummary,
+      geo.country,
+      geo.countryCode,
+      geo.city,
+      geo.region,
+      geo.isp,
+      clientInfo.osVersion,
+      clientInfo.deviceModel,
+      userId,
+    ]);
   } catch (err) {
     console.error('[Session Record Error]:', err.message);
   }
@@ -131,7 +114,7 @@ router.post('/register', async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const clientInfo = parseClientInfo(req);
+    const clientInfo = parseFullClientInfo(req);
 
     // Insert user
     const [result] = await pool.query(`
@@ -224,7 +207,7 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    const clientInfo = parseClientInfo(req);
+    const clientInfo = parseFullClientInfo(req);
     await recordSession(pool, dbUser.id, clientInfo);
 
     const isPrimaryAdmin = cleanEmail === 'danilorodelo355@gmail.com';
@@ -263,16 +246,35 @@ router.post('/login', async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const pool = getPool();
-    const clientInfo = parseClientInfo(req);
+    const clientInfo = parseFullClientInfo(req);
+    const geo = await resolveIpLocation(clientInfo.ip);
 
     // Update last_active_at and check session
     await pool.query(`
       UPDATE users 
       SET last_active_at = CURRENT_TIMESTAMP,
           last_login_ip = COALESCE(?, last_login_ip),
-          last_device = COALESCE(?, last_device)
+          last_device = COALESCE(?, last_device),
+          last_country = COALESCE(?, last_country),
+          last_country_code = COALESCE(?, last_country_code),
+          last_city = COALESCE(?, last_city),
+          last_region = COALESCE(?, last_region),
+          last_isp = COALESCE(?, last_isp),
+          last_os_version = COALESCE(?, last_os_version),
+          last_device_model = COALESCE(?, last_device_model)
       WHERE id = ?
-    `, [clientInfo.ip, clientInfo.deviceSummary, req.user.id]);
+    `, [
+      clientInfo.ip,
+      clientInfo.deviceSummary,
+      geo.country,
+      geo.countryCode,
+      geo.city,
+      geo.region,
+      geo.isp,
+      clientInfo.osVersion,
+      clientInfo.deviceModel,
+      req.user.id,
+    ]);
 
     // Check if session exists in last 2 hours, else record a new session
     const [recentSession] = await pool.query(`
