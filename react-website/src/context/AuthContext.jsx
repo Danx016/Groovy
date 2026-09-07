@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authApi, getAuthToken, setAuthToken } from '../services/api';
+import { authApi, telemetryApi, getAuthToken, setAuthToken } from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -21,6 +21,8 @@ export const AuthProvider = ({ children }) => {
       try {
         const data = await authApi.getProfile();
         setUser(data.user);
+        // Immediate ping on web app load
+        telemetryApi.ping().catch(() => {});
       } catch (err) {
         console.warn('Session expired or invalid:', err.message);
         setAuthToken(null);
@@ -32,6 +34,15 @@ export const AuthProvider = ({ children }) => {
     };
     loadSession();
   }, []);
+
+  // Periodic heartbeat while web app is open
+  useEffect(() => {
+    if (!token || !user) return;
+    const interval = setInterval(() => {
+      telemetryApi.ping().catch(() => {});
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [token, user]);
 
   const login = async (email, password) => {
     setAuthError(null);

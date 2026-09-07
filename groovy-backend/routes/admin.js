@@ -15,7 +15,7 @@ router.use(authenticateAdmin);
 router.get('/live-playback', async (req, res) => {
   try {
     const pool = getPool();
-    // 1. Users actively streaming/playing music
+    // 1. Live playback stream presence (within last 5 minutes)
     const [rows] = await pool.query(`
       SELECT 
         lp.user_id,
@@ -43,11 +43,11 @@ router.get('/live-playback', async (req, res) => {
         TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as seconds_since_ping
       FROM user_live_playback lp
       JOIN users u ON lp.user_id = u.id
-      WHERE lp.last_ping_at >= NOW() - INTERVAL 120 SECOND
+      WHERE lp.last_ping_at >= NOW() - INTERVAL 300 SECOND
       ORDER BY lp.last_ping_at DESC
     `);
 
-    // 2. Users active/connected in the app right now (within last 3 minutes)
+    // 2. Users active/connected in the app right now (within last 5 minutes)
     const [connectedRows] = await pool.query(`
       SELECT 
         s.id as session_id,
@@ -67,11 +67,11 @@ router.get('/live-playback', async (req, res) => {
         s.region,
         s.isp,
         s.session_duration_seconds,
-        s.last_active_at,
-        TIMESTAMPDIFF(SECOND, s.last_active_at, NOW()) as seconds_since_active
+        COALESCE(s.last_active_at, s.created_at) as last_active_at,
+        TIMESTAMPDIFF(SECOND, COALESCE(s.last_active_at, s.created_at), NOW()) as seconds_since_active
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
-      WHERE s.last_active_at >= NOW() - INTERVAL 180 SECOND
+      WHERE s.last_active_at >= NOW() - INTERVAL 300 SECOND OR s.created_at >= NOW() - INTERVAL 300 SECOND
       ORDER BY s.last_active_at DESC
     `);
 
@@ -91,7 +91,7 @@ router.get('/live-playback', async (req, res) => {
         coverArt: r.cover_art,
         duration: r.duration,
         position: r.position,
-        isPlaying: r.is_playing === 1 && r.seconds_since_ping < 45,
+        isPlaying: r.is_playing === 1 && (r.seconds_since_ping < 90),
         platform: r.platform || 'Desconocido',
         deviceName: r.device_name,
         ipAddress: r.ip_address,
