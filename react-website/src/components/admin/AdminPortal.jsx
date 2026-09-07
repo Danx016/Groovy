@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  ShieldCheck,
   Users,
   Radio,
   Music,
@@ -12,29 +11,24 @@ import {
   Globe,
   Search,
   RefreshCw,
-  Edit3,
+  Edit2,
   Trash2,
   Ban,
-  CheckCircle2,
-  XCircle,
-  Copy,
   Check,
+  Copy,
+  Mail,
+  X,
+  Activity,
+  ArrowLeft,
+  Shield,
+  ShieldCheck,
+  AlertCircle,
+  Database,
   Calendar,
   Clock,
-  Key,
-  Mail,
-  User,
-  AlertTriangle,
-  X,
-  Play,
-  History,
-  Activity,
   ChevronRight,
-  TrendingUp,
-  LogOut,
-  ArrowLeft,
   ExternalLink,
-  ShieldAlert,
+  Info,
 } from 'lucide-react';
 import { adminApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -42,12 +36,12 @@ import { useAuth } from '../../context/AuthContext';
 export const AdminPortal = ({ onBackToPlayer }) => {
   const { user: currentUser, isAdmin, isAuthenticated, login, logout } = useAuth();
 
-  // Navigation inside Admin Portal
-  const [adminTab, setAdminTab] = useState('users'); // 'users' | 'sessions' | 'metrics'
+  // Navigation tab in Admin Sidebar: 'users' | 'sessions' | 'metrics'
+  const [activeTab, setActiveTab] = useState('users');
 
-  // Admin login form state
-  const [adminEmail, setAdminEmail] = useState('');
-  const [adminPassword, setAdminPassword] = useState('');
+  // Login form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
@@ -60,8 +54,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
 
-  // Modals & Action State
-  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
+  // Modals / Inspector
+  const [selectedUser, setSelectedUser] = useState(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'user', password: '' });
@@ -70,10 +64,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
 
-  // Check if current user is admin or primary admin email
   const isAuthorized = isAdmin || currentUser?.email === 'danilorodelo355@gmail.com';
 
   const copyToClipboard = (text) => {
+    if (!text) return;
     navigator.clipboard?.writeText(text);
     setCopiedIp(text);
     setTimeout(() => setCopiedIp(null), 2000);
@@ -84,7 +78,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     setLoginError(null);
     setIsLoggingIn(true);
     try {
-      await login(adminEmail.trim(), adminPassword);
+      await login(email.trim(), password);
     } catch (err) {
       setLoginError(err.message || 'Error al iniciar sesión.');
     } finally {
@@ -98,26 +92,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     setActionMessage(null);
     try {
       const [metricsRes, usersRes, sessionsRes] = await Promise.all([
-        adminApi.getMetrics().catch(err => {
-          console.warn('[Admin API] metrics error:', err.message);
-          return { error: err.message };
-        }),
-        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(err => {
-          console.warn('[Admin API] users error:', err.message);
-          return { error: err.message, users: [] };
-        }),
-        adminApi.getSessions(100).catch(err => {
-          console.warn('[Admin API] sessions error:', err.message);
-          return { error: err.message, sessions: [] };
-        }),
+        adminApi.getMetrics().catch(() => ({ metrics: null })),
+        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
+        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
       ]);
-
-      if (usersRes?.error && usersRes.error.includes('404')) {
-        setActionMessage({
-          type: 'error',
-          text: 'El backend en el servidor VPS aún no tiene desplegado el módulo de administración (/api/admin). Realiza un git pull y reinicia el servicio en el VPS.',
-        });
-      }
 
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
       if (usersRes?.users) setUsers(usersRes.users);
@@ -138,12 +116,12 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
   const handleOpenUserDetail = async (userId) => {
     setIsLoadingDetail(true);
-    setSelectedUserDetail(null);
+    setSelectedUser(null);
     try {
       const data = await adminApi.getUserDetails(userId);
-      setSelectedUserDetail(data);
+      setSelectedUser(data);
     } catch (err) {
-      alert('Error al cargar detalles del usuario: ' + err.message);
+      alert('Error al cargar información: ' + err.message);
     } finally {
       setIsLoadingDetail(false);
     }
@@ -165,8 +143,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     setIsSubmitting(true);
     try {
       const payload = {
-        name: editFormData.name,
-        email: editFormData.email,
+        name: editFormData.name.trim(),
+        email: editFormData.email.trim(),
         role: editFormData.role,
       };
       if (editFormData.password.trim()) {
@@ -186,14 +164,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const handleToggleBan = async (user) => {
     const nextStatus = !user.isBanned;
     const confirmMsg = nextStatus
-      ? `¿Estás seguro de suspender el acceso a ${user.name} (${user.email})?`
-      : `¿Deseas reactivar la cuenta de ${user.name}?`;
+      ? `¿Suspender el acceso a la cuenta de ${user.name}?`
+      : `¿Reactivar la cuenta de ${user.name}?`;
     if (!window.confirm(confirmMsg)) return;
 
     try {
       await adminApi.toggleBanUser(user.id, nextStatus);
       fetchData();
-      if (selectedUserDetail?.user?.id === user.id) {
+      if (selectedUser?.user?.id === user.id) {
         handleOpenUserDetail(user.id);
       }
     } catch (err) {
@@ -207,13 +185,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     try {
       await adminApi.deleteUser(userToDelete.id);
       setUserToDelete(null);
-      if (selectedUserDetail?.user?.id === userToDelete.id) {
-        setSelectedUserDetail(null);
+      if (selectedUser?.user?.id === userToDelete.id) {
+        setSelectedUser(null);
       }
-      setActionMessage({ type: 'success', text: `Usuario ${userToDelete.name} eliminado permanentemente.` });
+      setActionMessage({ type: 'success', text: `Usuario ${userToDelete.name} eliminado.` });
       fetchData();
     } catch (err) {
-      alert('Error al eliminar usuario: ' + err.message);
+      alert('Error al eliminar: ' + err.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -221,150 +199,128 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
   const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
     const osLower = (os || '').toLowerCase();
-    if (osLower.includes('android') || osLower.includes('ios') || deviceType === 'Mobile') {
-      return <Smartphone size={16} style={{ color: '#30D158' }} />;
+    if (osLower.includes('android') || osLower.includes('ios') || osLower.includes('iphone') || deviceType === 'Mobile') {
+      return <Smartphone size={16} style={{ color: '#FA243C' }} />;
     }
     if (osLower.includes('ipad') || deviceType === 'Tablet') {
-      return <Tablet size={16} style={{ color: '#0A84FF' }} />;
+      return <Tablet size={16} style={{ color: '#FA243C' }} />;
     }
-    if (osLower.includes('windows')) {
-      return <Laptop size={16} style={{ color: '#0078D7' }} />;
+    if (osLower.includes('windows') || osLower.includes('mac') || osLower.includes('linux')) {
+      return <Laptop size={16} style={{ color: '#FA243C' }} />;
     }
-    if (osLower.includes('mac')) {
-      return <Laptop size={16} style={{ color: '#E0E0E0' }} />;
-    }
-    if (osLower.includes('linux')) {
-      return <Laptop size={16} style={{ color: '#FF9500' }} />;
-    }
-    return <Globe size={16} style={{ color: '#999999' }} />;
+    return <Globe size={16} style={{ color: '#B3B3B3' }} />;
   };
 
-  // If not authorized / not logged in: Dedicated Standalone Admin Login Page
+  // Auth Guard Screen (matches Groovy's AccountView / AuthModal)
   if (!isAuthenticated || !isAuthorized) {
     return (
       <div style={{
-        minHeight: '100vh', width: '100vw', background: '#09090B', color: '#fff',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: '24px', fontFamily: 'system-ui, -apple-system, sans-serif',
+        minHeight: '100vh',
+        background: '#000000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
       }}>
         <div style={{
-          background: '#141417', border: '1px solid #27272A', borderRadius: '24px',
-          width: '100%', maxWidth: '440px', padding: '36px 32px',
-          boxShadow: '0 25px 60px rgba(0,0,0,0.7)',
+          width: '100%',
+          maxWidth: '400px',
+          background: '#181818',
+          border: '0.5px solid #282828',
+          borderRadius: '16px',
+          padding: '36px 30px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          textAlign: 'center',
+          boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '20px' }}>
-            <div style={{
-              width: '50px', height: '50px', borderRadius: '14px',
-              background: 'linear-gradient(135deg, #FF9500, #FA243C)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 6px 20px rgba(250,36,60,0.4)',
-            }}>
-              <ShieldCheck size={28} color="#fff" />
-            </div>
-            <div>
-              <h1 style={{ fontSize: '22px', fontWeight: 800, letterSpacing: '-0.4px' }}>Groovy Admin</h1>
-              <p style={{ fontSize: '12px', color: '#A1A1AA' }}>Portal de Control y Auditoría</p>
-            </div>
+          <div style={{ width: '64px', height: '64px', borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
+            <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
 
-          {isAuthenticated && !isAuthorized ? (
+          <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.4px', color: '#fff' }}>
+            Panel de Administración
+          </h1>
+          <p style={{ fontSize: '14px', color: '#B3B3B3', marginTop: '8px', marginBottom: '24px', lineHeight: 1.4 }}>
+            Inicia sesión con tu cuenta de administrador de Groovy para acceder a la gestión de usuarios.
+          </p>
+
+          {loginError && (
             <div style={{
-              background: 'rgba(255,69,58,0.12)', border: '1px solid rgba(255,69,58,0.25)',
-              borderRadius: '12px', padding: '16px', marginBottom: '20px', textAlign: 'center',
+              width: '100%', padding: '10px 14px', borderRadius: '8px',
+              background: 'rgba(250,36,60,0.12)', border: '0.5px solid rgba(250,36,60,0.3)',
+              color: '#FA243C', fontSize: '13px', marginBottom: '16px', textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: '8px',
             }}>
-              <ShieldAlert size={26} color="#FF453A" style={{ margin: '0 auto 8px' }} />
-              <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#FF453A' }}>Acceso Restringido</h3>
-              <p style={{ fontSize: '13px', color: '#D4D4D8', marginTop: '4px' }}>
-                Tu cuenta ({currentUser?.email}) no tiene permisos de administrador. Por favor inicia sesión con las credenciales maestras.
-              </p>
-              <button
-                onClick={logout}
-                style={{
-                  marginTop: '14px', padding: '8px 16px', borderRadius: '8px',
-                  background: '#27272A', color: '#fff', border: 'none', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                Cerrar sesión e ingresar como Admin
-              </button>
+              <AlertCircle size={15} style={{ flexShrink: 0 }} />
+              <span>{loginError}</span>
             </div>
-          ) : (
-            <>
-              <p style={{ fontSize: '14px', color: '#A1A1AA', textAlign: 'center', marginBottom: '24px' }}>
-                Ingresa con tu cuenta de administrador para acceder al panel de gestión y monitoreo.
-              </p>
-
-              {loginError && (
-                <div style={{
-                  padding: '12px', borderRadius: '10px', background: 'rgba(255,59,48,0.15)',
-                  border: '1px solid rgba(255,59,48,0.3)', color: '#FF453A', fontSize: '13px',
-                  marginBottom: '18px', textAlign: 'left',
-                }}>
-                  {loginError}
-                </div>
-              )}
-
-              <form onSubmit={handleLoginSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D4D4D8', marginBottom: '6px' }}>
-                    Correo Electrónico
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="ej. danilorodelo355@gmail.com"
-                    value={adminEmail}
-                    onChange={e => setAdminEmail(e.target.value)}
-                    style={{
-                      width: '100%', background: '#09090B', border: '1px solid #3F3F46',
-                      borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '14px',
-                      outline: 'none', boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#D4D4D8', marginBottom: '6px' }}>
-                    Contraseña
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="••••••••"
-                    value={adminPassword}
-                    onChange={e => setAdminPassword(e.target.value)}
-                    style={{
-                      width: '100%', background: '#09090B', border: '1px solid #3F3F46',
-                      borderRadius: '10px', padding: '12px 14px', color: '#fff', fontSize: '14px',
-                      outline: 'none', boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={isLoggingIn}
-                  style={{
-                    marginTop: '8px', width: '100%', padding: '14px', borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #FA243C, #FF375F)', color: '#fff',
-                    fontWeight: 700, fontSize: '15px', border: 'none', cursor: 'pointer',
-                    boxShadow: '0 4px 20px rgba(250,36,60,0.35)', transition: 'all 0.2s',
-                  }}
-                >
-                  {isLoggingIn ? 'Verificando...' : 'Iniciar Sesión en el Panel'}
-                </button>
-              </form>
-            </>
           )}
+
+          <form onSubmit={handleLoginSubmit} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div style={{ textAlign: 'left' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#B3B3B3', marginBottom: '6px', fontWeight: 500 }}>
+                Correo electrónico
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="nombre@ejemplo.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                style={{
+                  width: '100%', background: '#282828', border: '0.5px solid #404040',
+                  borderRadius: '8px', padding: '12px 14px', color: '#fff', fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <div style={{ textAlign: 'left' }}>
+              <label style={{ display: 'block', fontSize: '12px', color: '#B3B3B3', marginBottom: '6px', fontWeight: 500 }}>
+                Contraseña
+              </label>
+              <input
+                type="password"
+                required
+                placeholder="••••••••"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                style={{
+                  width: '100%', background: '#282828', border: '0.5px solid #404040',
+                  borderRadius: '8px', padding: '12px 14px', color: '#fff', fontSize: '14px',
+                  outline: 'none',
+                }}
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              style={{
+                marginTop: '10px', width: '100%', padding: '14px', borderRadius: '12px',
+                background: '#FA243C', color: '#fff', fontWeight: 700, fontSize: '15px',
+                cursor: 'pointer', transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#c41c2e'}
+              onMouseLeave={e => e.currentTarget.style.background = '#FA243C'}
+            >
+              {isLoggingIn ? 'Verificando credenciales...' : 'Iniciar Sesión'}
+            </button>
+          </form>
 
           {onBackToPlayer && (
             <button
               onClick={onBackToPlayer}
               style={{
-                marginTop: '20px', width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                background: 'none', border: 'none', color: '#A1A1AA', fontSize: '13px', cursor: 'pointer',
+                marginTop: '24px', display: 'flex', alignItems: 'center', gap: '6px',
+                color: '#B3B3B3', fontSize: '13px', cursor: 'pointer',
               }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
             >
-              <ArrowLeft size={14} /> Volver a Groovy Music Player
+              <ArrowLeft size={14} /> Volver a Groovy Música
             </button>
           )}
         </div>
@@ -372,733 +328,909 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     );
   }
 
-  // Standalone Full-Screen Admin Dashboard
   return (
-    <div style={{
-      minHeight: '100vh', width: '100vw', background: '#09090B', color: '#fff',
-      fontFamily: 'system-ui, -apple-system, sans-serif', display: 'flex', flexDirection: 'column',
-    }}>
-      {/* Standalone Top Bar */}
-      <header style={{
-        height: '64px', background: '#121215', borderBottom: '1px solid #27272A',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 24px', position: 'sticky', top: 0, zIndex: 50,
+    <div style={{ display: 'flex', minHeight: '100vh', background: '#000000', color: '#ffffff' }}>
+      {/* 1. GROOVY NATIVE SIDEBAR (Matches Sidebar.jsx exactly) */}
+      <aside style={{
+        width: '240px',
+        flexShrink: 0,
+        background: '#000000',
+        borderRight: '0.5px solid #282828',
+        height: '100vh',
+        position: 'sticky',
+        top: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: '16px 8px',
+        boxSizing: 'border-box',
+        zIndex: 20,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{
-            width: '38px', height: '38px', borderRadius: '10px',
-            background: 'linear-gradient(135deg, #FF9500, #FA243C)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(250,36,60,0.3)',
-          }}>
-            <ShieldCheck size={22} color="#fff" />
+        {/* Brand */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', marginBottom: '16px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+            <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '17px', fontWeight: 800, letterSpacing: '-0.3px' }}>Groovy Admin Portal</span>
-              <span style={{ fontSize: '10px', background: '#FF9500', color: '#000', padding: '1px 6px', borderRadius: '8px', fontWeight: 800 }}>
-                CONSOLE
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h1 style={{ fontSize: '17px', fontWeight: 700, color: '#fff', letterSpacing: '-0.3px' }}>Groovy</h1>
+              <span style={{ fontSize: '10px', color: '#FA243C', fontWeight: 700, background: 'rgba(250,36,60,0.15)', padding: '1px 6px', borderRadius: '10px' }}>
+                ADMIN
               </span>
             </div>
-            <span style={{ fontSize: '11px', color: '#A1A1AA' }}>Servidor MySQL VPS 157.137.233.119</span>
+            <p style={{ fontSize: '11px', color: '#B3B3B3', marginTop: '1px' }}>Gestión de Nube</p>
           </div>
         </div>
 
-        {/* Center Nav tabs */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <button
-            onClick={() => setAdminTab('users')}
-            style={{
-              padding: '8px 16px', borderRadius: '10px', border: 'none',
-              background: adminTab === 'users' ? '#27272A' : 'transparent',
-              color: adminTab === 'users' ? '#fff' : '#A1A1AA',
-              fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            👥 Usuarios ({users.length})
-          </button>
-          <button
-            onClick={() => setAdminTab('sessions')}
-            style={{
-              padding: '8px 16px', borderRadius: '10px', border: 'none',
-              background: adminTab === 'sessions' ? '#27272A' : 'transparent',
-              color: adminTab === 'sessions' ? '#fff' : '#A1A1AA',
-              fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            🌐 Dispositivos e IPs ({sessions.length})
-          </button>
-          <button
-            onClick={() => setAdminTab('metrics')}
-            style={{
-              padding: '8px 16px', borderRadius: '10px', border: 'none',
-              background: adminTab === 'metrics' ? '#27272A' : 'transparent',
-              color: adminTab === 'metrics' ? '#fff' : '#A1A1AA',
-              fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-            }}
-          >
-            📊 Estadísticas
-          </button>
+        {/* Section Label */}
+        <div style={{ padding: '4px 12px 8px' }}>
+          <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', color: '#6B6B6B', textTransform: 'uppercase' }}>
+            Panel de Control
+          </span>
         </div>
 
-        {/* Right Admin Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Navigation Items (Exact Groovy style) */}
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '16px' }}>
           <button
-            onClick={fetchData}
-            disabled={isLoading}
-            title="Refrescar datos del servidor"
+            onClick={() => setActiveTab('users')}
             style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '7px 12px', borderRadius: '8px',
-              background: '#1C1C20', border: '1px solid #2E2E33',
-              color: '#D4D4D8', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              width: '100%', padding: '10px 12px', borderRadius: '8px',
+              fontSize: '14px', fontWeight: activeTab === 'users' ? 700 : 500,
+              color: activeTab === 'users' ? '#fff' : '#B3B3B3',
+              background: activeTab === 'users' ? '#282828' : 'transparent',
+              textAlign: 'left', transition: 'all 0.15s',
             }}
+            onMouseEnter={e => { if (activeTab !== 'users') e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={e => { if (activeTab !== 'users') e.currentTarget.style.color = '#B3B3B3'; }}
           >
-            <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
-            <span>Refrescar</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Users size={19} style={{ color: activeTab === 'users' ? '#FA243C' : '#B3B3B3', flexShrink: 0 }} />
+              <span>Usuarios</span>
+            </div>
+            <span style={{
+              fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '10px',
+              background: activeTab === 'users' ? '#FA243C' : '#181818',
+              color: '#fff',
+            }}>
+              {users.length}
+            </span>
           </button>
 
-          {onBackToPlayer && (
-            <button
-              onClick={onBackToPlayer}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '5px',
-                padding: '7px 12px', borderRadius: '8px',
-                background: '#1C1C20', border: '1px solid #2E2E33',
-                color: '#D4D4D8', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              }}
-            >
-              <ExternalLink size={13} />
-              <span>Ir a la App Web</span>
-            </button>
-          )}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '8px', borderLeft: '1px solid #27272A' }}>
-            <div style={{
-              width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '13px', fontWeight: 700, color: '#fff',
+          <button
+            onClick={() => setActiveTab('sessions')}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              width: '100%', padding: '10px 12px', borderRadius: '8px',
+              fontSize: '14px', fontWeight: activeTab === 'sessions' ? 700 : 500,
+              color: activeTab === 'sessions' ? '#fff' : '#B3B3B3',
+              background: activeTab === 'sessions' ? '#282828' : 'transparent',
+              textAlign: 'left', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (activeTab !== 'sessions') e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={e => { if (activeTab !== 'sessions') e.currentTarget.style.color = '#B3B3B3'; }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <Activity size={19} style={{ color: activeTab === 'sessions' ? '#FA243C' : '#B3B3B3', flexShrink: 0 }} />
+              <span>Dispositivos & IPs</span>
+            </div>
+            <span style={{
+              fontSize: '11px', fontWeight: 600, padding: '1px 7px', borderRadius: '10px',
+              background: activeTab === 'sessions' ? '#FA243C' : '#181818',
+              color: '#fff',
             }}>
-              {currentUser?.name?.charAt(0).toUpperCase() || 'A'}
+              {sessions.length}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('metrics')}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              width: '100%', padding: '10px 12px', borderRadius: '8px',
+              fontSize: '14px', fontWeight: activeTab === 'metrics' ? 700 : 500,
+              color: activeTab === 'metrics' ? '#fff' : '#B3B3B3',
+              background: activeTab === 'metrics' ? '#282828' : 'transparent',
+              textAlign: 'left', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (activeTab !== 'metrics') e.currentTarget.style.color = '#fff'; }}
+            onMouseLeave={e => { if (activeTab !== 'metrics') e.currentTarget.style.color = '#B3B3B3'; }}
+          >
+            <Music size={19} style={{ color: activeTab === 'metrics' ? '#FA243C' : '#B3B3B3', flexShrink: 0 }} />
+            <span>Top Canciones</span>
+          </button>
+        </nav>
+
+        {/* Divider */}
+        <div style={{ height: '0.5px', background: '#282828', margin: '0 12px 16px' }} />
+
+        {/* Return to Music Player action */}
+        {onBackToPlayer && (
+          <button
+            onClick={onBackToPlayer}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '12px',
+              width: '100%', padding: '10px 12px', borderRadius: '8px',
+              fontSize: '14px', fontWeight: 500, color: '#B3B3B3',
+              background: 'transparent', textAlign: 'left', transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = '#181818'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#B3B3B3'; e.currentTarget.style.background = 'transparent'; }}
+          >
+            <ArrowLeft size={18} style={{ color: '#FA243C', flexShrink: 0 }} />
+            <span>Volver a Groovy</span>
+          </button>
+        )}
+
+        {/* Bottom: Current Admin Profile Card */}
+        <div style={{ marginTop: 'auto', padding: '12px 8px', borderTop: '0.5px solid #282828' }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            padding: '8px 10px', background: '#181818', borderRadius: '10px',
+            border: '0.5px solid #282828',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+              <div style={{
+                width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 700, fontSize: '13px', color: '#fff', flexShrink: 0,
+              }}>
+                {currentUser?.name?.charAt(0).toUpperCase() || 'A'}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentUser?.name || 'Administrador'}
+                </p>
+                <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {currentUser?.email || ''}
+                </p>
+              </div>
             </div>
             <button
               onClick={logout}
-              title="Cerrar sesión de administrador"
-              style={{
-                display: 'flex', alignItems: 'center', gap: '4px',
-                padding: '6px 10px', borderRadius: '8px',
-                background: 'rgba(255,59,48,0.12)', border: '1px solid rgba(255,59,48,0.2)',
-                color: '#FF453A', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              }}
+              title="Cerrar sesión"
+              style={{ color: '#B3B3B3', padding: '4px', flexShrink: 0 }}
+              onMouseEnter={e => e.currentTarget.style.color = '#FF3B30'}
+              onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
             >
-              <LogOut size={13} />
-              <span>Salir</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content Area */}
-      <main style={{ flex: 1, padding: '24px 32px', maxWidth: '1440px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-        {/* KPI Metrics Strip */}
-        <div style={{
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-          gap: '14px', marginBottom: '24px',
-        }}>
-          <div style={{ background: '#121215', borderRadius: '16px', padding: '18px', border: '1px solid #27272A' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#A1A1AA', fontWeight: 600, textTransform: 'uppercase' }}>Usuarios Totales</span>
-              <Users size={18} style={{ color: '#0A84FF' }} />
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff' }}>{metrics?.totalUsers ?? users.length}</div>
-            <div style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-              <TrendingUp size={12} /> {metrics?.activeToday ?? 0} activos hoy
-            </div>
-          </div>
-
-          <div style={{ background: '#121215', borderRadius: '16px', padding: '18px', border: '1px solid #27272A' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#A1A1AA', fontWeight: 600, textTransform: 'uppercase' }}>Sesiones & IPs</span>
-              <Activity size={18} style={{ color: '#30D158' }} />
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff' }}>{metrics?.totalSessions ?? sessions.length}</div>
-            <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>Conexiones registradas</div>
-          </div>
-
-          <div style={{ background: '#121215', borderRadius: '16px', padding: '18px', border: '1px solid #27272A' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#A1A1AA', fontWeight: 600, textTransform: 'uppercase' }}>Favoritos en Nube</span>
-              <Heart size={18} style={{ color: '#FF375F' }} />
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff' }}>{metrics?.totalFavorites ?? 0}</div>
-            <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>Canciones guardadas</div>
-          </div>
-
-          <div style={{ background: '#121215', borderRadius: '16px', padding: '18px', border: '1px solid #27272A' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#A1A1AA', fontWeight: 600, textTransform: 'uppercase' }}>Playlists Creadas</span>
-              <ListMusic size={18} style={{ color: '#FA243C' }} />
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff' }}>{metrics?.totalPlaylists ?? 0}</div>
-            <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>Colecciones de usuario</div>
-          </div>
-
-          <div style={{ background: '#121215', borderRadius: '16px', padding: '18px', border: '1px solid #27272A' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-              <span style={{ fontSize: '12px', color: '#A1A1AA', fontWeight: 600, textTransform: 'uppercase' }}>Reproducciones</span>
-              <Music size={18} style={{ color: '#BF5AF2' }} />
-            </div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff' }}>{metrics?.totalPlays ?? 0}</div>
-            <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '4px' }}>Historial en streaming</div>
-          </div>
-        </div>
-
-        {/* Alert Notification if any */}
-        {actionMessage && (
-          <div style={{
-            padding: '12px 18px', borderRadius: '12px', marginBottom: '20px',
-            background: actionMessage.type === 'success' ? 'rgba(52,199,89,0.15)' : 'rgba(255,59,48,0.15)',
-            border: `1px solid ${actionMessage.type === 'success' ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
-            color: actionMessage.type === 'success' ? '#34C759' : '#FF453A',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>{actionMessage.text}</span>
-            <button onClick={() => setActionMessage(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>
               <X size={16} />
             </button>
           </div>
-        )}
+        </div>
+      </aside>
 
-        {/* TAB 1: USERS MANAGEMENT TABLE */}
-        {adminTab === 'users' && (
-          <div>
-            {/* Search & Filter bar */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '10px',
-                background: '#121215', border: '1px solid #27272A', borderRadius: '12px',
-                padding: '10px 16px', flex: 1, minWidth: '260px', maxWidth: '520px',
-              }}>
-                <Search size={16} color="#A1A1AA" />
-                <input
-                  type="text"
-                  placeholder="Buscar usuario por nombre, email, IP o dispositivo..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  style={{
-                    background: 'none', border: 'none', color: '#fff', fontSize: '13px',
-                    width: '100%', outline: 'none',
-                  }}
-                />
-                {searchQuery && (
-                  <button onClick={() => setSearchQuery('')} style={{ background: 'none', border: 'none', color: '#A1A1AA', cursor: 'pointer' }}>
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <select
-                  value={roleFilter}
-                  onChange={e => setRoleFilter(e.target.value)}
-                  style={{
-                    background: '#121215', border: '1px solid #27272A', borderRadius: '10px',
-                    color: '#fff', padding: '9px 14px', fontSize: '13px', outline: 'none', cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">Todos los roles</option>
-                  <option value="admin">Administradores</option>
-                  <option value="user">Usuarios regulares</option>
-                </select>
-
-                <select
-                  value={statusFilter}
-                  onChange={e => setStatusFilter(e.target.value)}
-                  style={{
-                    background: '#121215', border: '1px solid #27272A', borderRadius: '10px',
-                    color: '#fff', padding: '9px 14px', fontSize: '13px', outline: 'none', cursor: 'pointer',
-                  }}
-                >
-                  <option value="all">Todos los estados</option>
-                  <option value="active">Activos</option>
-                  <option value="banned">Suspendidos</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Users Table */}
-            <div style={{
-              background: '#121215', borderRadius: '18px', border: '1px solid #27272A',
-              overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
-            }}>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '920px' }}>
-                  <thead>
-                    <tr style={{ background: '#18181C', borderBottom: '1px solid #27272A', color: '#A1A1AA', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      <th style={{ padding: '14px 18px' }}>Usuario</th>
-                      <th style={{ padding: '14px 18px' }}>Rol / Estado</th>
-                      <th style={{ padding: '14px 18px' }}>Última IP</th>
-                      <th style={{ padding: '14px 18px' }}>Dispositivo</th>
-                      <th style={{ padding: '14px 18px' }}>Biblioteca</th>
-                      <th style={{ padding: '14px 18px' }}>Fecha Registro</th>
-                      <th style={{ padding: '14px 18px', textAlign: 'right' }}>Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((u) => (
-                      <tr
-                        key={u.id}
-                        style={{
-                          borderBottom: '1px solid #1E1E22',
-                          background: u.isBanned ? 'rgba(255,69,58,0.06)' : 'transparent',
-                          transition: 'background 0.15s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = u.isBanned ? 'rgba(255,69,58,0.12)' : '#18181C'}
-                        onMouseLeave={e => e.currentTarget.style.background = u.isBanned ? 'rgba(255,69,58,0.06)' : 'transparent'}
-                      >
-                        {/* User Profile */}
-                        <td style={{ padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <div style={{
-                              width: '40px', height: '40px', borderRadius: '50%',
-                              background: u.role === 'admin' ? 'linear-gradient(135deg, #FF9500, #FA243C)' : '#27272A',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '15px', fontWeight: 800, color: '#fff', flexShrink: 0,
-                            }}>
-                              {u.name?.charAt(0).toUpperCase() || 'U'}
-                            </div>
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontSize: '14px', fontWeight: 700, color: '#fff' }}>{u.name}</span>
-                                {currentUser?.id === u.id && (
-                                  <span style={{ fontSize: '10px', background: '#FA243C', color: '#fff', padding: '1px 6px', borderRadius: '10px', fontWeight: 800 }}>
-                                    Tú
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '2px' }}>{u.email}</div>
-                            </div>
-                          </div>
-                        </td>
-
-                        {/* Role & Status */}
-                        <td style={{ padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-                            <span style={{
-                              fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px',
-                              background: u.role === 'admin' ? 'rgba(255,149,0,0.15)' : 'rgba(255,255,255,0.08)',
-                              color: u.role === 'admin' ? '#FF9500' : '#A1A1AA',
-                              border: `1px solid ${u.role === 'admin' ? 'rgba(255,149,0,0.3)' : 'transparent'}`,
-                            }}>
-                              {u.role === 'admin' ? '👑 Admin' : '👤 Usuario'}
-                            </span>
-
-                            <span style={{
-                              fontSize: '11px', fontWeight: 600,
-                              color: u.isBanned ? '#FF453A' : '#34C759',
-                              display: 'flex', alignItems: 'center', gap: '4px',
-                            }}>
-                              {u.isBanned ? <XCircle size={11} /> : <CheckCircle2 size={11} />}
-                              {u.isBanned ? 'Suspendido' : 'Activo'}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* IP Address */}
-                        <td style={{ padding: '14px 18px' }}>
-                          {u.lastLoginIp ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              <code style={{ fontSize: '12px', background: '#1E1E22', padding: '4px 8px', borderRadius: '6px', color: '#34C759', fontFamily: 'monospace' }}>
-                                {u.lastLoginIp}
-                              </code>
-                              <button
-                                onClick={() => copyToClipboard(u.lastLoginIp)}
-                                title="Copiar IP"
-                                style={{ background: 'none', border: 'none', color: '#A1A1AA', cursor: 'pointer', padding: '2px' }}
-                              >
-                                {copiedIp === u.lastLoginIp ? <Check size={13} color="#34C759" /> : <Copy size={13} />}
-                              </button>
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: '12px', color: '#52525B' }}>Sin IP registrada</span>
-                          )}
-                        </td>
-
-                        {/* Device */}
-                        <td style={{ padding: '14px 18px' }}>
-                          {u.lastDevice ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '7px', fontSize: '13px', color: '#E4E4E7' }}>
-                              {getDeviceIcon(u.lastDevice)}
-                              <span style={{ maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {u.lastDevice}
-                              </span>
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: '12px', color: '#52525B' }}>Desconocido</span>
-                          )}
-                        </td>
-
-                        {/* Stats */}
-                        <td style={{ padding: '14px 18px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#A1A1AA' }}>
-                            <span title="Favoritos" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <Heart size={12} style={{ color: '#FF375F' }} /> {u.stats?.favorites || 0}
-                            </span>
-                            <span title="Playlists" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <ListMusic size={12} style={{ color: '#FA243C' }} /> {u.stats?.playlists || 0}
-                            </span>
-                            <span title="Reproducciones" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-                              <Music size={12} style={{ color: '#BF5AF2' }} /> {u.stats?.plays || 0}
-                            </span>
-                          </div>
-                        </td>
-
-                        {/* Registered Date */}
-                        <td style={{ padding: '14px 18px', fontSize: '12px', color: '#A1A1AA' }}>
-                          {u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}
-                        </td>
-
-                        {/* Actions */}
-                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
-                            <button
-                              onClick={() => handleOpenUserDetail(u.id)}
-                              title="Ver información completa (IPs, dispositivos, canciones)"
-                              style={{
-                                padding: '6px 12px', borderRadius: '8px',
-                                background: '#1E1E24', border: '1px solid #2E2E36',
-                                color: '#fff', fontSize: '12px', fontWeight: 600,
-                                cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                              }}
-                            >
-                              <Search size={13} color="#0A84FF" />
-                              <span>Ver Todo</span>
-                            </button>
-
-                            <button
-                              onClick={() => handleOpenEdit(u)}
-                              title="Editar usuario"
-                              style={{
-                                padding: '6px 8px', borderRadius: '8px',
-                                background: '#1E1E24', border: '1px solid #2E2E36',
-                                color: '#FF9500', cursor: 'pointer',
-                              }}
-                            >
-                              <Edit3 size={14} />
-                            </button>
-
-                            {currentUser?.id !== u.id && (
-                              <button
-                                onClick={() => handleToggleBan(u)}
-                                title={u.isBanned ? 'Reactivar usuario' : 'Suspender usuario'}
-                                style={{
-                                  padding: '6px 8px', borderRadius: '8px',
-                                  background: u.isBanned ? 'rgba(52,199,89,0.15)' : 'rgba(255,59,48,0.15)',
-                                  border: `1px solid ${u.isBanned ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
-                                  color: u.isBanned ? '#34C759' : '#FF453A',
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                <Ban size={14} />
-                              </button>
-                            )}
-
-                            {currentUser?.id !== u.id && (
-                              <button
-                                onClick={() => setUserToDelete(u)}
-                                title="Eliminar usuario permanentemente"
-                                style={{
-                                  padding: '6px 8px', borderRadius: '8px',
-                                  background: 'rgba(255,59,48,0.1)', border: '1px solid rgba(255,59,48,0.25)',
-                                  color: '#FF453A', cursor: 'pointer',
-                                }}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-
-                    {users.length === 0 && !isLoading && (
-                      <tr>
-                        <td colSpan={7} style={{ padding: '40px', textAlign: 'center', color: '#A1A1AA' }}>
-                          No se encontraron usuarios coincidentes con los filtros de búsqueda.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TAB 2: SESSIONS & IP AUDIT */}
-        {adminTab === 'sessions' && (
+      {/* 2. MAIN CONTENT AREA */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', overflowY: 'auto' }}>
+        {/* Top Header (Matches Header.jsx exactly) */}
+        <header style={{
+          height: '56px',
+          background: 'rgba(0,0,0,0.92)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '0.5px solid #282828',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 32px',
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+        }}>
+          {/* Search bar (styled exactly like desktop-search in Header.jsx) */}
           <div style={{
-            background: '#121215', borderRadius: '18px', border: '1px solid #27272A',
-            overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.5)',
+            flex: 1, maxWidth: '420px',
+            display: 'flex', alignItems: 'center', gap: '10px',
+            background: '#282828', borderRadius: '8px', padding: '8px 14px',
+            border: '0.5px solid #404040',
           }}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #27272A' }}>
-              <h3 style={{ fontSize: '17px', fontWeight: 700 }}>Registro Global de Conexiones y Dispositivos</h3>
-              <p style={{ fontSize: '12px', color: '#A1A1AA', marginTop: '2px' }}>
-                Historial cronológico en tiempo real de todos los accesos, IPs, navegadores y sistemas operativos
+            <Search size={15} style={{ color: '#B3B3B3', flexShrink: 0 }} />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, correo, IP o dispositivo..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              style={{
+                background: 'transparent', border: 'none', color: '#fff', fontSize: '13px',
+                width: '100%', outline: 'none',
+              }}
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery('')} style={{ color: '#B3B3B3', padding: '2px' }}>
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Right Header items */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Live VPS MySQL Connection Status pill */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: '#181818', border: '0.5px solid #404040',
+              borderRadius: '20px', padding: '5px 12px',
+              fontSize: '12px', color: '#B3B3B3',
+            }}>
+              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759' }} />
+              <span style={{ fontWeight: 500 }}>MySQL Cloud Conectado</span>
+            </div>
+
+            {/* Refresh Button */}
+            <button
+              onClick={fetchData}
+              disabled={isLoading}
+              title="Actualizar datos"
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: '#282828', border: '0.5px solid #404040',
+                borderRadius: '8px', padding: '7px 14px',
+                color: '#fff', fontSize: '13px', fontWeight: 600,
+                cursor: 'pointer', transition: 'all 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.background = '#333'}
+              onMouseLeave={e => e.currentTarget.style.background = '#282828'}
+            >
+              <RefreshCw size={13} className={isLoading ? 'animate-spin' : ''} />
+              <span>{isLoading ? 'Cargando...' : 'Actualizar'}</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Content Body */}
+        <main style={{ padding: '32px', maxWidth: '1200px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+          {/* Header Title Section */}
+          <div style={{ marginBottom: '24px' }}>
+            <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '6px' }}>
+              {activeTab === 'users' && 'Usuarios Registrados'}
+              {activeTab === 'sessions' && 'Auditoría de Dispositivos e IPs'}
+              {activeTab === 'metrics' && 'Top Canciones en Streaming'}
+            </h1>
+            <p style={{ fontSize: '14px', color: '#B3B3B3' }}>
+              Base de datos en tiempo real de Groovy en el servidor de producción.
+            </p>
+          </div>
+
+          {/* Action Message Banner */}
+          {actionMessage && (
+            <div style={{
+              padding: '12px 18px', borderRadius: '10px', marginBottom: '24px',
+              background: actionMessage.type === 'success' ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)',
+              border: `0.5px solid ${actionMessage.type === 'success' ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
+              color: actionMessage.type === 'success' ? '#34C759' : '#FF3B30',
+              fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <span>{actionMessage.text}</span>
+              <button onClick={() => setActionMessage(null)} style={{ color: 'inherit', padding: '2px' }}>
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* GROOVY METRICS STRIP (Cohesive & Clean, Apple Music / Spotify for Artists style) */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '12px',
+            marginBottom: '28px',
+          }}>
+            <div style={{
+              background: '#181818', borderRadius: '12px', border: '0.5px solid #282828',
+              padding: '18px 20px',
+            }}>
+              <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Usuarios Totales
+              </span>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
+                {metrics?.totalUsers ?? users.length}
+              </div>
+              <p style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                ● {metrics?.activeToday ?? 0} activos hoy
               </p>
             </div>
 
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', minWidth: '920px' }}>
-                <thead>
-                  <tr style={{ background: '#18181C', borderBottom: '1px solid #27272A', color: '#A1A1AA', fontSize: '11px', textTransform: 'uppercase' }}>
-                    <th style={{ padding: '14px 18px' }}>Usuario</th>
-                    <th style={{ padding: '14px 18px' }}>Dirección IP</th>
-                    <th style={{ padding: '14px 18px' }}>Dispositivo / S.O.</th>
-                    <th style={{ padding: '14px 18px' }}>Navegador / Cliente</th>
-                    <th style={{ padding: '14px 18px' }}>Plataforma</th>
-                    <th style={{ padding: '14px 18px' }}>Fecha y Hora</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions.map((s) => (
-                    <tr key={s.id} style={{ borderBottom: '1px solid #1E1E22' }}>
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '13px' }}>{s.user_name}</div>
-                        <div style={{ fontSize: '11px', color: '#A1A1AA' }}>{s.user_email}</div>
-                      </td>
+            <div style={{
+              background: '#181818', borderRadius: '12px', border: '0.5px solid #282828',
+              padding: '18px 20px',
+            }}>
+              <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Sesiones Registradas
+              </span>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
+                {metrics?.totalSessions ?? sessions.length}
+              </div>
+              <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
+                Inicios de sesión con IP y dispositivo
+              </p>
+            </div>
 
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <code style={{ fontSize: '12px', background: '#1E1E22', padding: '4px 8px', borderRadius: '6px', color: '#34C759', fontWeight: 600, fontFamily: 'monospace' }}>
-                            {s.ip_address}
-                          </code>
-                          <button
-                            onClick={() => copyToClipboard(s.ip_address)}
-                            title="Copiar IP"
-                            style={{ background: 'none', border: 'none', color: '#A1A1AA', cursor: 'pointer', padding: '2px' }}
-                          >
-                            {copiedIp === s.ip_address ? <Check size={12} color="#34C759" /> : <Copy size={12} />}
-                          </button>
-                        </div>
-                      </td>
+            <div style={{
+              background: '#181818', borderRadius: '12px', border: '0.5px solid #282828',
+              padding: '18px 20px',
+            }}>
+              <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Favoritos en Nube
+              </span>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
+                {metrics?.totalFavorites ?? 0}
+              </div>
+              <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
+                Canciones guardadas por usuarios
+              </p>
+            </div>
 
-                      <td style={{ padding: '14px 18px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-                          {getDeviceIcon(s.device_os, s.browser, s.device_type)}
-                          <span>{s.device_os || 'Desconocido'}</span>
-                        </div>
-                      </td>
-
-                      <td style={{ padding: '14px 18px', fontSize: '13px', color: '#E4E4E7' }}>
-                        {s.browser || 'Web Browser'}
-                      </td>
-
-                      <td style={{ padding: '14px 18px' }}>
-                        <span style={{ fontSize: '11px', background: '#1E1E22', padding: '2px 8px', borderRadius: '10px', color: '#A1A1AA' }}>
-                          {s.client_platform || 'Web Client'}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '14px 18px', fontSize: '12px', color: '#A1A1AA' }}>
-                        {s.created_at ? new Date(s.created_at).toLocaleString() : 'N/A'}
-                      </td>
-                    </tr>
-                  ))}
-
-                  {sessions.length === 0 && (
-                    <tr>
-                      <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: '#A1A1AA' }}>
-                        No hay registros de sesiones disponibles todavía.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+            <div style={{
+              background: '#181818', borderRadius: '12px', border: '0.5px solid #282828',
+              padding: '18px 20px',
+            }}>
+              <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Reproducciones
+              </span>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
+                {metrics?.totalPlays ?? 0}
+              </div>
+              <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
+                Streams totales sincronizados
+              </p>
             </div>
           </div>
-        )}
 
-        {/* TAB 3: STATS & STREAMING TOP SONGS */}
-        {adminTab === 'metrics' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: '20px' }}>
-            <div style={{ background: '#121215', borderRadius: '18px', border: '1px solid #27272A', padding: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <TrendingUp size={20} color="#FA243C" /> Canciones más reproducidas en la nube
+          {/* TAB 1: USERS */}
+          {activeTab === 'users' && (
+            <div>
+              {/* Segmented Filter Pills (exact Apple Music / LibraryView style) */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '16px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[
+                    { id: 'all', label: 'Todos' },
+                    { id: 'admin', label: 'Administradores' },
+                    { id: 'user', label: 'Usuarios Estándar' },
+                  ].map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setRoleFilter(filter.id)}
+                      style={{
+                        padding: '7px 16px', borderRadius: '20px', fontSize: '13px', fontWeight: 600,
+                        background: roleFilter === filter.id ? '#FA243C' : '#282828',
+                        color: roleFilter === filter.id ? '#fff' : '#B3B3B3',
+                        border: `0.5px solid ${roleFilter === filter.id ? '#FA243C' : '#404040'}`,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[
+                    { id: 'all', label: 'Cualquier Estado' },
+                    { id: 'active', label: 'Activos' },
+                    { id: 'banned', label: 'Suspendidos' },
+                  ].map(filter => (
+                    <button
+                      key={filter.id}
+                      onClick={() => setStatusFilter(filter.id)}
+                      style={{
+                        padding: '7px 14px', borderRadius: '20px', fontSize: '12px', fontWeight: 600,
+                        background: statusFilter === filter.id ? '#282828' : 'transparent',
+                        color: statusFilter === filter.id ? '#fff' : '#6B6B6B',
+                        border: `0.5px solid ${statusFilter === filter.id ? '#FA243C' : '#333'}`,
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Users List (Styled as Groovy Music Rows / Apple Music Tracklist) */}
+              <div style={{
+                background: '#181818',
+                borderRadius: '16px',
+                border: '0.5px solid #282828',
+                overflow: 'hidden',
+              }}>
+                {/* List Header */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(220px, 2fr) 130px 180px 140px 160px',
+                  padding: '12px 20px',
+                  borderBottom: '0.5px solid #282828',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: '#6B6B6B',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                }}>
+                  <div>Usuario</div>
+                  <div>Rol y Estado</div>
+                  <div>Última IP y Dispositivo</div>
+                  <div>Biblioteca</div>
+                  <div style={{ textAlign: 'right' }}>Acciones</div>
+                </div>
+
+                {/* User Rows */}
+                {users.map((u) => (
+                  <div
+                    key={u.id}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(220px, 2fr) 130px 180px 140px 160px',
+                      alignItems: 'center',
+                      padding: '14px 20px',
+                      borderBottom: '0.5px solid #202020',
+                      transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#202020'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    {/* User profile & email */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, paddingRight: '12px' }}>
+                      <div style={{
+                        width: '40px', height: '40px', borderRadius: '50%',
+                        background: u.role === 'admin' ? '#FA243C' : '#282828',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '15px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                        border: u.role === 'admin' ? '2px solid rgba(250,36,60,0.5)' : '1px solid #333',
+                      }}>
+                        {u.name?.charAt(0).toUpperCase() || 'U'}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontSize: '15px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.name}
+                          </span>
+                          {currentUser?.id === u.id && (
+                            <span style={{ fontSize: '10px', color: '#B3B3B3', background: '#282828', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              Tú
+                            </span>
+                          )}
+                        </div>
+                        <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                          {u.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Role & Status */}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                          fontSize: '11px', fontWeight: 700, padding: '2px 8px', borderRadius: '12px',
+                          background: u.role === 'admin' ? 'rgba(250,36,60,0.15)' : '#282828',
+                          color: u.role === 'admin' ? '#FA243C' : '#B3B3B3',
+                          border: `0.5px solid ${u.role === 'admin' ? 'rgba(250,36,60,0.3)' : '#333'}`,
+                        }}>
+                          {u.role === 'admin' ? 'Admin' : 'Usuario'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', color: u.isBanned ? '#FF3B30' : '#34C759' }}>
+                        <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: u.isBanned ? '#FF3B30' : '#34C759' }} />
+                        <span>{u.isBanned ? 'Suspendido' : 'Activo'}</span>
+                      </div>
+                    </div>
+
+                    {/* IP & Device */}
+                    <div style={{ minWidth: 0, paddingRight: '12px' }}>
+                      {u.lastLoginIp ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{
+                            fontFamily: 'monospace', fontSize: '12px', background: '#282828',
+                            padding: '2px 6px', borderRadius: '4px', color: '#fff',
+                          }}>
+                            {u.lastLoginIp}
+                          </span>
+                          <button
+                            onClick={() => copyToClipboard(u.lastLoginIp)}
+                            title="Copiar dirección IP"
+                            style={{ color: '#6B6B6B', padding: '2px' }}
+                            onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                            onMouseLeave={e => e.currentTarget.style.color = '#6B6B6B'}
+                          >
+                            {copiedIp === u.lastLoginIp ? <Check size={12} style={{ color: '#34C759' }} /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#6B6B6B' }}>Sin registros</span>
+                      )}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px' }}>
+                        {getDeviceIcon(u.lastDevice)}
+                        <span style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {u.lastDevice || 'Dispositivo no reg.'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Library Stats */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '12px', color: '#B3B3B3' }}>
+                      <span title="Favoritos" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Heart size={13} style={{ color: '#FF375F' }} /> {u.stats?.favorites || 0}
+                      </span>
+                      <span title="Playlists" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <ListMusic size={13} style={{ color: '#FA243C' }} /> {u.stats?.playlists || 0}
+                      </span>
+                      <span title="Plays" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Music size={13} style={{ color: '#AF52DE' }} /> {u.stats?.plays || 0}
+                      </span>
+                    </div>
+
+                    {/* Actions */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px' }}>
+                      <button
+                        onClick={() => handleOpenUserDetail(u.id)}
+                        style={{
+                          padding: '6px 12px', borderRadius: '8px', background: '#282828',
+                          border: '0.5px solid #404040', color: '#fff', fontSize: '12px', fontWeight: 600,
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                        onMouseLeave={e => e.currentTarget.style.background = '#282828'}
+                      >
+                        Detalles
+                      </button>
+
+                      <button
+                        onClick={() => handleOpenEdit(u)}
+                        title="Editar usuario"
+                        style={{
+                          padding: '7px', borderRadius: '8px', background: '#282828',
+                          border: '0.5px solid #404040', color: '#B3B3B3',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                        onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
+                      >
+                        <Edit2 size={13} />
+                      </button>
+
+                      {currentUser?.id !== u.id && (
+                        <button
+                          onClick={() => handleToggleBan(u)}
+                          title={u.isBanned ? 'Reactivar acceso' : 'Suspender acceso'}
+                          style={{
+                            padding: '7px', borderRadius: '8px', background: '#282828',
+                            border: '0.5px solid #404040', color: u.isBanned ? '#34C759' : '#FF9500',
+                          }}
+                        >
+                          <Ban size={13} />
+                        </button>
+                      )}
+
+                      {currentUser?.id !== u.id && (
+                        <button
+                          onClick={() => setUserToDelete(u)}
+                          title="Eliminar usuario"
+                          style={{
+                            padding: '7px', borderRadius: '8px', background: 'rgba(255,59,48,0.1)',
+                            border: '0.5px solid rgba(255,59,48,0.25)', color: '#FF3B30',
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                {users.length === 0 && !isLoading && (
+                  <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
+                    <Users size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>No se encontraron usuarios</p>
+                    <p style={{ fontSize: '13px', marginTop: '4px' }}>Prueba con otro término de búsqueda o cambia los filtros.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: SESSIONS & IP AUDIT */}
+          {activeTab === 'sessions' && (
+            <div style={{
+              background: '#181818',
+              borderRadius: '16px',
+              border: '0.5px solid #282828',
+              overflow: 'hidden',
+            }}>
+              <div style={{ padding: '18px 24px', borderBottom: '0.5px solid #282828' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.3px' }}>Registro de Conexiones en Vivo</h3>
+                <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '3px' }}>
+                  Auditoría completa de direcciones IP, sistemas operativos, navegadores y marcas de tiempo de cada usuario.
+                </p>
+              </div>
+
+              {/* Table header */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(200px, 1.8fr) 160px 180px 140px 160px',
+                padding: '12px 24px',
+                borderBottom: '0.5px solid #282828',
+                fontSize: '11px',
+                fontWeight: 700,
+                color: '#6B6B6B',
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+              }}>
+                <div>Usuario</div>
+                <div>Dirección IP</div>
+                <div>Dispositivo & SO</div>
+                <div>Navegador</div>
+                <div>Fecha y Hora</div>
+              </div>
+
+              {/* Sessions list */}
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'minmax(200px, 1.8fr) 160px 180px 140px 160px',
+                    alignItems: 'center',
+                    padding: '14px 24px',
+                    borderBottom: '0.5px solid #202020',
+                    transition: 'background 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#202020'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  {/* User */}
+                  <div style={{ minWidth: 0, paddingRight: '12px' }}>
+                    <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.user_name}
+                    </p>
+                    <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.user_email}
+                    </p>
+                  </div>
+
+                  {/* IP */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{
+                      fontFamily: 'monospace', fontSize: '12px', background: '#282828',
+                      padding: '3px 7px', borderRadius: '4px', color: '#fff',
+                    }}>
+                      {s.ip_address}
+                    </span>
+                    <button
+                      onClick={() => copyToClipboard(s.ip_address)}
+                      title="Copiar IP"
+                      style={{ color: '#6B6B6B', padding: '2px' }}
+                      onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                      onMouseLeave={e => e.currentTarget.style.color = '#6B6B6B'}
+                    >
+                      {copiedIp === s.ip_address ? <Check size={12} style={{ color: '#34C759' }} /> : <Copy size={12} />}
+                    </button>
+                  </div>
+
+                  {/* Device & OS */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                    {getDeviceIcon(s.device_os, s.browser, s.device_type)}
+                    <span style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.device_os || 'Desconocido'}
+                    </span>
+                  </div>
+
+                  {/* Browser */}
+                  <div style={{ fontSize: '13px', color: '#B3B3B3' }}>
+                    {s.browser || 'Web Client'}
+                  </div>
+
+                  {/* Timestamp */}
+                  <div style={{ fontSize: '12px', color: '#6B6B6B' }}>
+                    {s.created_at ? new Date(s.created_at).toLocaleString() : '—'}
+                  </div>
+                </div>
+              ))}
+
+              {sessions.length === 0 && (
+                <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
+                  <Activity size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                  <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Sin conexiones registradas</p>
+                  <p style={{ fontSize: '13px', marginTop: '4px' }}>Los inicios de sesión quedarán auditados aquí automáticamente.</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: POPULAR SONGS & STREAMING METRICS */}
+          {activeTab === 'metrics' && (
+            <div style={{
+              background: '#181818',
+              borderRadius: '16px',
+              border: '0.5px solid #282828',
+              padding: '24px',
+            }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.4px', marginBottom: '6px' }}>
+                Canciones Más Populares
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <p style={{ fontSize: '13px', color: '#B3B3B3', marginBottom: '20px' }}>
+                Ranking global de canciones más escuchadas en Groovy Cloud por todos los usuarios.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {metrics?.topSongs?.map((song, i) => (
-                  <div key={song.song_id || i} style={{ display: 'flex', alignItems: 'center', gap: '14px', background: '#18181C', padding: '12px 16px', borderRadius: '12px' }}>
-                    <span style={{ fontSize: '15px', fontWeight: 800, color: i === 0 ? '#FFD700' : '#A1A1AA', width: '22px' }}>
-                      #{i + 1}
+                  <div
+                    key={song.song_id || i}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '16px',
+                      padding: '10px 14px', borderRadius: '10px',
+                      background: 'transparent', transition: 'background 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = '#282828'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ fontSize: '15px', fontWeight: 700, color: i < 3 ? '#FA243C' : '#6B6B6B', width: '24px', textAlign: 'center' }}>
+                      {i + 1}
                     </span>
                     {song.cover_art ? (
                       <img src={song.cover_art} alt={song.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
                     ) : (
-                      <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#27272A', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Music size={20} color="#A1A1AA" />
+                      <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Music size={20} style={{ color: '#6B6B6B' }} />
                       </div>
                     )}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: '14px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: '15px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {song.title}
                       </p>
-                      <p style={{ fontSize: '12px', color: '#A1A1AA', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
                         {song.artist}
                       </p>
                     </div>
-                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#34C759', background: 'rgba(52,199,89,0.12)', padding: '4px 10px', borderRadius: '12px' }}>
-                      {song.play_count} plays
-                    </span>
+                    <div style={{
+                      fontSize: '13px', fontWeight: 700, color: '#34C759',
+                      background: 'rgba(52,199,89,0.1)', padding: '4px 10px', borderRadius: '12px',
+                    }}>
+                      {song.play_count} reproducciones
+                    </div>
                   </div>
                 ))}
+
                 {(!metrics?.topSongs || metrics.topSongs.length === 0) && (
-                  <p style={{ fontSize: '13px', color: '#A1A1AA', textAlign: 'center', padding: '24px' }}>
-                    Sin datos de reproducción aún.
-                  </p>
+                  <div style={{ padding: '36px', textAlign: 'center', color: '#6B6B6B' }}>
+                    <Music size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>Aún no hay reproducciones registradas en la nube.</p>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </main>
+      </div>
 
-      {/* MODAL 1: FULL USER DEEP DIVE */}
-      {selectedUserDetail && (
+      {/* 3. CUPERTINO MODAL: USER DETAILS INSPECTOR ("Ver Todo") */}
+      {selectedUser && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(10px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
         }}>
           <div style={{
-            background: '#141417', border: '1px solid #2E2E33', borderRadius: '24px',
-            width: '100%', maxWidth: '880px', maxHeight: '90vh', overflowY: 'auto', padding: '28px',
-            boxShadow: '0 25px 60px rgba(0,0,0,0.8)',
+            background: '#181818', border: '0.5px solid #282828', borderRadius: '20px',
+            width: '100%', maxWidth: '720px', maxHeight: '88vh', overflowY: 'auto', padding: '28px',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{
-                  width: '56px', height: '56px', borderRadius: '50%', background: '#FA243C',
+                  width: '52px', height: '52px', borderRadius: '50%', background: '#FA243C',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '24px', fontWeight: 800, color: '#fff',
+                  fontSize: '22px', fontWeight: 700, color: '#fff',
                 }}>
-                  {selectedUserDetail.user.name?.charAt(0).toUpperCase() || 'U'}
+                  {selectedUser.user.name?.charAt(0).toUpperCase() || 'U'}
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800 }}>{selectedUserDetail.user.name}</h2>
-                  <p style={{ fontSize: '13px', color: '#A1A1AA', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Mail size={13} /> {selectedUserDetail.user.email}
-                  </p>
+                  <h2 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.3px' }}>{selectedUser.user.name}</h2>
+                  <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '2px' }}>{selectedUser.user.email}</p>
                 </div>
               </div>
               <button
-                onClick={() => setSelectedUserDetail(null)}
-                style={{ background: '#27272A', border: 'none', borderRadius: '50%', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer' }}
+                onClick={() => setSelectedUser(null)}
+                style={{ color: '#B3B3B3', padding: '6px', borderRadius: '8px' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
               >
-                <X size={18} />
+                <X size={20} />
               </button>
             </div>
 
-            {/* Profile Info Row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ background: '#09090B', padding: '14px', borderRadius: '12px', border: '1px solid #27272A' }}>
-                <span style={{ fontSize: '11px', color: '#71717A', textTransform: 'uppercase', fontWeight: 700 }}>Rol</span>
-                <p style={{ fontSize: '14px', fontWeight: 700, color: '#FF9500', marginTop: '3px' }}>
-                  {selectedUserDetail.user.role === 'admin' ? '👑 Administrador' : '👤 Usuario'}
+            {/* Quick Meta Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '24px' }}>
+              <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Rol</span>
+                <p style={{ fontSize: '14px', fontWeight: 700, marginTop: '3px', color: selectedUser.user.role === 'admin' ? '#FA243C' : '#fff' }}>
+                  {selectedUser.user.role === 'admin' ? 'Administrador' : 'Usuario'}
                 </p>
               </div>
-              <div style={{ background: '#09090B', padding: '14px', borderRadius: '12px', border: '1px solid #27272A' }}>
-                <span style={{ fontSize: '11px', color: '#71717A', textTransform: 'uppercase', fontWeight: 700 }}>Estado</span>
-                <p style={{ fontSize: '14px', fontWeight: 700, color: selectedUserDetail.user.isBanned ? '#FF453A' : '#34C759', marginTop: '3px' }}>
-                  {selectedUserDetail.user.isBanned ? 'Suspendido' : 'Activo'}
+              <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Estado</span>
+                <p style={{ fontSize: '14px', fontWeight: 700, marginTop: '3px', color: selectedUser.user.isBanned ? '#FF3B30' : '#34C759' }}>
+                  {selectedUser.user.isBanned ? 'Suspendido' : 'Activo'}
                 </p>
               </div>
-              <div style={{ background: '#09090B', padding: '14px', borderRadius: '12px', border: '1px solid #27272A' }}>
-                <span style={{ fontSize: '11px', color: '#71717A', textTransform: 'uppercase', fontWeight: 700 }}>Última IP</span>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: '#34C759', marginTop: '3px', fontFamily: 'monospace' }}>
-                  {selectedUserDetail.user.lastLoginIp || 'N/A'}
+              <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Última IP</span>
+                <p style={{ fontSize: '13px', fontWeight: 700, marginTop: '3px', fontFamily: 'monospace' }}>
+                  {selectedUser.user.lastLoginIp || '—'}
                 </p>
               </div>
-              <div style={{ background: '#09090B', padding: '14px', borderRadius: '12px', border: '1px solid #27272A' }}>
-                <span style={{ fontSize: '11px', color: '#71717A', textTransform: 'uppercase', fontWeight: 700 }}>Fecha Registro</span>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: '#E4E4E7', marginTop: '3px' }}>
-                  {new Date(selectedUserDetail.user.createdAt).toLocaleDateString()}
+              <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
+                <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Registro</span>
+                <p style={{ fontSize: '13px', fontWeight: 700, marginTop: '3px' }}>
+                  {new Date(selectedUser.user.createdAt).toLocaleDateString()}
                 </p>
               </div>
             </div>
 
-            {/* Devices & Login Sessions */}
+            {/* Sessions / Devices list */}
             <div style={{ marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Laptop size={17} color="#0A84FF" /> Historial de Dispositivos e IPs Utilizados ({selectedUserDetail.sessions?.length || 0})
-              </h3>
-              <div style={{ background: '#09090B', borderRadius: '14px', border: '1px solid #27272A', maxHeight: '200px', overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '12px' }}>
-                  <thead>
-                    <tr style={{ background: '#18181C', color: '#A1A1AA' }}>
-                      <th style={{ padding: '10px 14px' }}>IP</th>
-                      <th style={{ padding: '10px 14px' }}>Sistema Operativo</th>
-                      <th style={{ padding: '10px 14px' }}>Navegador</th>
-                      <th style={{ padding: '10px 14px' }}>Fecha y Hora</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedUserDetail.sessions?.map((s) => (
-                      <tr key={s.id} style={{ borderBottom: '1px solid #1E1E22' }}>
-                        <td style={{ padding: '10px 14px', color: '#34C759', fontFamily: 'monospace', fontWeight: 600 }}>{s.ip_address}</td>
-                        <td style={{ padding: '10px 14px', color: '#fff' }}>{s.device_os}</td>
-                        <td style={{ padding: '10px 14px', color: '#A1A1AA' }}>{s.browser}</td>
-                        <td style={{ padding: '10px 14px', color: '#71717A' }}>{new Date(s.created_at).toLocaleString()}</td>
-                      </tr>
-                    ))}
-                    {(!selectedUserDetail.sessions || selectedUserDetail.sessions.length === 0) && (
-                      <tr><td colSpan={4} style={{ padding: '16px', textAlign: 'center', color: '#A1A1AA' }}>Sin registros de sesiones</td></tr>
-                    )}
-                  </tbody>
-                </table>
+              <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px' }}>
+                Dispositivos e IPs Utilizados ({selectedUser.sessions?.length || 0})
+              </h4>
+              <div style={{ background: '#282828', borderRadius: '10px', maxHeight: '160px', overflowY: 'auto' }}>
+                {selectedUser.sessions?.map((s) => (
+                  <div key={s.id} style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '10px 14px', borderBottom: '0.5px solid #333', fontSize: '13px',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      {getDeviceIcon(s.device_os)}
+                      <span style={{ fontWeight: 600, color: '#fff' }}>{s.device_os || 'Dispositivo'}</span>
+                      <span style={{ color: '#B3B3B3', fontSize: '12px' }}>({s.browser || 'Web'})</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <code style={{ fontSize: '12px', background: '#181818', padding: '2px 6px', borderRadius: '4px' }}>{s.ip_address}</code>
+                      <span style={{ color: '#6B6B6B', fontSize: '11px' }}>{new Date(s.created_at).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+                {(!selectedUser.sessions || selectedUser.sessions.length === 0) && (
+                  <p style={{ padding: '16px', textAlign: 'center', color: '#6B6B6B', fontSize: '13px' }}>Sin registros de conexiones.</p>
+                )}
               </div>
             </div>
 
-            {/* User Favorites & Playlists */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
+            {/* Favorites & Playlists */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '24px' }}>
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Heart size={15} color="#FF375F" /> Canciones Favoritas ({selectedUserDetail.favorites?.length || 0})
+                <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                  Canciones Favoritas ({selectedUser.favorites?.length || 0})
                 </h4>
-                <div style={{ background: '#09090B', borderRadius: '12px', padding: '10px', maxHeight: '150px', overflowY: 'auto' }}>
-                  {selectedUserDetail.favorites?.map((fav) => (
-                    <div key={fav.id} style={{ padding: '6px 8px', fontSize: '12px', borderBottom: '1px solid #1E1E22' }}>
-                      <p style={{ fontWeight: 700, color: '#fff' }}>{fav.title}</p>
-                      <p style={{ color: '#71717A', fontSize: '11px' }}>{fav.artist}</p>
+                <div style={{ background: '#282828', borderRadius: '10px', padding: '8px', maxHeight: '130px', overflowY: 'auto' }}>
+                  {selectedUser.favorites?.map(fav => (
+                    <div key={fav.id} style={{ padding: '6px 8px', borderBottom: '0.5px solid #333' }}>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{fav.title}</p>
+                      <p style={{ fontSize: '11px', color: '#B3B3B3' }}>{fav.artist}</p>
                     </div>
                   ))}
-                  {(!selectedUserDetail.favorites || selectedUserDetail.favorites.length === 0) && (
-                    <p style={{ fontSize: '12px', color: '#52525B', textAlign: 'center', padding: '12px' }}>Sin favoritos guardados</p>
+                  {(!selectedUser.favorites || selectedUser.favorites.length === 0) && (
+                    <p style={{ padding: '12px', textAlign: 'center', color: '#6B6B6B', fontSize: '12px' }}>Sin canciones en favoritos</p>
                   )}
                 </div>
               </div>
 
               <div>
-                <h4 style={{ fontSize: '14px', fontWeight: 700, marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <ListMusic size={15} color="#FA243C" /> Playlists Creadas ({selectedUserDetail.playlists?.length || 0})
+                <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#B3B3B3', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }}>
+                  Playlists ({selectedUser.playlists?.length || 0})
                 </h4>
-                <div style={{ background: '#09090B', borderRadius: '12px', padding: '10px', maxHeight: '150px', overflowY: 'auto' }}>
-                  {selectedUserDetail.playlists?.map((pl) => (
-                    <div key={pl.id} style={{ padding: '6px 8px', fontSize: '12px', borderBottom: '1px solid #1E1E22' }}>
-                      <p style={{ fontWeight: 700, color: '#fff' }}>{pl.name}</p>
-                      <p style={{ color: '#71717A', fontSize: '11px' }}>{new Date(pl.created_at).toLocaleDateString()}</p>
+                <div style={{ background: '#282828', borderRadius: '10px', padding: '8px', maxHeight: '130px', overflowY: 'auto' }}>
+                  {selectedUser.playlists?.map(pl => (
+                    <div key={pl.id} style={{ padding: '6px 8px', borderBottom: '0.5px solid #333' }}>
+                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>{pl.name}</p>
+                      <p style={{ fontSize: '11px', color: '#B3B3B3' }}>{new Date(pl.created_at).toLocaleDateString()}</p>
                     </div>
                   ))}
-                  {(!selectedUserDetail.playlists || selectedUserDetail.playlists.length === 0) && (
-                    <p style={{ fontSize: '12px', color: '#52525B', textAlign: 'center', padding: '12px' }}>Sin playlists creadas</p>
+                  {(!selectedUser.playlists || selectedUser.playlists.length === 0) && (
+                    <p style={{ padding: '12px', textAlign: 'center', color: '#6B6B6B', fontSize: '12px' }}>Sin playlists creadas</p>
                   )}
                 </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+            {/* Bottom Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
               <button
-                onClick={() => setSelectedUserDetail(null)}
-                style={{ padding: '10px 22px', borderRadius: '10px', background: '#FA243C', color: '#fff', fontWeight: 700, border: 'none', cursor: 'pointer' }}
+                onClick={() => setSelectedUser(null)}
+                style={{
+                  padding: '9px 20px', borderRadius: '10px', background: '#FA243C',
+                  color: '#fff', fontWeight: 700, fontSize: '13px', cursor: 'pointer',
+                }}
               >
                 Cerrar
               </button>
@@ -1107,79 +1239,86 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         </div>
       )}
 
-      {/* MODAL 2: EDIT USER */}
+      {/* 4. EDIT USER MODAL */}
       {editingUser && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
         }}>
           <form onSubmit={handleSaveEdit} style={{
-            background: '#141417', border: '1px solid #2E2E33', borderRadius: '22px',
-            width: '100%', maxWidth: '480px', padding: '28px', boxShadow: '0 20px 50px rgba(0,0,0,0.8)',
+            background: '#181818', border: '0.5px solid #282828', borderRadius: '20px',
+            width: '100%', maxWidth: '440px', padding: '28px',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Editar Usuario</h3>
-              <button type="button" onClick={() => setEditingUser(null)} style={{ background: 'none', border: 'none', color: '#A1A1AA', cursor: 'pointer' }}>
+              <h3 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.3px' }}>Editar Usuario</h3>
+              <button type="button" onClick={() => setEditingUser(null)} style={{ color: '#B3B3B3' }}>
                 <X size={18} />
               </button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#A1A1AA', marginBottom: '6px' }}>Nombre</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#B3B3B3', marginBottom: '6px', fontWeight: 500 }}>
+                  Nombre
+                </label>
                 <input
                   type="text"
                   required
                   value={editFormData.name}
                   onChange={e => setEditFormData({ ...editFormData, name: e.target.value })}
                   style={{
-                    width: '100%', background: '#09090B', border: '1px solid #27272A', borderRadius: '10px',
-                    padding: '10px 14px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+                    width: '100%', background: '#282828', border: '0.5px solid #404040',
+                    borderRadius: '8px', padding: '11px 14px', color: '#fff', fontSize: '14px', outline: 'none',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#A1A1AA', marginBottom: '6px' }}>Correo Electrónico</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#B3B3B3', marginBottom: '6px', fontWeight: 500 }}>
+                  Correo Electrónico
+                </label>
                 <input
                   type="email"
                   required
                   value={editFormData.email}
                   onChange={e => setEditFormData({ ...editFormData, email: e.target.value })}
                   style={{
-                    width: '100%', background: '#09090B', border: '1px solid #27272A', borderRadius: '10px',
-                    padding: '10px 14px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+                    width: '100%', background: '#282828', border: '0.5px solid #404040',
+                    borderRadius: '8px', padding: '11px 14px', color: '#fff', fontSize: '14px', outline: 'none',
                   }}
                 />
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#A1A1AA', marginBottom: '6px' }}>Rol en el Sistema</label>
+                <label style={{ display: 'block', fontSize: '12px', color: '#B3B3B3', marginBottom: '6px', fontWeight: 500 }}>
+                  Rol de Cuenta
+                </label>
                 <select
                   value={editFormData.role}
                   onChange={e => setEditFormData({ ...editFormData, role: e.target.value })}
                   style={{
-                    width: '100%', background: '#09090B', border: '1px solid #27272A', borderRadius: '10px',
-                    padding: '10px 14px', color: '#fff', fontSize: '14px', outline: 'none', cursor: 'pointer', boxSizing: 'border-box',
+                    width: '100%', background: '#282828', border: '0.5px solid #404040',
+                    borderRadius: '8px', padding: '11px 14px', color: '#fff', fontSize: '14px', outline: 'none', cursor: 'pointer',
                   }}
                 >
                   <option value="user">Usuario Regular</option>
-                  <option value="admin">Administrador (Acceso Total)</option>
+                  <option value="admin">Administrador</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: '#A1A1AA', marginBottom: '6px' }}>
-                  Nueva Contraseña (dejar en blanco para conservar la actual)
+                <label style={{ display: 'block', fontSize: '12px', color: '#B3B3B3', marginBottom: '6px', fontWeight: 500 }}>
+                  Nueva Contraseña (opcional)
                 </label>
                 <input
                   type="password"
-                  placeholder="Mínimo 6 caracteres"
+                  placeholder="Dejar vacío para no cambiar"
                   value={editFormData.password}
                   onChange={e => setEditFormData({ ...editFormData, password: e.target.value })}
                   style={{
-                    width: '100%', background: '#09090B', border: '1px solid #27272A', borderRadius: '10px',
-                    padding: '10px 14px', color: '#fff', fontSize: '14px', outline: 'none', boxSizing: 'border-box',
+                    width: '100%', background: '#282828', border: '0.5px solid #404040',
+                    borderRadius: '8px', padding: '11px 14px', color: '#fff', fontSize: '14px', outline: 'none',
                   }}
                 />
               </div>
@@ -1189,14 +1328,20 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <button
                 type="button"
                 onClick={() => setEditingUser(null)}
-                style={{ padding: '10px 18px', borderRadius: '10px', background: '#27272A', color: '#A1A1AA', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                style={{
+                  padding: '9px 18px', borderRadius: '10px', background: '#282828',
+                  color: '#B3B3B3', fontSize: '13px', fontWeight: 600,
+                }}
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                style={{ padding: '10px 22px', borderRadius: '10px', background: '#FA243C', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                style={{
+                  padding: '9px 20px', borderRadius: '10px', background: '#FA243C',
+                  color: '#fff', fontSize: '13px', fontWeight: 700,
+                }}
               >
                 {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
               </button>
@@ -1205,42 +1350,51 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         </div>
       )}
 
-      {/* MODAL 3: DELETE CONFIRMATION */}
+      {/* 5. DELETE CONFIRMATION DIALOG */}
       {userToDelete && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px',
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
         }}>
           <div style={{
-            background: '#141417', border: '1px solid #FF453A', borderRadius: '22px',
-            width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center',
+            background: '#181818', border: '0.5px solid #282828', borderRadius: '20px',
+            width: '100%', maxWidth: '400px', padding: '28px', textAlign: 'center',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
           }}>
             <div style={{
-              width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(255,69,58,0.15)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: '#FF453A',
+              width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,59,48,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
             }}>
-              <AlertTriangle size={28} />
+              <Trash2 size={24} style={{ color: '#FF3B30' }} />
             </div>
 
-            <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>¿Eliminar usuario?</h3>
-            <p style={{ fontSize: '14px', color: '#A1A1AA', marginBottom: '24px' }}>
-              Esta acción eliminará de forma permanente a <strong style={{ color: '#fff' }}>{userToDelete.name}</strong> ({userToDelete.email}), junto con todas sus playlists, favoritos, reproducciones e historial de dispositivos.
+            <h3 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.3px', marginBottom: '8px' }}>
+              ¿Eliminar usuario?
+            </h3>
+            <p style={{ fontSize: '14px', color: '#B3B3B3', marginBottom: '24px', lineHeight: 1.4 }}>
+              Se eliminará permanentemente la cuenta de <strong style={{ color: '#fff' }}>{userToDelete.name}</strong> ({userToDelete.email}) y todas sus playlists y favoritos en MySQL.
             </p>
 
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
               <button
                 onClick={() => setUserToDelete(null)}
                 disabled={isSubmitting}
-                style={{ padding: '10px 18px', borderRadius: '10px', background: '#27272A', color: '#A1A1AA', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+                style={{
+                  padding: '10px 18px', borderRadius: '10px', background: '#282828',
+                  color: '#B3B3B3', fontSize: '13px', fontWeight: 600,
+                }}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleConfirmDelete}
                 disabled={isSubmitting}
-                style={{ padding: '10px 22px', borderRadius: '10px', background: '#FF453A', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}
+                style={{
+                  padding: '10px 20px', borderRadius: '10px', background: '#FF3B30',
+                  color: '#fff', fontSize: '13px', fontWeight: 700,
+                }}
               >
-                {isSubmitting ? 'Eliminando...' : 'Sí, Eliminar'}
+                {isSubmitting ? 'Eliminando...' : 'Eliminar Cuenta'}
               </button>
             </div>
           </div>
