@@ -6,8 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
-
-import '../../models/song.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/player_provider.dart';
 import '../../services/cast_service.dart';
@@ -172,6 +170,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
               'Conectado a ${device.name}. Reproduciendo con Groovy Connect.',
               isSuccess: true,
             );
+            Navigator.of(context).pop();
           }
         } else {
           if (mounted) {
@@ -182,17 +181,20 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           }
         }
       } else {
-        // Just establish remote connection
-        final ok = await groovyConnect.transferPlayback(
-          device: device,
-          song: Song(id: 'dummy', title: 'Groovy Connect Session'),
-          position: Duration.zero,
-          isPlaying: false,
-        );
+        // Connect to remote device without requiring an active song
+        final ok = await groovyConnect.connectToDevice(device);
         if (ok) {
           player.enableGroovyConnectRemote(device);
           if (mounted) {
             _showSnackBar('Conectado a ${device.name}', isSuccess: true);
+            Navigator.of(context).pop();
+          }
+        } else {
+          if (mounted) {
+            _showSnackBar(
+              'No se pudo conectar a ${device.name}. Verifica que Groovy esté abierto.',
+              isSuccess: false,
+            );
           }
         }
       }
@@ -223,6 +225,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             'Conectado a ${device.friendlyName}. Reproduciendo en alta fidelidad.',
             isSuccess: true,
           );
+          Navigator.of(context).pop();
         }
       } else {
         if (mounted) {
@@ -259,6 +262,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             'Conectado a ${device.friendlyName}. Reproduciendo con Google Cast.',
             isSuccess: true,
           );
+          Navigator.of(context).pop();
         }
       } else {
         if (mounted) {
@@ -409,8 +413,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
   @override
   Widget build(BuildContext context) {
     final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final isDark = !kIsWeb || true;
 
     final castService = Provider.of<CastService>(context);
     final upnpService = Provider.of<UpnpService>(context);
@@ -745,7 +748,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
 
     if (groovyConnect.isConnected) {
       deviceTitle = groovyConnect.connectedDevice?.name ?? 'Dispositivo Groovy';
-      deviceSubtitle = 'Groovy Connect • Control Remoto en Vivo';
+      deviceSubtitle = 'Groovy Connect • Controlando de forma remota';
       deviceIcon = Icons.speaker_phone_rounded;
     } else if (castService.isConnected) {
       deviceTitle = castService.deviceName ?? 'Dispositivo Google Cast';
@@ -762,255 +765,115 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
       deviceIcon = isMobile ? Icons.smartphone_rounded : Icons.laptop_mac_rounded;
     }
 
-    final currentSong = player.currentSong;
-
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1ED760).withValues(alpha: 0.09),
+        color: const Color(0xFF1ED760).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: const Color(0xFF1ED760).withValues(alpha: 0.4),
           width: 1.2,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              // Glowing Animated Active Device Icon
-              AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, child) {
-                  return Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF1ED760).withValues(
-                        alpha: 0.18 + (_pulseController.value * 0.12),
-                      ),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Center(
-                      child: Icon(
-                        deviceIcon,
-                        color: const Color(0xFF1ED760),
-                        size: 24,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'ESTÁS ESCUCHANDO EN',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: Color(0xFF1ED760),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      deviceTitle,
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    Text(
-                      deviceSubtitle,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white60 : Colors.black54,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+          // Glowing Animated Active Device Icon
+          AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              return Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1ED760).withValues(
+                    alpha: 0.18 + (_pulseController.value * 0.12),
+                  ),
+                  shape: BoxShape.circle,
                 ),
-              ),
-              if (isRemoteConnected)
-                FilledButton.tonal(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFFFF453A).withValues(alpha: 0.15),
-                    foregroundColor: const Color(0xFFFF453A),
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  onPressed: () {
-                    if (groovyConnect.isConnected) {
-                      groovyConnect.disconnect();
-                      player.disableGroovyConnectRemote();
-                    }
-                    if (castService.isConnected) castService.disconnect();
-                    if (upnpService.isConnected) upnpService.disconnect();
-                  },
-                  child: const Text(
-                    'Desconectar',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                )
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF1ED760).withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Activo',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                      color: Color(0xFF1ED760),
-                    ),
+                child: Center(
+                  child: Icon(
+                    deviceIcon,
+                    color: const Color(0xFF1ED760),
+                    size: 24,
                   ),
                 ),
-            ],
+              );
+            },
           ),
-
-          if (currentSong != null) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: isDark ? Colors.white10 : Colors.black12,
-                  width: 1,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      // Equalizer soundwave
-                      _EqualizerBars(
-                        isPlaying: player.isPlaying,
-                        color: const Color(0xFF1ED760),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              currentSong.title,
-                              style: TextStyle(
-                                fontSize: 13.5,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white : Colors.black,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              currentSong.artist ?? 'Groovy Music',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.white60 : Colors.black54,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                      // Previous Track
-                      IconButton(
-                        icon: const Icon(Icons.skip_previous_rounded, size: 22),
-                        color: isDark ? Colors.white70 : Colors.black87,
-                        visualDensity: VisualDensity.compact,
-                        tooltip: 'Anterior',
-                        onPressed: () => player.skipPrevious(),
-                      ),
-                      // Play / Pause Circle Button
-                      GestureDetector(
-                        onTap: () => player.togglePlayPause(),
-                        child: Container(
-                          width: 38,
-                          height: 38,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF1ED760),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                            size: 24,
-                            color: Colors.black,
-                          ),
-                        ),
-                      ),
-                      // Next Track
-                      IconButton(
-                        icon: const Icon(Icons.skip_next_rounded, size: 22),
-                        color: isDark ? Colors.white70 : Colors.black87,
-                        visualDensity: VisualDensity.compact,
-                        tooltip: 'Siguiente',
-                        onPressed: () => player.skipNext(),
-                      ),
-                    ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'ESTÁS ESCUCHANDO EN',
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: Color(0xFF1ED760),
                   ),
-                ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  deviceTitle,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  deviceSubtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          if (isRemoteConnected)
+            FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFFFF453A).withValues(alpha: 0.18),
+                foregroundColor: const Color(0xFFFF453A),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                visualDensity: VisualDensity.compact,
+              ),
+              onPressed: () {
+                if (groovyConnect.isConnected) {
+                  groovyConnect.disconnect();
+                  player.disableGroovyConnectRemote();
+                }
+                if (castService.isConnected) castService.disconnect();
+                if (upnpService.isConnected) upnpService.disconnect();
+              },
+              child: const Text(
+                'Desconectar',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+              ),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1ED760).withValues(alpha: 0.2),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'Activo',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1ED760),
+                ),
               ),
             ),
-          ],
-
-          // Volume Slider
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Icon(
-                player.volume == 0
-                    ? Icons.volume_off_rounded
-                    : player.volume < 0.5
-                        ? Icons.volume_down_rounded
-                        : Icons.volume_up_rounded,
-                size: 19,
-                color: isDark ? Colors.white60 : Colors.black54,
-              ),
-              Expanded(
-                child: SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3.5,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
-                    activeTrackColor: const Color(0xFF1ED760),
-                    inactiveTrackColor: isDark
-                        ? Colors.white.withValues(alpha: 0.15)
-                        : Colors.black.withValues(alpha: 0.1),
-                    thumbColor: Colors.white,
-                  ),
-                  child: Slider(
-                    value: player.volume.clamp(0.0, 1.0),
-                    onChanged: (v) {
-                      player.setVolume(v);
-                    },
-                  ),
-                ),
-              ),
-              Text(
-                '${(player.volume * 100).round()}%',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white60 : Colors.black54,
-                ),
-              ),
-            ],
-          ),
         ],
       ),
     );

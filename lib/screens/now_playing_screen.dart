@@ -30,6 +30,8 @@ import '../widgets/now_playing/now_playing_more_menu.dart';
 import '../widgets/now_playing/track_navigation_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/lrclib_service.dart';
+import '../services/groovy_connect_service.dart';
+import '../widgets/connect/groovy_connect_modal.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final ImageProvider image;
@@ -548,6 +550,38 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      Consumer<GroovyConnectService>(
+                        builder: (context, groovyConnect, _) {
+                          if (!groovyConnect.isConnected) return const SizedBox.shrink();
+                          final devName = groovyConnect.connectedDevice?.name ?? 'Dispositivo';
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 2.0),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.speaker_phone_rounded,
+                                  size: 11,
+                                  color: Color(0xFF1ED760),
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    devName,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: Color(0xFF1ED760),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 ),
@@ -686,6 +720,58 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                               color: Colors.white.withValues(alpha: 0.65),
                               letterSpacing: -0.2,
                             ),
+                          ),
+                          Consumer<GroovyConnectService>(
+                            builder: (context, groovyConnect, _) {
+                              if (!groovyConnect.isConnected) {
+                                return const SizedBox.shrink();
+                              }
+                              final devName = groovyConnect.connectedDevice?.name ?? 'Dispositivo';
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 6.0),
+                                child: GestureDetector(
+                                  onTap: () {
+                                    HapticFeedback.lightImpact();
+                                    GroovyConnectModal.show(context);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF1ED760).withValues(alpha: 0.16),
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(
+                                        color: const Color(0xFF1ED760).withValues(alpha: 0.4),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.speaker_phone_rounded,
+                                          size: 13,
+                                          color: Color(0xFF1ED760),
+                                        ),
+                                        const SizedBox(width: 5),
+                                        Flexible(
+                                          child: Text(
+                                            'Escuchando en $devName',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF1ED760),
+                                              letterSpacing: -0.2,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
                           ),
                         ],
                       ),

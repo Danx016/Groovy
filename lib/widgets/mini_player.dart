@@ -208,16 +208,67 @@ class _MiniPlayerRow extends StatelessWidget {
             AlbumArtwork(coverArt: coverArt, size: 44, borderRadius: 8),
           const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              title,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white : Colors.black,
-                letterSpacing: -0.3,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
+            child: Consumer<GroovyConnectService>(
+              builder: (context, groovyConnect, _) {
+                final isRemote = groovyConnect.isConnected;
+                final remoteDeviceName = groovyConnect.connectedDevice?.name;
+
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.white : Colors.black,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    if (isRemote && remoteDeviceName != null)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.speaker_phone_rounded,
+                            size: 13,
+                            color: Color(0xFF1ED760),
+                          ),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: Text(
+                              remoteDeviceName,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF1ED760),
+                                letterSpacing: -0.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      )
+                    else if (subtitle != null && subtitle!.isNotEmpty)
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: isDark ? Colors.white60 : Colors.black54,
+                          letterSpacing: -0.2,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                );
+              },
             ),
           ),
           const SizedBox(width: 8),

@@ -335,12 +335,13 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
-  /// Triggers a network discovery scan for other Groovy devices (LAN UDP + Cloud Heartbeat).
+  /// Triggers a network discovery scan for other Groovy devices (Subnet scan + LAN UDP + Cloud Heartbeat).
   Future<void> discover({String? authToken}) async {
     if (kIsWeb) return;
     _isDiscovering = true;
     notifyListeners();
 
+    // 1. UDP Broadcast discovery (fastest when not blocked by router)
     try {
       if (_udpSocket != null) {
         final discoverPacket = jsonEncode({
@@ -364,6 +365,12 @@ class GroovyConnectService extends ChangeNotifier {
       debugPrint('[GroovyConnect] Discovery broadcast error: $e');
     }
 
+    // 2. Active Subnet Scan (works even when routers block UDP broadcast / on Android)
+    _scanSubnetForDevices().catchError((e) {
+      debugPrint('[GroovyConnect] Subnet scan note: $e');
+    });
+
+    // 3. Cloud telemetry discovery
     try {
       await _fetchCloudDevices(authToken);
     } catch (e) {
@@ -375,6 +382,53 @@ class GroovyConnectService extends ChangeNotifier {
       _isDiscovering = false;
       notifyListeners();
     });
+  }
+
+  /// Scans local Wi-Fi subnet via direct HTTP unicast to bypass router UDP broadcast filtering.
+  Future<void> _scanSubnetForDevices() async {
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
+      );
+
+      final List<String> candidateSubnets = [];
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          final ip = addr.address;
+          if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
+            final parts = ip.split('.');
+            if (parts.length == 4) {
+              candidateSubnets.add('${parts[0]}.${parts[1]}.${parts[2]}');
+            }
+          }
+        }
+      }
+
+      for (final subnet in candidateSubnets.toSet()) {
+        final ips = List.generate(254, (i) => '$subnet.${i + 1}');
+        for (int i = 0; i < ips.length; i += 32) {
+          final chunk = ips.sublist(i, (i + 32).clamp(0, ips.length));
+          await Future.wait(chunk.map((targetIp) async {
+            try {
+              final uri = Uri.parse('http://$targetIp:$_defaultHttpPort/groovy/info');
+              final res = await http.get(uri).timeout(const Duration(milliseconds: 650));
+              if (res.statusCode == 200) {
+                final json = jsonDecode(res.body) as Map<String, dynamic>;
+                final senderId = json['id'] as String?;
+                if (senderId != null && senderId != _localDeviceId) {
+                  final dev = GroovyRemoteDevice.fromJson(json, host: targetIp, port: _defaultHttpPort);
+                  _discoveredDevices[dev.id] = dev;
+                  notifyListeners();
+                }
+              }
+            } catch (_) {}
+          }));
+        }
+      }
+    } catch (e) {
+      debugPrint('[GroovyConnect] Subnet scan error: $e');
+    }
   }
 
   /// Fetches active devices from Groovy Cloud backend telemetry.
@@ -399,7 +453,7 @@ class GroovyConnectService extends ChangeNotifier {
             final devPlatform = item['platform']?.toString() ?? 'Dispositivo';
             final devId = 'cloud_${item['user_id'] ?? item['ip_address']}_$devPlatform';
 
-            if (devName != _localDeviceName && devPlatform != _localPlatform) {
+            if (devId != _localDeviceId && devName != _localDeviceName) {
               _discoveredDevices[devId] = GroovyRemoteDevice(
                 id: devId,
                 name: devName,
@@ -475,6 +529,41 @@ class GroovyConnectService extends ChangeNotifier {
       return false;
     } catch (e) {
       debugPrint('[GroovyConnect] Transfer failed to ${device.name}: $e');
+      return false;
+    }
+  }
+
+  /// Connects to a target Groovy device without requiring an active song
+  /// (e.g. When user selects a device from the picker before playing).
+  Future<bool> connectToDevice(GroovyRemoteDevice device) async {
+    try {
+      debugPrint('[GroovyConnect] Connecting to ${device.name} at ${device.host}:${device.port}');
+      final uri = Uri.parse('http://${device.host}:${device.port}/groovy/info');
+      final response = await http.get(uri).timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final songData = data['song'] as Map<String, dynamic>?;
+        Song? currentSong;
+        if (songData != null) {
+          try {
+            currentSong = Song.fromJson(songData);
+          } catch (_) {}
+        }
+
+        _connectedDevice = device.copyWith(
+          currentSong: currentSong,
+          isPlaying: data['isPlaying'] as bool? ?? false,
+          lastSeen: DateTime.now(),
+        );
+        _startStatusSyncTimer();
+        notifyListeners();
+        debugPrint('[GroovyConnect] Successfully connected to ${device.name}');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[GroovyConnect] Connection failed to ${device.name}: $e');
       return false;
     }
   }
