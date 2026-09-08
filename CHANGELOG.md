@@ -5,6 +5,13 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.79] - 2026-09-08
+
+### Release
+- **Lanzamiento Multiplataforma Oficial**:
+  - Compilación y publicación de binarios oficiales para Android (`app-release.apk`) y Windows (`Groovy-Setup.exe` y versión portable).
+  - Incluye todas las optimizaciones de 120Hz/144Hz, sincronización de Groovy Connect sin saltos temporales, y resolución robusta de álbumes y pistas locales.
+
 ## [1.0.78] - 2026-09-08
 
 ### Fixed
