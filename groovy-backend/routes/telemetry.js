@@ -27,6 +27,32 @@ const normalizeCoverArt = (coverArt, songId) => {
 router.use(optionalAuth);
 
 /**
+ * GET /api/telemetry/playback
+ * Returns active live sessions and devices for Groovy Connect synchronization
+ */
+router.get('/playback', async (req, res) => {
+  try {
+    const client = parseFullClientInfo(req);
+    const userId = req.user?.id || 0;
+    const pool = getPool();
+
+    const [rows] = await pool.query(`
+      SELECT 
+        user_id, platform, device_name, device_model, os_version, ip_address,
+        song_id, title, artist, album, cover_art, duration, position, is_playing, last_ping_at
+      FROM user_live_playback
+      WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
+        AND last_ping_at >= NOW() - INTERVAL 60 SECOND
+      ORDER BY last_ping_at DESC
+    `, [userId, userId, client.ip]);
+
+    return res.json({ success: true, devices: rows });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/telemetry/playback
  * Real-time heartbeat of what the user is listening to right now (Android, Windows, Web)
  */

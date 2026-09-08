@@ -15,6 +15,7 @@ import '../screens/now_playing_screen.dart';
 import 'album_artwork.dart';
 import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
+import '../services/groovy_connect_service.dart';
 import 'connect/groovy_connect_icon.dart';
 import 'connect/groovy_connect_modal.dart';
 
@@ -266,9 +267,9 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   onPressed: widget.onToggleNowPlaying ?? widget.onToggleQueue,
                   tooltip: 'Vista que suena',
                 ),
-                Consumer2<CastService, UpnpService>(
-                  builder: (context, cs, us, _) {
-                    final isConn = cs.isConnected || us.isConnected;
+                Consumer3<CastService, UpnpService, GroovyConnectService>(
+                  builder: (context, cs, us, gs, _) {
+                    final isConn = cs.isConnected || us.isConnected || gs.isConnected;
                     return IconButton(
                       icon: GroovyConnectIcon(
                         size: 20,
@@ -476,9 +477,9 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   onPressed: widget.onToggleQueue,
                   tooltip: 'Cola de reproducción',
                 ),
-                Consumer2<CastService, UpnpService>(
-                  builder: (context, cs, us, _) {
-                    final isConn = cs.isConnected || us.isConnected;
+                Consumer3<CastService, UpnpService, GroovyConnectService>(
+                  builder: (context, cs, us, gs, _) {
+                    final isConn = cs.isConnected || us.isConnected || gs.isConnected;
                     return IconButton(
                       icon: GroovyConnectIcon(
                         size: 20,

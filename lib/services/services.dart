@@ -19,3 +19,4 @@ export 'lrclib_service.dart';
 export 'favorite_artists_service.dart';
 export 'artist_image_service.dart';
 export 'album_resolver_service.dart';
+export 'groovy_connect_service.dart';

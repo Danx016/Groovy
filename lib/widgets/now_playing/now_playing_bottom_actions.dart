@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../services/cast_service.dart';
 import '../../services/upnp_service.dart';
+import '../../services/groovy_connect_service.dart';
 import '../connect/groovy_connect_icon.dart';
 import '../connect/groovy_connect_modal.dart';
 
@@ -27,7 +28,8 @@ class NowPlayingBottomActions extends StatelessWidget {
   Widget build(BuildContext context) {
     final isCastConnected = context.select<CastService, bool>((s) => s.isConnected);
     final isUpnpConnected = context.select<UpnpService, bool>((s) => s.isConnected);
-    final isDeviceConnected = isCastConnected || isUpnpConnected;
+    final isGroovyConnected = context.select<GroovyConnectService, bool>((s) => s.isConnected);
+    final isDeviceConnected = isCastConnected || isUpnpConnected || isGroovyConnected;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 36.0, vertical: 6.0),

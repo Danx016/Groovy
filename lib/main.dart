@@ -283,6 +283,62 @@ void main() async {
   libraryProvider.setMergeLocalLibrary(true);
   playerProvider.setLibraryProvider(libraryProvider);
 
+  final groovyConnectService = GroovyConnectService();
+  groovyConnectService.initialize().catchError((e) {
+    debugPrint('Failed to initialize GroovyConnectService: $e');
+  });
+
+  groovyConnectService.onTransferReceived = (Song song, int positionMs, bool isPlaying, String fromDevice) async {
+    debugPrint('[GroovyConnect] Playback transferred from $fromDevice: ${song.title}');
+    await playerProvider.playSong(song);
+    if (positionMs > 0) {
+      await playerProvider.seek(Duration(milliseconds: positionMs));
+    }
+    if (!isPlaying) {
+      await playerProvider.pause();
+    }
+  };
+
+  groovyConnectService.onCommandReceived = (String action, dynamic value) {
+    debugPrint('[GroovyConnect] Remote command received: $action ($value)');
+    switch (action) {
+      case 'play':
+        playerProvider.play();
+        break;
+      case 'pause':
+        playerProvider.pause();
+        break;
+      case 'togglePlayPause':
+        playerProvider.togglePlayPause();
+        break;
+      case 'skipNext':
+        playerProvider.skipNext();
+        break;
+      case 'skipPrevious':
+        playerProvider.skipPrevious();
+        break;
+      case 'seek':
+        if (value is num) {
+          playerProvider.seek(Duration(milliseconds: value.toInt()));
+        }
+        break;
+      case 'volume':
+        if (value is num) {
+          playerProvider.setVolume(value.toDouble().clamp(0.0, 1.0));
+        }
+        break;
+    }
+  };
+
+  groovyConnectService.onProvidePlayerStatus = () {
+    return {
+      'isPlaying': playerProvider.isPlaying,
+      'song': playerProvider.currentSong?.toJson(),
+      'positionMs': playerProvider.position.inMilliseconds,
+      'volume': playerProvider.volume,
+    };
+  };
+
   final Widget appWithProviders = MultiProvider(
     providers: [
       Provider<StorageService>.value(value: storageService),
@@ -303,6 +359,7 @@ void main() async {
       ChangeNotifierProvider<ThemeService>.value(value: themeService),
       ChangeNotifierProvider<UpnpService>.value(value: upnpService),
       ChangeNotifierProvider<JukeboxService>.value(value: jukeboxService),
+      ChangeNotifierProvider<GroovyConnectService>.value(value: groovyConnectService),
       ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
       ChangeNotifierProvider<LibraryProvider>.value(value: libraryProvider),
     ],
