@@ -5,6 +5,13 @@ All notable changes to Musly will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.67] - 2026-09-07
+
+### Fixed
+- **Resolución de Streaming en Windows y Android**:
+  - Corrección crítica: Se restableció la prioridad de Chaquopy Python en Android y `yt-dlp.exe` en Windows para la resolución de streams de audio de YouTube.
+  - Esto garantiza que los tokens de descifrado de firma (`n-sig`) y las cabeceras HTTP de GoogleVideo se envíen correctamente, evitando el error `HTTP 403 Forbidden` que impedía la reproducción.
+
 ## [1.0.66] - 2026-09-07
 
 ### Performance & Major Optimization Across 21 Screens (Windows & Android)
