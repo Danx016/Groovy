@@ -20,27 +20,28 @@ class AlbumArtView extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: AnimatedScale(
-        scale: isPlaying ? 1.0 : 0.86,
-        duration: const Duration(milliseconds: 300),
+        scale: isPlaying ? 1.0 : 0.80,
+        duration: const Duration(milliseconds: 350),
         curve: Curves.easeOutCubic,
         child: Container(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16.0),
+            borderRadius: BorderRadius.circular(22.0),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: isPlaying ? 0.35 : 0.18),
-                blurRadius: isPlaying ? 20.0 : 10.0,
+                color: Colors.black.withValues(alpha: isPlaying ? 0.38 : 0.20),
+                blurRadius: isPlaying ? 28.0 : 16.0,
                 spreadRadius: 0.0,
-                offset: Offset(0, isPlaying ? 10.0 : 4.0),
+                offset: Offset(0, isPlaying ? 12.0 : 5.0),
               ),
             ],
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(16.0),
+            borderRadius: BorderRadius.circular(22.0),
             child: Image(
               image: image,
               fit: BoxFit.cover,
               gaplessPlayback: true,
+              filterQuality: FilterQuality.medium,
               errorBuilder: (context, error, stackTrace) => Container(
                 color: Colors.white.withValues(alpha: 0.12),
                 child: const Center(

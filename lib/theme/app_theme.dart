@@ -64,9 +64,9 @@ class AppTheme {
           scrolledUnderElevation: 0,
           titleTextStyle: TextStyle(
             color: Colors.black,
-            fontSize: 34,
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.5,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
           ),
         ),
         cardTheme: CardThemeData(
@@ -150,9 +150,9 @@ class AppTheme {
           scrolledUnderElevation: 0,
           titleTextStyle: TextStyle(
             color: Colors.white,
-            fontSize: 34,
-            fontWeight: FontWeight.bold,
-            letterSpacing: -0.5,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
           ),
         ),
         cardTheme: CardThemeData(
@@ -241,9 +241,9 @@ class AppTheme {
         scrolledUnderElevation: 0,
         titleTextStyle: TextStyle(
           color: fg,
-          fontSize: 34,
-          fontWeight: FontWeight.bold,
-          letterSpacing: -0.5,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
         ),
       ),
       cardTheme: CardThemeData(

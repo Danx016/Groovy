@@ -226,29 +226,16 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                 return Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.1),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
+                    IconButton(
+                      icon: Icon(
+                        isPlaying
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
+                        size: 38,
+                        color: isDark ? Colors.white : Colors.black,
                       ),
-                      child: IconButton(
-                        icon: Icon(
-                          isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                          size: 32,
-                          color: Colors.black,
-                        ),
-                        onPressed: provider.togglePlayPause,
-                        padding: const EdgeInsets.all(8),
-                      ),
+                      onPressed: provider.togglePlayPause,
+                      padding: const EdgeInsets.all(4),
                     ),
                     const SizedBox(width: 16),
                     IconButton(
@@ -560,7 +547,7 @@ class _PlayerControls extends StatelessWidget {
             IconButton(
               icon: Icon(
                 Icons.shuffle_rounded,
-                size: 22,
+                size: 20,
                 color: shuffleEnabled
                     ? activeAccent
                     : (isDark
@@ -570,44 +557,34 @@ class _PlayerControls extends StatelessWidget {
               onPressed: provider.toggleShuffle,
               tooltip: AppLocalizations.of(context)?.enableShuffle ?? 'Aleatorio',
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             IconButton(
-              icon: const Icon(Icons.skip_previous_rounded, size: 28),
+              icon: const Icon(Icons.fast_rewind_rounded, size: 30),
               onPressed: hasPrevious ? provider.skipPrevious : null,
               color: color,
               disabledColor: disabledColor,
+              tooltip: 'Anterior',
             ),
-            const SizedBox(width: 8),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.15),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: IconButton(
-                icon: Icon(
-                  isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  size: 32,
-                  color: Colors.black,
-                ),
-                onPressed: provider.togglePlayPause,
-                padding: const EdgeInsets.all(8),
-              ),
-            ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             IconButton(
-              icon: const Icon(Icons.skip_next_rounded, size: 28),
+              icon: Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 40,
+                color: color,
+              ),
+              onPressed: provider.togglePlayPause,
+              padding: const EdgeInsets.all(4),
+              tooltip: isPlaying ? 'Pausa' : 'Reproducir',
+            ),
+            const SizedBox(width: 6),
+            IconButton(
+              icon: const Icon(Icons.fast_forward_rounded, size: 30),
               onPressed: hasNext ? provider.skipNext : null,
               color: color,
               disabledColor: disabledColor,
+              tooltip: 'Siguiente',
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             IconButton(
               icon: Icon(
                 repeatMode == RepeatMode.one
@@ -639,6 +616,7 @@ class _ProgressBar extends StatefulWidget {
 
 class _ProgressBarState extends State<_ProgressBar> {
   bool _isDragging = false;
+  bool _showRemainingTime = true;
   double _dragValue = 0.0;
   StreamSubscription<Duration>? _positionSub;
   Duration _currentPosition = Duration.zero;
@@ -768,7 +746,18 @@ class _ProgressBarState extends State<_ProgressBar> {
                 ),
               ),
               const SizedBox(width: 8),
-              Text(_formatDuration(duration), style: timeStyle),
+              MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  onTap: () => setState(() => _showRemainingTime = !_showRemainingTime),
+                  child: Text(
+                    _showRemainingTime
+                        ? "-${_formatDuration(duration > displayPos ? duration - displayPos : Duration.zero)}"
+                        : _formatDuration(duration),
+                    style: timeStyle,
+                  ),
+                ),
+              ),
             ],
           ),
         );

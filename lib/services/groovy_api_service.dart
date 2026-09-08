@@ -129,6 +129,7 @@ class GroovyApiService {
     int position = 0,
     int listenDeltaSeconds = 15,
     String? deviceId,
+    double? volume,
   }) async {
     try {
       String? effectiveDeviceId = deviceId;
@@ -154,6 +155,7 @@ class GroovyApiService {
           'duration': song.duration ?? 0,
           'position': position,
           'isPlaying': isPlaying,
+          if (volume != null) 'volume': volume,
           'platform': dev.platform,
           'deviceName': dev.deviceModel,
           'deviceModel': dev.deviceModel,

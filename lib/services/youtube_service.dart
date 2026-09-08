@@ -424,19 +424,21 @@ class YoutubeService {
 
   // ── Cover art & stream ────────────────────────────────────────────────────
 
-  String getCoverArtUrl(String? id, {int size = 600}) {
+  String getCoverArtUrl(String? id, {int size = 800}) {
     if (id == null || id.isEmpty) return '';
     if (id.startsWith('http://') || id.startsWith('https://')) {
       var url = id;
-      url = url.replaceAll(RegExp(r'=w\d+-h\d+'), '=w800-h800');
-      url = url.replaceAll(RegExp(r'=s\d+'), '=s800');
-      url = url.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
-      url = url.replaceAll('/default.jpg', '/hqdefault.jpg');
+      // Upgrade Google User Content / YouTube Music album artwork to 1200x1200px lossless quality
+      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-l90-rj');
+      // Upgrade YouTube thumbnails to standard definition / high resolution
+      url = url.replaceAll('/mqdefault.jpg', '/sddefault.jpg');
+      url = url.replaceAll('/default.jpg', '/sddefault.jpg');
+      url = url.replaceAll('/hqdefault.jpg', '/sddefault.jpg');
       return url;
     }
     final cleanId = id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
     if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
-      return 'https://i.ytimg.com/vi/$cleanId/hqdefault.jpg';
+      return 'https://i.ytimg.com/vi/$cleanId/sddefault.jpg';
     }
     return '';
   }
@@ -462,10 +464,15 @@ class YoutubeService {
   Song _mapDictToSong(Map<String, dynamic> d) {
     final id = d['id'] as String;
     final thumb = d['thumbnailUrl'] as String?;
+    var artistName = d['artist'] as String? ?? 'Unknown Artist';
+    // Clean up " - Topic" from official artist channels
+    if (artistName.endsWith(' - Topic')) {
+      artistName = artistName.substring(0, artistName.length - 8).trim();
+    }
     return Song(
       id: id,
       title: d['title'] as String? ?? 'Unknown Title',
-      artist: d['artist'] as String? ?? 'Unknown Artist',
+      artist: artistName,
       album: d['album'] as String?,
       duration: d['duration'] as int?,
       coverArt: (thumb != null && thumb.isNotEmpty) ? thumb : (d['coverArt'] as String? ?? id),
@@ -861,6 +868,10 @@ class YoutubeService {
         }
       }
 
+      // 5. Prioritize official original artist songs first, pushing covers/fan edits down
+      mergedMusic.sort((a, b) => _scoreSongRelevance(b, query).compareTo(_scoreSongRelevance(a, query)));
+      youtubeVideos.sort((a, b) => _scoreSongRelevance(b, query).compareTo(_scoreSongRelevance(a, query)));
+
       return SearchResult(
         artists: artists.take(artistCount).toList(),
         albums: albums.take(albumCount).toList(),
@@ -871,6 +882,86 @@ class YoutubeService {
       debugPrint('[YouTube] search error: $e');
       return SearchResult(artists: [], albums: [], songs: []);
     }
+  }
+
+  /// Calculates relevance score to prioritize original artist recordings and official releases over covers and unofficial edits.
+  int _scoreSongRelevance(Song song, String query) {
+    int score = 0;
+    final qLower = query.toLowerCase().trim();
+    final titleLower = song.title.toLowerCase();
+    final artistLower = (song.artist ?? '').toLowerCase();
+    final albumLower = (song.album ?? '').toLowerCase();
+
+    // 1. Verified official album release
+    if (song.album != null &&
+        song.album!.isNotEmpty &&
+        albumLower != 'album' &&
+        albumLower != 'álbum' &&
+        albumLower != 'single') {
+      score += 70;
+    }
+
+    // 2. Artist match with search query
+    if (artistLower.isNotEmpty) {
+      if (artistLower == qLower) {
+        score += 100;
+      } else if (artistLower.contains(qLower) || qLower.contains(artistLower)) {
+        score += 60;
+      }
+    }
+
+    // 3. Title match with search query
+    if (titleLower == qLower) {
+      score += 90;
+    } else if (titleLower.startsWith(qLower)) {
+      score += 50;
+    } else if (titleLower.contains(qLower)) {
+      score += 30;
+    }
+
+    // 4. Official release tags
+    if (artistLower.contains('topic') || artistLower.contains('official')) {
+      score += 40;
+    }
+
+    // 5. Demote unofficial / fan content (covers, karaoke, slowed+reverb, 8D audio, tributes)
+    const penalties = [
+      'cover',
+      'tributo',
+      'tribute',
+      'karaoke',
+      'instrumental',
+      'parodia',
+      'parody',
+      'slowed',
+      'reverb',
+      '8d audio',
+      '8d',
+      'nightcore',
+      'tutorial',
+      'como tocar',
+      'reacción',
+      'reaccion',
+      'reaction',
+    ];
+
+    for (final penalty in penalties) {
+      if (!qLower.contains(penalty)) {
+        if (titleLower.contains(penalty)) score -= 90;
+        if (artistLower.contains(penalty)) score -= 90;
+      }
+    }
+
+    // 6. Normal studio song duration reward (2 to 6 minutes) vs extremes (sample / long loops)
+    if (song.duration != null && song.duration! > 0) {
+      if (song.duration! < 45 || song.duration! > 900) {
+        score -= 60;
+      } else if (song.duration! >= 120 && song.duration! <= 360) {
+        score += 20;
+      }
+    }
+
+    return score;
   }
 
   // ── Random / Trending songs ───────────────────────────────────────────────

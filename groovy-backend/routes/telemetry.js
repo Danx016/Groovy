@@ -39,7 +39,7 @@ router.get('/playback', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT 
         user_id, platform, device_name, device_model, os_version, ip_address,
-        song_id, title, artist, album, cover_art, duration, position, is_playing, last_ping_at,
+        song_id, title, artist, album, cover_art, duration, position, is_playing, volume, last_ping_at,
         device_key, COALESCE(device_key, CONCAT(platform, '_', device_name)) as device_id
       FROM user_live_playback
       WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
@@ -134,11 +134,12 @@ router.get('/command', async (req, res) => {
         AND (
           target_device_id = ?
           OR (? != '' AND target_device_id = ?)
+          OR (? != '' AND target_device_id LIKE ?)
           OR (? > 0 AND user_id = ? AND (target_device_id LIKE ? OR target_device_id = ?))
         )
       ORDER BY id ASC
       LIMIT 10
-    `, [deviceId, deviceId, platformModel, platformModel, userId, userId, platformDevice, deviceId]);
+    `, [deviceId, deviceId, platformModel, platformModel, platform, `${platform}%`, userId, userId, platformDevice, deviceId]);
 
     if (commands.length > 0) {
       const ids = commands.map(c => c.id);
@@ -193,6 +194,7 @@ router.post('/playback', async (req, res) => {
       duration = 0,
       position = 0,
       isPlaying = true,
+      volume,
       platform,
       deviceName,
       listenDeltaSeconds = 15, // seconds listened since last ping
@@ -222,9 +224,9 @@ router.post('/playback', async (req, res) => {
     await pool.query(`
       INSERT INTO user_live_playback (
         user_id, song_id, title, artist, album, cover_art, duration, position, 
-        is_playing, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
+        is_playing, volume, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON DUPLICATE KEY UPDATE
         user_id = COALESCE(VALUES(user_id), user_id),
         song_id = CASE WHEN VALUES(song_id) != '' THEN VALUES(song_id) ELSE song_id END,
@@ -235,6 +237,7 @@ router.post('/playback', async (req, res) => {
         duration = CASE WHEN VALUES(title) != '' THEN VALUES(duration) ELSE duration END,
         position = CASE WHEN VALUES(title) != '' THEN VALUES(position) ELSE position END,
         is_playing = VALUES(is_playing),
+        volume = COALESCE(VALUES(volume), volume),
         platform = VALUES(platform),
         device_name = VALUES(device_name),
         ip_address = VALUES(ip_address),
@@ -254,6 +257,7 @@ router.post('/playback', async (req, res) => {
       hasSong ? (parseInt(duration, 10) || 0) : 0,
       hasSong ? (parseInt(position, 10) || 0) : 0,
       (isPlaying && hasSong) ? 1 : 0,
+      typeof volume === 'number' ? Math.max(0, Math.min(1, volume)) : 1.0,
       resolvedPlatform,
       resolvedDevice,
       client.ip,
@@ -267,14 +271,15 @@ router.post('/playback', async (req, res) => {
     // Cleanup stale live sessions older than 75 seconds
     pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 75 SECOND').catch(() => {});
 
-    // Purge any ghost/fallback rows for the same user and platform/model that have a different device_key
-    if (deviceId && dbUserId) {
+    // Purge only stale ghost/fallback rows for the same user and platform that have not pinged in > 25 seconds
+    if (deviceId && dbUserId && resolvedPlatform) {
       pool.query(`
         DELETE FROM user_live_playback
         WHERE user_id = ?
           AND device_key != ?
           AND LOWER(platform) = LOWER(?)
           AND (LOWER(device_name) = LOWER(?) OR LOWER(device_model) = LOWER(?))
+          AND last_ping_at < NOW() - INTERVAL 25 SECOND
       `, [dbUserId, deviceKey, resolvedPlatform, resolvedDevice, client.deviceModel || '']).catch(() => {});
     }
 

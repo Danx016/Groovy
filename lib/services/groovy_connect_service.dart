@@ -2,12 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/song.dart';
 import 'device_info_service.dart';
 import 'groovy_api_service.dart';
+import 'storage_service.dart';
 
 /// Represents a remote Groovy instance available on the local network (LAN) or cloud.
 class GroovyRemoteDevice {
@@ -20,6 +20,7 @@ class GroovyRemoteDevice {
   final bool isLocalLan;
   final Song? currentSong;
   final bool isPlaying;
+  final double? volume;
   final DateTime lastSeen;
 
   GroovyRemoteDevice({
@@ -32,6 +33,7 @@ class GroovyRemoteDevice {
     this.isLocalLan = false,
     this.currentSong,
     this.isPlaying = false,
+    this.volume = 1.0,
     required this.lastSeen,
   });
 
@@ -45,6 +47,7 @@ class GroovyRemoteDevice {
     bool? isLocalLan,
     Song? currentSong,
     bool? isPlaying,
+    double? volume,
     DateTime? lastSeen,
   }) {
     return GroovyRemoteDevice(
@@ -57,6 +60,7 @@ class GroovyRemoteDevice {
       isLocalLan: isLocalLan ?? this.isLocalLan,
       currentSong: currentSong ?? this.currentSong,
       isPlaying: isPlaying ?? this.isPlaying,
+      volume: volume ?? this.volume,
       lastSeen: lastSeen ?? this.lastSeen,
     );
   }
@@ -70,6 +74,7 @@ class GroovyRemoteDevice {
     'port': port,
     'isLocalLan': isLocalLan,
     'isPlaying': isPlaying,
+    'volume': volume,
     'song': currentSong?.toJson(),
   };
 
@@ -182,6 +187,11 @@ class GroovyConnectService extends ChangeNotifier {
         await prefs.setString('groovy_cloud_device_id_v2', id);
       }
       _localDeviceId = id;
+
+      final storedToken = await StorageService().getUserToken();
+      if (storedToken != null && storedToken.isNotEmpty) {
+        _cachedAuthToken = storedToken;
+      }
 
       // 1. Start local network P2P services (Wi-Fi discovery without internet dependency)
       if (!kIsWeb) {
@@ -425,7 +435,7 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts the cloud command polling loop to receive actions from other devices.
   void _startCommandPollLoop() {
     _commandPollTimer?.cancel();
-    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
+    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 450), (_) {
       _pollCloudCommands();
     });
   }
@@ -467,9 +477,15 @@ class GroovyConnectService extends ChangeNotifier {
 
             await onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex);
           }
-        } else if (action == 'control' && payload is Map) {
-          final controlAction = payload['action']?.toString() ?? '';
-          final controlValue = payload['value'];
+        } else if (action == 'control' || action == 'play' || action == 'pause' || action == 'skipNext' || action == 'skipPrevious' || action == 'seek' || action == 'volume' || action == 'togglePlayPause') {
+          String controlAction = action;
+          dynamic controlValue;
+          if (payload is Map) {
+            controlAction = payload['action']?.toString() ?? action;
+            controlValue = payload['value'];
+          } else if (payload is num) {
+            controlValue = payload;
+          }
           if (onCommandReceived != null && controlAction.isNotEmpty) {
             onCommandReceived!(controlAction, controlValue);
           }
@@ -583,17 +599,24 @@ class GroovyConnectService extends ChangeNotifier {
           );
         }
 
-        // Only override if not already discovered via lower-latency LAN
         final existing = _discoveredDevices[remoteDeviceId];
-        if (existing == null || !existing.isLocalLan) {
+        if (existing == null) {
           _discoveredDevices[remoteDeviceId] = GroovyRemoteDevice(
             id: remoteDeviceId,
             name: remoteDeviceName,
             platform: remoteDevicePlatform,
             model: item['device_model']?.toString() ?? '',
-            host: item['ip_address']?.toString() ?? '',
+            host: '',
             port: 42425,
             isLocalLan: false,
+            isPlaying: isPlaying,
+            currentSong: song,
+            lastSeen: DateTime.now(),
+          );
+        } else {
+          _discoveredDevices[remoteDeviceId] = existing.copyWith(
+            name: remoteDeviceName,
+            platform: remoteDevicePlatform,
             isPlaying: isPlaying,
             currentSong: song,
             lastSeen: DateTime.now(),
@@ -648,46 +671,9 @@ class GroovyConnectService extends ChangeNotifier {
       effectiveQueueIndex = (qIndex - startIndex).clamp(0, sub.length - 1);
     }
 
-    // 1. Try direct local network P2P HTTP transfer if device is on LAN
-    if (device.isLocalLan && device.host.isNotEmpty && device.port > 0) {
-      try {
-        debugPrint('[GroovyConnect] Attempting direct LAN transfer to ${device.name} at ${device.host}:${device.port}');
-        final uri = Uri.parse('http://${device.host}:${device.port}/groovy/transfer');
-        final response = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'song': song.toJson(),
-            'positionMs': position.inMilliseconds,
-            'isPlaying': isPlaying,
-            'fromDevice': _localDeviceName,
-            'queue': conciseQueue,
-            'queueIndex': effectiveQueueIndex,
-          }),
-        ).timeout(const Duration(milliseconds: 1200));
-
-        if (response.statusCode == 200) {
-          final now = DateTime.now();
-          final updated = device.copyWith(
-            currentSong: song,
-            isPlaying: isPlaying,
-            lastSeen: now,
-          );
-          _connectedDevice = updated;
-          _discoveredDevices[device.id] = updated;
-          _startStatusSyncTimer();
-          notifyListeners();
-          debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via LAN');
-          return true;
-        }
-      } catch (e) {
-        debugPrint('[GroovyConnect] Direct LAN transfer failed ($e), falling back to Cloud Relay...');
-      }
-    }
-
-    // 2. Fall back to Cloud Relay
+    // Route playback transfer exclusively through the Groovy Cloud Relay Server
     try {
-      debugPrint('[GroovyConnect] Cloud transferring to ${device.name} (${device.id})');
+      debugPrint('[GroovyConnect] Sending transfer to server for device ${device.name} (${device.id})');
       final success = await GroovyApiService().sendDeviceCommand(
         targetDeviceId: device.id,
         senderDeviceId: _localDeviceId,
@@ -714,12 +700,12 @@ class GroovyConnectService extends ChangeNotifier {
         _discoveredDevices[device.id] = updated;
         _startStatusSyncTimer();
         notifyListeners();
-        debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via cloud');
+        debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via cloud server');
         return true;
       }
       return false;
     } catch (e) {
-      debugPrint('[GroovyConnect] Transfer failed: $e');
+      debugPrint('[GroovyConnect] Server transfer failed: $e');
       return false;
     }
   }
@@ -729,6 +715,8 @@ class GroovyConnectService extends ChangeNotifier {
     _connectedDevice = device;
     _startStatusSyncTimer();
     notifyListeners();
+    // Query remote device status immediately to ensure current track is visible
+    _syncRemoteStatus();
     return true;
   }
 
@@ -743,33 +731,17 @@ class GroovyConnectService extends ChangeNotifier {
     } else if (action == 'pause') {
       _connectedDevice = _connectedDevice?.copyWith(isPlaying: false);
       notifyListeners();
+    } else if (action == 'volume' && value is num) {
+      _connectedDevice = _connectedDevice?.copyWith(volume: value.toDouble().clamp(0.0, 1.0));
+      notifyListeners();
     }
 
-    // 1. Try local LAN P2P HTTP control if device is on LAN (quick 500ms timeout)
-    if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty && _connectedDevice!.port > 0) {
-      try {
-        final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/control');
-        final response = await http.post(
-          uri,
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({'action': action, 'value': value}),
-        ).timeout(const Duration(milliseconds: 500));
-
-        if (response.statusCode == 200) {
-          Future.delayed(const Duration(milliseconds: 150), () => _syncRemoteStatus());
-          return true;
-        }
-      } catch (e) {
-        debugPrint('[GroovyConnect] Local control failed ($e), falling back to Cloud Relay...');
-      }
-    }
-
-    // 2. Fall back to Cloud Relay
+    // Route control command exclusively through the Groovy Cloud Relay Server
     try {
       final success = await GroovyApiService().sendDeviceCommand(
         targetDeviceId: _connectedDevice!.id,
         senderDeviceId: _localDeviceId,
-        action: 'control',
+        action: action,
         payload: {
           'action': action,
           'value': value,
@@ -777,7 +749,6 @@ class GroovyConnectService extends ChangeNotifier {
         token: _cachedAuthToken,
       );
 
-      Future.delayed(const Duration(milliseconds: 250), () => _syncRemoteStatus());
       return success;
     } catch (e) {
       debugPrint('[GroovyConnect] Cloud sendControl error: $e');
@@ -806,15 +777,12 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts status synchronization timer to reflect remote playback progress in the UI.
   void _startStatusSyncTimer() {
     _statusSyncTimer?.cancel();
-    final interval = (_connectedDevice?.isLocalLan == true)
-        ? const Duration(milliseconds: 1000)
-        : const Duration(milliseconds: 1500);
-    _statusSyncTimer = Timer.periodic(interval, (_) {
+    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
       _syncRemoteStatus();
     });
   }
 
-  /// Synchronizes playback status with remote device (local HTTP or cloud telemetry).
+  /// Synchronizes playback status with remote device via cloud telemetry.
   Future<void> _syncRemoteStatus() async {
     if (_connectedDevice == null) {
       _statusSyncTimer?.cancel();
@@ -824,52 +792,7 @@ class GroovyConnectService extends ChangeNotifier {
     _isSyncingStatus = true;
 
     try {
-      // 1. Query local device status if on LAN
-      if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty && _connectedDevice!.port > 0) {
-        try {
-          final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/status');
-          final response = await http.get(uri).timeout(const Duration(milliseconds: 600));
-
-          if (response.statusCode == 200) {
-            final data = jsonDecode(response.body) as Map<String, dynamic>;
-            final isPlaying = data['isPlaying'] as bool? ?? false;
-            final positionMs = (data['positionMs'] as num?)?.toInt() ?? 0;
-            final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
-            final volume = (data['volume'] as num?)?.toDouble() ?? 1.0;
-            final songData = data['song'] as Map<String, dynamic>?;
-
-            Song? song;
-            if (songData != null) {
-              try {
-                song = Song.fromJson(songData);
-              } catch (_) {}
-            }
-
-            final now = DateTime.now();
-            final updated = _connectedDevice!.copyWith(
-              currentSong: song ?? _connectedDevice!.currentSong,
-              isPlaying: isPlaying,
-              lastSeen: now,
-            );
-            _connectedDevice = updated;
-            _discoveredDevices[updated.id] = updated;
-            notifyListeners();
-
-            onRemoteStatusUpdated?.call(
-              song: song,
-              position: Duration(milliseconds: positionMs),
-              duration: Duration(milliseconds: durationMs),
-              isPlaying: isPlaying,
-              volume: volume,
-            );
-            return;
-          }
-        } catch (_) {
-          // Fall back to cloud query below if LAN packet dropped
-        }
-      }
-
-      // 2. Cloud status query
+      // Cloud status query from VPS server
       if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
         try {
           final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
@@ -905,9 +828,11 @@ class GroovyConnectService extends ChangeNotifier {
             }
 
             final now = DateTime.now();
+            final remoteVol = (targetDev['volume'] as num?)?.toDouble() ?? _connectedDevice?.volume ?? 1.0;
             final updated = _connectedDevice!.copyWith(
               currentSong: song ?? _connectedDevice!.currentSong,
               isPlaying: isPlaying,
+              volume: remoteVol,
               lastSeen: now,
             );
             _connectedDevice = updated;
@@ -919,7 +844,7 @@ class GroovyConnectService extends ChangeNotifier {
               position: Duration(seconds: positionSec),
               duration: Duration(seconds: durationSec),
               isPlaying: isPlaying,
-              volume: 1.0,
+              volume: remoteVol,
             );
           }
         } catch (_) {

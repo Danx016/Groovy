@@ -116,10 +116,10 @@ class YtDlpService {
   static String _upgradeThumbnail(String? url) {
     if (url == null || url.isEmpty) return '';
     var upgraded = url;
-    upgraded = upgraded.replaceAll(RegExp(r'=w\d+-h\d+'), '=w800-h800');
-    upgraded = upgraded.replaceAll(RegExp(r'=s\d+'), '=s800');
-    upgraded = upgraded.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
-    upgraded = upgraded.replaceAll('/default.jpg', '/hqdefault.jpg');
+    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-l90-rj');
+    upgraded = upgraded.replaceAll('/mqdefault.jpg', '/sddefault.jpg');
+    upgraded = upgraded.replaceAll('/default.jpg', '/sddefault.jpg');
+    upgraded = upgraded.replaceAll('/hqdefault.jpg', '/sddefault.jpg');
     return upgraded;
   }
 
@@ -248,7 +248,7 @@ class YtDlpService {
             'album': albumName,
             'duration': durationSecs,
             'thumbnailUrl': thumb,
-            'coverArt': videoId,
+            'coverArt': thumb.isNotEmpty ? thumb : videoId,
           });
 
           if (results.length >= limit) break;
@@ -332,7 +332,7 @@ class YtDlpService {
             'album': null,
             'duration': durSecs,
             'thumbnailUrl': thumb,
-            'coverArt': vid,
+            'coverArt': thumb.isNotEmpty ? thumb : vid,
           });
 
           if (results.length >= limit) break;

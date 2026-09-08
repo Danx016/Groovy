@@ -18,10 +18,9 @@ class _ImageUrlCache {
 
   static String getUrl(YoutubeService service, String? coverArt, int size) {
     if (coverArt == null || coverArt.isEmpty) return '';
-    final key = '${coverArt}_$size';
     return _cache.putIfAbsent(
-      key,
-      () => service.getCoverArtUrl(coverArt, size: size),
+      coverArt,
+      () => service.getCoverArtUrl(coverArt, size: 800),
     );
   }
 }
@@ -124,14 +123,14 @@ class AlbumArtwork extends StatelessWidget {
     final int minClamp;
     final int maxClamp;
     if (validSize <= 80) {
-      minClamp = 96;
-      maxClamp = 240;
+      minClamp = 120;
+      maxClamp = 320;
     } else if (validSize <= 180) {
-      minClamp = 240;
-      maxClamp = 480;
+      minClamp = 320;
+      maxClamp = 640;
     } else {
-      minClamp = 400;
-      maxClamp = 1080;
+      minClamp = 600;
+      maxClamp = 1200;
     }
     final cacheSize = targetSize.toInt().clamp(minClamp, maxClamp);
 
@@ -185,6 +184,7 @@ class AlbumArtwork extends StatelessWidget {
         fit: BoxFit.contain,
         cacheWidth: cacheSize,
         cacheHeight: cacheSize,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
       );
     }
@@ -198,6 +198,7 @@ class AlbumArtwork extends StatelessWidget {
           fit: BoxFit.contain,
           cacheWidth: cacheSize,
           cacheHeight: cacheSize,
+          filterQuality: FilterQuality.medium,
           errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
         );
       }
@@ -213,13 +214,13 @@ class AlbumArtwork extends StatelessWidget {
         if (imageUrl.isEmpty) return _buildPlaceholder(isDark);
         return CachedNetworkImage(
           imageUrl: imageUrl,
-          cacheKey: '${coverArt}_natural_$cacheSize',
-          key: ValueKey('${coverArt}_natural_$cacheSize'),
+          key: ValueKey('natural_$imageUrl'),
           fit: BoxFit.contain,
           memCacheWidth: cacheSize,
           memCacheHeight: cacheSize,
-          maxWidthDiskCache: cacheSize,
-          maxHeightDiskCache: cacheSize,
+          maxWidthDiskCache: 1200,
+          maxHeightDiskCache: 1200,
+          filterQuality: FilterQuality.medium,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
           useOldImageOnUrlChange: true,
@@ -244,6 +245,7 @@ class AlbumArtwork extends StatelessWidget {
         fit: BoxFit.cover,
         cacheWidth: cacheSize,
         cacheHeight: cacheSize,
+        filterQuality: FilterQuality.medium,
         errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
       );
     }
@@ -257,6 +259,7 @@ class AlbumArtwork extends StatelessWidget {
           fit: BoxFit.cover,
           cacheWidth: cacheSize,
           cacheHeight: cacheSize,
+          filterQuality: FilterQuality.medium,
           errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
         );
       }
@@ -272,13 +275,13 @@ class AlbumArtwork extends StatelessWidget {
         if (imageUrl.isEmpty) return _buildPlaceholder(isDark);
         return CachedNetworkImage(
           imageUrl: imageUrl,
-          cacheKey: '${coverArt}_$cacheSize',
-          key: ValueKey('${coverArt}_$cacheSize'),
+          key: ValueKey('cover_$imageUrl'),
           fit: BoxFit.cover,
           memCacheWidth: cacheSize,
           memCacheHeight: cacheSize,
-          maxWidthDiskCache: cacheSize,
-          maxHeightDiskCache: cacheSize,
+          maxWidthDiskCache: 1200,
+          maxHeightDiskCache: 1200,
+          filterQuality: FilterQuality.medium,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
           useOldImageOnUrlChange: true,
@@ -293,9 +296,15 @@ class AlbumArtwork extends StatelessWidget {
   }
 
   Widget _buildNetworkImageFallback(String url, bool isDark, BoxFit fit) {
+    final fallbackUrl = url.contains('/sddefault.jpg')
+        ? url.replaceAll('/sddefault.jpg', '/hqdefault.jpg')
+        : (url.contains('=w1200-h1200')
+            ? url.replaceAll('=w1200-h1200-l90-rj', '=w800-h800')
+            : url);
     return Image.network(
-      url,
+      fallbackUrl,
       fit: fit,
+      filterQuality: FilterQuality.medium,
       errorBuilder: (ctx, err, stack) {
         debugPrint('Network image fallback error: $err');
         return _buildPlaceholder(isDark);

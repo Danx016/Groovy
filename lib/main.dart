@@ -306,11 +306,18 @@ void main() async {
     if (!isPlaying) {
       await playerProvider.pause();
     }
+    playerProvider.sendTelemetryHeartbeatNow();
   };
 
   groovyConnectService.onCommandReceived = (String action, dynamic value) {
     debugPrint('[GroovyConnect] Remote command received: $action ($value)');
-    playerProvider.disableGroovyConnectRemote();
+    if (groovyConnectService.isConnected) {
+      debugPrint('[GroovyConnect] Controller ignoring self-echo command: $action');
+      return;
+    }
+    if (action != 'volume') {
+      playerProvider.disableGroovyConnectRemote();
+    }
     switch (action) {
       case 'play':
         playerProvider.play();
@@ -338,6 +345,7 @@ void main() async {
         }
         break;
     }
+    playerProvider.sendTelemetryHeartbeatNow();
   };
 
   groovyConnectService.onProvidePlayerStatus = () {

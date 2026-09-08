@@ -185,7 +185,8 @@ async function runMigrations(conn) {
   // 6. User Live Playback Presence table (Who is currently playing music in real time)
   await conn.query(`
     CREATE TABLE IF NOT EXISTS user_live_playback (
-      user_id INT PRIMARY KEY,
+      device_key VARCHAR(255) PRIMARY KEY,
+      user_id INT NULL,
       song_id VARCHAR(255) NOT NULL,
       title VARCHAR(255) NOT NULL,
       artist VARCHAR(255),
@@ -194,13 +195,18 @@ async function runMigrations(conn) {
       duration INT DEFAULT 0,
       position INT DEFAULT 0,
       is_playing TINYINT(1) DEFAULT 1,
+      volume FLOAT DEFAULT 1.0,
       platform VARCHAR(100) DEFAULT 'Desconocido',
       device_name VARCHAR(255) DEFAULT 'Groovy App',
+      device_model VARCHAR(255) NULL,
+      os_version VARCHAR(255) NULL,
       ip_address VARCHAR(100),
+      country VARCHAR(100) NULL,
+      city VARCHAR(100) NULL,
       started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       last_ping_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_live_ping (last_ping_at DESC),
-      CONSTRAINT fk_live_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      INDEX idx_live_user (user_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 
@@ -287,8 +293,20 @@ async function runMigrations(conn) {
     await conn.query('ALTER TABLE user_live_playback DROP FOREIGN KEY fk_live_user');
   } catch (_) {}
   try {
-    await conn.query('ALTER TABLE user_live_playback DROP PRIMARY KEY, ADD PRIMARY KEY (device_key)');
+    // Ensure all existing rows have a non-null device_key before converting to PRIMARY KEY
+    await conn.query(`
+      UPDATE user_live_playback 
+      SET device_key = CONCAT(COALESCE(user_id, 'guest'), '_', LOWER(COALESCE(platform, 'app')), '_', LOWER(COALESCE(device_name, 'device'))) 
+      WHERE device_key IS NULL OR device_key = ''
+    `);
+    await conn.query('ALTER TABLE user_live_playback MODIFY COLUMN device_key VARCHAR(255) NOT NULL');
+    await conn.query('ALTER TABLE user_live_playback DROP PRIMARY KEY');
+    await conn.query('ALTER TABLE user_live_playback ADD PRIMARY KEY (device_key)');
     console.log('[Database] Migrated user_live_playback to device_key primary key');
+  } catch (_) {}
+  try {
+    await conn.query('ALTER TABLE user_live_playback ADD COLUMN volume FLOAT DEFAULT 1.0');
+    console.log('[Database] Migrated user_live_playback to include volume column');
   } catch (_) {}
 
   // Promote danilorodelo355@gmail.com and initial admin to admin role

@@ -6,10 +6,10 @@ import yt_dlp
 def _upgrade_thumbnail(url):
     if not url:
         return ""
-    url = re.sub(r'=w\d+-h\d+', '=w800-h800', url)
-    url = re.sub(r'=s\d+', '=s800', url)
-    url = url.replace('/mqdefault.jpg', '/hqdefault.jpg')
-    url = url.replace('/default.jpg', '/hqdefault.jpg')
+    url = re.sub(r'=(w\d+-h\d+|s\d+)[^/]*', '=w1200-h1200-l90-rj', url)
+    url = url.replace('/mqdefault.jpg', '/sddefault.jpg')
+    url = url.replace('/default.jpg', '/sddefault.jpg')
+    url = url.replace('/hqdefault.jpg', '/sddefault.jpg')
     return url
 
 def _extract_stream(video_id_or_url):
@@ -84,7 +84,7 @@ def _search_query(target, limit):
                 'album': e.get('album'),
                 'duration': duration,
                 'thumbnailUrl': thumb_url,
-                'coverArt': item_id,
+                'coverArt': thumb_url if thumb_url else item_id,
             })
         return results
 
@@ -187,7 +187,7 @@ def _search_ytmusic_innertube(query, limit=25):
                     "album": album_name,
                     "duration": duration_secs,
                     "thumbnailUrl": thumb,
-                    "coverArt": video_id
+                    "coverArt": thumb if thumb else video_id
                 })
                 if len(results) >= limit:
                     break
@@ -261,7 +261,7 @@ def _search_youtube_video_innertube(query, limit=25):
                     "album": None,
                     "duration": dur_secs,
                     "thumbnailUrl": thumb,
-                    "coverArt": vid
+                    "coverArt": thumb if thumb else vid
                 })
                 if len(results) >= limit:
                     break

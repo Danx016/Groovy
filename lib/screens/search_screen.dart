@@ -564,9 +564,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
         if (result.songs.isNotEmpty) ...[
           SectionHeader(
-            title: (result.youtubeVideos != null && result.youtubeVideos!.isNotEmpty)
-                ? 'YT Stream'
-                : AppLocalizations.of(context)!.songs,
+            title: AppLocalizations.of(context)!.songs,
           ),
           ListView.builder(
             shrinkWrap: true,

@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:groovy/services/youtube_service.dart';
 
@@ -19,7 +19,7 @@ void main() {
 
     test('should build cover art URL correctly for YouTube video ID', () {
       final url = service.getCoverArtUrl('dQw4w9WgXcQ', size: 300);
-      expect(url, equals('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'));
+      expect(url, equals('https://i.ytimg.com/vi/dQw4w9WgXcQ/sddefault.jpg'));
     });
 
     test('should return original URL if already full HTTP URL', () {

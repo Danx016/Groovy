@@ -855,7 +855,7 @@ class _RightSidebarState extends State<RightSidebar> {
                                 ),
                               ),
                               Icon(
-                                Icons.skip_next_rounded,
+                                Icons.fast_forward_rounded,
                                 size: 22,
                                 color: isDark ? Colors.white70 : Colors.black54,
                               ),

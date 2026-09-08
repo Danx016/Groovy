@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import '../widgets/blurred_gradient_background.dart';
@@ -8,6 +9,7 @@ import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
 import '../widgets/now_playing/playback_controls.dart';
 import '../widgets/now_playing/playback_progress_slider.dart';
+import '../widgets/now_playing/volume_slider.dart';
 import '../widgets/now_playing/now_playing_bottom_actions.dart';
 import '../widgets/lyrics/lyrics_list_view.dart';
 import '../models/lyric_line.dart';
@@ -377,6 +379,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               // 2. Foreground Content Area
               Positioned.fill(
                 child: SafeArea(
+                  top: false, // Explicitly controlled via effectiveTopPadding for pixel-perfect spacing on all devices
+                  bottom: true,
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                       final isLandscape = constraints.maxWidth > constraints.maxHeight;
@@ -398,28 +402,35 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   Widget _buildPortraitLayout(BuildContext context, Color accentColor, BoxConstraints constraints) {
     final isCompact = constraints.maxHeight < 680;
-    final statusBarHeight = MediaQuery.of(context).viewPadding.top;
-    final effectiveTopPadding = math.max(statusBarHeight, 14.0) + (widget.topPadding > 0 ? widget.topPadding * 0.2 : 6.0);
+    final mediaQuery = MediaQuery.of(context);
+    final rawStatus = math.max(
+      widget.topPadding,
+      math.max(mediaQuery.padding.top, mediaQuery.viewPadding.top),
+    );
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    // On mobile devices, status bar is typically between 30px and 48px.
+    // If rawStatus was not detected (e.g. inside a modal bottom sheet), default to a safe 38px.
+    final statusBarHeight = isMobile ? math.max(rawStatus, 38.0) : rawStatus;
+    final effectiveTopPadding = statusBarHeight + (isCompact ? 10.0 : 16.0);
 
     return Column(
       children: [
-        // 1. Smooth Universal Header with Fixed Height (Prevents layout shifts during swipe)
+        // 1. Smooth Universal Header: Mini header for lyrics/queue, clean zero-gap top space for cover page
         Padding(
           padding: EdgeInsets.only(
-            top: effectiveTopPadding,
+            top: _currentPage == 0 ? statusBarHeight + (isCompact ? 2.0 : 6.0) : effectiveTopPadding,
             left: 20.0,
             right: 20.0,
-            bottom: 4.0,
+            bottom: _currentPage == 0 ? 0.0 : 4.0,
           ),
-          child: SizedBox(
-            height: 52,
-            child: AnimatedCrossFade(
-              firstChild: _buildDragHandle(isCompact),
-              secondChild: _buildTrackMiniHeader(context),
-              crossFadeState: _currentPage == 0
-                  ? CrossFadeState.showFirst
-                  : CrossFadeState.showSecond,
-              duration: const Duration(milliseconds: 200),
+          child: AnimatedSize(
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeInOutCubic,
+            child: SizedBox(
+              height: _currentPage == 0 ? 0 : 52,
+              child: _currentPage == 0
+                  ? const SizedBox.shrink()
+                  : _buildTrackMiniHeader(context),
             ),
           ),
         ),
@@ -448,18 +459,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Widget _buildDragHandle(bool isCompact) {
-    return Center(
-      child: Container(
-        width: 38,
-        height: 5,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.28),
-          borderRadius: BorderRadius.circular(2.5),
-        ),
-      ),
-    );
-  }
 
   Widget _buildTrackMiniHeader(BuildContext context) {
     return Selector<PlayerProvider, (Song?, bool)>(
@@ -712,8 +711,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               child: Center(
                 child: Padding(
                   padding: EdgeInsets.symmetric(
-                    horizontal: 36.0,
-                    vertical: isCompact ? 2.0 : 8.0,
+                    horizontal: 20.0,
+                    vertical: isCompact ? 2.0 : 6.0,
                   ),
                   child: AspectRatio(
                     aspectRatio: 1.0,
@@ -730,7 +729,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             // Song Info (Title, Artist, Favorite, More)
             Padding(
               padding: const EdgeInsets.symmetric(
-                horizontal: 32.0,
+                horizontal: 26.0,
                 vertical: 6.0,
               ),
               child: Row(
@@ -975,6 +974,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   onShuffleToggle: () => provider.toggleShuffle(),
                   onRepeatToggle: () => provider.toggleRepeat(),
                 ),
+              ),
+
+              SizedBox(height: isCompact ? 4 : 8),
+
+              // Volume Slider (Apple Music style)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                child: const VolumeSlider(),
               ),
 
               SizedBox(height: isCompact ? 4 : 8),
