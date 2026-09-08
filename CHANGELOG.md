@@ -5,6 +5,22 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.80] - 2026-09-08
+
+### Added & Improved
+- **Control de Volumen Remoto Bidireccional (Groovy Connect)**:
+  - Control de volumen sincronizado entre Android y Windows. El uso de botones físicos del teléfono o de los sliders en pantalla envía comandos `'volume'` y sincroniza en tiempo real el reproductor remoto.
+  - Integración nativa con `RemoteAndroidPlaybackInfo` y botones físicos de Android con el menú emergente del sistema.
+  - Nuevo control deslizante de volumen integrado en la pantalla Ahora Suena estilo Apple Music con retroalimentación háptica.
+- **Carátulas en Alta Resolución Lossless**:
+  - Eliminado el reescalado agresivo; actualización a imágenes 1200x1200px con filtro bilineal suave y soporte nativo completo.
+- **Búsqueda Inteligente Priorizada**:
+  - Los lanzamientos y álbumes oficiales de artistas verificados ("Canciones") aparecen primero, seguidos por videos ("YouTube").
+- **Paridad Visual y de Controles en Windows**:
+  - Barra de reproducción desktop actualizada con iconos Apple Music (`Icons.fast_rewind_rounded`, `play/pause`, `Icons.fast_forward_rounded` y tiempo restante negativo `-0:30`).
+- **Servidor y Base de Datos**:
+  - Migración automática de MySQL y soporte para telemetría de volumen en tiempo real.
+
 ## [1.0.79] - 2026-09-08
 
 ### Release
