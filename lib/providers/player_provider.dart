@@ -30,6 +30,7 @@ import '../services/audio_handler.dart';
 import '../services/fade_settings_service.dart';
 
 import '../services/transcoding_service.dart';
+import '../services/groovy_connect_service.dart';
 import '../providers/library_provider.dart';
 
 enum RepeatMode { off, all, one }
@@ -342,6 +343,95 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       changed = true;
     }
     if (changed) {
+      notifyListeners();
+      _updateAllServices();
+      _updateAndroidAuto();
+    }
+  }
+
+  GroovyConnectService? _groovyConnectService;
+
+  void setGroovyConnectService(GroovyConnectService service) {
+    _groovyConnectService?.removeListener(_onGroovyConnectChanged);
+    _groovyConnectService = service;
+    _groovyConnectService?.addListener(_onGroovyConnectChanged);
+    _groovyConnectService?.onRemoteStatusUpdated = onGroovyConnectRemoteStatusUpdated;
+  }
+
+  void _onGroovyConnectChanged() {
+    if (_groovyConnectService?.isConnected != true && _isRenderingRemotely) {
+      _isRenderingRemotely = false;
+      notifyListeners();
+      _updateAllServices();
+    }
+  }
+
+  void enableGroovyConnectRemote(GroovyRemoteDevice device) {
+    if (_audioPlayer.playing) {
+      _audioPlayer.stop();
+    }
+    _isRenderingRemotely = true;
+    notifyListeners();
+    _updateAllServices();
+    _updateAndroidAuto();
+  }
+
+  void disableGroovyConnectRemote() {
+    _isRenderingRemotely = false;
+    notifyListeners();
+    _updateAllServices();
+    _updateAndroidAuto();
+  }
+
+  void onGroovyConnectRemoteStatusUpdated({
+    Song? song,
+    required Duration position,
+    required Duration duration,
+    required bool isPlaying,
+    required double volume,
+  }) {
+    if (!_isRenderingRemotely && _groovyConnectService?.isConnected != true) return;
+
+    bool changed = false;
+    if (song != null && _currentSong?.id != song.id) {
+      _currentSong = song;
+      _audioHandler.updateNowPlaying(
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album,
+        artworkUrl: _resolveArtworkUrl(),
+        duration: duration,
+      );
+      changed = true;
+    }
+
+    if (_isPlaying != isPlaying) {
+      _isPlaying = isPlaying;
+      changed = true;
+    }
+
+    if ((_position.inMilliseconds - position.inMilliseconds).abs() > 1200) {
+      _position = position;
+      _positionController.add(position);
+      changed = true;
+    }
+
+    if (duration > Duration.zero && _duration != duration) {
+      _duration = duration;
+      changed = true;
+    }
+
+    if ((_volume - volume).abs() > 0.05) {
+      _volume = volume;
+      changed = true;
+    }
+
+    if (changed) {
+      _audioHandler.updateRemotePlaybackState(
+        playing: _isPlaying,
+        position: _position,
+      );
       notifyListeners();
       _updateAllServices();
       _updateAndroidAuto();
@@ -901,7 +991,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// than locally.  Used to suppress audio-focus and noisy-event handling that
   /// would incorrectly pause the remote device, and to route UI volume changes
   /// to the renderer instead of the Android system volume.
-  bool get isRemotePlayback => _isRenderingRemotely;
+  bool get isRemotePlayback => _isRenderingRemotely || _groovyConnectService?.isConnected == true;
   bool get shuffleEnabled => _shuffleEnabled;
   bool get gaplessEnabled => _gaplessEnabled;
   RepeatMode get repeatMode => _repeatMode;
@@ -1502,10 +1592,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     Song song, {
     List<Song>? playlist,
     int? startIndex,
+    Duration? initialPosition,
   }) async {
     final currentGen = ++_playGeneration;
 
-    if (_currentSong?.id == song.id && !_isPlayingRadio) {
+    if (_currentSong?.id == song.id && !_isPlayingRadio && initialPosition == null) {
       await togglePlayPause();
       return;
     }
@@ -1530,6 +1621,36 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAllServices();
       _updateAndroidAuto();
+      return;
+    }
+
+    // Groovy Connect mode: route playback directly to connected device (Spotify Connect style)
+    if (_groovyConnectService?.isConnected == true) {
+      final targetPlaylist = (playlist ?? (_queue.isNotEmpty ? _queue : [song])).toList();
+      final targetIndex = startIndex ??
+          targetPlaylist
+              .indexWhere((s) => s.id == song.id)
+              .clamp(0, targetPlaylist.length - 1);
+      _queue = targetPlaylist;
+      _currentIndex = targetIndex;
+      _currentSong = song;
+      _position = initialPosition ?? Duration.zero;
+      _duration = song.duration != null ? Duration(seconds: song.duration!) : Duration.zero;
+      _isRenderingRemotely = true;
+      _isPlaying = true;
+      _isLoading = false;
+      if (_audioPlayer.playing) {
+        await _audioPlayer.stop();
+      }
+      notifyListeners();
+      _updateAndroidAuto();
+      _updateAllServices();
+      await _groovyConnectService!.sendPlaySong(
+        song,
+        positionMs: initialPosition?.inMilliseconds ?? 0,
+        queue: _queue,
+        queueIndex: _currentIndex,
+      );
       return;
     }
 
@@ -1561,7 +1682,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentSong = song;
       _lastPreloadedSongId = null;
       _resolvedArtworkUrl = null;
-      _position = Duration.zero;
+      _position = initialPosition ?? Duration.zero;
       if (song.duration != null && song.duration! > 0) {
         _duration = Duration(seconds: song.duration!);
       } else {
@@ -1661,7 +1782,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (youtubeSource != null) {
           _concatenatingSource = null;
-          await _audioPlayer.setAudioSource(youtubeSource, initialPosition: Duration.zero);
+          await _audioPlayer.setAudioSource(youtubeSource, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
@@ -1682,7 +1803,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             }
           }
           if (currentGen != _playGeneration) return;
-          await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
+          await _audioPlayer.setUrl(playUrl, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
@@ -1690,7 +1811,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           try {
             await _buildAndSetConcatenatingSource(
               initialIndex: _currentIndex,
-              initialPosition: Duration.zero,
+              initialPosition: initialPosition ?? Duration.zero,
             );
           } catch (e) {
             if (!_hasPlayedOnce) {
@@ -1700,7 +1821,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               await Future.delayed(const Duration(milliseconds: 100));
               await _buildAndSetConcatenatingSource(
                 initialIndex: _currentIndex,
-                initialPosition: Duration.zero,
+                initialPosition: initialPosition ?? Duration.zero,
               );
               _hasPlayedOnce = true;
             } else {
@@ -1708,7 +1829,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             }
           }
           if (currentGen != _playGeneration) return;
-          await _audioPlayer.seek(Duration.zero);
+          await _audioPlayer.seek(initialPosition ?? Duration.zero);
           await _applyReplayGain(song);
           await _ensureAudioFocus(() => _audioPlayer.play());
         } else {
@@ -1734,7 +1855,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (song.isLocal == true ||
               _offlineService.getLocalPath(song.id) != null ||
               (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
-            await _audioPlayer.setUrl(playUrl, initialPosition: Duration.zero);
+            await _audioPlayer.setUrl(playUrl, initialPosition: initialPosition ?? Duration.zero);
           } else {
             final cacheDir = await getTemporaryDirectory();
             final cacheFile = File(
@@ -1748,7 +1869,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 cacheFile: cacheFile,
                 tag: song.id,
               ),
-              initialPosition: Duration.zero,
+              initialPosition: initialPosition ?? Duration.zero,
             );
           }
           if (currentGen != _playGeneration) return;
@@ -1900,6 +2021,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
       return;
     }
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('play');
+      _isPlaying = true;
+      notifyListeners();
+      _updateAndroidAuto();
+      return;
+    }
     if (_castService.isConnected) {
       await _castService.play();
       _isPlaying = true;
@@ -1946,6 +2074,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
       return;
     }
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('pause');
+      _isPlaying = false;
+      notifyListeners();
+      _updateAndroidAuto();
+      return;
+    }
     if (_castService.isConnected) {
       await _castService.pause();
       _isPlaying = false;
@@ -1972,6 +2107,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> stop() async {
     _telemetryTimer?.cancel();
     _sendTelemetryHeartbeat(overridePlaying: false);
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('pause');
+      _isPlaying = false;
+      notifyListeners();
+      _updateAndroidAuto();
+      return;
+    }
     if (_castService.isConnected) {
       await _castService.stop();
     } else if (_upnpService.isConnected) {
@@ -2091,6 +2233,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Jukebox doesn't support seek by position; ignore.
       return;
     }
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('seek', position.inMilliseconds);
+      _updateAndroidAuto();
+      return;
+    }
     if (_castService.isConnected) {
       await _castService.seek(position);
     } else if (_upnpService.isConnected) {
@@ -2126,6 +2273,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_jukeboxService.enabled) {
       await _jukeboxService.skipNext(_youtubeService);
+      return;
+    }
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('skipNext');
       return;
     }
 
@@ -2191,6 +2342,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _hasRetriedCurrentPlay = false;
     if (_jukeboxService.enabled) {
       await _jukeboxService.skipPrevious(_youtubeService);
+      return;
+    }
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('skipPrevious');
       return;
     }
     if (_position.inSeconds > 3) {
@@ -2391,7 +2546,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
     await _storageService.saveVolume(_volume);
-    if (_castService.isConnected) {
+    if (_groovyConnectService?.isConnected == true) {
+      await _groovyConnectService!.sendControl('volume', _volume);
+    } else if (_castService.isConnected) {
       await _castService.setVolume(_volume);
     } else if (_upnpService.isConnected) {
       await _upnpService.setVolume((_volume * 100).round());

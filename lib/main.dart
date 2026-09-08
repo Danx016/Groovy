@@ -288,13 +288,24 @@ void main() async {
   groovyConnectService.initialize().catchError((e) {
     debugPrint('Failed to initialize GroovyConnectService: $e');
   });
+  playerProvider.setGroovyConnectService(groovyConnectService);
 
-  groovyConnectService.onTransferReceived = (Song song, int positionMs, bool isPlaying, String fromDevice) async {
-    debugPrint('[GroovyConnect] Playback transferred from $fromDevice: ${song.title}');
-    await playerProvider.playSong(song);
-    if (positionMs > 0) {
-      await playerProvider.seek(Duration(milliseconds: positionMs));
-    }
+  groovyConnectService.onTransferReceived = (
+    Song song,
+    int positionMs,
+    bool isPlaying,
+    String fromDevice,
+    List<Song>? queue,
+    int? queueIndex,
+  ) async {
+    debugPrint('[GroovyConnect] Playback transferred from $fromDevice: ${song.title} at ${positionMs}ms');
+    playerProvider.disableGroovyConnectRemote();
+    await playerProvider.playSong(
+      song,
+      playlist: queue,
+      startIndex: queueIndex,
+      initialPosition: positionMs > 0 ? Duration(milliseconds: positionMs) : null,
+    );
     if (!isPlaying) {
       await playerProvider.pause();
     }
@@ -336,6 +347,7 @@ void main() async {
       'isPlaying': playerProvider.isPlaying,
       'song': playerProvider.currentSong?.toJson(),
       'positionMs': playerProvider.position.inMilliseconds,
+      'durationMs': playerProvider.duration.inMilliseconds,
       'volume': playerProvider.volume,
     };
   };

@@ -162,12 +162,14 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           song: song,
           position: position,
           isPlaying: isPlaying,
+          queue: player.queue,
+          queueIndex: player.currentIndex,
         );
         if (ok) {
-          await player.pause();
+          player.enableGroovyConnectRemote(device);
           if (mounted) {
             _showSnackBar(
-              'Conectado a ${device.name}. Música transferida con Groovy Connect.',
+              'Conectado a ${device.name}. Reproduciendo con Groovy Connect.',
               isSuccess: true,
             );
           }
@@ -181,14 +183,17 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
         }
       } else {
         // Just establish remote connection
-        groovyConnect.transferPlayback(
+        final ok = await groovyConnect.transferPlayback(
           device: device,
           song: Song(id: 'dummy', title: 'Groovy Connect Session'),
           position: Duration.zero,
           isPlaying: false,
         );
-        if (mounted) {
-          _showSnackBar('Conectado a ${device.name}', isSuccess: true);
+        if (ok) {
+          player.enableGroovyConnectRemote(device);
+          if (mounted) {
+            _showSnackBar('Conectado a ${device.name}', isSuccess: true);
+          }
         }
       }
     } catch (e) {
@@ -843,7 +848,10 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                     visualDensity: VisualDensity.compact,
                   ),
                   onPressed: () {
-                    if (groovyConnect.isConnected) groovyConnect.disconnect();
+                    if (groovyConnect.isConnected) {
+                      groovyConnect.disconnect();
+                      player.disableGroovyConnectRemote();
+                    }
                     if (castService.isConnected) castService.disconnect();
                     if (upnpService.isConnected) upnpService.disconnect();
                   },
@@ -872,62 +880,96 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           ),
 
           if (currentSong != null) ...[
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
-                color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(10),
+                color: (isDark ? Colors.black : Colors.white).withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: isDark ? Colors.white10 : Colors.black12,
+                  width: 1,
+                ),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Icon(
-                    player.isPlaying
-                        ? Icons.graphic_eq_rounded
-                        : Icons.pause_circle_filled_rounded,
-                    size: 16,
-                    color: const Color(0xFF1ED760),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      '${currentSong.title} • ${currentSong.artist ?? "Groovy"}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white70 : Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  if (groovyConnect.isConnected) ...[
-                    IconButton(
-                      icon: Icon(
-                        player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                        size: 18,
+                  Row(
+                    children: [
+                      // Equalizer soundwave
+                      _EqualizerBars(
+                        isPlaying: player.isPlaying,
                         color: const Color(0xFF1ED760),
                       ),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () {
-                        groovyConnect.sendControl(player.isPlaying ? 'pause' : 'play');
-                      },
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.skip_next_rounded, size: 18, color: Colors.white70),
-                      visualDensity: VisualDensity.compact,
-                      onPressed: () {
-                        groovyConnect.sendControl('skipNext');
-                      },
-                    ),
-                  ],
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              currentSong.title,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w600,
+                                color: isDark ? Colors.white : Colors.black,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              currentSong.artist ?? 'Groovy Music',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: isDark ? Colors.white60 : Colors.black54,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Previous Track
+                      IconButton(
+                        icon: const Icon(Icons.skip_previous_rounded, size: 22),
+                        color: isDark ? Colors.white70 : Colors.black87,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Anterior',
+                        onPressed: () => player.skipPrevious(),
+                      ),
+                      // Play / Pause Circle Button
+                      GestureDetector(
+                        onTap: () => player.togglePlayPause(),
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF1ED760),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            player.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            size: 24,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                      // Next Track
+                      IconButton(
+                        icon: const Icon(Icons.skip_next_rounded, size: 22),
+                        color: isDark ? Colors.white70 : Colors.black87,
+                        visualDensity: VisualDensity.compact,
+                        tooltip: 'Siguiente',
+                        onPressed: () => player.skipNext(),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
           ],
 
           // Volume Slider
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           Row(
             children: [
               Icon(
@@ -936,13 +978,13 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                     : player.volume < 0.5
                         ? Icons.volume_down_rounded
                         : Icons.volume_up_rounded,
-                size: 18,
+                size: 19,
                 color: isDark ? Colors.white60 : Colors.black54,
               ),
               Expanded(
                 child: SliderTheme(
                   data: SliderTheme.of(context).copyWith(
-                    trackHeight: 3,
+                    trackHeight: 3.5,
                     thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                     overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                     activeTrackColor: const Color(0xFF1ED760),
@@ -955,9 +997,6 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                     value: player.volume.clamp(0.0, 1.0),
                     onChanged: (v) {
                       player.setVolume(v);
-                      if (groovyConnect.isConnected) {
-                        groovyConnect.sendControl('volume', v);
-                      }
                     },
                   ),
                 ),
@@ -966,6 +1005,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 '${(player.volume * 100).round()}%',
                 style: TextStyle(
                   fontSize: 12,
+                  fontWeight: FontWeight.w600,
                   color: isDark ? Colors.white60 : Colors.black54,
                 ),
               ),
@@ -1281,6 +1321,85 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             child: const Text('Cerrar', style: TextStyle(color: Color(0xFF1ED760))),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Dynamic animated equalizer soundwave bars (Spotify / Apple Music style)
+class _EqualizerBars extends StatefulWidget {
+  final bool isPlaying;
+  final Color color;
+  const _EqualizerBars({required this.isPlaying, required this.color});
+
+  @override
+  State<_EqualizerBars> createState() => _EqualizerBarsState();
+}
+
+class _EqualizerBarsState extends State<_EqualizerBars> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!widget.isPlaying) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _bar(8),
+          const SizedBox(width: 2.5),
+          _bar(5),
+          const SizedBox(width: 2.5),
+          _bar(12),
+          const SizedBox(width: 2.5),
+          _bar(7),
+        ],
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) {
+        final t = _controller.value;
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _bar(5 + 11 * ((t * 1.3) % 1.0)),
+            const SizedBox(width: 2.5),
+            _bar(14 - 9 * ((t * 0.9) % 1.0)),
+            const SizedBox(width: 2.5),
+            _bar(7 + 13 * ((t * 1.5) % 1.0)),
+            const SizedBox(width: 2.5),
+            _bar(13 - 7 * ((t * 1.1) % 1.0)),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _bar(double height) {
+    return Container(
+      width: 3,
+      height: height.clamp(4.0, 18.0),
+      decoration: BoxDecoration(
+        color: widget.color,
+        borderRadius: BorderRadius.circular(1.5),
       ),
     );
   }

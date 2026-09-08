@@ -87,8 +87,8 @@ class GroovyRemoteDevice {
   }
 }
 
-/// Service that coordinates device-to-device discovery and seamless audio transfer
-/// across Windows, Android, Mac, and Linux via local Wi-Fi LAN P2P and Cloud Relay.
+/// Service that coordinates device-to-device discovery, real-time synchronization,
+/// and remote playback controls across Windows, Android, Mac, and Linux via Wi-Fi LAN P2P.
 class GroovyConnectService extends ChangeNotifier {
   static final GroovyConnectService _instance = GroovyConnectService._internal();
   factory GroovyConnectService() => _instance;
@@ -110,11 +110,28 @@ class GroovyConnectService extends ChangeNotifier {
   bool _isDiscovering = false;
   Timer? _discoveryTimer;
   Timer? _pruneTimer;
+  Timer? _statusSyncTimer;
 
   // Callbacks hooked to PlayerProvider
-  Future<void> Function(Song song, int positionMs, bool isPlaying, String fromDevice)? onTransferReceived;
+  Future<void> Function(
+    Song song,
+    int positionMs,
+    bool isPlaying,
+    String fromDevice,
+    List<Song>? queue,
+    int? queueIndex,
+  )? onTransferReceived;
+
   void Function(String action, dynamic value)? onCommandReceived;
   Map<String, dynamic> Function()? onProvidePlayerStatus;
+
+  void Function({
+    Song? song,
+    required Duration position,
+    required Duration duration,
+    required bool isPlaying,
+    required double volume,
+  })? onRemoteStatusUpdated;
 
   List<GroovyRemoteDevice> get discoveredDevices => _discoveredDevices.values.toList();
   GroovyRemoteDevice? get connectedDevice => _connectedDevice;
@@ -137,7 +154,7 @@ class GroovyConnectService extends ChangeNotifier {
       await _startUdpListener();
 
       _pruneTimer?.cancel();
-      _pruneTimer = Timer.periodic(const Duration(seconds: 10), (_) => _pruneStaleDevices());
+      _pruneTimer = Timer.periodic(const Duration(seconds: 12), (_) => _pruneStaleDevices());
 
       debugPrint('[GroovyConnect] Service initialized on HTTP: $_actualHttpPort, Device: $_localDeviceName');
     } catch (e) {
@@ -145,7 +162,7 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
-  /// Starts the embedded HTTP server to handle incoming transfer and control requests.
+  /// Starts the embedded HTTP server to handle incoming transfer, info, and control requests.
   Future<void> _startHttpServer() async {
     try {
       try {
@@ -165,7 +182,6 @@ class GroovyConnectService extends ChangeNotifier {
   }
 
   Future<void> _handleHttpRequest(HttpRequest req) async {
-    // Add CORS headers for web or LAN requests
     req.response.headers.add('Access-Control-Allow-Origin', '*');
     req.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     req.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
@@ -178,7 +194,7 @@ class GroovyConnectService extends ChangeNotifier {
 
     final path = req.uri.path;
     try {
-      if (path == '/groovy/info') {
+      if (path == '/groovy/info' || path == '/groovy/status') {
         final status = onProvidePlayerStatus?.call() ?? {};
         final payload = {
           'id': _localDeviceId,
@@ -204,8 +220,27 @@ class GroovyConnectService extends ChangeNotifier {
         final fromDevice = data['fromDevice']?.toString() ?? 'Dispositivo Groovy';
 
         if (songData != null && onTransferReceived != null) {
-          final song = Song.fromJson(songData);
-          await onTransferReceived!(song, positionMs, isPlaying, fromDevice);
+          var song = Song.fromJson(songData);
+
+          // If local file path doesn't exist on this receiving device, fall back to online streaming
+          if (song.isLocal && (song.path == null || !File(song.path!).existsSync())) {
+            song = song.copyWith(isLocal: false);
+          }
+
+          List<Song>? queue;
+          final queueData = data['queue'] as List<dynamic>?;
+          if (queueData != null) {
+            queue = queueData.map((s) {
+              var qs = Song.fromJson(s as Map<String, dynamic>);
+              if (qs.isLocal && (qs.path == null || !File(qs.path!).existsSync())) {
+                qs = qs.copyWith(isLocal: false);
+              }
+              return qs;
+            }).toList();
+          }
+          final queueIndex = (data['queueIndex'] as num?)?.toInt();
+
+          await onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex);
           req.response.headers.contentType = ContentType.json;
           req.response.write(jsonEncode({'success': true, 'message': 'Playback transferred'}));
           await req.response.close();
@@ -307,7 +342,6 @@ class GroovyConnectService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 1. Broadcast UDP packet on local subnet
       if (_udpSocket != null) {
         final discoverPacket = jsonEncode({
           'type': 'GROOVY_DISCOVER',
@@ -322,7 +356,6 @@ class GroovyConnectService extends ChangeNotifier {
         // Broadcast to 255.255.255.255
         _udpSocket?.send(bytes, InternetAddress('255.255.255.255'), _defaultUdpPort);
 
-        // Also broadcast to standard SSDP multicast address as fallback
         try {
           _udpSocket?.send(bytes, InternetAddress('239.255.255.250'), _defaultUdpPort);
         } catch (_) {}
@@ -331,7 +364,6 @@ class GroovyConnectService extends ChangeNotifier {
       debugPrint('[GroovyConnect] Discovery broadcast error: $e');
     }
 
-    // 2. Query Cloud Telemetry Devices if user is authenticated or guest
     try {
       await _fetchCloudDevices(authToken);
     } catch (e) {
@@ -387,25 +419,28 @@ class GroovyConnectService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Removes devices that haven't responded in over 30 seconds.
+  /// Removes devices that haven't responded in over 35 seconds.
   void _pruneStaleDevices() {
     final now = DateTime.now();
     _discoveredDevices.removeWhere((id, dev) {
       final isStale = now.difference(dev.lastSeen).inSeconds > 35;
       if (isStale && _connectedDevice?.id == id) {
         _connectedDevice = null;
+        _statusSyncTimer?.cancel();
       }
       return isStale;
     });
     notifyListeners();
   }
 
-  /// Transfers current playback smoothly to a target Groovy device.
+  /// Transfers current playback to a target Groovy device and starts real-time synchronization.
   Future<bool> transferPlayback({
     required GroovyRemoteDevice device,
     required Song song,
     required Duration position,
     required bool isPlaying,
+    List<Song>? queue,
+    int? queueIndex,
   }) async {
     try {
       debugPrint('[GroovyConnect] Transferring to ${device.name} at ${device.host}:${device.port}');
@@ -416,6 +451,8 @@ class GroovyConnectService extends ChangeNotifier {
         'positionMs': position.inMilliseconds,
         'isPlaying': isPlaying,
         'fromDevice': _localDeviceName,
+        'queue': queue?.map((s) => s.toJson()).toList(),
+        'queueIndex': queueIndex,
       });
 
       final response = await http.post(
@@ -425,7 +462,12 @@ class GroovyConnectService extends ChangeNotifier {
       ).timeout(const Duration(seconds: 5));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        _connectedDevice = device;
+        _connectedDevice = device.copyWith(
+          currentSong: song,
+          isPlaying: isPlaying,
+          lastSeen: DateTime.now(),
+        );
+        _startStatusSyncTimer();
         notifyListeners();
         debugPrint('[GroovyConnect] Playback successfully transferred to ${device.name}');
         return true;
@@ -437,7 +479,63 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
-  /// Sends remote playback commands (play, pause, skipNext, skipPrevious, seek, volume).
+  /// Starts periodic status polling to keep song, timeline position, play/pause and volume
+  /// 100% in sync between both devices just like Spotify Connect.
+  void _startStatusSyncTimer() {
+    _statusSyncTimer?.cancel();
+    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 850), (_) {
+      _syncRemoteStatus();
+    });
+  }
+
+  Future<void> _syncRemoteStatus() async {
+    if (_connectedDevice == null) {
+      _statusSyncTimer?.cancel();
+      return;
+    }
+
+    try {
+      final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/info');
+      final response = await http.get(uri).timeout(const Duration(milliseconds: 800));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        final isPlaying = data['isPlaying'] as bool? ?? false;
+        final positionMs = (data['positionMs'] as num?)?.toInt() ?? 0;
+        final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
+        final volume = (data['volume'] as num?)?.toDouble() ?? 1.0;
+        final songData = data['song'] as Map<String, dynamic>?;
+
+        Song? song;
+        if (songData != null) {
+          try {
+            song = Song.fromJson(songData);
+          } catch (_) {}
+        }
+
+        if (song != null) {
+          _connectedDevice = _connectedDevice!.copyWith(
+            currentSong: song,
+            isPlaying: isPlaying,
+            lastSeen: DateTime.now(),
+          );
+          notifyListeners();
+        }
+
+        onRemoteStatusUpdated?.call(
+          song: song,
+          position: Duration(milliseconds: positionMs),
+          duration: Duration(milliseconds: durationMs),
+          isPlaying: isPlaying,
+          volume: volume,
+        );
+      }
+    } catch (_) {
+      // Ignore intermittent packet drops
+    }
+  }
+
+  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume).
   Future<bool> sendControl(String action, [dynamic value]) async {
     if (_connectedDevice == null) return false;
     try {
@@ -448,6 +546,9 @@ class GroovyConnectService extends ChangeNotifier {
         body: jsonEncode({'action': action, 'value': value}),
       ).timeout(const Duration(seconds: 3));
 
+      // Immediately poll status so UI reflects remote action instantly
+      Future.delayed(const Duration(milliseconds: 100), () => _syncRemoteStatus());
+
       return response.statusCode == 200;
     } catch (e) {
       debugPrint('[GroovyConnect] Remote control error: $e');
@@ -455,14 +556,34 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
+  /// Sends a song to play on the connected device.
+  Future<bool> sendPlaySong(
+    Song song, {
+    int positionMs = 0,
+    List<Song>? queue,
+    int? queueIndex,
+  }) async {
+    if (_connectedDevice == null) return false;
+    return transferPlayback(
+      device: _connectedDevice!,
+      song: song,
+      position: Duration(milliseconds: positionMs),
+      isPlaying: true,
+      queue: queue,
+      queueIndex: queueIndex,
+    );
+  }
+
   /// Disconnects from the remote device.
   void disconnect() {
+    _statusSyncTimer?.cancel();
     _connectedDevice = null;
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _statusSyncTimer?.cancel();
     _pruneTimer?.cancel();
     _discoveryTimer?.cancel();
     _httpServer?.close(force: true);
