@@ -54,6 +54,7 @@ void main() {
         port: 42425,
         lastSeen: DateTime.now(),
       );
+      expect(testDev.name, 'Desktop PC');
 
       // Verify disconnect clears state safely
       service.disconnect();

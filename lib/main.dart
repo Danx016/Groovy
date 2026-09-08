@@ -21,6 +21,7 @@ import 'services/analytics_service.dart';
 import 'services/favorite_playlists_service.dart';
 import 'services/recent_searches_service.dart';
 import 'services/device_info_service.dart';
+import 'models/models.dart';
 import 'providers/providers.dart';
 import 'screens/screens.dart';
 import 'package:dynamic_color/dynamic_color.dart';
