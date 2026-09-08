@@ -1,7 +1,7 @@
 ; Groovy Inno Setup Script
 
 #define MyAppName "Groovy"
-#define MyAppVersion "1.0.82"
+#define MyAppVersion "1.0.83"
 #define MyAppPublisher "Danx016"
 #define MyAppURL "https://github.com/Danx016/Groovy"
 #define MyAppExeName "groovy.exe"

@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.83] - 2026-09-08
+
+### Verified & Released
+- **Estabilización Total y Verificación de Groovy Connect**:
+  - Pruebas de extremo a extremo completadas con éxito en el servidor de producción (entrega simultánea en menos de 1s de comandos `transfer` y `skipNext`).
+  - Sincronización remota bidireccional estable entre Windows y Android sin bloqueos en el hilo de reproducción ni reversión de pistas.
+  - Eliminado el control deslizante horizontal de volumen en la pantalla de reproducción.
+  - Generación de nuevos instaladores de Windows y binarios APK de Android para actualización inmediata.
+
 ## [1.0.82] - 2026-09-08
 
 ### Fixed & Improved
