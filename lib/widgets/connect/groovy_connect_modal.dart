@@ -6,6 +6,7 @@ import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/player_provider.dart';
+import '../../screens/login_screen.dart';
 import '../../services/cast_service.dart';
 import '../../services/device_info_service.dart';
 import '../../services/groovy_connect_service.dart';
@@ -367,6 +368,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     final upnpService = Provider.of<UpnpService>(context);
     final groovyConnect = Provider.of<GroovyConnectService>(context);
     final player = Provider.of<PlayerProvider>(context);
+    final auth = Provider.of<AuthProvider>(context);
 
     final isCastConnected = castService.isConnected;
     final isUpnpConnected = upnpService.isConnected;
@@ -440,7 +442,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                       ),
                       const SizedBox(height: 1),
                       Text(
-                        'Groovy Connect',
+                        'Groovy Connect • En la nube y red local',
                         style: TextStyle(
                           fontSize: 12,
                           color: isDark
@@ -480,6 +482,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
               children: [
+                if (!auth.isAuthenticated)
+                  _buildCloudAuthBanner(context, isDark)
+                else
+                  _buildCloudStatusHeader(isDark, auth.currentUser?.email ?? auth.currentUser?.name),
+
                 // 1. ACTIVE PLAYBACK DEVICE CARD
                 _buildCurrentDeviceCard(
                   context,
@@ -651,7 +658,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
 
                 // 6. IF NO OTHER DEVICES DETECTED YET: SHOW INTERACTIVE RADAR SCAN CARD
                 if (groovyDevices.isEmpty && _upnpDevices.isEmpty)
-                  _buildNoDevicesCard(context, isDark),
+                  _buildNoDevicesCard(context, isDark, auth.isAuthenticated),
 
                 const SizedBox(height: 18),
 
@@ -931,7 +938,122 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     );
   }
 
-  Widget _buildNoDevicesCard(BuildContext context, bool isDark) {
+  Widget _buildCloudAuthBanner(BuildContext context, bool isDark) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.appleMusicRed.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: AppTheme.appleMusicRed.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: AppTheme.appleMusicRed.withValues(alpha: 0.18),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.cloud_sync_rounded,
+              color: AppTheme.appleMusicRed,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Conexión Remota en la Nube',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: isDark ? Colors.white : Colors.black,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Para sincronizar tu celular en 4G/5G y tu PC en cualquier lugar, inicia sesión con la misma cuenta en ambos.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: isDark ? Colors.white70 : Colors.black54,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.appleMusicRed,
+              foregroundColor: Colors.white,
+              visualDensity: VisualDensity.compact,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: const Text(
+              'Ingresar',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCloudStatusHeader(bool isDark, String? userIdentifier) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.03),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Colors.greenAccent.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: const BoxDecoration(
+              color: Colors.greenAccent,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Nube activa: ${userIdentifier ?? "Cuenta Groovy"} (Sincronización remota)',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoDevicesCard(BuildContext context, bool isDark, bool isAuthenticated) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
@@ -964,7 +1086,9 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           ),
           const SizedBox(height: 6),
           Text(
-            'Abre Groovy con tu cuenta en tu teléfono, PC o laptop en cualquier lugar (Wi-Fi o datos móviles 4G/5G) para reproducir tu música a distancia.',
+            isAuthenticated
+                ? 'Abre Groovy en tu teléfono o laptop (en cualquier red Wi-Fi o datos 4G/5G) con tu misma cuenta para reproducir a distancia.'
+                : 'Inicia sesión con tu misma cuenta de Groovy en tus otros dispositivos para que aparezcan aquí automáticamente vía internet.',
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.white60 : Colors.black54,
@@ -973,17 +1097,41 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: _startDeviceDiscovery,
-            style: OutlinedButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              foregroundColor: AppTheme.appleMusicRed,
-              side: BorderSide(
-                color: AppTheme.appleMusicRed.withValues(alpha: 0.4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _startDeviceDiscovery,
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  foregroundColor: AppTheme.appleMusicRed,
+                  side: BorderSide(
+                    color: AppTheme.appleMusicRed.withValues(alpha: 0.4),
+                  ),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 14),
+                label: const Text('Actualizar', style: TextStyle(fontSize: 12)),
               ),
-            ),
-            icon: const Icon(Icons.refresh_rounded, size: 14),
-            label: const Text('Actualizar dispositivos', style: TextStyle(fontSize: 12)),
+              if (!isAuthenticated) ...[
+                const SizedBox(width: 8),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LoginScreen()),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.appleMusicRed,
+                    foregroundColor: Colors.white,
+                    visualDensity: VisualDensity.compact,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  icon: const Icon(Icons.login_rounded, size: 14),
+                  label: const Text('Iniciar sesión', style: TextStyle(fontSize: 12)),
+                ),
+              ],
+            ],
           ),
         ],
       ),

@@ -290,6 +290,13 @@ void main() async {
   });
   playerProvider.setGroovyConnectService(groovyConnectService);
 
+  authProvider.addListener(() {
+    groovyConnectService.updateAuthToken(authProvider.token);
+  });
+  if (authProvider.token != null && authProvider.token!.isNotEmpty) {
+    groovyConnectService.updateAuthToken(authProvider.token);
+  }
+
   groovyConnectService.onTransferReceived = (
     Song song,
     int positionMs,
