@@ -112,7 +112,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('¡Perfil actualizado con éxito!'),
-          backgroundColor: Color(0xFF1DB954),
+          backgroundColor: AppTheme.appleMusicRed,
           behavior: SnackBarBehavior.floating,
         ),
       );

@@ -588,7 +588,7 @@ Future<GroovyAudioHandler> initAudioService() async {
         androidNotificationOngoing: false,
         androidStopForegroundOnPause: false,
         androidNotificationIcon: 'mipmap/ic_launcher',
-        notificationColor: Color(0xFF1DB954),
+        notificationColor: Color(0xFFFA243C),
         preloadArtwork: true,
         androidBrowsableRootExtras: {
           'android.media.browse.SEARCH_SUPPORTED': true,

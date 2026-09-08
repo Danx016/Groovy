@@ -109,28 +109,167 @@ class GoogleAuthService {
         final code = uri.queryParameters['code'];
         final error = uri.queryParameters['error'];
 
+        final isSuccess = error == null;
+        final title = isSuccess ? '¡Autenticación Exitosa!' : 'Error de Autenticación';
+        final message = isSuccess
+            ? 'Has iniciado sesión con Google en <strong style="color: #FA243C;">Groovy</strong>.<br>Ya puedes cerrar esta ventana y regresar a la aplicación.'
+            : 'No se pudo completar el inicio de sesión.<br>Código de error: <code>$error</code>';
+
         req.response.headers.contentType = ContentType.html;
         req.response.write('''
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <meta charset="utf-8">
-  <title>Groovy - Autenticación</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Groovy · $title</title>
   <style>
-    body { background: #121214; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { background: #1A1A1E; padding: 40px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); text-align: center; max-width: 420px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-    h1 { color: #1ED760; margin: 0 0 12px; font-size: 22px; }
-    p { color: #A0A0A0; font-size: 14px; line-height: 1.5; margin: 0 0 16px; }
-    .btn { display: inline-block; background: #1ED760; color: #000; font-weight: bold; text-decoration: none; padding: 10px 24px; border-radius: 20px; font-size: 13px; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background-color: #0C0D12;
+      background-image: radial-gradient(circle at 50% 40%, rgba(250, 36, 60, 0.15) 0%, rgba(12, 13, 18, 0) 70%);
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      overflow: hidden;
+    }
+    .card {
+      background: rgba(22, 22, 28, 0.85);
+      backdrop-filter: blur(28px) saturate(180%);
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      padding: 44px 36px;
+      border-radius: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      text-align: center;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(250, 36, 60, 0.12);
+      animation: fadeIn 0.4s ease-out;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(16px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .icon-wrapper {
+      width: 72px;
+      height: 72px;
+      margin: 0 auto 20px;
+      background: linear-gradient(135deg, #1E1E26 0%, #16161E 100%);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+    }
+    .status-badge {
+      position: absolute;
+      bottom: -4px;
+      right: -4px;
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: ${isSuccess ? 'linear-gradient(135deg, #FA243C, #FF4B63)' : '#E02424'};
+      border: 2.5px solid #0C0D12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 14px rgba(250, 36, 60, 0.6);
+    }
+    .status-badge svg {
+      width: 14px;
+      height: 14px;
+      fill: #fff;
+    }
+    h1 {
+      color: #FFFFFF;
+      margin: 0 0 10px;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.4px;
+    }
+    p {
+      color: rgba(255, 255, 255, 0.72);
+      font-size: 14px;
+      line-height: 1.6;
+      margin: 0 0 24px;
+    }
+    code {
+      background: rgba(255,255,255,0.08);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #FF5C65;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #FA243C 0%, #D81B32 100%);
+      color: #FFFFFF;
+      font-weight: 600;
+      text-decoration: none;
+      padding: 12px 32px;
+      border-radius: 30px;
+      font-size: 14px;
+      letter-spacing: -0.2px;
+      transition: all 0.2s ease;
+      box-shadow: 0 8px 24px rgba(250, 36, 60, 0.4);
+      cursor: pointer;
+      border: none;
+      outline: none;
+    }
+    .btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 28px rgba(250, 36, 60, 0.55);
+      filter: brightness(1.08);
+    }
+    .btn:active {
+      transform: translateY(0);
+    }
+    .footer {
+      margin-top: 18px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.35);
+    }
   </style>
 </head>
 <body>
   <div class="card">
-    <h1>¡Autenticación Exitosa!</h1>
-    <p>Has iniciado sesión con Google en <strong>Groovy</strong>.<br>Ya puedes cerrar esta ventana y regresar a la aplicación.</p>
+    <div class="icon-wrapper">
+      <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#FA243C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"></path>
+        <circle cx="6" cy="18" r="3" fill="#FA243C"></circle>
+        <circle cx="18" cy="16" r="3" fill="#FA243C"></circle>
+      </svg>
+      <div class="status-badge">
+        ${isSuccess
+            ? '<svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>'
+            : '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>'}
+      </div>
+    </div>
+    <h1>$title</h1>
+    <p>$message</p>
     <a href="javascript:window.close();" class="btn">Cerrar pestaña</a>
+    <div class="footer" id="countdown">Cerrando automáticamente en <span id="sec">3</span>s...</div>
   </div>
-  <script>setTimeout(function() { window.close(); }, 3000);</script>
+  <script>
+    var remaining = 3;
+    var el = document.getElementById('sec');
+    var timer = setInterval(function() {
+      remaining--;
+      if (el) el.innerText = remaining;
+      if (remaining <= 0) {
+        clearInterval(timer);
+        window.close();
+      }
+    }, 1000);
+  </script>
 </body>
 </html>
 ''');

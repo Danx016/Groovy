@@ -5,6 +5,20 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.81] - 2026-09-08
+
+### Fixed & Improved
+- **Diseño del Botón de Google en Inicio de Sesión**:
+  - Reemplazado el dibujo manual por la geometría vectorial oficial del logotipo de Google con colores estándar de cuatro cuadrantes (#4285F4, #EA4335, #FBBC05, #34A853).
+- **Eliminación Total de Indicadores de Carga Verdes**:
+  - Se eliminaron las cargas en verde en favor de la identidad de marca Apple Music Red (`#FA243C`).
+  - Configurado `progressIndicatorTheme` global en temas claro y oscuro, eliminando cualquier spinner verde residual en toda la app.
+  - Barra de notificación y snackbars actualizados a la paleta oficial Groovy.
+- **Página de Retorno OAuth Google Rediseñada**:
+  - Rediseñada la página de confirmación de autenticación web con estética dark glassmorphism, brillo ambiental, logo de Groovy, badge de éxito y botón de acción en gradiente Apple Music Red.
+- **Corrección de Build y Subida en GitHub Actions (Android)**:
+  - Configurado enlace estático y del sistema para `sqlite3` (`source: system`), eliminando la descarga externa y el error de conexión por socket en CI.
+
 ## [1.0.80] - 2026-09-08
 
 ### Added & Improved

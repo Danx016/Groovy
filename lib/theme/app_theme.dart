@@ -120,6 +120,11 @@ class AppTheme {
           ),
         ),
         iconTheme: IconThemeData(color: accent),
+        progressIndicatorTheme: ProgressIndicatorThemeData(
+          color: accent,
+          linearTrackColor: accent.withValues(alpha: 0.2),
+          circularTrackColor: Colors.transparent,
+        ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
           backgroundColor: Colors.white,
           selectedItemColor: accent,
@@ -206,6 +211,11 @@ class AppTheme {
           ),
         ),
         iconTheme: IconThemeData(color: accent),
+        progressIndicatorTheme: ProgressIndicatorThemeData(
+          color: accent,
+          linearTrackColor: accent.withValues(alpha: 0.2),
+          circularTrackColor: Colors.transparent,
+        ),
         bottomNavigationBarTheme: BottomNavigationBarThemeData(
           backgroundColor: const Color(0xFF1C1C1E),
           selectedItemColor: accent,
@@ -278,6 +288,11 @@ class AppTheme {
             TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: accent),
       ),
       iconTheme: IconThemeData(color: accent),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accent,
+        linearTrackColor: accent.withValues(alpha: 0.2),
+        circularTrackColor: Colors.transparent,
+      ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         selectedItemColor: accent,

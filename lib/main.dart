@@ -197,7 +197,7 @@ void main() async {
       platform: 'Unknown',
       deviceModel: 'Groovy Device',
       osVersion: 'Unknown',
-      appVersion: '1.0.80',
+      appVersion: '1.0.81',
       userAgent: 'GroovyApp/1.0',
     );
   });
@@ -475,7 +475,7 @@ class AuthWrapper extends StatelessWidget {
         backgroundColor: Color(0xFF0C0D10),
         body: Center(
           child: CircularProgressIndicator(
-            color: Color(0xFF1DB954),
+            color: AppTheme.appleMusicRed,
           ),
         ),
       );

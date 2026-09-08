@@ -274,7 +274,7 @@ export const SettingsView = () => {
               <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', margin: '0 0 4px' }}>Groovy Cloud Music</h2>
-            <p style={{ fontSize: '13px', color: '#8E8E93', margin: '0 0 16px' }}>Versión Oficial v1.0.80</p>
+            <p style={{ fontSize: '13px', color: '#8E8E93', margin: '0 0 16px' }}>Versión Oficial v1.0.81</p>
             <p style={{ fontSize: '13px', color: '#aaa', maxWidth: '400px', margin: '0 auto', lineHeight: 1.5 }}>
               Reproductor musical en la nube con soporte multiplataforma para Windows, Android y Web. Desarrollado con pasión.
             </p>
