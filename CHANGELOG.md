@@ -22,6 +22,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Corrección de llamadas deprecadas en `Countly.instance.events.recordEvent`.
   - Proyecto con 0 errores y 0 advertencias en `flutter analyze`.
 
+### Fixed & Optimized (Groovy Connect)
+- **Filtro Antirretorno de Barra de Reproducción**:
+  - Eliminado el bucle donde la barra avanzaba a 3s y rebotaba a 1s debido a reportes desfasados de la red.
+  - Protección de posición extrapolada con margen de deriva tolerante y período de gracia de 4 segundos tras saltos manuales.
+  - Intervalo de latido de telemetría acelerado a 3 segundos para sincronización en tiempo real.
+- **Control Remoto Fluido y Sin Congelamientos**:
+  - Actualizaciones de estado visual e interactivo instantáneas (0 ms) en `play()`, `pause()`, `seek()`, `skipNext()` y `skipPrevious()`.
+  - Reducción de timeouts de red LAN de 2.0s a 500ms para conmutación inmediata a Cloud Relay.
+  - Enrutamiento inteligente de comandos en el backend (`telemetry.js`) garantizando entrega por UUID, alias de modelo o sesión de usuario.
+
 ## [1.0.76] - 2026-09-08
 
 ### Fixed & Optimized
