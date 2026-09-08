@@ -43,7 +43,7 @@ router.get('/playback', async (req, res) => {
         device_key, COALESCE(device_key, CONCAT(platform, '_', device_name)) as device_id
       FROM user_live_playback
       WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
-        AND last_ping_at >= NOW() - INTERVAL 60 SECOND
+        AND last_ping_at >= NOW() - INTERVAL 120 SECOND
       ORDER BY last_ping_at DESC
     `, [userId, userId, client.ip]);
 
@@ -172,16 +172,13 @@ router.post('/playback', async (req, res) => {
       listenDeltaSeconds = 15, // seconds listened since last ping
     } = req.body;
 
-    if (!songId || !title) {
-      return res.status(400).json({ success: false, error: 'songId y title son obligatorios' });
-    }
-
+    const hasSong = Boolean(songId && title);
     const client = parseFullClientInfo(req);
     const geo = await resolveIpLocation(client.ip);
 
     const resolvedPlatform = platform || client.os;
     const resolvedDevice = deviceName || client.deviceSummary;
-    const resolvedCoverArt = normalizeCoverArt(coverArt, songId);
+    const resolvedCoverArt = hasSong ? normalizeCoverArt(coverArt, songId) : '';
     const pool = getPool();
     const userId = req.user?.id || 0;
     const dbUserId = userId > 0 ? userId : null;
@@ -193,7 +190,7 @@ router.post('/playback', async (req, res) => {
       }
     }
 
-    // 1. Log playback to user_live_playback with atomic upsert
+    // 1. Log playback/presence to user_live_playback with atomic upsert
     const deviceKey = deviceId || `${userId > 0 ? userId : client.ip}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
 
     await pool.query(`
@@ -204,13 +201,13 @@ router.post('/playback', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON DUPLICATE KEY UPDATE
         user_id = COALESCE(VALUES(user_id), user_id),
-        song_id = VALUES(song_id),
-        title = VALUES(title),
-        artist = VALUES(artist),
-        album = VALUES(album),
-        cover_art = VALUES(cover_art),
-        duration = VALUES(duration),
-        position = VALUES(position),
+        song_id = CASE WHEN VALUES(song_id) != '' THEN VALUES(song_id) ELSE song_id END,
+        title = CASE WHEN VALUES(title) != '' THEN VALUES(title) ELSE title END,
+        artist = CASE WHEN VALUES(title) != '' THEN VALUES(artist) ELSE artist END,
+        album = CASE WHEN VALUES(title) != '' THEN VALUES(album) ELSE album END,
+        cover_art = CASE WHEN VALUES(title) != '' THEN VALUES(cover_art) ELSE cover_art END,
+        duration = CASE WHEN VALUES(title) != '' THEN VALUES(duration) ELSE duration END,
+        position = CASE WHEN VALUES(title) != '' THEN VALUES(position) ELSE position END,
         is_playing = VALUES(is_playing),
         platform = VALUES(platform),
         device_name = VALUES(device_name),
@@ -223,14 +220,14 @@ router.post('/playback', async (req, res) => {
         device_key = VALUES(device_key)
     `, [
       dbUserId,
-      String(songId),
-      title,
-      artist || '',
-      album || '',
+      hasSong ? String(songId) : '',
+      hasSong ? title : '',
+      hasSong ? (artist || '') : '',
+      hasSong ? (album || '') : '',
       resolvedCoverArt,
-      parseInt(duration, 10) || 0,
-      parseInt(position, 10) || 0,
-      isPlaying ? 1 : 0,
+      hasSong ? (parseInt(duration, 10) || 0) : 0,
+      hasSong ? (parseInt(position, 10) || 0) : 0,
+      (isPlaying && hasSong) ? 1 : 0,
       resolvedPlatform,
       resolvedDevice,
       client.ip,
@@ -241,8 +238,8 @@ router.post('/playback', async (req, res) => {
       deviceKey,
     ]);
 
-    // Cleanup stale live sessions older than 25 seconds
-    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 25 SECOND').catch(() => {});
+    // Cleanup stale live sessions older than 75 seconds
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 75 SECOND').catch(() => {});
 
     // 2. Automatically log to playback_history if new song started
     const delta = Math.min(Math.max(parseInt(listenDeltaSeconds, 10) || 0, 0), 60);
