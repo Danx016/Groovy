@@ -234,7 +234,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   // 1. Playlists
                   _AppleMusicLibraryTile(
                     icon: CupertinoIcons.music_note_list,
-                    title: 'Playlists',
+                    title: 'Listas de reproducción',
                     dividerColor: dividerColor,
                     onTap: () => _navigate(context, const PlaylistsScreen()),
                   ),

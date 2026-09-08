@@ -598,13 +598,25 @@ class YoutubeService {
       // If no local albums, fetch official artist albums from YouTube Music Innertube
       final rawAlbums = await _ytdlp.searchYtAlbumsInnertube(channelOrArtistId, limit: 30);
       if (rawAlbums.isNotEmpty) {
-        return rawAlbums.map((a) => Album(
+        final cleanTarget = channelOrArtistId.toLowerCase().trim();
+        final mapped = rawAlbums.map((a) => Album(
           id: a['id'] as String,
           name: a['title'] as String? ?? 'Álbum',
           artist: a['artist'] as String?,
           year: a['year'] as int?,
           coverArt: a['coverArt'] as String?,
         )).toList();
+
+        // If an artist name was passed, filter to albums actually matching this artist
+        if (!channelOrArtistId.startsWith('UC') && !channelOrArtistId.startsWith('FE')) {
+          final filtered = mapped.where((alb) {
+            final a = alb.artist?.toLowerCase().trim();
+            if (a == null || a.isEmpty) return true;
+            return a.contains(cleanTarget) || cleanTarget.contains(a);
+          }).toList();
+          return filtered.isNotEmpty ? filtered : mapped;
+        }
+        return mapped;
       }
 
       return [];
@@ -1002,12 +1014,25 @@ class YoutubeService {
   }
 
   Future<List<Song>> getArtistTopSongs(
-    String channelId, {
+    String channelIdOrArtistName, {
     int count = 50,
   }) async {
     try {
-      final rawResults = await _ytdlp.search('$channelId top songs', limit: count);
-      return rawResults.map(_mapDictToSong).toList();
+      final isChannelId = channelIdOrArtistName.startsWith('UC') || channelIdOrArtistName.startsWith('FE');
+      final query = isChannelId ? channelIdOrArtistName : '$channelIdOrArtistName top songs';
+      final rawResults = await _ytdlp.search(query, limit: count);
+      final songs = rawResults.map(_mapDictToSong).toList();
+
+      if (!isChannelId) {
+        final cleanTarget = channelIdOrArtistName.toLowerCase().trim();
+        final filtered = songs.where((s) {
+          final a = s.artist?.toLowerCase().trim();
+          if (a == null || a.isEmpty) return false;
+          return a.contains(cleanTarget) || cleanTarget.contains(a);
+        }).toList();
+        return filtered.isNotEmpty ? filtered : songs;
+      }
+      return songs;
     } catch (e) {
       debugPrint('[YouTube] getArtistTopSongs error: $e');
       return [];

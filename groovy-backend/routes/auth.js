@@ -242,6 +242,110 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// POST /api/auth/google
+router.post('/google', async (req, res) => {
+  try {
+    const { email, name, googleId, avatarUrl } = req.body;
+
+    if (!email || !googleId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email y Google ID son requeridos.',
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = (name || cleanEmail.split('@')[0]).trim();
+    const clientInfo = parseFullClientInfo(req);
+    const pool = getPool();
+
+    // Check if user exists by email
+    const [rows] = await pool.query(
+      'SELECT id, name, email, avatar_url, role, is_banned, created_at, last_login_ip, last_device FROM users WHERE email = ? LIMIT 1',
+      [cleanEmail]
+    );
+
+    let user;
+    if (rows.length > 0) {
+      const existing = rows[0];
+      if (existing.is_banned) {
+        return res.status(403).json({
+          success: false,
+          error: 'Esta cuenta ha sido suspendida. Contacta a soporte.',
+        });
+      }
+
+      // Update avatar or name if missing, and associate google_id
+      if (avatarUrl && !existing.avatar_url) {
+        await pool.query('UPDATE users SET avatar_url = ?, google_id = COALESCE(google_id, ?) WHERE id = ?', [avatarUrl, googleId, existing.id]);
+        existing.avatar_url = avatarUrl;
+      } else {
+        await pool.query('UPDATE users SET google_id = COALESCE(google_id, ?) WHERE id = ?', [googleId, existing.id]);
+      }
+
+      user = {
+        id: existing.id,
+        name: existing.name || cleanName,
+        email: existing.email,
+        avatarUrl: existing.avatar_url,
+        role: existing.role || 'user',
+        isBanned: false,
+        lastLoginIp: clientInfo.ip,
+        lastDevice: clientInfo.deviceSummary,
+        createdAt: existing.created_at,
+      };
+    } else {
+      // First registered user gets 'admin'
+      const [countResult] = await pool.query('SELECT COUNT(*) as total FROM users');
+      const totalUsers = countResult[0]?.total || 0;
+      const initialRole = totalUsers === 0 ? 'admin' : 'user';
+
+      const dummyHash = await bcrypt.hash(`gauth_${googleId}_${Date.now()}`, 10);
+      const [result] = await pool.query(`
+        INSERT INTO users (name, email, password_hash, avatar_url, role, google_id, last_login_ip, last_device)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `, [
+        cleanName,
+        cleanEmail,
+        dummyHash,
+        avatarUrl || null,
+        initialRole,
+        googleId,
+        clientInfo.ip,
+        clientInfo.deviceSummary,
+      ]);
+
+      user = {
+        id: result.insertId,
+        name: cleanName,
+        email: cleanEmail,
+        avatarUrl: avatarUrl || null,
+        role: initialRole,
+        isBanned: false,
+        lastLoginIp: clientInfo.ip,
+        lastDevice: clientInfo.deviceSummary,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    await recordSession(pool, user.id, clientInfo);
+    const token = generateToken(user);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Inicio de sesión con Google exitoso',
+      token,
+      user,
+    });
+  } catch (err) {
+    console.error('[Auth Google Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Error interno al autenticar con Google.',
+    });
+  }
+});
+
 // GET /api/auth/me
 router.get('/me', authenticateToken, async (req, res) => {
   try {

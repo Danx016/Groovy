@@ -59,7 +59,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Favorites'),
+        title: const Text('Favoritos'),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(
@@ -68,13 +68,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
             child: Row(
               children: [
                 _TabButton(
-                  title: 'Songs',
+                  title: 'Canciones',
                   isSelected: _selectedTab == 0,
                   onTap: () => setState(() => _selectedTab = 0),
                 ),
                 const SizedBox(width: 8),
                 _TabButton(
-                  title: 'Albums',
+                  title: 'Álbumes',
                   isSelected: _selectedTab == 1,
                   onTap: () => setState(() => _selectedTab = 1),
                 ),
@@ -99,7 +99,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           children: [
             Icon(Icons.favorite_border, size: 64, color: Colors.grey),
             SizedBox(height: 16),
-            Text('No favorite songs yet'),
+            Text('No tienes canciones favoritas todavía'),
           ],
         ),
       );
@@ -154,7 +154,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               ListTile(
                 leading: const Icon(Icons.heart_broken, color: Colors.red),
                 title: const Text(
-                  'Remove from Favorites',
+                  'Eliminar de favoritos',
                   style: TextStyle(color: Colors.white),
                 ),
                 onTap: () async {
@@ -184,7 +184,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Removed from favorites'),
+            content: Text('Eliminado de favoritos'),
             duration: Duration(seconds: 1),
           ),
         );
@@ -209,7 +209,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
           children: [
             Icon(Icons.favorite_border, size: 64, color: Colors.grey),
             SizedBox(height: 16),
-            Text('No favorite albums yet'),
+            Text('No tienes álbumes favoritos todavía'),
           ],
         ),
       );

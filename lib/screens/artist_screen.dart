@@ -55,14 +55,28 @@ class _ArtistScreenState extends State<ArtistScreen> {
             .trim();
       }
 
+      // Keep the original reliable artist name (never override with random search result artist or channel ID)
+      final reliableArtistName = (widget.artist?.name != null &&
+              widget.artist!.name.isNotEmpty &&
+              !widget.artist!.name.toLowerCase().startsWith('artist_') &&
+              !widget.artist!.name.toLowerCase().startsWith('local_artist_') &&
+              !widget.artist!.name.startsWith('UC') &&
+              !widget.artist!.name.startsWith('FE'))
+          ? widget.artist!.name
+          : (!cleanArtistQuery.startsWith('UC') && !cleanArtistQuery.startsWith('FE'))
+              ? cleanArtistQuery
+              : (widget.artist?.name ?? cleanArtistQuery);
+
       Artist? artist = widget.artist;
       if (artist != null &&
           (artist.name.toLowerCase().startsWith('artist_') ||
               artist.name.toLowerCase().startsWith('local_artist_') ||
-              artist.name.contains('__'))) {
+              artist.name.contains('__') ||
+              artist.name.startsWith('UC') ||
+              artist.name.startsWith('FE'))) {
         artist = Artist(
           id: artist.id,
-          name: cleanArtistQuery,
+          name: reliableArtistName,
           coverArt: artist.coverArt,
           albumCount: artist.albumCount,
           artistImageUrl: artist.artistImageUrl,
@@ -89,24 +103,43 @@ class _ArtistScreenState extends State<ArtistScreen> {
         for (final a in libraryProvider.artists) {
           if (a.id == widget.artistId ||
               a.name.toLowerCase() == widget.artistId.toLowerCase() ||
-              a.name.toLowerCase() == cleanArtistQuery.toLowerCase()) {
+              a.name.toLowerCase() == reliableArtistName.toLowerCase()) {
             libraryMatch = a;
             break;
           }
         }
-        final targetId = libraryMatch?.id ?? widget.artistId;
+        // When not a local library match, always query by the artist's real name instead of channel ID
+        final queryTarget = libraryMatch?.id ?? reliableArtistName;
 
         try {
           final results = await Future.wait([
-            youtubeService.getArtist(targetId).then<Artist?>((a) => a).catchError((_) => null),
-            youtubeService.getArtistInfo(targetId).catchError((_) => null),
-            youtubeService.getArtistTopSongs(targetId).catchError((_) => <Song>[]),
-            youtubeService.getArtistAlbums(targetId).catchError((_) => <Album>[]),
+            libraryMatch != null
+                ? Future.value(libraryMatch)
+                : youtubeService.getArtist(queryTarget).then<Artist?>((a) => a).catchError((_) => null),
+            youtubeService.getArtistInfo(queryTarget).catchError((_) => null),
+            youtubeService.getArtistTopSongs(queryTarget).catchError((_) => <Song>[]),
+            youtubeService.getArtistAlbums(queryTarget).catchError((_) => <Album>[]),
           ]);
-          artist = results[0] as Artist?;
+          if (libraryMatch != null) {
+            artist = libraryMatch;
+          }
           _artistInfo = results[1] as ArtistInfo?;
           topSongs = (results[2] as List<Song>?) ?? [];
           albums = (results[3] as List<Album>?) ?? [];
+
+          // Strict filtering: ensure topSongs and albums strictly belong to this artist
+          final cleanLower = reliableArtistName.toLowerCase().trim();
+          topSongs = topSongs.where((s) {
+            final a = s.artist?.toLowerCase().trim();
+            if (a == null || a.isEmpty) return true;
+            return a.contains(cleanLower) || cleanLower.contains(a);
+          }).toList();
+
+          albums = albums.where((alb) {
+            final a = alb.artist?.toLowerCase().trim();
+            if (a == null || a.isEmpty) return true;
+            return a.contains(cleanLower) || cleanLower.contains(a);
+          }).toList();
 
           if (topSongs.length < 5 && albums.isNotEmpty) {
             final topSongIds = topSongs.map((s) => s.id).toSet();
@@ -115,7 +148,14 @@ class _ArtistScreenState extends State<ArtistScreen> {
             final albumSongResults = await Future.wait(
               albumsToFetch.map((a) => youtubeService.getAlbumSongs(a.id).catchError((_) => <Song>[])),
             );
-            final allAlbumSongs = albumSongResults.expand((songs) => songs).where((s) => seenIds.add(s.id));
+            final allAlbumSongs = albumSongResults
+                .expand((songs) => songs)
+                .where((s) => seenIds.add(s.id))
+                .where((s) {
+                  final a = s.artist?.toLowerCase().trim();
+                  if (a == null || a.isEmpty) return true;
+                  return a.contains(cleanLower) || cleanLower.contains(a);
+                });
             topSongs = [...topSongs, ...allAlbumSongs];
           }
         } catch (serverErr) {
@@ -123,19 +163,12 @@ class _ArtistScreenState extends State<ArtistScreen> {
         }
       }
 
-      // Keep the original reliable artist name (never override with random search result artist)
-      final reliableArtistName = (widget.artist?.name != null &&
-              widget.artist!.name.isNotEmpty &&
-              !widget.artist!.name.toLowerCase().startsWith('artist_') &&
-              !widget.artist!.name.toLowerCase().startsWith('local_artist_'))
-          ? widget.artist!.name
-          : cleanArtistQuery;
-
-      // If artist was not found in local DB or has no top songs, fetch online via YouTube
-      if (artist == null || topSongs.isEmpty) {
+      // If artist has no top songs, fetch online via YouTube with reliableArtistName
+      if (topSongs.isEmpty) {
         artist ??= Artist(
           id: widget.artistId,
           name: reliableArtistName,
+          coverArt: widget.artist?.coverArt ?? widget.artist?.artistImageUrl,
         );
 
         try {
@@ -150,29 +183,28 @@ class _ArtistScreenState extends State<ArtistScreen> {
             }).toList();
 
             topSongs = matchingSongs.isNotEmpty ? matchingSongs : ytResult.songs;
-            albums = ytResult.albums;
-            artist = Artist(
-              id: artist.id,
-              name: reliableArtistName,
-              coverArt: artist.coverArt,
-            );
+            if (albums.isEmpty && ytResult.albums.isNotEmpty) {
+              albums = ytResult.albums.where((alb) {
+                final a = alb.artist?.toLowerCase().trim();
+                if (a == null || a.isEmpty) return true;
+                return a.contains(cleanLower) || cleanLower.contains(a);
+              }).toList();
+            }
           }
         } catch (ytErr) {
           debugPrint('Online artist search error: $ytErr');
         }
       }
 
-      // Final guarantee: always keep the reliable artist name
-      if (artist != null) {
-        artist = Artist(
-          id: artist.id,
-          name: reliableArtistName,
-          coverArt: artist.coverArt,
-          albumCount: artist.albumCount,
-          artistImageUrl: artist.artistImageUrl,
-          isLocal: artist.isLocal,
-        );
-      }
+      // Final guarantee: always keep the reliable artist name and valid cover art
+      artist = Artist(
+        id: widget.artistId,
+        name: reliableArtistName,
+        coverArt: widget.artist?.coverArt ?? widget.artist?.artistImageUrl ?? artist?.coverArt,
+        albumCount: artist?.albumCount ?? albums.length,
+        artistImageUrl: widget.artist?.artistImageUrl ?? widget.artist?.coverArt ?? artist?.artistImageUrl,
+        isLocal: artist?.isLocal ?? false,
+      );
 
       // Ensure all unique albums from topSongs are included in albums
       final albumMap = <String, Album>{};
@@ -187,7 +219,7 @@ class _ArtistScreenState extends State<ArtistScreen> {
             albumMap[key] = Album(
               id: s.albumId ?? 'album_${aName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
               name: aName,
-              artist: s.artist ?? artist?.name ?? '',
+              artist: s.artist ?? artist.name,
               coverArt: s.coverArt,
               year: s.year,
             );
@@ -197,29 +229,26 @@ class _ArtistScreenState extends State<ArtistScreen> {
       albums = albumMap.values.toList();
 
       // Fetch artist full discography online via Deezer and merge
-      if (artist != null) {
-        try {
-          final onlineAlbums = await ArtistImageService()
-              .getArtistAlbums(artist.name)
-              .timeout(const Duration(seconds: 4));
-          for (final oa in onlineAlbums) {
-            final key = oa.name.toLowerCase().trim();
-            if (!albumMap.containsKey(key)) {
-              albumMap[key] = oa;
-            }
+      try {
+        final onlineAlbums = await ArtistImageService()
+            .getArtistAlbums(artist.name)
+            .timeout(const Duration(seconds: 4));
+        for (final oa in onlineAlbums) {
+          final key = oa.name.toLowerCase().trim();
+          if (!albumMap.containsKey(key)) {
+            albumMap[key] = oa;
           }
-          albums = albumMap.values.toList();
-        } catch (_) {}
-      }
+        }
+        albums = albumMap.values.toList();
+      } catch (_) {}
 
       // Resolve high-resolution artist image if missing or empty
-      String? coverArtUrl = artist?.coverArt ?? artist?.artistImageUrl;
-      if (artist != null) {
-        final fallbackCover = topSongs.isNotEmpty ? topSongs.first.coverArt : null;
-        try {
-          final resolved = await ArtistImageService()
-              .getArtistImageUrl(artist.name, fallbackCoverArt: fallbackCover)
-              .timeout(const Duration(seconds: 3));
+      String? coverArtUrl = artist.coverArt ?? artist.artistImageUrl;
+      final fallbackCover = topSongs.isNotEmpty ? topSongs.first.coverArt : null;
+      try {
+        final resolved = await ArtistImageService()
+            .getArtistImageUrl(artist.name, fallbackCoverArt: fallbackCover)
+            .timeout(const Duration(seconds: 3));
           if (resolved != null && resolved.isNotEmpty) {
             coverArtUrl = resolved;
             artist = Artist(
@@ -237,7 +266,6 @@ class _ArtistScreenState extends State<ArtistScreen> {
             );
           }
         } catch (_) {}
-      }
 
       if (mounted) {
         setState(() {

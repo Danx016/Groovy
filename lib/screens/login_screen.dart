@@ -126,6 +126,27 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _signInWithGoogle() async {
+    _clearError();
+    setState(() => _isLoading = true);
+    HapticFeedback.mediumImpact();
+
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.signInWithGoogle();
+
+    if (mounted) {
+      setState(() {
+        _isLoading = false;
+        if (!success && authProvider.error != null) {
+          _errorMessage = authProvider.error;
+        }
+      });
+      if (success) {
+        Navigator.of(context).maybePop(true);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -414,8 +435,75 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 18),
 
+                  // Divider with "O"
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Divider(
+                          thickness: 0.6,
+                          color: isDark ? Colors.white24 : Colors.black26,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          'O',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: isDark ? Colors.white54 : Colors.black45,
+                          ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Divider(
+                          thickness: 0.6,
+                          color: isDark ? Colors.white24 : Colors.black26,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // Google Sign In Button
+                  SizedBox(
+                    height: 50,
+                    width: double.infinity,
+                    child: OutlinedButton(
+                      onPressed: _isLoading ? null : _signInWithGoogle,
+                      style: OutlinedButton.styleFrom(
+                        backgroundColor: isDark ? const Color(0xFF1E1E22) : Colors.white,
+                        foregroundColor: isDark ? Colors.white : Colors.black87,
+                        side: BorderSide(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.16)
+                              : Colors.black.withValues(alpha: 0.14),
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const _GoogleLogo(),
+                          const SizedBox(width: 12),
+                          const Text(
+                            'Continuar con Google',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
 
                   const SizedBox(height: 24),
                 ],
@@ -488,4 +576,68 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+}
+
+class _GoogleLogo extends StatelessWidget {
+  const _GoogleLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 20,
+      height: 20,
+      child: CustomPaint(painter: _GoogleLogoPainter()),
+    );
+  }
+}
+
+class _GoogleLogoPainter extends CustomPainter {
+  const _GoogleLogoPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final rect = Rect.fromLTWH(0, 0, w, h);
+    final strokeWidth = w * 0.22;
+    final center = Offset(w / 2, h / 2);
+
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.butt;
+
+    final innerRect = rect.deflate(strokeWidth / 2);
+
+    // Blue arc (top-right to bottom-right)
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawArc(innerRect, -0.65, 1.3, false, paint);
+
+    // Green arc (bottom)
+    paint.color = const Color(0xFF34A853);
+    canvas.drawArc(innerRect, 0.65, 1.35, false, paint);
+
+    // Yellow arc (bottom-left)
+    paint.color = const Color(0xFFFBBC05);
+    canvas.drawArc(innerRect, 2.0, 1.25, false, paint);
+
+    // Red arc (top)
+    paint.color = const Color(0xFFEA4335);
+    canvas.drawArc(innerRect, 3.25, 1.35, false, paint);
+
+    // Blue crossbar
+    final barPaint = Paint()
+      ..color = const Color(0xFF4285F4)
+      ..style = PaintingStyle.fill;
+    final barRect = Rect.fromLTRB(
+      center.dx - (w * 0.04),
+      center.dy - (strokeWidth / 2),
+      w - (strokeWidth * 0.35),
+      center.dy + (strokeWidth / 2),
+    );
+    canvas.drawRect(barRect, barPaint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

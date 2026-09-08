@@ -44,7 +44,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Text(
-          'Playlists',
+          'Listas de reproducción',
           style: TextStyle(
             fontWeight: FontWeight.w700,
             fontSize: 20,
@@ -73,10 +73,10 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                     color: AppTheme.lightSecondaryText,
                   ),
                   const SizedBox(height: 16),
-                  Text('No Playlists', style: theme.textTheme.headlineMedium),
+                  Text('Sin listas de reproducción', style: theme.textTheme.headlineMedium),
                   const SizedBox(height: 8),
                   Text(
-                    'Create a playlist to get started',
+                    'Crea una lista para comenzar',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: AppTheme.lightSecondaryText,
                     ),
@@ -85,7 +85,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                   ElevatedButton.icon(
                     onPressed: () => _showCreatePlaylistDialog(context),
                     icon: const Icon(CupertinoIcons.add),
-                    label: const Text('New Playlist'),
+                    label: const Text('Nueva lista'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppTheme.appleMusicRed,
                       foregroundColor: Colors.white,
@@ -130,11 +130,11 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
       context: context,
       builder: (dialogCtx) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
-          title: const Text('New Playlist'),
+          title: const Text('Nueva lista'),
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Playlist name'),
+            decoration: const InputDecoration(hintText: 'Nombre de la lista'),
             onSubmitted: (_) async {
               final name = controller.text.trim();
               if (name.isNotEmpty && !isSubmitting) {
@@ -153,7 +153,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogCtx),
-              child: const Text('Cancel'),
+              child: const Text('Cancelar'),
             ),
             TextButton(
               onPressed: isSubmitting
@@ -172,7 +172,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
                         }
                       }
                     },
-              child: const Text('Create'),
+              child: const Text('Crear'),
             ),
           ],
         ),
@@ -212,7 +212,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
               const SizedBox(height: 16),
               ListTile(
                 leading: const Icon(CupertinoIcons.trash, color: Colors.red),
-                title: const Text('Delete Playlist'),
+                title: const Text('Eliminar lista'),
                 onTap: () async {
                   Navigator.pop(context);
                   await OfflineService().cancelPlaylistDownload(playlist.id);
@@ -267,7 +267,7 @@ class _PlaylistTile extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        '${playlist.songCount ?? 0} songs',
+        '${playlist.songCount ?? 0} ${(playlist.songCount ?? 0) == 1 ? "canción" : "canciones"}',
         style: theme.textTheme.bodySmall,
       ),
       trailing: ValueListenableBuilder<Set<String>>(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../theme/app_theme.dart';
 
-/// A beautifully rendered vector icon representing Spotify Connect / Device playback.
+/// A beautifully rendered vector icon representing Groovy Connect / Device playback.
 /// Features a desktop monitor/screen in the background and a speaker box in the foreground.
 class GroovyConnectIcon extends StatelessWidget {
   final double size;
@@ -13,7 +14,7 @@ class GroovyConnectIcon extends StatelessWidget {
     this.size = 24.0,
     this.color,
     this.isConnected = false,
-    this.connectedColor = const Color(0xFF34C759),
+    this.connectedColor = AppTheme.appleMusicRed,
   });
 
   @override

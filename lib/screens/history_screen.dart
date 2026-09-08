@@ -102,7 +102,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Listening History')),
+      appBar: AppBar(title: const Text('Historial de reproducción')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _recentSongs.isEmpty
@@ -119,7 +119,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No Listening History',
+                        'Sin historial de reproducción',
                         style: theme.textTheme.headlineMedium?.copyWith(
                           color: isDark
                               ? AppTheme.darkSecondaryText
@@ -128,7 +128,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Songs you play will appear here',
+                        'Las canciones que reproduzcas aparecerán aquí',
                         style: theme.textTheme.bodyMedium?.copyWith(
                           color: isDark
                               ? AppTheme.darkSecondaryText

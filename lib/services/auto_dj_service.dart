@@ -214,9 +214,12 @@ class AutoDjService extends ChangeNotifier {
       if (genreSongs.isNotEmpty) return genreSongs;
     }
 
-    if (song.artistId != null) {
+    final artistTarget = (song.artist != null && song.artist!.isNotEmpty)
+        ? song.artist!
+        : song.artistId;
+    if (artistTarget != null && artistTarget.isNotEmpty) {
       final artistSongs = await _getSameArtistSongs(
-        song.artistId!,
+        artistTarget,
         existingIds,
       );
       if (artistSongs.isNotEmpty) return artistSongs;

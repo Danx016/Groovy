@@ -1,10 +1,8 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_chrome_cast/flutter_chrome_cast.dart';
-import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/player_provider.dart';
@@ -12,6 +10,7 @@ import '../../services/cast_service.dart';
 import '../../services/device_info_service.dart';
 import '../../services/groovy_connect_service.dart';
 import '../../services/upnp_service.dart';
+import '../../theme/app_theme.dart';
 import 'groovy_connect_icon.dart';
 
 /// Modal dialog (desktop) or bottom sheet (mobile) to pick and control playback devices,
@@ -203,7 +202,57 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
         _showSnackBar('Error al conectar: $e', isSuccess: false);
       }
     } finally {
-      if (mounted) setState(() => _connectingDeviceId = null);
+      if (mounted) {
+        setState(() => _connectingDeviceId = null);
+      }
+    }
+  }
+
+  /// Switches playback back to this local device (Spotify style), stopping the remote device.
+  Future<void> _switchToThisDevice(
+    GroovyConnectService groovyConnect,
+    PlayerProvider player,
+    CastService castService,
+    UpnpService upnpService,
+  ) async {
+    setState(() => _connectingDeviceId = 'local');
+    try {
+      final song = player.currentSong;
+      final position = player.position;
+      final isPlaying = player.isPlaying;
+      final queue = player.queue;
+      final queueIndex = player.currentIndex;
+
+      if (groovyConnect.isConnected) {
+        await groovyConnect.sendControl('pause');
+        groovyConnect.disconnect();
+        player.disableGroovyConnectRemote();
+      }
+      if (castService.isConnected) castService.disconnect();
+      if (upnpService.isConnected) upnpService.disconnect();
+
+      if (song != null) {
+        await player.playSong(
+          song,
+          playlist: queue,
+          startIndex: queueIndex,
+          initialPosition: position,
+        );
+        if (!isPlaying) {
+          await player.pause();
+        }
+      }
+
+      if (mounted) {
+        _showSnackBar('Reproduciendo en este dispositivo.', isSuccess: true);
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      debugPrint('[GroovyConnect] Error switching to this device: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _connectingDeviceId = null);
+      }
     }
   }
 
@@ -300,7 +349,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             ),
           ],
         ),
-        backgroundColor: isSuccess ? const Color(0xFF1ED760) : const Color(0xFFE53935),
+        backgroundColor: isSuccess ? AppTheme.appleMusicRed : const Color(0xFFE53935),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         duration: const Duration(seconds: 4),
@@ -308,112 +357,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     );
   }
 
-  // --- MANUAL IP CONNECT DIALOG ---
-  Future<void> _showManualIpDialog(BuildContext context, bool isDark) async {
-    final controller = TextEditingController();
-    final groovyConnect = Provider.of<GroovyConnectService>(context, listen: false);
-    final player = Provider.of<PlayerProvider>(context, listen: false);
-
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF222225) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: [
-            const Icon(Icons.wifi_find_rounded, color: Color(0xFF1ED760), size: 24),
-            const SizedBox(width: 10),
-            Text(
-              'Conectar por IP Local',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Si tu router bloquea el descubrimiento automático (aislamiento de red), ingresa la IP local de tu otro dispositivo:',
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white70 : Colors.black87,
-                height: 1.35,
-              ),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.url,
-              autofocus: true,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black),
-              decoration: InputDecoration(
-                hintText: 'Ej: 192.168.1.50',
-                hintStyle: TextStyle(color: isDark ? Colors.white38 : Colors.black38),
-                filled: true,
-                fillColor: isDark ? Colors.black26 : Colors.black.withValues(alpha: 0.04),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: BorderSide(
-                    color: isDark ? Colors.white24 : Colors.black26,
-                  ),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(10),
-                  borderSide: const BorderSide(color: Color(0xFF1ED760), width: 1.5),
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Cancelar', style: TextStyle(color: isDark ? Colors.white60 : Colors.black54)),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF1ED760),
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              final ip = controller.text.trim();
-              if (ip.isEmpty) return;
-              Navigator.of(ctx).pop();
-
-              try {
-                // Test connection
-                final res = await http.get(
-                  Uri.parse('http://$ip:42425/groovy/info'),
-                ).timeout(const Duration(seconds: 3));
-
-                if (res.statusCode == 200) {
-                  final data = jsonDecode(res.body) as Map<String, dynamic>;
-                  final device = GroovyRemoteDevice.fromJson(data, host: ip, port: 42425);
-                  await _connectToGroovyDevice(device, groovyConnect, player);
-                } else {
-                  _showSnackBar('No se encontró Groovy en http://$ip:42425', isSuccess: false);
-                }
-              } catch (e) {
-                _showSnackBar('No se pudo contactar $ip: $e', isSuccess: false);
-              }
-            },
-            child: const Text('Conectar', style: TextStyle(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
-    final isDark = !kIsWeb || true;
+    final isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final castService = Provider.of<CastService>(context);
     final upnpService = Provider.of<UpnpService>(context);
@@ -429,14 +377,14 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
 
     return Container(
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF161618) : Colors.white,
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         borderRadius: isDesktop
             ? BorderRadius.circular(20)
             : const BorderRadius.vertical(top: Radius.circular(24)),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.12)
-              : Colors.black.withValues(alpha: 0.08),
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.06),
           width: 1,
         ),
         boxShadow: [
@@ -459,8 +407,8 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 height: 4,
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.white.withValues(alpha: 0.3)
-                      : Colors.black.withValues(alpha: 0.2),
+                      ? Colors.white.withValues(alpha: 0.24)
+                      : Colors.black.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -474,7 +422,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 const GroovyConnectIcon(
                   size: 24,
                   isConnected: true,
-                  connectedColor: Color(0xFF1ED760),
+                  connectedColor: AppTheme.appleMusicRed,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -503,15 +451,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: Icon(
-                    Icons.wifi_find_rounded,
-                    size: 20,
-                    color: isDark ? Colors.white60 : Colors.black54,
-                  ),
-                  tooltip: 'Conectar por IP Local',
-                  onPressed: () => _showManualIpDialog(context, isDark),
-                ),
+
                 IconButton(
                   icon: Icon(
                     Icons.info_outline_rounded,
@@ -583,7 +523,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                             height: 13,
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: Color(0xFF1ED760),
+                              color: AppTheme.appleMusicRed,
                             ),
                           ),
                         ],
@@ -613,7 +553,21 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 ),
                 const SizedBox(height: 10),
 
-                // 3. GROOVY CONNECT INSTANCES (Windows, Android, Mac, Linux)
+                // 3. THIS LOCAL DEVICE (Tap to switch playback back here, just like Spotify)
+                _buildDeviceTile(
+                  icon: isMobile ? Icons.smartphone_rounded : Icons.laptop_windows_rounded,
+                  title: isMobile ? 'Este teléfono' : 'Esta computadora',
+                  subtitle: _deviceInfo?.deviceModel ?? (isMobile ? 'Dispositivo móvil' : 'Windows PC'),
+                  badge: !isRemoteConnected ? (player.isPlaying ? 'Reproduciendo' : 'Activo') : null,
+                  isConnected: !isRemoteConnected,
+                  isLoading: _connectingDeviceId == 'local',
+                  isDark: isDark,
+                  onTap: !isRemoteConnected
+                      ? null
+                      : () => _switchToThisDevice(groovyConnect, player, castService, upnpService),
+                ),
+
+                // 4. GROOVY CONNECT CLOUD INSTANCES (External devices)
                 if (groovyDevices.isNotEmpty) ...[
                   ...groovyDevices.map((dev) {
                     final isThisConnected = isGroovyConnected &&
@@ -627,8 +581,10 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                     return _buildDeviceTile(
                       icon: isLaptop ? Icons.laptop_windows_rounded : Icons.smartphone_rounded,
                       title: dev.name,
-                      subtitle: '${dev.platform} • ${dev.isLocalLan ? "Red Wi-Fi Local" : "En línea"}',
-                      badge: dev.isPlaying ? 'Reproduciendo' : 'Disponible',
+                      subtitle: '${dev.platform} • En la nube',
+                      badge: isThisConnected
+                          ? (player.isPlaying ? 'Reproduciendo' : 'En remoto')
+                          : (dev.isPlaying ? 'En uso' : 'En línea'),
                       isConnected: isThisConnected,
                       isLoading: isConnecting,
                       isDark: isDark,
@@ -768,10 +724,10 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: const Color(0xFF1ED760).withValues(alpha: 0.12),
+        color: AppTheme.appleMusicRed.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: const Color(0xFF1ED760).withValues(alpha: 0.4),
+          color: AppTheme.appleMusicRed.withValues(alpha: 0.35),
           width: 1.2,
         ),
       ),
@@ -785,7 +741,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1ED760).withValues(
+                  color: AppTheme.appleMusicRed.withValues(
                     alpha: 0.18 + (_pulseController.value * 0.12),
                   ),
                   shape: BoxShape.circle,
@@ -793,7 +749,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 child: Center(
                   child: Icon(
                     deviceIcon,
-                    color: const Color(0xFF1ED760),
+                    color: AppTheme.appleMusicRed,
                     size: 24,
                   ),
                 ),
@@ -811,7 +767,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.8,
-                    color: Color(0xFF1ED760),
+                    color: AppTheme.appleMusicRed,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -837,43 +793,31 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
               ],
             ),
           ),
-          if (isRemoteConnected)
-            FilledButton.tonal(
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFFF453A).withValues(alpha: 0.18),
-                foregroundColor: const Color(0xFFFF453A),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                visualDensity: VisualDensity.compact,
-              ),
-              onPressed: () {
-                if (groovyConnect.isConnected) {
-                  groovyConnect.disconnect();
-                  player.disableGroovyConnectRemote();
-                }
-                if (castService.isConnected) castService.disconnect();
-                if (upnpService.isConnected) upnpService.disconnect();
-              },
-              child: const Text(
-                'Desconectar',
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1ED760).withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Text(
-                'Activo',
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1ED760),
-                ),
-              ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: AppTheme.appleMusicRed.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(12),
             ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _EqualizerBars(
+                  isPlaying: player.isPlaying,
+                  color: AppTheme.appleMusicRed,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  isRemoteConnected ? 'En remoto' : 'Activo',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.appleMusicRed,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -892,25 +836,29 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF222225) : const Color(0xFFF6F6F6),
-        borderRadius: BorderRadius.circular(12),
+        color: isConnected
+            ? AppTheme.appleMusicRed.withValues(alpha: 0.10)
+            : (isDark
+                ? Colors.white.withValues(alpha: 0.06)
+                : Colors.black.withValues(alpha: 0.04)),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isConnected
-              ? const Color(0xFF1ED760)
+              ? AppTheme.appleMusicRed.withValues(alpha: 0.35)
               : (isDark
                   ? Colors.white.withValues(alpha: 0.06)
                   : Colors.black.withValues(alpha: 0.05)),
         ),
       ),
       child: ListTile(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         onTap: isLoading ? null : onTap,
         leading: Container(
           width: 40,
           height: 40,
           decoration: BoxDecoration(
             color: isConnected
-                ? const Color(0xFF1ED760).withValues(alpha: 0.18)
+                ? AppTheme.appleMusicRed.withValues(alpha: 0.18)
                 : (isDark ? Colors.white10 : Colors.black12),
             borderRadius: BorderRadius.circular(10),
           ),
@@ -918,7 +866,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             icon,
             size: 21,
             color: isConnected
-                ? const Color(0xFF1ED760)
+                ? AppTheme.appleMusicRed
                 : (isDark ? Colors.white : Colors.black87),
           ),
         ),
@@ -931,7 +879,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
                   color: isConnected
-                      ? const Color(0xFF1ED760)
+                      ? AppTheme.appleMusicRed
                       : (isDark ? Colors.white : Colors.black),
                 ),
                 maxLines: 1,
@@ -943,7 +891,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1ED760).withValues(alpha: 0.15),
+                  color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -951,7 +899,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                   style: const TextStyle(
                     fontSize: 10,
                     fontWeight: FontWeight.w600,
-                    color: Color(0xFF1ED760),
+                    color: AppTheme.appleMusicRed,
                   ),
                 ),
               ),
@@ -973,11 +921,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
                 height: 18,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  color: Color(0xFF1ED760),
+                  color: AppTheme.appleMusicRed,
                 ),
               )
             : isConnected
-                ? const Icon(Icons.check_circle_rounded, color: Color(0xFF1ED760), size: 20)
+                ? const Icon(Icons.check_circle_rounded, color: AppTheme.appleMusicRed, size: 20)
                 : const Icon(Icons.chevron_right_rounded, size: 20, color: Colors.grey),
       ),
     );
@@ -987,24 +935,26 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1D) : const Color(0xFFF7F7F8),
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
-              ? Colors.white.withValues(alpha: 0.05)
+              ? Colors.white.withValues(alpha: 0.06)
               : Colors.black.withValues(alpha: 0.05),
         ),
       ),
       child: Column(
         children: [
           Icon(
-            Icons.radar_rounded,
-            size: 32,
-            color: const Color(0xFF1ED760).withValues(alpha: 0.8),
+            Icons.cloud_sync_rounded,
+            size: 34,
+            color: AppTheme.appleMusicRed.withValues(alpha: 0.85),
           ),
           const SizedBox(height: 10),
           Text(
-            'Buscando dispositivos en tu red Wi-Fi...',
+            'Buscando tus dispositivos en la nube...',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
@@ -1014,7 +964,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           ),
           const SizedBox(height: 6),
           Text(
-            'Abre Groovy en tu teléfono o computadora conectada a la misma red Wi-Fi para transferir la música al instante.',
+            'Abre Groovy con tu cuenta en tu teléfono, PC o laptop en cualquier lugar (Wi-Fi o datos móviles 4G/5G) para reproducir tu música a distancia.',
             style: TextStyle(
               fontSize: 12,
               color: isDark ? Colors.white60 : Colors.black54,
@@ -1023,32 +973,17 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 14),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              OutlinedButton.icon(
-                onPressed: _startDeviceDiscovery,
-                style: OutlinedButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  side: BorderSide(
-                    color: isDark ? Colors.white24 : Colors.black26,
-                  ),
-                ),
-                icon: const Icon(Icons.refresh_rounded, size: 14),
-                label: const Text('Buscar de nuevo', style: TextStyle(fontSize: 12)),
+          OutlinedButton.icon(
+            onPressed: _startDeviceDiscovery,
+            style: OutlinedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
+              foregroundColor: AppTheme.appleMusicRed,
+              side: BorderSide(
+                color: AppTheme.appleMusicRed.withValues(alpha: 0.4),
               ),
-              const SizedBox(width: 10),
-              FilledButton.tonalIcon(
-                onPressed: () => _showManualIpDialog(context, isDark),
-                style: FilledButton.styleFrom(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: const Color(0xFF1ED760).withValues(alpha: 0.15),
-                  foregroundColor: const Color(0xFF1ED760),
-                ),
-                icon: const Icon(Icons.link_rounded, size: 14),
-                label: const Text('Ingresar IP', style: TextStyle(fontSize: 12)),
-              ),
-            ],
+            ),
+            icon: const Icon(Icons.refresh_rounded, size: 14),
+            label: const Text('Actualizar dispositivos', style: TextStyle(fontSize: 12)),
           ),
         ],
       ),
@@ -1059,7 +994,9 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E22) : const Color(0xFFF4F4F6),
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.04)
+            : Colors.black.withValues(alpha: 0.03),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: isDark
@@ -1073,13 +1010,13 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           Row(
             children: [
               const Icon(
-                Icons.wifi_rounded,
+                Icons.cloud_done_rounded,
                 size: 16,
-                color: Color(0xFF1ED760),
+                color: AppTheme.appleMusicRed,
               ),
               const SizedBox(width: 8),
               Text(
-                'CÓMO USAR GROOVY CONNECT',
+                'CÓMO USAR GROOVY CONNECT GLOBAL',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
@@ -1090,11 +1027,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
             ],
           ),
           const SizedBox(height: 10),
-          _instructionStep('1', 'Conecta tu teléfono y computadora a la misma red Wi-Fi.', isDark),
+          _instructionStep('1', 'Inicia sesión con tu cuenta de Groovy en tus dispositivos.', isDark),
           const SizedBox(height: 6),
-          _instructionStep('2', 'Abre Groovy en ambos dispositivos.', isDark),
+          _instructionStep('2', 'Abre Groovy en tu teléfono o PC desde cualquier red (Wi-Fi o datos móviles).', isDark),
           const SizedBox(height: 6),
-          _instructionStep('3', 'Toca el dispositivo en la lista para transferir la reproducción al instante.', isDark),
+          _instructionStep('3', 'Toca el dispositivo en la lista para reproducir y controlar tu música al instante.', isDark),
         ],
       ),
     );
@@ -1108,7 +1045,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           width: 18,
           height: 18,
           decoration: BoxDecoration(
-            color: const Color(0xFF1ED760).withValues(alpha: 0.2),
+            color: AppTheme.appleMusicRed.withValues(alpha: 0.18),
             shape: BoxShape.circle,
           ),
           child: Center(
@@ -1117,7 +1054,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
               style: const TextStyle(
                 fontSize: 10,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1ED760),
+                color: AppTheme.appleMusicRed,
               ),
             ),
           ),
@@ -1141,7 +1078,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF222225) : Colors.white,
+        backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Row(
           children: [
@@ -1151,13 +1088,13 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
           ],
         ),
         content: const Text(
-          'Groovy Connect te permite sincronizar y transferir la reproducción de música sin cortes entre tu teléfono móvil, tu computadora de escritorio, Google Cast y altavoces DLNA en tu red local.\n\nDisfruta de sonido continuo sin importar en qué pantalla o altavoz estés.',
+          'Groovy Connect te permite sincronizar y transferir la reproducción de música sin cortes entre tu teléfono móvil, tu computadora de escritorio y otros dispositivos en cualquier lugar a través de la nube.\n\nDisfruta de sonido continuo estés donde estés, con Wi-Fi o datos móviles.',
           style: TextStyle(fontSize: 14, height: 1.4),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Entendido', style: TextStyle(color: Color(0xFF1ED760))),
+            child: const Text('Entendido', style: TextStyle(color: AppTheme.appleMusicRed)),
           ),
         ],
       ),
@@ -1168,20 +1105,20 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF222225) : Colors.white,
+        backgroundColor: isDark ? const Color(0xFF1C1C1E) : Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: const Text('¿No ves tu dispositivo?', style: TextStyle(fontSize: 17)),
         content: const Text(
-          '1. Asegúrate de que ambos dispositivos estén conectados a la misma red Wi-Fi o banda del router.\n\n'
+          '1. Asegúrate de tener iniciada sesión con la misma cuenta en ambos dispositivos.\n\n'
           '2. Verifica que Groovy esté abierto y activo en tu otro dispositivo.\n\n'
-          '3. Si tu router tiene "Aislamiento de AP" activado, puedes usar el botón de arriba para ingresar la IP local directamente.\n\n'
-          '4. En Windows, asegúrate de permitir a Groovy en redes privadas en el Firewall.',
+          '3. Verifica que ambos dispositivos tengan conexión a internet (Wi-Fi o datos móviles).\n\n'
+          '4. Toca el botón de actualizar para refrescar los dispositivos activos en la nube.',
           style: TextStyle(fontSize: 13.5, height: 1.45),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('Cerrar', style: TextStyle(color: Color(0xFF1ED760))),
+            child: const Text('Cerrar', style: TextStyle(color: AppTheme.appleMusicRed)),
           ),
         ],
       ),

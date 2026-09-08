@@ -88,6 +88,7 @@ async function runMigrations(conn) {
   await addColIfNotExists('last_login_at', 'TIMESTAMP NULL');
   await addColIfNotExists('last_login_ip', 'VARCHAR(100) NULL');
   await addColIfNotExists('last_device', 'VARCHAR(255) NULL');
+  await addColIfNotExists('google_id', 'VARCHAR(255) NULL');
 
   // 1b. User Sessions / Activity Logs table
   await conn.query(`
@@ -200,6 +201,23 @@ async function runMigrations(conn) {
       last_ping_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_live_ping (last_ping_at DESC),
       CONSTRAINT fk_live_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `);
+
+  // 7. Device Commands table (Groovy Connect Cloud Relay)
+  await conn.query(`
+    CREATE TABLE IF NOT EXISTS device_commands (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      user_id INT NULL,
+      sender_device_id VARCHAR(255) NOT NULL,
+      target_device_id VARCHAR(255) NOT NULL,
+      action VARCHAR(50) NOT NULL,
+      payload LONGTEXT NULL,
+      status ENUM('pending', 'delivered', 'expired') DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      delivered_at TIMESTAMP NULL,
+      INDEX idx_target_status (target_device_id, status, created_at),
+      INDEX idx_user_commands (user_id, created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
 

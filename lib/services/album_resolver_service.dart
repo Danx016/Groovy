@@ -69,9 +69,14 @@ class AlbumResolverService {
       title = albumId;
     }
 
-    // Step 1: If albumId is already an MPREb_ browseId, browse directly
-    if (albumId.startsWith('MPREb_')) {
-      final direct = await _browseYtmAlbum(albumId, title ?? albumId, artist ?? '');
+    // Step 1: If albumId is already a YouTube Music browseId (MPREb_..., OLAK..., VLOLAK...), browse directly!
+    final ytmBrowseId = albumId.startsWith('MPREb_')
+        ? albumId
+        : (albumId.startsWith('VLOLAK')
+            ? albumId
+            : (albumId.startsWith('OLAK') ? 'VL$albumId' : null));
+    if (ytmBrowseId != null) {
+      final direct = await _browseYtmAlbum(ytmBrowseId, title ?? albumId, artist ?? '');
       if (direct != null && direct.songs.isNotEmpty) {
         return direct;
       }
@@ -140,6 +145,13 @@ class AlbumResolverService {
           final cover = alb['cover_xl'] as String? ?? alb['cover_big'] as String?;
           final albId = alb['id']?.toString();
           if (albTitle != null && albTitle.isNotEmpty) {
+            if (cleanArtist.isNotEmpty) {
+              final normClean = cleanArtist.toLowerCase().trim();
+              final normArt = (artName ?? '').toLowerCase().trim();
+              if (normArt.isNotEmpty && !normArt.contains(normClean) && !normClean.contains(normArt)) {
+                return null;
+              }
+            }
             return (
               albumTitle: albTitle,
               artistName: artName ?? cleanArtist,
@@ -206,7 +218,9 @@ class AlbumResolverService {
                   (runs.isNotEmpty ? runs[0]['navigationEndpoint'] : null);
               final bId = nav?['browseEndpoint']?['browseId'] as String?;
 
-              if (bId != null && bId.startsWith('MPREb_') && t != null && t.isNotEmpty) {
+              final isSupportedBrowseId = bId != null &&
+                  (bId.startsWith('MPREb_') || bId.startsWith('OLAK') || bId.startsWith('VLOLAK'));
+              if (isSupportedBrowseId && t != null && t.isNotEmpty) {
                 final normT = _normalize(t);
 
                 // Extract artist runs from secondary flex column if present
@@ -223,12 +237,14 @@ class AlbumResolverService {
                   }
                 }
 
-                // Strict title matching
+                // Strict title and artist matching (prevents matching different artists)
                 final bool isExactMatch = normT == normAlbum;
-                final bool isPrefixMatch = normT.startsWith(normAlbum) || normAlbum.startsWith(normT);
-                final bool artistMatches = normArtist.isEmpty || itemArtist.isEmpty || itemArtist.contains(normArtist) || normArtist.contains(itemArtist);
+                final bool isTitleMatch = isExactMatch ||
+                    (normAlbum.length >= 4 && (normT.startsWith(normAlbum) || normAlbum.startsWith(normT)));
+                final bool artistMatches = normArtist.isEmpty ||
+                    (itemArtist.isNotEmpty && (itemArtist.contains(normArtist) || normArtist.contains(itemArtist)));
 
-                if ((isExactMatch || isPrefixMatch) && artistMatches) {
+                if (isTitleMatch && artistMatches) {
                   if (matchedBrowseId == null || isExactMatch) {
                     matchedBrowseId = bId;
                     matchedTitle = t;
@@ -470,7 +486,7 @@ class AlbumResolverService {
     try {
       final cleanArtist = !_isPlaceholder(artistName) ? artistName : '';
       final query = cleanArtist.isNotEmpty ? '$albumName $cleanArtist' : albumName;
-      final url = 'https://api.deezer.com/search/album?q=${Uri.encodeComponent(query)}&limit=1';
+      final url = 'https://api.deezer.com/search/album?q=${Uri.encodeComponent(query)}&limit=5';
 
       final req = await _client.getUrl(Uri.parse(url));
       req.headers.set('User-Agent', 'Mozilla/5.0');
@@ -480,10 +496,27 @@ class AlbumResolverService {
       final data = map['data'] as List<dynamic>?;
 
       if (data != null && data.isNotEmpty) {
-        final first = data[0];
-        final dzId = first['id']?.toString();
-        if (dzId != null && dzId.isNotEmpty) {
-          return await _fetchDeezerAlbum(dzId, albumName, cleanArtist, null);
+        for (final item in data) {
+          final itemTitle = item['title'] as String? ?? '';
+          final itemArtist = (item['artist']?['name'] as String?) ?? '';
+          final dzId = item['id']?.toString();
+          if (dzId == null || dzId.isEmpty) continue;
+
+          final normItemTitle = _normalize(itemTitle);
+          final normAlbum = _normalize(albumName);
+          final normItemArtist = _normalize(itemArtist);
+          final normCleanArtist = _normalize(cleanArtist);
+
+          // Verify that this album actually matches the requested album and artist!
+          final bool titleMatches = normItemTitle == normAlbum ||
+              (normAlbum.length >= 4 && (normItemTitle.startsWith(normAlbum) || normAlbum.startsWith(normItemTitle)));
+          final bool artistMatches = normCleanArtist.isEmpty ||
+              normItemArtist.contains(normCleanArtist) ||
+              normCleanArtist.contains(normItemArtist);
+
+          if (titleMatches && artistMatches) {
+            return await _fetchDeezerAlbum(dzId, albumName, cleanArtist, null);
+          }
         }
       }
     } catch (e) {

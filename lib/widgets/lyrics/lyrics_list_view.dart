@@ -97,6 +97,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
 
     if (widget.isActive && !oldWidget.isActive) {
+      setState(() {});
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToCurrentLine(duration: const Duration(milliseconds: 300));
       });
@@ -145,10 +146,15 @@ class _LyricsListViewState extends State<LyricsListView> {
 
     if (isUnsynced) {
       if (_currentIndex != -1) {
-        setState(() {
+        if (widget.isActive) {
+          setState(() {
+            _currentIndex = -1;
+            _currentLyricIndex = -1;
+          });
+        } else {
           _currentIndex = -1;
           _currentLyricIndex = -1;
-        });
+        }
       }
       return;
     }
@@ -170,6 +176,17 @@ class _LyricsListViewState extends State<LyricsListView> {
     // ONLY rebuild when the active line actually changes!
     // This saves 50 unnecessary rebuilds per second.
     if (newIndex != _currentIndex) {
+      if (!widget.isActive) {
+        // When screen is inactive (e.g. user viewing cover or queue), update state silently without rebuilds/animations
+        _currentIndex = newIndex;
+        if (newIndex >= 0 && newIndex < _items.length) {
+          _currentLyricIndex = _items[newIndex].lyricIndex ?? -1;
+        } else {
+          _currentLyricIndex = -1;
+        }
+        return;
+      }
+
       setState(() {
         _currentIndex = newIndex;
         if (newIndex >= 0 && newIndex < _items.length) {
@@ -178,11 +195,9 @@ class _LyricsListViewState extends State<LyricsListView> {
           _currentLyricIndex = -1;
         }
       });
-      if (widget.isActive) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _scrollToCurrentLine();
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToCurrentLine();
+      });
     }
   }
 
@@ -303,9 +318,10 @@ class _LyricsListViewState extends State<LyricsListView> {
                 }
               }
 
+              // Clamping distance to 0, 1, or 2 stops rebuilds and animation tweens on the other 90+ lines
               final distance = _currentLyricIndex != -1 
-                  ? (lyricIndex - _currentLyricIndex).abs() 
-                  : 3;
+                  ? (lyricIndex - _currentLyricIndex).abs().clamp(0, 2) 
+                  : 2;
 
               return Container(
                 key: _keys[index],

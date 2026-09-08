@@ -26,6 +26,22 @@ class LyricsLineWidget extends StatefulWidget {
 class _LyricsLineWidgetState extends State<LyricsLineWidget> {
   bool _isHovered = false;
 
+  static const List<String> _fontFallback = [
+    '-apple-system',
+    'BlinkMacSystemFont',
+    'SF Pro Display',
+    'Roboto',
+    'sans-serif',
+  ];
+
+  static const List<Shadow> _currentLineShadow = [
+    Shadow(
+      color: Color(0x59000000),
+      blurRadius: 10,
+      offset: Offset(0, 3),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final isCurrent = widget.state == LyricLineState.current;
@@ -44,49 +60,33 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
     final isHighlighted = isCurrent || widget.isUnsynced;
 
-    return RepaintBoundary(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 28.0),
-            child: AnimatedScale(
-              scale: isCurrent ? 1.0 : (_isHovered ? 0.985 : 0.97),
-              alignment: Alignment.centerLeft,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 28.0),
+          child: AnimatedScale(
+            scale: isCurrent ? 1.0 : (_isHovered ? 0.985 : 0.97),
+            alignment: Alignment.centerLeft,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            child: AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                style: TextStyle(
-                  fontSize: isHighlighted ? 36 : 30,
-                  fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
-                  letterSpacing: -0.6,
-                  color: Colors.white.withValues(alpha: targetOpacity),
-                  height: 1.2,
-                  fontFamilyFallback: const [
-                    '-apple-system',
-                    'BlinkMacSystemFont',
-                    'SF Pro Display',
-                    'Roboto',
-                    'sans-serif',
-                  ],
-                  shadows: isCurrent
-                      ? [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: 0.35),
-                            blurRadius: 10,
-                            offset: const Offset(0, 3),
-                          ),
-                        ]
-                      : null,
-                ),
-                child: Text(widget.line.text),
+              style: TextStyle(
+                fontSize: isHighlighted ? 36 : 30,
+                fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
+                letterSpacing: -0.6,
+                color: Colors.white.withValues(alpha: targetOpacity),
+                height: 1.2,
+                fontFamilyFallback: _fontFallback,
+                shadows: isCurrent ? _currentLineShadow : null,
               ),
+              child: Text(widget.line.text),
             ),
           ),
         ),

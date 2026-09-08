@@ -32,6 +32,7 @@ class _QueueViewState {
           shuffleEnabled == other.shuffleEnabled &&
           repeatMode == other.repeatMode &&
           isEmpty == other.isEmpty &&
+          upcomingSongs.length == other.upcomingSongs.length &&
           listEquals(upcomingSongs, other.upcomingSongs);
 
   @override
@@ -199,10 +200,7 @@ class QueueView extends StatelessWidget {
                   itemCount: upcomingSongs.length,
                   onReorder: (oldIndex, newIndex) {
                     final actualOldIndex = currentIndex + 1 + oldIndex;
-                    var actualNewIndex = currentIndex + 1 + newIndex;
-                    if (actualOldIndex < actualNewIndex) {
-                      actualNewIndex -= 1;
-                    }
+                    final actualNewIndex = currentIndex + 1 + newIndex;
                     provider.reorderQueue(actualOldIndex, actualNewIndex);
                   },
                   itemBuilder: (context, index) {

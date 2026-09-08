@@ -7,6 +7,7 @@ import '../../services/upnp_service.dart';
 import '../../services/groovy_connect_service.dart';
 import '../connect/groovy_connect_icon.dart';
 import '../connect/groovy_connect_modal.dart';
+import '../../theme/app_theme.dart';
 
 class NowPlayingBottomActions extends StatelessWidget {
   final VoidCallback onLyricsTap;
@@ -56,10 +57,10 @@ class NowPlayingBottomActions extends StatelessWidget {
             customIcon: GroovyConnectIcon(
               size: 22,
               color: isDeviceConnected
-                  ? const Color(0xFF1ED760)
+                  ? AppTheme.appleMusicRed
                   : Colors.white.withValues(alpha: 0.65),
               isConnected: isDeviceConnected,
-              connectedColor: const Color(0xFF1ED760),
+              connectedColor: AppTheme.appleMusicRed,
             ),
             isActive: isDeviceConnected,
             onTap: () {

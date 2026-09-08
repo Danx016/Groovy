@@ -236,7 +236,7 @@ class _MiniPlayerRow extends StatelessWidget {
                           const Icon(
                             Icons.speaker_phone_rounded,
                             size: 13,
-                            color: Color(0xFF1ED760),
+                            color: AppTheme.appleMusicRed,
                           ),
                           const SizedBox(width: 4),
                           Flexible(
@@ -245,7 +245,7 @@ class _MiniPlayerRow extends StatelessWidget {
                               style: const TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
-                                color: Color(0xFF1ED760),
+                                color: AppTheme.appleMusicRed,
                                 letterSpacing: -0.2,
                               ),
                               maxLines: 1,
@@ -314,10 +314,10 @@ class _MiniPlayerControls extends StatelessWidget {
               icon: GroovyConnectIcon(
                 size: 21,
                 color: isDeviceConnected
-                    ? const Color(0xFF1ED760)
+                    ? AppTheme.appleMusicRed
                     : (isDark ? Colors.white70 : Colors.black87),
                 isConnected: isDeviceConnected,
-                connectedColor: const Color(0xFF1ED760),
+                connectedColor: AppTheme.appleMusicRed,
               ),
               tooltip: 'Dispositivos',
             ),

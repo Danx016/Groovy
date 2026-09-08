@@ -4,6 +4,7 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../models/models.dart';
 import '../services/services.dart';
 import '../services/groovy_api_service.dart';
+import '../services/google_auth_service.dart';
 
 enum AuthState {
   unknown,
@@ -204,6 +205,52 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> signInWithGoogle() async {
+    _state = AuthState.authenticating;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final googleUser = await GoogleAuthService().signIn();
+      if (googleUser == null) {
+        _state = _token != null ? AuthState.authenticated : AuthState.unauthenticated;
+        notifyListeners();
+        return false;
+      }
+
+      final response = await _apiService.loginWithGoogle(
+        email: googleUser.email,
+        name: googleUser.name,
+        googleId: googleUser.id,
+        avatarUrl: googleUser.avatarUrl,
+        idToken: googleUser.idToken,
+      );
+
+      if (response.success && response.token != null && response.user != null) {
+        _token = response.token;
+        _currentUser = response.user;
+        await _storageService.saveUserAuth(token: _token!, userJson: _currentUser!.toJson());
+
+        _state = AuthState.authenticated;
+        notifyListeners();
+        _startSessionHeartbeat();
+        syncUserDataFromCloud();
+        return true;
+      } else {
+        _error = response.error ?? 'Error al iniciar sesión con Google.';
+        _state = AuthState.error;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      debugPrint('[AuthProvider] Google sign-in exception: $e');
+      _error = 'Error de inicio de sesión con Google: ${e.toString().replaceAll('Exception: ', '')}';
+      _state = AuthState.error;
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<bool> updateUserProfile({
     required String name,
     String? avatarUrl,
@@ -265,6 +312,9 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {}
     try {
       await offlineService.deleteAllDownloads();
+    } catch (_) {}
+    try {
+      await GoogleAuthService().signOut();
     } catch (_) {}
 
     await _storageService.clearUserAuth();

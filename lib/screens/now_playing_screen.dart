@@ -1,11 +1,7 @@
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
-import 'package:flutter_displaymode/flutter_displaymode.dart';
-import 'package:window_manager/window_manager.dart';
 import '../widgets/blurred_gradient_background.dart';
 import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
@@ -32,6 +28,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../services/lrclib_service.dart';
 import '../services/groovy_connect_service.dart';
 import '../widgets/connect/groovy_connect_modal.dart';
+import '../theme/app_theme.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final ImageProvider image;
@@ -86,17 +83,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       _bgColors = cached;
     }
 
-    // 2. Lock 120Hz display refresh rate on Android
-    if (!kIsWeb && Platform.isAndroid) {
-      FlutterDisplayMode.setHighRefreshRate().catchError((_) {});
-    }
-
-    // 3. Enter true OS fullscreen on desktop for borderless Apple Music experience
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      windowManager.setFullScreen(true).catchError((_) {});
-    }
-
-    // 4. Extract palette immediately (runs async, caches instantly)
+    // 2. Extract palette immediately (runs async, caches instantly)
     if (_bgColors.isEmpty) {
       _extractColors();
     }
@@ -294,10 +281,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
   }
 
-  void _exitFullScreen() async {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      await windowManager.setFullScreen(false).catchError((_) {});
-    }
+  void _exitFullScreen() {
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -305,9 +289,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   @override
   void dispose() {
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      windowManager.setFullScreen(false).catchError((_) {});
-    }
     _playerProvider?.removeListener(_onPlayerChanged);
     _colorDebounceTimer?.cancel();
     _lyricsDebounceTimer?.cancel();
@@ -359,25 +340,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   Widget _buildPortraitLayout(BuildContext context, Color accentColor, BoxConstraints constraints) {
     final isCompact = constraints.maxHeight < 680;
     final statusBarHeight = MediaQuery.of(context).viewPadding.top;
-    final effectiveTopPadding = math.max(statusBarHeight, 38.0) + 8.0;
+    final effectiveTopPadding = math.max(statusBarHeight, 14.0) + (widget.topPadding > 0 ? widget.topPadding * 0.2 : 6.0);
 
     return Column(
       children: [
-        // 1. Smooth Universal Header (Crossfades between Drag Pill and Track Info Header)
+        // 1. Smooth Universal Header with Fixed Height (Prevents layout shifts during swipe)
         Padding(
           padding: EdgeInsets.only(
-            top: _currentPage == 0 ? (widget.topPadding > 0 ? widget.topPadding * 0.3 : 10.0) : effectiveTopPadding,
+            top: effectiveTopPadding,
             left: 20.0,
             right: 20.0,
             bottom: 4.0,
           ),
-          child: AnimatedCrossFade(
-            firstChild: _buildDragHandle(isCompact),
-            secondChild: _buildTrackMiniHeader(context),
-            crossFadeState: _currentPage == 0
-                ? CrossFadeState.showFirst
-                : CrossFadeState.showSecond,
-            duration: const Duration(milliseconds: 250),
+          child: SizedBox(
+            height: 52,
+            child: AnimatedCrossFade(
+              firstChild: _buildDragHandle(isCompact),
+              secondChild: _buildTrackMiniHeader(context),
+              crossFadeState: _currentPage == 0
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              duration: const Duration(milliseconds: 200),
+            ),
           ),
         ),
 
@@ -406,7 +390,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildDragHandle(bool isCompact) {
-    return const SizedBox.shrink();
+    return Center(
+      child: Container(
+        width: 38,
+        height: 5,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.28),
+          borderRadius: BorderRadius.circular(2.5),
+        ),
+      ),
+    );
   }
 
   Widget _buildTrackMiniHeader(BuildContext context) {
@@ -562,7 +555,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                 const Icon(
                                   Icons.speaker_phone_rounded,
                                   size: 11,
-                                  color: Color(0xFF1ED760),
+                                  color: AppTheme.appleMusicRed,
                                 ),
                                 const SizedBox(width: 4),
                                 Flexible(
@@ -571,7 +564,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                     style: const TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
-                                      color: Color(0xFF1ED760),
+                                      color: AppTheme.appleMusicRed,
                                     ),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
@@ -737,10 +730,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                   child: Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF1ED760).withValues(alpha: 0.16),
+                                      color: AppTheme.appleMusicRed.withValues(alpha: 0.16),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
-                                        color: const Color(0xFF1ED760).withValues(alpha: 0.4),
+                                        color: AppTheme.appleMusicRed.withValues(alpha: 0.4),
                                         width: 1,
                                       ),
                                     ),
@@ -750,7 +743,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                         const Icon(
                                           Icons.speaker_phone_rounded,
                                           size: 13,
-                                          color: Color(0xFF1ED760),
+                                          color: AppTheme.appleMusicRed,
                                         ),
                                         const SizedBox(width: 5),
                                         Flexible(
@@ -759,7 +752,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                             style: const TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
-                                              color: Color(0xFF1ED760),
+                                              color: AppTheme.appleMusicRed,
                                               letterSpacing: -0.2,
                                             ),
                                             maxLines: 1,

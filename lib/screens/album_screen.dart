@@ -135,8 +135,32 @@ class _AlbumScreenState extends State<AlbumScreen> {
         if (songs.isEmpty) {
           try {
             final ytAlbum = await youtubeService.getAlbum(widget.albumId);
-            if (ytAlbum != null) album = ytAlbum;
-            songs = await libraryProvider.getAlbumSongs(widget.albumId);
+            if (ytAlbum != null) {
+              final keepName = (widget.album != null &&
+                      widget.album!.name.isNotEmpty &&
+                      widget.album!.name.toLowerCase() != 'album' &&
+                      widget.album!.name.toLowerCase() != 'álbum')
+                  ? widget.album!.name
+                  : ytAlbum.name;
+              final keepArtist = (widget.album?.artist != null &&
+                      widget.album!.artist!.isNotEmpty &&
+                      widget.album!.artist!.toLowerCase() != 'artist' &&
+                      widget.album!.artist!.toLowerCase() != 'artista')
+                  ? widget.album!.artist
+                  : ytAlbum.artist;
+              album = Album(
+                id: ytAlbum.id,
+                name: keepName,
+                artist: keepArtist,
+                artistId: widget.album?.artistId ?? ytAlbum.artistId,
+                coverArt: widget.album?.coverArt ?? ytAlbum.coverArt,
+                songCount: ytAlbum.songCount,
+                duration: ytAlbum.duration,
+                year: widget.album?.year ?? ytAlbum.year,
+              );
+            }
+            final localSongs = await libraryProvider.getAlbumSongs(widget.albumId);
+            if (localSongs.isNotEmpty) songs = localSongs;
           } catch (_) {}
         }
       }

@@ -20,6 +20,7 @@ import '../services/replay_gain_service.dart';
 import '../services/auto_dj_service.dart';
 import '../services/ytdlp_service.dart';
 import '../services/lrclib_service.dart';
+import '../services/palette_service.dart';
 
 import '../services/storage_service.dart';
 import '../services/groovy_api_service.dart';
@@ -119,6 +120,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         isPlaying: isPl,
         position: _position.inSeconds,
         listenDeltaSeconds: isPl ? 8 : 0,
+        deviceId: _groovyConnectService?.localDeviceId,
       );
     }).catchError((_) {});
   }
@@ -356,6 +358,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _groovyConnectService = service;
     _groovyConnectService?.addListener(_onGroovyConnectChanged);
     _groovyConnectService?.onRemoteStatusUpdated = onGroovyConnectRemoteStatusUpdated;
+    StorageService().getUserToken().then((token) {
+      if (token != null && token.isNotEmpty) {
+        _groovyConnectService?.updateAuthToken(token);
+      }
+    }).catchError((_) {});
   }
 
   void _onGroovyConnectChanged() {
@@ -918,14 +925,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_currentSong?.id == song.id) _updateAndroidAuto();
 
     // Cache the image file locally so Android notification / lock screen loads it instantly from disk!
+    File? cachedFile;
     try {
       final file = await DefaultCacheManager().getSingleFile(directUrl);
       if (file.existsSync() && _currentSong?.id == song.id) {
         _resolvedArtworkUrl = Uri.file(file.path).toString();
+        cachedFile = file;
         _updateAndroidAuto();
       }
     } catch (e) {
       debugPrint('[Artwork] Cache file download note: $e');
+    }
+
+    // Pre-warm background palette cache so entering NowPlayingScreen has a 0ms instant cache hit
+    final songId = song.id;
+    if (PaletteService.getCachedColors(songId) == null) {
+      final ImageProvider imgProvider = cachedFile != null
+          ? FileImage(cachedFile) as ImageProvider
+          : CachedNetworkImageProvider(directUrl) as ImageProvider;
+      PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
     }
   }
 
@@ -1357,6 +1375,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (_isPlaying && Platform.isWindows && !_isRenderingRemotely) {
             _windowsPositionTimer?.cancel();
             _lastPolledPosition = null;
+            Duration? lastSystemUpdate;
             _windowsPositionTimer = Timer.periodic(
               const Duration(milliseconds: 500),
               (_) {
@@ -1367,8 +1386,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   _position = pos;
                   _positionController.add(pos);
                   _checkAndPreloadNextSong(pos);
-                  notifyListeners();
-                  _updateAllServices();
+                  if (lastSystemUpdate == null ||
+                      (pos.inMilliseconds - lastSystemUpdate!.inMilliseconds).abs() > 1000) {
+                    lastSystemUpdate = pos;
+                    _updateAllServices();
+                  }
                 }
               },
             );

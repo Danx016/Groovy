@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -15,12 +14,7 @@ import 'album_screen.dart';
 import '../models/album.dart';
 import '../models/artist.dart';
 import 'artist_screen.dart';
-import 'genres_screen.dart';
-import 'new_releases_screen.dart';
-import 'made_for_you_screen.dart';
-import 'top_rated_screen.dart';
-import 'favorites_screen.dart';
-import 'radio_screen.dart';
+
 import '../l10n/app_localizations.dart';
 import '../services/player_ui_settings_service.dart';
 
@@ -301,7 +295,6 @@ class _SearchScreenState extends State<SearchScreen> {
                   SliverToBoxAdapter(
                     child: _buildRecentSearchesSection(context, recentSearches, isDark),
                   ),
-                SliverToBoxAdapter(child: _buildBrowseCategories()),
               ],
             ],
           ),
@@ -632,73 +625,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildBrowseCategories() {
-    final categories = [
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryMadeForYou,
-        Icons.person_outline_rounded,
-        [Colors.purple, Colors.pink],
-        () => NavigationHelper.push(context, const MadeForYouScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryNewReleases,
-        Icons.album_rounded,
-        [Colors.orange, Colors.red],
-        () => NavigationHelper.push(context, const NewReleasesScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryTopRated,
-        Icons.star_rounded,
-        [Colors.amber, Colors.orange],
-        () => NavigationHelper.push(context, const TopRatedScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryGenres,
-        Icons.library_music_rounded,
-        [Colors.green, Colors.teal],
-        () => NavigationHelper.push(context, const GenresScreen()),
-      ),
-      _CategoryItem(
-        AppLocalizations.of(context)!.categoryFavorites,
-        Icons.favorite_rounded,
-        [Colors.red, Colors.pink],
-        () => NavigationHelper.push(context, const FavoritesScreen()),
-      ),
-      if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux)
-        _CategoryItem(
-          AppLocalizations.of(context)!.categoryRadio,
-          Icons.radio_rounded,
-          [Colors.blue, Colors.indigo],
-          () => NavigationHelper.push(context, const RadioScreen()),
-        ),
-    ];
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SectionHeader(title: AppLocalizations.of(context)!.browseCategories),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 200,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              childAspectRatio: 1.6,
-            ),
-            itemCount: categories.length,
-            itemBuilder: (context, index) {
-              final category = categories[index];
-              return _CategoryCard(category: category);
-            },
-          ),
-        ),
-        const SizedBox(height: 150),
-      ],
-    );
-  }
 
   Widget _buildAutocompleteOverlay(bool isDark) {
     return Material(
@@ -882,58 +809,4 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 }
 
-class _CategoryItem {
-  final String title;
-  final IconData icon;
-  final List<Color> colors;
-  final VoidCallback onTap;
 
-  _CategoryItem(this.title, this.icon, this.colors, this.onTap);
-}
-
-class _CategoryCard extends StatelessWidget {
-  final _CategoryItem category;
-
-  const _CategoryCard({required this.category});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: category.colors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: category.onTap,
-          borderRadius: BorderRadius.circular(12),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(category.icon, color: Colors.white, size: 24),
-                const Spacer(),
-                Text(
-                  category.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}

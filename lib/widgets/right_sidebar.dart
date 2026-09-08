@@ -932,57 +932,12 @@ class _RightSidebarState extends State<RightSidebar> {
                       ],
                     ),
                   ] else if (_lyrics.isNotEmpty) ...[
-                    StreamBuilder<Duration>(
-                      stream: player.positionStream,
-                      builder: (context, snapshot) {
-                        final pos = snapshot.data ?? player.position;
-                        int activeIdx = -1;
-                        for (int i = 0; i < _lyrics.length; i++) {
-                          if (pos >= _lyrics[i].startTime) {
-                            activeIdx = i;
-                          } else {
-                            break;
-                          }
-                        }
-
-                        final currentLine = activeIdx >= 0 && activeIdx < _lyrics.length
-                            ? _lyrics[activeIdx].text
-                            : _lyrics.first.text;
-                        final nextLine = activeIdx + 1 < _lyrics.length
-                            ? _lyrics[activeIdx + 1].text
-                            : null;
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              currentLine,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: theme.colorScheme.primary,
-                                height: 1.3,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (nextLine != null && nextLine.isNotEmpty) ...[
-                              const SizedBox(height: 6),
-                              Text(
-                                nextLine,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark ? Colors.white38 : Colors.black38,
-                                  height: 1.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ],
-                        );
-                      },
+                    _SidebarMiniLyrics(
+                      lyrics: _lyrics,
+                      positionStream: player.positionStream,
+                      currentPosition: player.position,
+                      primaryColor: theme.colorScheme.primary,
+                      isDark: isDark,
                     ),
                   ] else ...[
                     Text(
@@ -1466,6 +1421,125 @@ class _QueueItemState extends State<_QueueItem> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SidebarMiniLyrics extends StatefulWidget {
+  final List<LyricLine> lyrics;
+  final Stream<Duration>? positionStream;
+  final Duration currentPosition;
+  final Color primaryColor;
+  final bool isDark;
+
+  const _SidebarMiniLyrics({
+    required this.lyrics,
+    this.positionStream,
+    required this.currentPosition,
+    required this.primaryColor,
+    required this.isDark,
+  });
+
+  @override
+  State<_SidebarMiniLyrics> createState() => _SidebarMiniLyricsState();
+}
+
+class _SidebarMiniLyricsState extends State<_SidebarMiniLyrics> {
+  int _activeIdx = -1;
+  StreamSubscription<Duration>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateIndex(widget.currentPosition);
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SidebarMiniLyrics oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.positionStream != widget.positionStream) {
+      _subscribe();
+    }
+    if (oldWidget.lyrics != widget.lyrics) {
+      _updateIndex(widget.currentPosition);
+    }
+  }
+
+  void _subscribe() {
+    _sub?.cancel();
+    if (widget.positionStream != null) {
+      _sub = widget.positionStream!.listen((pos) {
+        _updateIndex(pos);
+      });
+    }
+  }
+
+  void _updateIndex(Duration pos) {
+    if (widget.lyrics.isEmpty) return;
+    int low = 0;
+    int high = widget.lyrics.length - 1;
+    int newIdx = -1;
+    while (low <= high) {
+      final mid = (low + high) >> 1;
+      if (widget.lyrics[mid].startTime <= pos) {
+        newIdx = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    if (newIdx != _activeIdx) {
+      setState(() {
+        _activeIdx = newIdx;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final currentLine = _activeIdx >= 0 && _activeIdx < widget.lyrics.length
+        ? widget.lyrics[_activeIdx].text
+        : widget.lyrics.first.text;
+    final nextLine = _activeIdx + 1 < widget.lyrics.length
+        ? widget.lyrics[_activeIdx + 1].text
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          currentLine,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: widget.primaryColor,
+            height: 1.3,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        if (nextLine != null && nextLine.isNotEmpty) ...[
+          const SizedBox(height: 6),
+          Text(
+            nextLine,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w500,
+              color: widget.isDark ? Colors.white38 : Colors.black38,
+              height: 1.2,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ],
     );
   }
 }

@@ -1,13 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../models/song.dart';
 import 'device_info_service.dart';
 import 'groovy_api_service.dart';
 
-/// Represents a remote Groovy instance available on the local network or cloud.
+/// Represents a remote Groovy instance available in the cloud.
 class GroovyRemoteDevice {
   final String id;
   final String name;
@@ -25,9 +24,9 @@ class GroovyRemoteDevice {
     required this.name,
     required this.platform,
     required this.model,
-    required this.host,
-    required this.port,
-    this.isLocalLan = true,
+    this.host = '',
+    this.port = 0,
+    this.isLocalLan = false,
     this.currentSong,
     this.isPlaying = false,
     required this.lastSeen,
@@ -73,44 +72,54 @@ class GroovyRemoteDevice {
 
   factory GroovyRemoteDevice.fromJson(Map<String, dynamic> json, {String? host, int? port}) {
     return GroovyRemoteDevice(
-      id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? 'Groovy Device',
+      id: json['device_key']?.toString() ?? json['device_id']?.toString() ?? json['id']?.toString() ?? '',
+      name: json['device_name']?.toString() ?? json['name']?.toString() ?? 'Groovy Device',
       platform: json['platform']?.toString() ?? 'Dispositivo',
-      model: json['model']?.toString() ?? '',
-      host: host ?? json['host']?.toString() ?? '127.0.0.1',
-      port: port ?? (json['port'] is int ? json['port'] : int.tryParse(json['port']?.toString() ?? '42425') ?? 42425),
-      isLocalLan: json['isLocalLan'] as bool? ?? true,
-      isPlaying: json['isPlaying'] as bool? ?? false,
-      currentSong: json['song'] != null ? Song.fromJson(json['song'] as Map<String, dynamic>) : null,
+      model: json['device_model']?.toString() ?? json['model']?.toString() ?? '',
+      host: host ?? json['ip_address']?.toString() ?? '',
+      port: port ?? 0,
+      isLocalLan: false,
+      isPlaying: json['isPlaying'] == true || json['is_playing'] == 1 || json['is_playing'] == true,
+      currentSong: json['song'] != null
+          ? Song.fromJson(json['song'] as Map<String, dynamic>)
+          : (json['song_id'] != null && json['title'] != null
+              ? Song(
+                  id: json['song_id'].toString(),
+                  title: json['title'].toString(),
+                  artist: json['artist']?.toString() ?? '',
+                  album: json['album']?.toString(),
+                  coverArt: json['cover_art']?.toString(),
+                  duration: (json['duration'] as num?)?.toInt(),
+                  isLocal: false,
+                )
+              : null),
       lastSeen: DateTime.now(),
     );
   }
 }
 
-/// Service that coordinates device-to-device discovery, real-time synchronization,
-/// and remote playback controls across Windows, Android, Mac, and Linux via Wi-Fi LAN P2P.
+/// 100% Cloud-Native Groovy Connect Service.
+/// Coordinates cross-device discovery, real-time synchronization, and remote playback
+/// controls across Windows, Android, Mac, Linux, and Web anywhere over the internet.
 class GroovyConnectService extends ChangeNotifier {
   static final GroovyConnectService _instance = GroovyConnectService._internal();
   factory GroovyConnectService() => _instance;
   GroovyConnectService._internal();
 
-  static const int _defaultUdpPort = 42424;
-  static const int _defaultHttpPort = 42425;
-
-  HttpServer? _httpServer;
-  RawDatagramSocket? _udpSocket;
-  int _actualHttpPort = _defaultHttpPort;
   String _localDeviceId = '';
   String _localDeviceName = '';
   String _localPlatform = '';
   String _localModel = '';
+  String? _cachedAuthToken;
 
   final Map<String, GroovyRemoteDevice> _discoveredDevices = {};
   GroovyRemoteDevice? _connectedDevice;
   bool _isDiscovering = false;
   Timer? _discoveryTimer;
   Timer? _pruneTimer;
+  Timer? _commandPollTimer;
   Timer? _statusSyncTimer;
+  bool _isPollingCommands = false;
 
   // Callbacks hooked to PlayerProvider
   Future<void> Function(
@@ -137,347 +146,182 @@ class GroovyConnectService extends ChangeNotifier {
   GroovyRemoteDevice? get connectedDevice => _connectedDevice;
   bool get isConnected => _connectedDevice != null;
   bool get isDiscovering => _isDiscovering;
-  int get httpPort => _actualHttpPort;
+  String get localDeviceId => _localDeviceId;
+  String get localDeviceName => _localDeviceName;
+  String get localPlatform => _localPlatform;
+  String get localModel => _localModel;
+  int get httpPort => 0;
 
-  /// Initializes the local server and UDP listener on app startup.
+  /// Initializes the service, generating or loading the persistent device ID and starting cloud command listeners.
   Future<void> initialize() async {
-    if (kIsWeb) return;
-
     try {
       final info = await DeviceInfoService().getDeviceInfo();
       _localPlatform = info.platform;
       _localModel = info.deviceModel;
       _localDeviceName = info.deviceModel;
-      _localDeviceId = '${info.platform}_${info.deviceModel.hashCode.abs()}';
 
-      await _startHttpServer();
-      await _startUdpListener();
+      final prefs = await SharedPreferences.getInstance();
+      var id = prefs.getString('groovy_cloud_device_id_v2');
+      if (id == null || id.isEmpty) {
+        id = 'dev_${info.platform.toLowerCase()}_${const Uuid().v4().substring(0, 8)}';
+        await prefs.setString('groovy_cloud_device_id_v2', id);
+      }
+      _localDeviceId = id;
 
+      // Start background command polling loop (every 1.2 seconds)
+      _startCommandPollLoop();
+
+      // Prune devices not seen in > 60 seconds
       _pruneTimer?.cancel();
-      _pruneTimer = Timer.periodic(const Duration(seconds: 12), (_) => _pruneStaleDevices());
+      _pruneTimer = Timer.periodic(const Duration(seconds: 15), (_) => _pruneStaleDevices());
 
-      debugPrint('[GroovyConnect] Service initialized on HTTP: $_actualHttpPort, Device: $_localDeviceName');
+      debugPrint('[GroovyConnect] 100% Cloud-Native initialized for device: $_localDeviceId ($_localDeviceName)');
     } catch (e) {
       debugPrint('[GroovyConnect] Init error: $e');
     }
   }
 
-  /// Starts the embedded HTTP server to handle incoming transfer, info, and control requests.
-  Future<void> _startHttpServer() async {
-    try {
-      try {
-        _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, _defaultHttpPort);
-      } catch (_) {
-        // Fallback to ephemeral port if 42425 is in use
-        _httpServer = await HttpServer.bind(InternetAddress.anyIPv4, 0);
-      }
-      _actualHttpPort = _httpServer!.port;
-
-      _httpServer!.listen(_handleHttpRequest, onError: (e) {
-        debugPrint('[GroovyConnect] HTTP server error: $e');
-      });
-    } catch (e) {
-      debugPrint('[GroovyConnect] Could not bind HTTP server: $e');
+  /// Updates cached auth token to fetch user-specific devices and receive private commands.
+  void updateAuthToken(String? token) {
+    _cachedAuthToken = token;
+    if (token != null && token.isNotEmpty) {
+      discover(authToken: token);
     }
   }
 
-  Future<void> _handleHttpRequest(HttpRequest req) async {
-    req.response.headers.add('Access-Control-Allow-Origin', '*');
-    req.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    req.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method == 'OPTIONS') {
-      req.response.statusCode = HttpStatus.ok;
-      await req.response.close();
-      return;
-    }
-
-    final path = req.uri.path;
-    try {
-      if (path == '/groovy/info' || path == '/groovy/status') {
-        final status = onProvidePlayerStatus?.call() ?? {};
-        final payload = {
-          'id': _localDeviceId,
-          'name': _localDeviceName,
-          'platform': _localPlatform,
-          'model': _localModel,
-          'port': _actualHttpPort,
-          ...status,
-        };
-        req.response.headers.contentType = ContentType.json;
-        req.response.write(jsonEncode(payload));
-        await req.response.close();
-        return;
-      }
-
-      if (path == '/groovy/transfer' && req.method == 'POST') {
-        final bodyStr = await utf8.decodeStream(req);
-        final data = jsonDecode(bodyStr) as Map<String, dynamic>;
-
-        final songData = data['song'] as Map<String, dynamic>?;
-        final positionMs = (data['positionMs'] as num?)?.toInt() ?? 0;
-        final isPlaying = data['isPlaying'] as bool? ?? true;
-        final fromDevice = data['fromDevice']?.toString() ?? 'Dispositivo Groovy';
-
-        if (songData != null && onTransferReceived != null) {
-          var song = Song.fromJson(songData);
-
-          // If local file path doesn't exist on this receiving device, fall back to online streaming
-          if (song.isLocal && (song.path == null || !File(song.path!).existsSync())) {
-            song = song.copyWith(isLocal: false);
-          }
-
-          List<Song>? queue;
-          final queueData = data['queue'] as List<dynamic>?;
-          if (queueData != null) {
-            queue = queueData.map((s) {
-              var qs = Song.fromJson(s as Map<String, dynamic>);
-              if (qs.isLocal && (qs.path == null || !File(qs.path!).existsSync())) {
-                qs = qs.copyWith(isLocal: false);
-              }
-              return qs;
-            }).toList();
-          }
-          final queueIndex = (data['queueIndex'] as num?)?.toInt();
-
-          await onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex);
-          req.response.headers.contentType = ContentType.json;
-          req.response.write(jsonEncode({'success': true, 'message': 'Playback transferred'}));
-          await req.response.close();
-          return;
-        }
-      }
-
-      if (path == '/groovy/control' && req.method == 'POST') {
-        final bodyStr = await utf8.decodeStream(req);
-        final data = jsonDecode(bodyStr) as Map<String, dynamic>;
-        final action = data['action']?.toString() ?? '';
-        final value = data['value'];
-
-        if (onCommandReceived != null && action.isNotEmpty) {
-          onCommandReceived!(action, value);
-          req.response.headers.contentType = ContentType.json;
-          req.response.write(jsonEncode({'success': true}));
-          await req.response.close();
-          return;
-        }
-      }
-
-      req.response.statusCode = HttpStatus.notFound;
-      req.response.write('Not found');
-      await req.response.close();
-    } catch (e) {
-      debugPrint('[GroovyConnect] HTTP handle error: $e');
-      try {
-        req.response.statusCode = HttpStatus.internalServerError;
-        req.response.write(jsonEncode({'error': e.toString()}));
-        await req.response.close();
-      } catch (_) {}
-    }
+  /// Starts the cloud command polling loop to receive actions from other devices.
+  void _startCommandPollLoop() {
+    _commandPollTimer?.cancel();
+    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 1200), (_) {
+      _pollCloudCommands();
+    });
   }
 
-  /// Starts UDP socket to receive LAN discovery broadcasts.
-  Future<void> _startUdpListener() async {
+  /// Polls pending cloud commands targeting this device.
+  Future<void> _pollCloudCommands() async {
+    if (_localDeviceId.isEmpty || _isPollingCommands) return;
+    _isPollingCommands = true;
+
     try {
-      _udpSocket = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4,
-        _defaultUdpPort,
-        reuseAddress: true,
-        reusePort: !Platform.isWindows,
+      final commands = await GroovyApiService().getPendingCommands(
+        deviceId: _localDeviceId,
+        token: _cachedAuthToken,
       );
-      _udpSocket!.broadcastEnabled = true;
 
-      _udpSocket!.listen((event) {
-        if (event == RawSocketEvent.read) {
-          final dg = _udpSocket!.receive();
-          if (dg != null) {
-            _handleUdpPacket(dg);
+      for (final cmd in commands) {
+        final action = cmd['action']?.toString() ?? '';
+        final payload = cmd['payload'];
+
+        debugPrint('[GroovyConnect] Cloud command received: $action');
+
+        if (action == 'transfer' && payload is Map) {
+          final songData = payload['song'] as Map<String, dynamic>?;
+          final positionMs = (payload['positionMs'] as num?)?.toInt() ?? 0;
+          final isPlaying = payload['isPlaying'] as bool? ?? true;
+          final fromDevice = payload['fromDevice']?.toString() ?? 'Dispositivo Remoto';
+
+          if (songData != null && onTransferReceived != null) {
+            final song = Song.fromJson(songData).copyWith(isLocal: false);
+
+            List<Song>? queue;
+            final queueData = payload['queue'] as List<dynamic>?;
+            if (queueData != null) {
+              queue = queueData.map((s) {
+                return Song.fromJson(s as Map<String, dynamic>).copyWith(isLocal: false);
+              }).toList();
+            }
+            final queueIndex = (payload['queueIndex'] as num?)?.toInt();
+
+            await onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex);
+          }
+        } else if (action == 'control' && payload is Map) {
+          final controlAction = payload['action']?.toString() ?? '';
+          final controlValue = payload['value'];
+          if (onCommandReceived != null && controlAction.isNotEmpty) {
+            onCommandReceived!(controlAction, controlValue);
           }
         }
-      });
+      }
     } catch (e) {
-      debugPrint('[GroovyConnect] UDP bind warning: $e');
+      // Ignore intermittent poll drops
+    } finally {
+      _isPollingCommands = false;
     }
   }
 
-  void _handleUdpPacket(Datagram dg) {
-    try {
-      final msg = utf8.decode(dg.data);
-      final json = jsonDecode(msg) as Map<String, dynamic>;
-      final type = json['type'] as String?;
-      final senderId = json['id'] as String?;
-
-      if (senderId == _localDeviceId) return; // Ignore self
-
-      final senderHost = dg.address.address;
-      final senderPort = (json['port'] as num?)?.toInt() ?? _defaultHttpPort;
-
-      if (type == 'GROOVY_DISCOVER') {
-        // Send back an announcement packet directly to the sender
-        final reply = jsonEncode({
-          'type': 'GROOVY_ANNOUNCE',
-          'id': _localDeviceId,
-          'name': _localDeviceName,
-          'platform': _localPlatform,
-          'model': _localModel,
-          'port': _actualHttpPort,
-        });
-        _udpSocket?.send(utf8.encode(reply), dg.address, dg.port);
-      }
-
-      if (type == 'GROOVY_ANNOUNCE' || type == 'GROOVY_DISCOVER') {
-        final device = GroovyRemoteDevice.fromJson(json, host: senderHost, port: senderPort);
-        _discoveredDevices[device.id] = device;
-        notifyListeners();
-      }
-    } catch (_) {
-      // Ignore malformed UDP packets
-    }
-  }
-
-  /// Triggers a network discovery scan for other Groovy devices (Subnet scan + LAN UDP + Cloud Heartbeat).
+  /// Discovers other Groovy devices in the cloud associated with this user's account.
   Future<void> discover({String? authToken}) async {
-    if (kIsWeb) return;
+    if (authToken != null) _cachedAuthToken = authToken;
     _isDiscovering = true;
     notifyListeners();
 
-    // 1. UDP Broadcast discovery (fastest when not blocked by router)
     try {
-      if (_udpSocket != null) {
-        final discoverPacket = jsonEncode({
-          'type': 'GROOVY_DISCOVER',
-          'id': _localDeviceId,
-          'name': _localDeviceName,
-          'platform': _localPlatform,
-          'model': _localModel,
-          'port': _actualHttpPort,
-        });
-        final bytes = utf8.encode(discoverPacket);
-
-        // Broadcast to 255.255.255.255
-        _udpSocket?.send(bytes, InternetAddress('255.255.255.255'), _defaultUdpPort);
-
-        try {
-          _udpSocket?.send(bytes, InternetAddress('239.255.255.250'), _defaultUdpPort);
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('[GroovyConnect] Discovery broadcast error: $e');
-    }
-
-    // 2. Active Subnet Scan (works even when routers block UDP broadcast / on Android)
-    _scanSubnetForDevices().catchError((e) {
-      debugPrint('[GroovyConnect] Subnet scan note: $e');
-    });
-
-    // 3. Cloud telemetry discovery
-    try {
-      await _fetchCloudDevices(authToken);
+      await _fetchCloudDevices(_cachedAuthToken);
     } catch (e) {
       debugPrint('[GroovyConnect] Cloud discovery note: $e');
     }
 
     _discoveryTimer?.cancel();
-    _discoveryTimer = Timer(const Duration(seconds: 4), () {
+    _discoveryTimer = Timer(const Duration(seconds: 3), () {
       _isDiscovering = false;
       notifyListeners();
     });
   }
 
-  /// Scans local Wi-Fi subnet via direct HTTP unicast to bypass router UDP broadcast filtering.
-  Future<void> _scanSubnetForDevices() async {
+  /// Fetches active cloud devices from the Groovy backend.
+  Future<void> _fetchCloudDevices(String? token) async {
     try {
-      final interfaces = await NetworkInterface.list(
-        type: InternetAddressType.IPv4,
-        includeLinkLocal: false,
-      );
+      final devicesList = await GroovyApiService().fetchUserDevices(token: token);
 
-      final List<String> candidateSubnets = [];
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          final ip = addr.address;
-          if (ip.startsWith('192.168.') || ip.startsWith('10.') || ip.startsWith('172.')) {
-            final parts = ip.split('.');
-            if (parts.length == 4) {
-              candidateSubnets.add('${parts[0]}.${parts[1]}.${parts[2]}');
-            }
-          }
-        }
-      }
+      for (final item in devicesList) {
+        final devId = item['device_key']?.toString() ??
+            item['device_id']?.toString() ??
+            '${item['platform']}_${item['device_name']}';
 
-      for (final subnet in candidateSubnets.toSet()) {
-        final ips = List.generate(254, (i) => '$subnet.${i + 1}');
-        for (int i = 0; i < ips.length; i += 32) {
-          final chunk = ips.sublist(i, (i + 32).clamp(0, ips.length));
-          await Future.wait(chunk.map((targetIp) async {
-            try {
-              final uri = Uri.parse('http://$targetIp:$_defaultHttpPort/groovy/info');
-              final res = await http.get(uri).timeout(const Duration(milliseconds: 650));
-              if (res.statusCode == 200) {
-                final json = jsonDecode(res.body) as Map<String, dynamic>;
-                final senderId = json['id'] as String?;
-                if (senderId != null && senderId != _localDeviceId) {
-                  final dev = GroovyRemoteDevice.fromJson(json, host: targetIp, port: _defaultHttpPort);
-                  _discoveredDevices[dev.id] = dev;
-                  notifyListeners();
-                }
-              }
-            } catch (_) {}
-          }));
+        // Do not discover self
+        if (devId == _localDeviceId) continue;
+
+        final devName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
+        final devPlatform = item['platform']?.toString() ?? 'Dispositivo';
+        final isPlaying = item['is_playing'] == 1 || item['is_playing'] == true;
+
+        Song? song;
+        if (item['song_id'] != null && item['title'] != null) {
+          song = Song(
+            id: item['song_id'].toString(),
+            title: item['title'].toString(),
+            artist: item['artist']?.toString() ?? '',
+            album: item['album']?.toString(),
+            coverArt: item['cover_art']?.toString(),
+            duration: (item['duration'] as num?)?.toInt(),
+            isLocal: false,
+          );
         }
+
+        _discoveredDevices[devId] = GroovyRemoteDevice(
+          id: devId,
+          name: devName,
+          platform: devPlatform,
+          model: item['device_model']?.toString() ?? '',
+          host: item['ip_address']?.toString() ?? '',
+          port: 0,
+          isLocalLan: false,
+          isPlaying: isPlaying,
+          currentSong: song,
+          lastSeen: DateTime.now(),
+        );
       }
+      notifyListeners();
     } catch (e) {
-      debugPrint('[GroovyConnect] Subnet scan error: $e');
+      debugPrint('[GroovyConnect] fetchCloudDevices error: $e');
     }
   }
 
-  /// Fetches active devices from Groovy Cloud backend telemetry.
-  Future<void> _fetchCloudDevices(String? token) async {
-    try {
-      final baseUrl = GroovyApiService().baseUrl;
-      final uri = Uri.parse('$baseUrl/telemetry/playback');
-      final res = await http.get(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 4));
-
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        final list = (data is Map && data['devices'] is List) ? data['devices'] as List : [];
-        for (final item in list) {
-          if (item is Map<String, dynamic>) {
-            final devName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
-            final devPlatform = item['platform']?.toString() ?? 'Dispositivo';
-            final devId = 'cloud_${item['user_id'] ?? item['ip_address']}_$devPlatform';
-
-            if (devId != _localDeviceId && devName != _localDeviceName) {
-              _discoveredDevices[devId] = GroovyRemoteDevice(
-                id: devId,
-                name: devName,
-                platform: devPlatform,
-                model: item['device_model']?.toString() ?? '',
-                host: item['ip_address']?.toString() ?? '127.0.0.1',
-                port: _defaultHttpPort,
-                isLocalLan: false,
-                isPlaying: item['is_playing'] == 1 || item['is_playing'] == true,
-                lastSeen: DateTime.now(),
-              );
-            }
-          }
-        }
-        notifyListeners();
-      }
-    } catch (_) {}
-  }
-
-  /// Removes devices that haven't responded in over 35 seconds.
+  /// Removes devices that haven't sent a cloud ping in over 50 seconds.
   void _pruneStaleDevices() {
     final now = DateTime.now();
     _discoveredDevices.removeWhere((id, dev) {
-      final isStale = now.difference(dev.lastSeen).inSeconds > 35;
+      final isStale = now.difference(dev.lastSeen).inSeconds > 50;
       if (isStale && _connectedDevice?.id == id) {
         _connectedDevice = null;
         _statusSyncTimer?.cancel();
@@ -487,7 +331,7 @@ class GroovyConnectService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Transfers current playback to a target Groovy device and starts real-time synchronization.
+  /// Transfers current playback to a remote device over the cloud.
   Future<bool> transferPlayback({
     required GroovyRemoteDevice device,
     required Song song,
@@ -497,25 +341,24 @@ class GroovyConnectService extends ChangeNotifier {
     int? queueIndex,
   }) async {
     try {
-      debugPrint('[GroovyConnect] Transferring to ${device.name} at ${device.host}:${device.port}');
-      final uri = Uri.parse('http://${device.host}:${device.port}/groovy/transfer');
+      debugPrint('[GroovyConnect] Cloud transferring to ${device.name} (${device.id})');
 
-      final body = jsonEncode({
-        'song': song.toJson(),
-        'positionMs': position.inMilliseconds,
-        'isPlaying': isPlaying,
-        'fromDevice': _localDeviceName,
-        'queue': queue?.map((s) => s.toJson()).toList(),
-        'queueIndex': queueIndex,
-      });
+      final success = await GroovyApiService().sendDeviceCommand(
+        targetDeviceId: device.id,
+        senderDeviceId: _localDeviceId,
+        action: 'transfer',
+        payload: {
+          'song': song.copyWith(isLocal: false).toJson(),
+          'positionMs': position.inMilliseconds,
+          'isPlaying': isPlaying,
+          'fromDevice': _localDeviceName,
+          'queue': queue?.map((s) => s.copyWith(isLocal: false).toJson()).toList(),
+          'queueIndex': queueIndex,
+        },
+        token: _cachedAuthToken,
+      );
 
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: body,
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode >= 200 && response.statusCode < 300) {
+      if (success) {
         _connectedDevice = device.copyWith(
           currentSong: song,
           isPlaying: isPlaying,
@@ -523,129 +366,51 @@ class GroovyConnectService extends ChangeNotifier {
         );
         _startStatusSyncTimer();
         notifyListeners();
-        debugPrint('[GroovyConnect] Playback successfully transferred to ${device.name}');
+        debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via cloud');
         return true;
       }
       return false;
     } catch (e) {
-      debugPrint('[GroovyConnect] Transfer failed to ${device.name}: $e');
+      debugPrint('[GroovyConnect] Transfer failed: $e');
       return false;
     }
   }
 
-  /// Connects to a target Groovy device without requiring an active song
-  /// (e.g. When user selects a device from the picker before playing).
+  /// Connects to a target Groovy device in the cloud without immediately transferring a song.
   Future<bool> connectToDevice(GroovyRemoteDevice device) async {
-    try {
-      debugPrint('[GroovyConnect] Connecting to ${device.name} at ${device.host}:${device.port}');
-      final uri = Uri.parse('http://${device.host}:${device.port}/groovy/info');
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final songData = data['song'] as Map<String, dynamic>?;
-        Song? currentSong;
-        if (songData != null) {
-          try {
-            currentSong = Song.fromJson(songData);
-          } catch (_) {}
-        }
-
-        _connectedDevice = device.copyWith(
-          currentSong: currentSong,
-          isPlaying: data['isPlaying'] as bool? ?? false,
-          lastSeen: DateTime.now(),
-        );
-        _startStatusSyncTimer();
-        notifyListeners();
-        debugPrint('[GroovyConnect] Successfully connected to ${device.name}');
-        return true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint('[GroovyConnect] Connection failed to ${device.name}: $e');
-      return false;
-    }
+    _connectedDevice = device;
+    _startStatusSyncTimer();
+    notifyListeners();
+    return true;
   }
 
-  /// Starts periodic status polling to keep song, timeline position, play/pause and volume
-  /// 100% in sync between both devices just like Spotify Connect.
-  void _startStatusSyncTimer() {
-    _statusSyncTimer?.cancel();
-    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 850), (_) {
-      _syncRemoteStatus();
-    });
-  }
-
-  Future<void> _syncRemoteStatus() async {
-    if (_connectedDevice == null) {
-      _statusSyncTimer?.cancel();
-      return;
-    }
-
-    try {
-      final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/info');
-      final response = await http.get(uri).timeout(const Duration(milliseconds: 800));
-
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final isPlaying = data['isPlaying'] as bool? ?? false;
-        final positionMs = (data['positionMs'] as num?)?.toInt() ?? 0;
-        final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
-        final volume = (data['volume'] as num?)?.toDouble() ?? 1.0;
-        final songData = data['song'] as Map<String, dynamic>?;
-
-        Song? song;
-        if (songData != null) {
-          try {
-            song = Song.fromJson(songData);
-          } catch (_) {}
-        }
-
-        if (song != null) {
-          _connectedDevice = _connectedDevice!.copyWith(
-            currentSong: song,
-            isPlaying: isPlaying,
-            lastSeen: DateTime.now(),
-          );
-          notifyListeners();
-        }
-
-        onRemoteStatusUpdated?.call(
-          song: song,
-          position: Duration(milliseconds: positionMs),
-          duration: Duration(milliseconds: durationMs),
-          isPlaying: isPlaying,
-          volume: volume,
-        );
-      }
-    } catch (_) {
-      // Ignore intermittent packet drops
-    }
-  }
-
-  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume).
+  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume) via cloud.
   Future<bool> sendControl(String action, [dynamic value]) async {
     if (_connectedDevice == null) return false;
+
     try {
-      final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/control');
-      final response = await http.post(
-        uri,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'action': action, 'value': value}),
-      ).timeout(const Duration(seconds: 3));
+      final success = await GroovyApiService().sendDeviceCommand(
+        targetDeviceId: _connectedDevice!.id,
+        senderDeviceId: _localDeviceId,
+        action: 'control',
+        payload: {
+          'action': action,
+          'value': value,
+        },
+        token: _cachedAuthToken,
+      );
 
-      // Immediately poll status so UI reflects remote action instantly
-      Future.delayed(const Duration(milliseconds: 100), () => _syncRemoteStatus());
+      // Trigger status sync shortly after sending command to reflect state
+      Future.delayed(const Duration(milliseconds: 350), () => _syncRemoteStatus());
 
-      return response.statusCode == 200;
+      return success;
     } catch (e) {
-      debugPrint('[GroovyConnect] Remote control error: $e');
+      debugPrint('[GroovyConnect] Cloud sendControl error: $e');
       return false;
     }
   }
 
-  /// Sends a song to play on the connected device.
+  /// Sends a song to play on the connected device via cloud.
   Future<bool> sendPlaySong(
     Song song, {
     int positionMs = 0,
@@ -663,6 +428,68 @@ class GroovyConnectService extends ChangeNotifier {
     );
   }
 
+  /// Starts status synchronization timer to reflect remote playback progress in the UI.
+  void _startStatusSyncTimer() {
+    _statusSyncTimer?.cancel();
+    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 1400), (_) {
+      _syncRemoteStatus();
+    });
+  }
+
+  /// Synchronizes playback status with cloud telemetry from the target device.
+  Future<void> _syncRemoteStatus() async {
+    if (_connectedDevice == null) {
+      _statusSyncTimer?.cancel();
+      return;
+    }
+
+    try {
+      final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
+      final targetDev = devicesList.firstWhere(
+        (d) =>
+            d['device_key']?.toString() == _connectedDevice!.id ||
+            d['device_id']?.toString() == _connectedDevice!.id,
+        orElse: () => {},
+      );
+
+      if (targetDev.isNotEmpty) {
+        final isPlaying = targetDev['is_playing'] == 1 || targetDev['is_playing'] == true;
+        final positionSec = (targetDev['position'] as num?)?.toInt() ?? 0;
+        final durationSec = (targetDev['duration'] as num?)?.toInt() ?? 0;
+
+        Song? song;
+        if (targetDev['song_id'] != null && targetDev['title'] != null) {
+          song = Song(
+            id: targetDev['song_id'].toString(),
+            title: targetDev['title'].toString(),
+            artist: targetDev['artist']?.toString() ?? '',
+            album: targetDev['album']?.toString(),
+            coverArt: targetDev['cover_art']?.toString(),
+            duration: durationSec,
+            isLocal: false,
+          );
+        }
+
+        _connectedDevice = _connectedDevice!.copyWith(
+          currentSong: song ?? _connectedDevice!.currentSong,
+          isPlaying: isPlaying,
+          lastSeen: DateTime.now(),
+        );
+        notifyListeners();
+
+        onRemoteStatusUpdated?.call(
+          song: song,
+          position: Duration(seconds: positionSec),
+          duration: Duration(seconds: durationSec),
+          isPlaying: isPlaying,
+          volume: 1.0,
+        );
+      }
+    } catch (_) {
+      // Ignore intermittent network drop
+    }
+  }
+
   /// Disconnects from the remote device.
   void disconnect() {
     _statusSyncTimer?.cancel();
@@ -673,10 +500,9 @@ class GroovyConnectService extends ChangeNotifier {
   @override
   void dispose() {
     _statusSyncTimer?.cancel();
+    _commandPollTimer?.cancel();
     _pruneTimer?.cancel();
     _discoveryTimer?.cancel();
-    _httpServer?.close(force: true);
-    _udpSocket?.close();
     super.dispose();
   }
 }

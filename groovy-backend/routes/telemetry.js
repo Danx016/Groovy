@@ -39,7 +39,8 @@ router.get('/playback', async (req, res) => {
     const [rows] = await pool.query(`
       SELECT 
         user_id, platform, device_name, device_model, os_version, ip_address,
-        song_id, title, artist, album, cover_art, duration, position, is_playing, last_ping_at
+        song_id, title, artist, album, cover_art, duration, position, is_playing, last_ping_at,
+        device_key, COALESCE(device_key, CONCAT(platform, '_', device_name)) as device_id
       FROM user_live_playback
       WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
         AND last_ping_at >= NOW() - INTERVAL 60 SECOND
@@ -53,12 +54,111 @@ router.get('/playback', async (req, res) => {
 });
 
 /**
+ * POST /api/telemetry/command
+ * Send playback command to a target remote device via Groovy Cloud Relay
+ */
+router.post('/command', async (req, res) => {
+  try {
+    const { targetDeviceId, senderDeviceId, action, payload } = req.body;
+    const userId = req.user?.id || null;
+
+    if (!targetDeviceId || !action) {
+      return res.status(400).json({ success: false, error: 'targetDeviceId y action son requeridos' });
+    }
+
+    const pool = getPool();
+    const payloadStr = payload ? (typeof payload === 'string' ? payload : JSON.stringify(payload)) : null;
+
+    const [result] = await pool.query(`
+      INSERT INTO device_commands (user_id, sender_device_id, target_device_id, action, payload, status)
+      VALUES (?, ?, ?, ?, ?, 'pending')
+    `, [userId, senderDeviceId || 'unknown', targetDeviceId, action, payloadStr]);
+
+    return res.json({
+      success: true,
+      commandId: result.insertId,
+      message: 'Comando enviado a la nube exitosamente',
+    });
+  } catch (err) {
+    console.error('[Telemetry Command Error]:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
+ * GET /api/telemetry/command
+ * Polls pending commands for the calling device and marks them delivered
+ */
+router.get('/command', async (req, res) => {
+  try {
+    const deviceId = req.query.deviceId;
+    if (!deviceId) {
+      return res.status(400).json({ success: false, error: 'deviceId es requerido' });
+    }
+
+    const pool = getPool();
+
+    // Expire old unconsumed commands older than 45 seconds
+    pool.query(`
+      UPDATE device_commands 
+      SET status = 'expired' 
+      WHERE status = 'pending' AND created_at < NOW() - INTERVAL 45 SECOND
+    `).catch(() => {});
+
+    // Fetch pending commands for this target device
+    const [commands] = await pool.query(`
+      SELECT id, user_id, sender_device_id, target_device_id, action, payload, created_at
+      FROM device_commands
+      WHERE target_device_id = ? AND status = 'pending'
+      ORDER BY id ASC
+      LIMIT 10
+    `, [deviceId]);
+
+    if (commands.length > 0) {
+      const ids = commands.map(c => c.id);
+      await pool.query(`
+        UPDATE device_commands
+        SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
+        WHERE id IN (?)
+      `, [ids]);
+    }
+
+    const parsedCommands = commands.map(c => {
+      let parsedPayload = null;
+      if (c.payload) {
+        try {
+          parsedPayload = JSON.parse(c.payload);
+        } catch (_) {
+          parsedPayload = c.payload;
+        }
+      }
+      return {
+        id: c.id,
+        senderDeviceId: c.sender_device_id,
+        action: c.action,
+        payload: parsedPayload,
+        createdAt: c.created_at,
+      };
+    });
+
+    return res.json({
+      success: true,
+      commands: parsedCommands,
+    });
+  } catch (err) {
+    console.error('[Telemetry Poll Command Error]:', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/**
  * POST /api/telemetry/playback
  * Real-time heartbeat of what the user is listening to right now (Android, Windows, Web)
  */
 router.post('/playback', async (req, res) => {
   try {
     const {
+      deviceId,
       songId,
       title,
       artist,
@@ -94,7 +194,7 @@ router.post('/playback', async (req, res) => {
     }
 
     // 1. Log playback to user_live_playback with atomic upsert
-    const deviceKey = `${userId > 0 ? userId : client.ip}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
+    const deviceKey = deviceId || `${userId > 0 ? userId : client.ip}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
 
     await pool.query(`
       INSERT INTO user_live_playback (

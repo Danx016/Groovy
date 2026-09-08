@@ -143,7 +143,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Sort By',
+              'Ordenar por',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -151,14 +151,14 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
               ),
             ),
             const SizedBox(height: 8),
-            _buildSortOption('Title (A-Z)', SongSortOption.titleAsc, isDark),
-            _buildSortOption('Title (Z-A)', SongSortOption.titleDesc, isDark),
-            _buildSortOption('Artist (A-Z)', SongSortOption.artistAsc, isDark),
-            _buildSortOption('Artist (Z-A)', SongSortOption.artistDesc, isDark),
-            _buildSortOption('Album (A-Z)', SongSortOption.albumAsc, isDark),
-            _buildSortOption('Album (Z-A)', SongSortOption.albumDesc, isDark),
+            _buildSortOption('Título (A-Z)', SongSortOption.titleAsc, isDark),
+            _buildSortOption('Título (Z-A)', SongSortOption.titleDesc, isDark),
+            _buildSortOption('Artista (A-Z)', SongSortOption.artistAsc, isDark),
+            _buildSortOption('Artista (Z-A)', SongSortOption.artistDesc, isDark),
+            _buildSortOption('Álbum (A-Z)', SongSortOption.albumAsc, isDark),
+            _buildSortOption('Álbum (Z-A)', SongSortOption.albumDesc, isDark),
             _buildSortOption(
-              'Recently Added',
+              'Añadido recientemente',
               SongSortOption.recentlyAdded,
               isDark,
             ),
@@ -209,19 +209,19 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   String _getSortLabel() {
     switch (_currentSort) {
       case SongSortOption.titleAsc:
-        return 'Title (A-Z)';
+        return 'Título (A-Z)';
       case SongSortOption.titleDesc:
-        return 'Title (Z-A)';
+        return 'Título (Z-A)';
       case SongSortOption.artistAsc:
-        return 'Artist (A-Z)';
+        return 'Artista (A-Z)';
       case SongSortOption.artistDesc:
-        return 'Artist (Z-A)';
+        return 'Artista (Z-A)';
       case SongSortOption.albumAsc:
-        return 'Album (A-Z)';
+        return 'Álbum (A-Z)';
       case SongSortOption.albumDesc:
-        return 'Album (Z-A)';
+        return 'Álbum (Z-A)';
       case SongSortOption.recentlyAdded:
-        return 'Recently Added';
+        return 'Añadido recientemente';
     }
   }
 
@@ -231,14 +231,14 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('All Songs'),
+        title: const Text('Todas las canciones'),
         backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
         actions: [
           if (_sortedSongs.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.sort_rounded),
               onPressed: _showSortOptions,
-              tooltip: 'Sort',
+              tooltip: 'Ordenar',
             ),
         ],
       ),
@@ -256,7 +256,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'No songs found',
+                        'No se encontraron canciones',
                         style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                       ),
                     ],
@@ -273,7 +273,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  '${_sortedSongs.length} songs',
+                                  '${_sortedSongs.length} ${_sortedSongs.length == 1 ? "canción" : "canciones"}',
                                   style: TextStyle(
                                     fontSize: 14,
                                     fontWeight: FontWeight.w500,
@@ -314,7 +314,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                               color: isDark ? Colors.white70 : Colors.black54,
                               size: 28,
                             ),
-                            tooltip: 'Shuffle play',
+                            tooltip: 'Reproducción aleatoria',
                           ),
                           const SizedBox(width: 8),
                           Consumer<PlayerProvider>(
