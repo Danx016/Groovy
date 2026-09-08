@@ -201,7 +201,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 400)}) {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 750)}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     try {
@@ -212,7 +212,7 @@ class _LyricsListViewState extends State<LyricsListView> {
         if (renderObject is RenderBox && _scrollController.hasClients && renderObject.attached) {
           final viewport = RenderAbstractViewport.maybeOf(renderObject);
           if (viewport == null) return;
-          final targetOffset = viewport.getOffsetToReveal(renderObject, 0.24).offset;
+          final targetOffset = viewport.getOffsetToReveal(renderObject, 0.35).offset;
           final clamped = targetOffset.clamp(
             _scrollController.position.minScrollExtent,
             _scrollController.position.maxScrollExtent,
@@ -220,7 +220,7 @@ class _LyricsListViewState extends State<LyricsListView> {
           _scrollController.animateTo(
             clamped,
             duration: duration,
-            curve: Curves.easeOutCubic,
+            curve: Curves.easeInOutCubic,
           );
         }
       }
@@ -340,7 +340,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                       _currentLyricIndex = lyricIndex;
                     });
                     _resumeAutoScrollTimer?.cancel();
-                    _scrollToCurrentLine(duration: const Duration(milliseconds: 400));
+                    _scrollToCurrentLine(duration: const Duration(milliseconds: 650));
                   },
                 ),
               );

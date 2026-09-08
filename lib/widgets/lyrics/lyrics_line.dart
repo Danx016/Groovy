@@ -36,9 +36,9 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
   static const List<Shadow> _currentLineShadow = [
     Shadow(
-      color: Color(0x59000000),
-      blurRadius: 10,
-      offset: Offset(0, 3),
+      color: Color(0x73000000),
+      blurRadius: 16,
+      offset: Offset(0, 4),
     ),
   ];
 
@@ -49,14 +49,14 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
     // Authentic Apple Music Opacity Hierarchy
     final double targetOpacity = widget.isUnsynced
-        ? 0.92
+        ? 0.95
         : (isCurrent
             ? 1.0
             : (_isHovered
-                ? 0.72
+                ? 0.75
                 : (widget.distance == 1
-                    ? 0.38
-                    : (isPast ? 0.24 : 0.20))));
+                    ? 0.40
+                    : (isPast ? 0.26 : 0.22))));
 
     final isHighlighted = isCurrent || widget.isUnsynced;
 
@@ -68,25 +68,28 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
         onTap: widget.onTap,
         behavior: HitTestBehavior.opaque,
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 18.0, horizontal: 28.0),
+          padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 28.0),
           child: AnimatedScale(
-            scale: isCurrent ? 1.0 : (_isHovered ? 0.985 : 0.97),
+            scale: isCurrent ? 1.04 : (_isHovered ? 0.98 : 0.95),
             alignment: Alignment.centerLeft,
-            duration: const Duration(milliseconds: 250),
+            duration: const Duration(milliseconds: 550),
             curve: Curves.easeOutCubic,
-            child: AnimatedDefaultTextStyle(
-              duration: const Duration(milliseconds: 250),
+            child: AnimatedOpacity(
+              opacity: targetOpacity,
+              duration: const Duration(milliseconds: 550),
               curve: Curves.easeOutCubic,
-              style: TextStyle(
-                fontSize: isHighlighted ? 36 : 30,
-                fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
-                letterSpacing: -0.6,
-                color: Colors.white.withValues(alpha: targetOpacity),
-                height: 1.2,
-                fontFamilyFallback: _fontFallback,
-                shadows: isCurrent ? _currentLineShadow : null,
+              child: Text(
+                widget.line.text,
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
+                  letterSpacing: -0.6,
+                  color: Colors.white,
+                  height: 1.25,
+                  fontFamilyFallback: _fontFallback,
+                  shadows: isCurrent ? _currentLineShadow : null,
+                ),
               ),
-              child: Text(widget.line.text),
             ),
           ),
         ),
