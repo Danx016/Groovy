@@ -106,43 +106,9 @@ class _ArtistsScreenState extends State<ArtistsScreen> {
                     itemBuilder: (context, index) {
                       final artist = artists[index];
                       return ListTile(
-                        leading: ClipOval(
-                          child: Container(
-                            width: 48,
-                            height: 48,
-                            color: isDark ? Colors.white12 : Colors.black12,
-                            child: (artist.coverArt != null && artist.coverArt!.isNotEmpty)
-                                ? AlbumArtwork(
-                                    coverArt: artist.coverArt,
-                                    size: 48,
-                                    borderRadius: 24,
-                                  )
-                                : FutureBuilder<String?>(
-                                    future: ArtistImageService().getArtistImageUrl(artist.name),
-                                    builder: (context, snapshot) {
-                                      if (snapshot.hasData &&
-                                          snapshot.data != null &&
-                                          snapshot.data!.isNotEmpty) {
-                                        return CachedNetworkImage(
-                                          imageUrl: snapshot.data!,
-                                          width: 48,
-                                          height: 48,
-                                          fit: BoxFit.cover,
-                                          errorWidget: (_, __, ___) => Icon(
-                                            CupertinoIcons.person_solid,
-                                            color: isDark ? Colors.white54 : Colors.black45,
-                                            size: 24,
-                                          ),
-                                        );
-                                      }
-                                      return Icon(
-                                        CupertinoIcons.person_solid,
-                                        color: isDark ? Colors.white54 : Colors.black45,
-                                        size: 24,
-                                      );
-                                    },
-                                  ),
-                          ),
+                        leading: _ArtistAvatar(
+                          artist: artist,
+                          isDark: isDark,
                         ),
                         title: Text(
                           artist.name,
@@ -180,6 +146,105 @@ class _ArtistsScreenState extends State<ArtistsScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ArtistAvatar extends StatefulWidget {
+  final Artist artist;
+  final bool isDark;
+
+  const _ArtistAvatar({
+    required this.artist,
+    required this.isDark,
+  });
+
+  @override
+  State<_ArtistAvatar> createState() => _ArtistAvatarState();
+}
+
+class _ArtistAvatarState extends State<_ArtistAvatar> {
+  Future<String?>? _imageFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _initFutureIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ArtistAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.artist.name != widget.artist.name) {
+      _initFutureIfNeeded();
+    }
+  }
+
+  void _initFutureIfNeeded() {
+    final hasCover = widget.artist.coverArt != null && widget.artist.coverArt!.isNotEmpty;
+    if (!hasCover) {
+      final cached = ArtistImageService.getCachedArtistImageUrl(widget.artist.name);
+      if (cached == null) {
+        _imageFuture = ArtistImageService().getArtistImageUrl(widget.artist.name);
+      } else {
+        _imageFuture = null;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasCover = widget.artist.coverArt != null && widget.artist.coverArt!.isNotEmpty;
+    return ClipOval(
+      child: Container(
+        width: 48,
+        height: 48,
+        color: widget.isDark ? Colors.white12 : Colors.black12,
+        child: hasCover
+            ? AlbumArtwork(
+                coverArt: widget.artist.coverArt,
+                size: 48,
+                borderRadius: 24,
+              )
+            : _buildOnlineImage(),
+      ),
+    );
+  }
+
+  Widget _buildOnlineImage() {
+    final cached = ArtistImageService.getCachedArtistImageUrl(widget.artist.name);
+    if (cached != null && cached.isNotEmpty) {
+      return CachedNetworkImage(
+        imageUrl: cached,
+        width: 48,
+        height: 48,
+        fit: BoxFit.cover,
+        errorWidget: (_, __, ___) => _buildFallbackIcon(),
+      );
+    }
+
+    return FutureBuilder<String?>(
+      future: _imageFuture,
+      builder: (context, snapshot) {
+        if (snapshot.hasData && snapshot.data != null && snapshot.data!.isNotEmpty) {
+          return CachedNetworkImage(
+            imageUrl: snapshot.data!,
+            width: 48,
+            height: 48,
+            fit: BoxFit.cover,
+            errorWidget: (_, __, ___) => _buildFallbackIcon(),
+          );
+        }
+        return _buildFallbackIcon();
+      },
+    );
+  }
+
+  Widget _buildFallbackIcon() {
+    return Icon(
+      CupertinoIcons.person_solid,
+      color: widget.isDark ? Colors.white54 : Colors.black45,
+      size: 24,
     );
   }
 }

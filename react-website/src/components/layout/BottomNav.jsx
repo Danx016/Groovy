@@ -1,11 +1,12 @@
 import React from 'react';
-import { Home, Compass, Library, User, ShieldCheck } from 'lucide-react';
+import { Home, Compass, Library, Radio, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
 const tabs = [
   { id: 'home', label: 'Inicio', icon: Home },
   { id: 'search', label: 'Explorar', icon: Compass },
   { id: 'library', label: 'Biblioteca', icon: Library },
+  { id: 'radio', label: 'Radio', icon: Radio },
   { id: 'account', label: 'Cuenta', icon: User },
 ];
 

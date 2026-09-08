@@ -1,251 +1,460 @@
-import React, { useState } from 'react';
-import { Play, Pause, ChevronRight, Clock, Stars, Zap, Music2, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Play, Pause, ChevronRight, MoreVertical, Sparkles, Flame, Zap, Stars, Disc3, CheckCircle2, User } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { useAuth } from '../../context/AuthContext';
-import { useRecommendations } from '../../hooks/useRecommendations';
-import { SongCard } from '../ui/SongCard';
+import { musicService, GENRES_LIST } from '../../services/musicService';
 
-/* Greeting based on time */
-const getGreeting = () => {
-  const h = new Date().getHours();
-  if (h < 12) return 'Buenos días';
-  if (h < 17) return 'Buenas tardes';
-  return 'Buenas noches';
-};
+const DEFAULT_TOP_ARTISTS = [
+  { id: 10583405, name: 'Bad Bunny', image: 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/1000x1000-000000-80-0-0.jpg', genre: 'Urbano Latino' },
+  { id: 4050205, name: 'The Weeknd', image: 'https://cdn-images.dzcdn.net/images/artist/581693b4724a7fcfa754455101e13a44/1000x1000-000000-80-0-0.jpg', genre: 'R&B / Pop' },
+  { id: 1166311, name: 'Feid', image: 'https://cdn-images.dzcdn.net/images/artist/e629c93e03b3c225d8d52a42bae71537/1000x1000-000000-80-0-0.jpg', genre: 'Reggaetón' },
+  { id: 1429862, name: 'Karol G', image: 'https://cdn-images.dzcdn.net/images/artist/a1f81d11ff92b23ae1b1a7d6eec7716f/1000x1000-000000-80-0-0.jpg', genre: 'Urbano' },
+  { id: 12246, name: 'Taylor Swift', image: 'https://cdn-images.dzcdn.net/images/artist/33e0a16b94dd6d19488e09f5926c4832/1000x1000-000000-80-0-0.jpg', genre: 'Pop' },
+  { id: 892, name: 'Coldplay', image: 'https://cdn-images.dzcdn.net/images/artist/4ab1be22b51ecb6ec1f1f50f757279f6/1000x1000-000000-80-0-0.jpg', genre: 'Rock Alternativo' },
+  { id: 130835, name: 'Drake', image: 'https://cdn-images.dzcdn.net/images/artist/5d2fa5169a8c79c882103f56d9539352/1000x1000-000000-80-0-0.jpg', genre: 'Hip-Hop' },
+  { id: 8645063, name: 'Dua Lipa', image: 'https://cdn-images.dzcdn.net/images/artist/f104d44439c2889e47fdb6e05391c4d9/1000x1000-000000-80-0-0.jpg', genre: 'Dance Pop' },
+  { id: 9892994, name: 'Billie Eilish', image: 'https://cdn-images.dzcdn.net/images/artist/e795a947ce733a46d0a79ec0bc401b2f/1000x1000-000000-80-0-0.jpg', genre: 'Alt Pop' },
+  { id: 122177302, name: 'Peso Pluma', image: 'https://cdn-images.dzcdn.net/images/artist/495fe20a9a1d48c89429188e404bc03d/1000x1000-000000-80-0-0.jpg', genre: 'Regional Urbano' }
+];
 
-/* Horizontal scroll song strip (Quick Picks / Mix rows) */
-const SongStrip = ({ songs, label, icon: Icon, iconColor = '#FA243C' }) => {
-  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
+const TOP_ALBUMS = [
+  { id: 'nadie_sabe', name: 'Nadie Sabe Lo Que Va a Pasar Mañana', artist: 'Bad Bunny', year: '2023', coverArt: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/bf/6d/46/bf6d4605-728b-6f8e-49b8-3e4b370165b4/197189196383.jpg/800x800bb.jpg' },
+  { id: 'after_hours', name: 'After Hours', artist: 'The Weeknd', year: '2020', coverArt: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/4b/97/81/4b97813e-d90c-0335-ee17-c03531b7ca1e/20UMGIM08611.rgb.jpg/800x800bb.jpg' },
+  { id: 'mor_no_te_olvides', name: 'MOR, No Le Temas a la Oscuridad', artist: 'Feid', year: '2023', coverArt: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/10/58/e7/1058e7ce-3f74-323e-6a56-ee0fc7e97f06/23UM1IM05230.rgb.jpg/800x800bb.jpg' },
+  { id: 'manana_sera_bonito', name: 'MAÑANA SERÁ BONITO', artist: 'Karol G', year: '2023', coverArt: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/cf/e9/87/cfe98762-df08-25f0-5aa5-dbfc7a3ae051/23UMGIM13994.rgb.jpg/800x800bb.jpg' },
+  { id: 'un_verano_sin_ti', name: 'Un Verano Sin Ti', artist: 'Bad Bunny', year: '2022', coverArt: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/39/38/c1/3938c105-0210-916c-e547-0e6d628eb586/196626945068.jpg/800x800bb.jpg' },
+  { id: 'future_nostalgia', name: 'Future Nostalgia', artist: 'Dua Lipa', year: '2020', coverArt: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/2b/97/65/2b97654a-5f04-890e-b7d1-9252c42d6229/190295286109.jpg/800x800bb.jpg' }
+];
 
-  if (!songs || songs.length === 0) return null;
+/* Song card matching Windows App screenshot */
+const SongCard = ({ song, allSongs = [], index = 0 }) => {
+  const { currentSong, isPlaying, playSong, togglePlay, openArtist, openAlbum } = usePlayer();
+  const isCurrent = currentSong?.id === song.id;
 
   return (
-    <div style={{ marginBottom: '28px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', padding: '0 2px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {Icon && <Icon size={20} style={{ color: iconColor }} />}
-          <h2 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '-0.3px' }}>{label}</h2>
-        </div>
-        <button
-          onClick={() => playSong(songs[0], songs)}
-          style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#B3B3B3', fontSize: '12px', fontWeight: 600 }}
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
+    <div
+      onClick={() => isCurrent ? togglePlay() : playSong(song, allSongs, index)}
+      style={{
+        flexShrink: 0,
+        width: '185px',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        userSelect: 'none',
+        transition: 'transform 0.15s ease',
+      }}
+      onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+      onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+    >
+      {/* Square Artwork */}
+      <div style={{
+        position: 'relative',
+        width: '100%',
+        aspectRatio: '1/1',
+        borderRadius: '10px',
+        overflow: 'hidden',
+        background: '#1a1b1e',
+        marginBottom: '10px',
+        boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
+        border: isCurrent ? '1.5px solid #FA243C' : '1px solid rgba(255,255,255,0.06)',
+      }}>
+        <img
+          src={song.coverArt || ''}
+          alt={song.title}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          loading="lazy"
+          onError={e => { e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600'; }}
+        />
+
+        {/* Hover / Active Play Button Overlay */}
+        <div
+          className="song-play-overlay"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            opacity: isCurrent ? 1 : 0,
+            transition: 'opacity 0.2s',
+          }}
         >
-          Reproducir todo <ChevronRight size={14} />
-        </button>
+          <div style={{
+            width: '44px', height: '44px', borderRadius: '50%',
+            background: '#fff', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', boxShadow: '0 4px 14px rgba(0,0,0,0.6)',
+          }}>
+            {isCurrent && isPlaying ? (
+              <Pause size={20} style={{ fill: '#000', color: '#000' }} />
+            ) : (
+              <Play size={20} style={{ fill: '#000', color: '#000', marginLeft: '3px' }} />
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Horizontal card scroll */}
-      <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '8px', scrollbarWidth: 'none' }}>
-        {songs.slice(0, 12).map((song) => {
-          const isCurrent = currentSong?.id === song.id;
-          return (
-            <div
-              key={song.id}
-              onClick={() => isCurrent ? togglePlay() : playSong(song, songs)}
-              style={{
-                flexShrink: 0, width: '150px', cursor: 'pointer',
-                borderRadius: '8px', padding: '10px',
-                background: isCurrent ? 'rgba(250,36,60,0.12)' : '#181818',
-                border: `0.5px solid ${isCurrent ? 'rgba(250,36,60,0.3)' : '#282828'}`,
-                transition: 'background 0.15s',
+      {/* Song Title */}
+      <h3 style={{
+        fontSize: '14px',
+        fontWeight: 700,
+        color: isCurrent ? '#FA243C' : '#fff',
+        letterSpacing: '-0.2px',
+        margin: '0 0 3px 0',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
+        {song.title}
+      </h3>
+
+      {/* Artist Name & Album */}
+      <p style={{
+        fontSize: '12.5px',
+        color: '#8E8E93',
+        margin: 0,
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      }}>
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            if (openArtist && song.artist) openArtist(song.artist);
+          }}
+          style={{ cursor: 'pointer' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+          onMouseLeave={e => e.currentTarget.style.color = '#8E8E93'}
+        >
+          {song.artist}
+        </span>
+        {song.album && (
+          <>
+            {' • '}
+            <span
+              onClick={(e) => {
+                e.stopPropagation();
+                if (openAlbum) openAlbum({ id: song.albumId || song.id, name: song.album, artist: song.artist, coverArt: song.coverArt });
               }}
-              onMouseEnter={e => { if (!isCurrent) e.currentTarget.style.background = '#282828'; }}
-              onMouseLeave={e => { if (!isCurrent) e.currentTarget.style.background = '#181818'; }}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+              onMouseLeave={e => e.currentTarget.style.color = '#8E8E93'}
             >
-              <div style={{ position: 'relative', width: '100%', aspectRatio: '1/1', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px', background: '#282828' }}>
-                <img
-                  src={song.coverArt || ''}
-                  alt={song.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={e => e.target.style.display = 'none'}
-                />
-                {/* Play overlay */}
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: 'rgba(0,0,0,0.4)', opacity: 0, transition: 'opacity 0.15s',
-                }}
-                  className="song-play-overlay"
-                >
-                  {isCurrent && isPlaying
-                    ? <Pause size={28} style={{ fill: '#fff', color: '#fff' }} />
-                    : <Play size={28} style={{ fill: '#fff', color: '#fff', marginLeft: '3px' }} />}
-                </div>
-                {/* Equalizer bars if playing */}
-                {isCurrent && isPlaying && (
-                  <div style={{ position: 'absolute', bottom: '6px', right: '6px', display: 'flex', alignItems: 'flex-end', gap: '2px', height: '16px' }}>
-                    <div className="eq-bar" />
-                    <div className="eq-bar" />
-                    <div className="eq-bar" />
-                  </div>
-                )}
-              </div>
-              <p style={{ fontSize: '13px', fontWeight: 600, color: isCurrent ? '#FA243C' : '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {song.title}
-              </p>
-              <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                {song.artist}
-              </p>
-            </div>
-          );
-        })}
-      </div>
+              {song.album}
+            </span>
+          </>
+        )}
+      </p>
     </div>
   );
 };
 
-/* Quick Access Grid (recent items — like the top grid in Android) */
-const QuickAccessGrid = ({ items }) => {
-  const { playSong } = usePlayer();
-  if (!items || items.length === 0) return null;
+/* Artist Avatar Card */
+const ArtistCard = ({ artist, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{
+      flexShrink: 0,
+      width: '140px',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      cursor: 'pointer',
+      textAlign: 'center',
+      userSelect: 'none',
+      transition: 'transform 0.15s ease',
+    }}
+    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
+    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+  >
+    <div style={{
+      position: 'relative',
+      width: '120px',
+      height: '120px',
+      borderRadius: '50%',
+      overflow: 'hidden',
+      marginBottom: '10px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
+      border: '2px solid rgba(255,255,255,0.08)',
+    }}>
+      <img
+        src={artist.image}
+        alt={artist.name}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        loading="lazy"
+        onError={e => { e.target.src = 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=500'; }}
+      />
+    </div>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', maxWidth: '100%' }}>
+      <p style={{
+        fontSize: '14px', fontWeight: 700, color: '#fff', margin: 0,
+        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+      }}>
+        {artist.name}
+      </p>
+      <CheckCircle2 size={13} style={{ color: '#FA243C', fill: 'rgba(250,36,60,0.2)', flexShrink: 0 }} />
+    </div>
+    <p style={{ fontSize: '11.5px', color: '#8E8E93', margin: '2px 0 0 0' }}>{artist.genre || 'Artista'}</p>
+  </div>
+);
+
+/* Album Card */
+const AlbumCard = ({ album, onClick }) => (
+  <div
+    onClick={onClick}
+    style={{
+      flexShrink: 0,
+      width: '165px',
+      display: 'flex',
+      flexDirection: 'column',
+      cursor: 'pointer',
+      userSelect: 'none',
+      transition: 'transform 0.15s ease',
+    }}
+    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-3px)'}
+    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+  >
+    <div style={{
+      position: 'relative',
+      width: '100%',
+      aspectRatio: '1/1',
+      borderRadius: '10px',
+      overflow: 'hidden',
+      marginBottom: '8px',
+      boxShadow: '0 8px 20px rgba(0,0,0,0.5)',
+      border: '1px solid rgba(255,255,255,0.06)',
+    }}>
+      <img
+        src={album.coverArt}
+        alt={album.name}
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        loading="lazy"
+      />
+    </div>
+    <h4 style={{
+      fontSize: '13.5px', fontWeight: 700, color: '#fff', margin: '0 0 2px',
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    }}>
+      {album.name}
+    </h4>
+    <p style={{
+      fontSize: '12px', color: '#8E8E93', margin: 0,
+      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+    }}>
+      {album.artist} • {album.year}
+    </p>
+  </div>
+);
+
+/* Section with title and horizontal scroll */
+const SectionRow = ({ title, songs = [], onSeeAll }) => {
+  if (!songs || songs.length === 0) return null;
 
   return (
-    <div style={{ marginBottom: '24px' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-        {items.map((song) => (
-          <div
-            key={song.id}
-            onClick={() => playSong(song, items)}
+    <div style={{ marginBottom: '36px' }}>
+      {/* Section Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: '16px',
+      }}>
+        <h2 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.4px', color: '#fff' }}>
+          {title}
+        </h2>
+        {onSeeAll && (
+          <button
+            onClick={onSeeAll}
             style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              background: '#181818', borderRadius: '8px', overflow: 'hidden',
-              cursor: 'pointer', border: '0.5px solid #282828', transition: 'background 0.15s',
-              height: '54px',
+              background: 'transparent', border: 'none', color: '#888',
+              cursor: 'pointer', display: 'flex', alignItems: 'center',
+              padding: '4px', transition: 'color 0.15s',
             }}
-            onMouseEnter={e => e.currentTarget.style.background = '#282828'}
-            onMouseLeave={e => e.currentTarget.style.background = '#181818'}
+            onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+            onMouseLeave={e => e.currentTarget.style.color = '#888'}
           >
-            <div style={{ width: '54px', height: '54px', flexShrink: 0, background: '#282828', position: 'relative' }}>
-              {song.coverArt ? (
-                <img src={song.coverArt} alt={song.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              ) : (
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Music2 size={20} style={{ color: '#6B6B6B' }} />
-                </div>
-              )}
-            </div>
-            <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingRight: '10px' }}>
-              {song.title}
-            </span>
-          </div>
+            <ChevronRight size={20} />
+          </button>
+        )}
+      </div>
+
+      {/* Cards Strip */}
+      <div style={{
+        display: 'flex', gap: '16px', overflowX: 'auto',
+        paddingBottom: '8px', scrollbarWidth: 'none',
+      }}>
+        {songs.map((song, idx) => (
+          <SongCard key={`${song.id}-${idx}`} song={song} allSongs={songs} index={idx} />
         ))}
       </div>
     </div>
   );
 };
 
-export const HomeView = ({ setActiveTab }) => {
-  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
-  const { favorites = [], history = [] } = useLibrary();
-  const { isAuthenticated } = useAuth();
-  const { forYou = [], quickPicks = [], mixes = [] } = useRecommendations();
+export const HomeView = ({ setActiveTab, onSelectArtist, onSelectAlbum }) => {
+  const { history = [] } = useLibrary();
+  const { openArtist, openAlbum } = usePlayer();
+  const [feeds, setFeeds] = useState(null);
+  const [featuredArtists, setFeaturedArtists] = useState(DEFAULT_TOP_ARTISTS);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const hasData = (history?.length || 0) > 0 || (favorites?.length || 0) > 0;
+  const handleOpenArtist = (name) => {
+    if (onSelectArtist) onSelectArtist(name);
+    else if (openArtist) openArtist(name);
+  };
 
-  /* Quick access: last 6 unique songs from history */
-  const quickAccessSongs = (() => {
-    const seen = new Set();
-    return history.filter(s => {
-      if (!s?.id || seen.has(s.id)) return false;
-      // Skip songs with no meaningful album/title
-      if (!s.title || s.title === '[Unknown Album]') return false;
-      seen.add(s.id);
-      return true;
-    }).slice(0, 6);
-  })();
+  const handleOpenAlbum = (albumObj) => {
+    if (onSelectAlbum) onSelectAlbum(albumObj);
+    else if (openAlbum) openAlbum(albumObj);
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadFeeds = async () => {
+      try {
+        const [feedData, artistsData] = await Promise.allSettled([
+          musicService.getHomeFeeds(),
+          musicService.getTopArtists(),
+        ]);
+        if (isMounted) {
+          if (feedData.status === 'fulfilled' && feedData.value) setFeeds(feedData.value);
+          if (artistsData.status === 'fulfilled' && artistsData.value?.length > 0) {
+            setFeaturedArtists(artistsData.value);
+          }
+        }
+      } catch (err) {
+        console.warn('Feeds load failed:', err);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    loadFeeds();
+    return () => { isMounted = false; };
+  }, []);
+
+  const recentSongs = (history && history.length > 0)
+    ? history.slice(0, 10)
+    : feeds?.trending?.slice(0, 8) || [];
+
+  const recommendedMixes = feeds?.trending ? feeds.trending.slice(2, 12) : [];
 
   return (
-    <div style={{ paddingBottom: '148px' }}>
-      {/* Header with greeting */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px' }}>{getGreeting()}</h1>
+    <div style={{ padding: '8px 24px 140px', minHeight: '100%' }}>
+      {/* 1. Main View Header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        marginBottom: '28px', paddingTop: '8px',
+      }}>
+        <h1 style={{
+          fontSize: '32px', fontWeight: 900, letterSpacing: '-0.8px',
+          color: '#fff', margin: 0,
+        }}>
+          Inicio
+        </h1>
+
+        {/* 3-dots Menu in red (Apple Music red) */}
         <button
-          onClick={() => setActiveTab('library')}
-          style={{ color: '#B3B3B3', padding: '8px', borderRadius: '50%' }}
-          title="Historial"
-          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-          onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
+          onClick={() => setActiveTab('settings')}
+          style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: '#FA243C', padding: '6px', borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+          title="Opciones"
         >
-          <Clock size={22} />
+          <MoreVertical size={24} />
         </button>
       </div>
 
-      {/* Quick Access Grid (recent items) — hidden when empty */}
-      {quickAccessSongs.length > 0 && (
-        <QuickAccessGrid items={quickAccessSongs} />
-      )}
-
-      {/* Empty state if no history yet */}
-      {!hasData && (
-        <div style={{ textAlign: 'center', padding: '60px 24px', color: '#6B6B6B' }}>
-          <Sparkles size={48} style={{ margin: '0 auto 16px', color: '#FA243C', opacity: 0.4 }} />
-          <p style={{ fontSize: '17px', fontWeight: 600, color: '#fff', marginBottom: '8px' }}>Empieza a escuchar</p>
-          <p style={{ fontSize: '14px', maxWidth: '320px', margin: '0 auto 20px' }}>
-            Las secciones «Para Ti», «Selección Rápida» y los Mixes se generan en base a lo que escuchas.
-          </p>
-          <button
-            onClick={() => setActiveTab('search')}
-            style={{ padding: '12px 24px', borderRadius: '12px', background: '#FA243C', color: '#fff', fontWeight: 700, fontSize: '14px' }}
-          >
-            Explorar música
-          </button>
+      {/* 2. Artistas Destacados (Windows / Mobile circular avatars) */}
+      <div style={{ marginBottom: '36px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.4px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles size={20} style={{ color: '#FA243C' }} /> Artistas Destacados
+          </h2>
         </div>
-      )}
-
-      {/* Para Ti */}
-      {forYou.length > 0 && (
-        <SongStrip songs={forYou} label="Para Ti" icon={Stars} iconColor="#FA243C" />
-      )}
-
-      {/* Selección Rápida */}
-      {quickPicks.length > 0 && (
-        <SongStrip songs={quickPicks} label="Selección Rápida" icon={Zap} iconColor="#FF9F0A" />
-      )}
-
-      {/* Mixes (artist / genre / time-based) */}
-      {mixes.map(({ name, songs }) => (
-        <SongStrip key={name} songs={songs} label={name} icon={Music2} iconColor="#BF5AF2" />
-      ))}
-
-      {/* If logged in but has data — show full list button */}
-      {hasData && (
-        <div style={{ marginTop: '8px' }}>
-          <div style={{ height: '0.5px', background: '#282828', marginBottom: '20px' }} />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-            {history.slice(0, 8).filter(s => s?.title && s.title !== '[Unknown Album]').map((s, i) => (
-              <div
-                key={`${s.id}-${i}`}
-                onClick={() => currentSong?.id === s.id ? togglePlay() : playSong(s, history)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 10px',
-                  borderRadius: '8px', cursor: 'pointer',
-                  background: currentSong?.id === s.id ? 'rgba(250,36,60,0.1)' : 'transparent',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => { if (currentSong?.id !== s.id) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
-                onMouseLeave={e => { if (currentSong?.id !== s.id) e.currentTarget.style.background = 'transparent'; }}
-              >
-                <div style={{ width: '40px', height: '40px', borderRadius: '6px', overflow: 'hidden', flexShrink: 0, background: '#282828', position: 'relative' }}>
-                  {s.coverArt && <img src={s.coverArt} alt={s.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                  {currentSong?.id === s.id && isPlaying && (
-                    <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                      <div className="eq-bar" style={{ height: '12px' }} />
-                      <div className="eq-bar" style={{ height: '12px' }} />
-                      <div className="eq-bar" style={{ height: '12px' }} />
-                    </div>
-                  )}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ fontSize: '14px', fontWeight: 500, color: currentSong?.id === s.id ? '#FA243C' : '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.title}</p>
-                  <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.artist}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+        <div style={{
+          display: 'flex', gap: '18px', overflowX: 'auto',
+          paddingBottom: '8px', scrollbarWidth: 'none',
+        }}>
+          {featuredArtists.map((artist, idx) => (
+            <ArtistCard
+              key={artist.id || idx}
+              artist={artist}
+              onClick={() => handleOpenArtist(artist.name)}
+            />
+          ))}
         </div>
+      </div>
+
+      {/* 3. Section: Reproducciones recientes */}
+      <SectionRow
+        title="Reproducciones recientes"
+        songs={recentSongs}
+        onSeeAll={() => setActiveTab('history')}
+      />
+
+      {/* 4. Álbumes Populares */}
+      <div style={{ marginBottom: '36px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '20px', fontWeight: 800, letterSpacing: '-0.4px', color: '#fff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Disc3 size={20} style={{ color: '#FA243C' }} /> Álbumes Populares
+          </h2>
+        </div>
+        <div style={{
+          display: 'flex', gap: '16px', overflowX: 'auto',
+          paddingBottom: '8px', scrollbarWidth: 'none',
+        }}>
+          {TOP_ALBUMS.map((alb, idx) => (
+            <AlbumCard
+              key={idx}
+              album={alb}
+              onClick={() => handleOpenAlbum(alb)}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 5. Section: Mixes recomendados para ti */}
+      <SectionRow
+        title="Mixes recomendados para ti"
+        songs={recommendedMixes}
+        onSeeAll={() => setActiveTab('search')}
+      />
+
+      {/* 6. Section: Tendencias Globales */}
+      {feeds?.trending && feeds.trending.length > 0 && (
+        <SectionRow
+          title="Tendencias del Momento"
+          songs={feeds.trending}
+          onSeeAll={() => setActiveTab('search')}
+        />
+      )}
+
+      {/* 7. Section: Urbano & Reggaetón */}
+      {feeds?.urbano && feeds.urbano.length > 0 && (
+        <SectionRow
+          title="Urbano Latino & Reggaetón"
+          songs={feeds.urbano}
+          onSeeAll={() => setActiveTab('search')}
+        />
+      )}
+
+      {/* 8. Section: Pop Internacional */}
+      {feeds?.pop && feeds.pop.length > 0 && (
+        <SectionRow
+          title="Pop Internacional"
+          songs={feeds.pop}
+          onSeeAll={() => setActiveTab('search')}
+        />
+      )}
+
+      {/* 9. Section: Rock Clásico */}
+      {feeds?.rock && feeds.rock.length > 0 && (
+        <SectionRow
+          title="Rock Clásico & Alternativo"
+          songs={feeds.rock}
+          onSeeAll={() => setActiveTab('search')}
+        />
       )}
     </div>
   );

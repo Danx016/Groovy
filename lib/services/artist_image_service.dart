@@ -9,7 +9,19 @@ import '../models/models.dart';
 class ArtistImageService {
   static const String _prefsKey = 'artist_image_cache_v1';
   static final Map<String, String> _memoryCache = {};
+  static final Map<String, Future<String?>> _inFlight = {};
   static bool _prefsLoaded = false;
+
+  /// Synchronous memory cache check
+  static String? getCachedArtistImageUrl(String artistName) {
+    if (artistName.trim().isEmpty) return null;
+    final key = artistName
+        .replaceAll(RegExp(r'^artist_|^local_artist_', caseSensitive: false), '')
+        .replaceAll('_', ' ')
+        .trim()
+        .toLowerCase();
+    return _memoryCache[key];
+  }
 
   static final Dio _dio = Dio(BaseOptions(
     connectTimeout: const Duration(seconds: 5),
@@ -88,9 +100,31 @@ class ArtistImageService {
   }) async {
     if (artistName.trim().isEmpty) return fallbackCoverArt;
 
+    final key = _normalize(artistName);
+    if (_memoryCache.containsKey(key) && _memoryCache[key]!.isNotEmpty) {
+      return _memoryCache[key];
+    }
+
+    if (_inFlight.containsKey(key)) {
+      return _inFlight[key];
+    }
+
+    final future = _resolveArtistImageInternal(artistName, key, fallbackCoverArt: fallbackCoverArt);
+    _inFlight[key] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlight.remove(key);
+    }
+  }
+
+  Future<String?> _resolveArtistImageInternal(
+    String artistName,
+    String key, {
+    String? fallbackCoverArt,
+  }) async {
     await _ensureCacheLoaded();
 
-    final key = _normalize(artistName);
     if (_memoryCache.containsKey(key) && _memoryCache[key]!.isNotEmpty) {
       return _memoryCache[key];
     }

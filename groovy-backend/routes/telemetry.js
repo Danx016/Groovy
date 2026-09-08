@@ -1,12 +1,30 @@
 const express = require('express');
 const { getPool } = require('../database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const { resolveIpLocation, parseFullClientInfo } = require('../utils/geoip');
 
 const router = express.Router();
 
-// Apply auth middleware
-router.use(authenticateToken);
+const normalizeCoverArt = (coverArt, songId) => {
+  if (coverArt && typeof coverArt === 'string') {
+    const trimmed = coverArt.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (!trimmed.includes('/') && !trimmed.includes('\\') && !trimmed.includes(' ') && trimmed.length >= 8 && trimmed.length <= 25) {
+      return `https://i.ytimg.com/vi/${trimmed}/hqdefault.jpg`;
+    }
+  }
+  if (songId && typeof songId === 'string') {
+    const trimmedId = String(songId).trim();
+    if (!trimmedId.startsWith('local_') && !trimmedId.includes('/') && !trimmedId.includes('\\') && trimmedId.length >= 8 && trimmedId.length <= 25) {
+      return `https://i.ytimg.com/vi/${trimmedId}/hqdefault.jpg`;
+    }
+  }
+  return (coverArt && typeof coverArt === 'string') ? coverArt : '';
+};
+
+router.use(optionalAuth);
 
 /**
  * POST /api/telemetry/playback
@@ -37,11 +55,20 @@ router.post('/playback', async (req, res) => {
 
     const resolvedPlatform = platform || client.os;
     const resolvedDevice = deviceName || client.deviceSummary;
+    const resolvedCoverArt = normalizeCoverArt(coverArt, songId);
     const pool = getPool();
-    const userId = req.user.id;
+    const userId = req.user?.id || 0;
+    const dbUserId = userId > 0 ? userId : null;
+
+    if (userId > 0) {
+      const [banCheck] = await pool.query('SELECT is_banned FROM users WHERE id = ? LIMIT 1', [userId]);
+      if (banCheck.length > 0 && banCheck[0].is_banned === 1) {
+        return res.status(403).json({ success: false, error: 'Tu cuenta ha sido suspendida.' });
+      }
+    }
 
     // 1. Log playback to user_live_playback with atomic upsert
-    const deviceKey = `${userId}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
+    const deviceKey = `${userId > 0 ? userId : client.ip}_${(resolvedPlatform || 'app').toLowerCase()}_${(client.deviceModel || resolvedDevice || 'device').toLowerCase()}`;
 
     await pool.query(`
       INSERT INTO user_live_playback (
@@ -50,6 +77,7 @@ router.post('/playback', async (req, res) => {
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
       ON DUPLICATE KEY UPDATE
+        user_id = COALESCE(VALUES(user_id), user_id),
         song_id = VALUES(song_id),
         title = VALUES(title),
         artist = VALUES(artist),
@@ -68,12 +96,12 @@ router.post('/playback', async (req, res) => {
         last_ping_at = CURRENT_TIMESTAMP,
         device_key = VALUES(device_key)
     `, [
-      userId,
+      dbUserId,
       String(songId),
       title,
       artist || '',
       album || '',
-      coverArt || '',
+      resolvedCoverArt,
       parseInt(duration, 10) || 0,
       parseInt(position, 10) || 0,
       isPlaying ? 1 : 0,
@@ -87,21 +115,21 @@ router.post('/playback', async (req, res) => {
       deviceKey,
     ]);
 
-    // Cleanup stale live sessions older than 3 minutes
-    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 180 SECOND').catch(() => {});
+    // Cleanup stale live sessions older than 25 seconds
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 25 SECOND').catch(() => {});
 
     // 2. Automatically log to playback_history if new song started
     const delta = Math.min(Math.max(parseInt(listenDeltaSeconds, 10) || 0, 0), 60);
-    if (isPlaying) {
+    if (isPlaying && dbUserId) {
       try {
         const [recentHistory] = await pool.query(
           'SELECT id FROM playback_history WHERE user_id = ? AND song_id = ? AND played_at >= NOW() - INTERVAL 45 SECOND LIMIT 1',
-          [userId, String(songId)]
+          [dbUserId, String(songId)]
         );
         if (recentHistory.length === 0) {
           await pool.query(
             'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address, listen_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [userId, String(songId), title, artist || '', album || '', coverArt || '', parseInt(duration, 10) || 0, resolvedPlatform, resolvedDevice, client.ip, delta || 15]
+            [dbUserId, String(songId), title, artist || '', album || '', resolvedCoverArt, parseInt(duration, 10) || 0, resolvedPlatform, resolvedDevice, client.ip, delta || 15]
           );
         }
       } catch (histErr) {
@@ -111,33 +139,35 @@ router.post('/playback', async (req, res) => {
 
     // 3. Accumulate listening seconds in users and active session if music is playing
     if (isPlaying && delta > 0) {
-      await pool.query(`
-        UPDATE users 
-        SET total_listen_seconds = total_listen_seconds + ?, 
-            last_active_at = CURRENT_TIMESTAMP,
-            last_login_ip = ?,
-            last_device = ?,
-            last_country = COALESCE(?, last_country),
-            last_country_code = COALESCE(?, last_country_code),
-            last_city = COALESCE(?, last_city),
-            last_region = COALESCE(?, last_region),
-            last_isp = COALESCE(?, last_isp),
-            last_os_version = COALESCE(?, last_os_version),
-            last_device_model = COALESCE(?, last_device_model)
-        WHERE id = ?
-      `, [
-        delta,
-        client.ip,
-        resolvedDevice,
-        geo.country,
-        geo.countryCode,
-        geo.city,
-        geo.region,
-        geo.isp,
-        client.osVersion,
-        client.deviceModel,
-        userId,
-      ]);
+      if (userId > 0) {
+        await pool.query(`
+          UPDATE users 
+          SET total_listen_seconds = total_listen_seconds + ?, 
+              last_active_at = CURRENT_TIMESTAMP,
+              last_login_ip = ?,
+              last_device = ?,
+              last_country = COALESCE(?, last_country),
+              last_country_code = COALESCE(?, last_country_code),
+              last_city = COALESCE(?, last_city),
+              last_region = COALESCE(?, last_region),
+              last_isp = COALESCE(?, last_isp),
+              last_os_version = COALESCE(?, last_os_version),
+              last_device_model = COALESCE(?, last_device_model)
+          WHERE id = ?
+        `, [
+          delta,
+          client.ip,
+          resolvedDevice,
+          geo.country,
+          geo.countryCode,
+          geo.city,
+          geo.region,
+          geo.isp,
+          client.osVersion,
+          client.deviceModel,
+          userId,
+        ]);
+      }
 
       await pool.query(`
         UPDATE user_sessions 
@@ -148,10 +178,10 @@ router.post('/playback', async (req, res) => {
             country = COALESCE(country, ?),
             city = COALESCE(city, ?),
             isp = COALESCE(isp, ?)
-        WHERE user_id = ? AND client_platform = ?
+        WHERE (user_id = ? OR ip_address = ?) AND client_platform = ?
         ORDER BY id DESC LIMIT 1
-      `, [delta, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, userId, client.clientPlatform]);
-    } else {
+      `, [delta, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, userId, client.ip, client.clientPlatform]);
+    } else if (userId > 0) {
       await pool.query(`
         UPDATE users 
         SET last_active_at = CURRENT_TIMESTAMP 
@@ -187,7 +217,16 @@ router.post('/ping', async (req, res) => {
     const client = parseFullClientInfo(req);
     const geo = await resolveIpLocation(client.ip);
     const pool = getPool();
-    const userId = req.user.id;
+    const userId = req.user?.id || 0;
+    const dbUserId = userId > 0 ? userId : null;
+
+    if (userId > 0) {
+      const [banCheck] = await pool.query('SELECT is_banned FROM users WHERE id = ? LIMIT 1', [userId]);
+      if (banCheck.length > 0 && banCheck[0].is_banned === 1) {
+        return res.status(403).json({ success: false, error: 'Tu cuenta ha sido suspendida.' });
+      }
+    }
+
     const platform = req.body?.platform || client.os;
     const deviceSummary = client.deviceSummary;
 
@@ -195,9 +234,12 @@ router.post('/ping', async (req, res) => {
     const [recentSession] = await pool.query(`
       SELECT id, created_at, last_active_at 
       FROM user_sessions 
-      WHERE user_id = ? AND client_platform = ? AND (device_model = ? OR device_os = ?) AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 10 MINUTE 
+      WHERE ((? IS NOT NULL AND user_id = ?) OR ip_address = ?) 
+        AND client_platform = ? 
+        AND (device_model = ? OR device_os = ?) 
+        AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 10 MINUTE 
       ORDER BY id DESC LIMIT 1
-    `, [userId, client.clientPlatform, client.deviceModel, client.os]);
+    `, [dbUserId, dbUserId, client.ip, client.clientPlatform, client.deviceModel, client.os]);
 
     if (recentSession.length > 0) {
       // Update ongoing session last active time & duration for this device
@@ -210,9 +252,10 @@ router.post('/ping', async (req, res) => {
             os_version = COALESCE(?, os_version),
             country = COALESCE(?, country),
             city = COALESCE(?, city),
-            isp = COALESCE(?, isp)
+            isp = COALESCE(?, isp),
+            user_id = COALESCE(?, user_id)
         WHERE id = ?
-      `, [client.ip, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, recentSession[0].id]);
+      `, [client.ip, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, dbUserId, recentSession[0].id]);
     } else {
       // Record new session with full device & geolocation for this device
       await pool.query(`
@@ -222,7 +265,7 @@ router.post('/ping', async (req, res) => {
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        userId,
+        dbUserId,
         client.ip,
         client.userAgent,
         client.os,
@@ -240,46 +283,91 @@ router.post('/ping', async (req, res) => {
       ]);
     }
 
-    // Update user metadata
-    await pool.query(`
-      UPDATE users 
-      SET last_active_at = CURRENT_TIMESTAMP,
-          last_login_at = COALESCE(last_login_at, CURRENT_TIMESTAMP),
-          last_login_ip = ?,
-          last_device = ?,
-          last_country = COALESCE(?, last_country),
-          last_country_code = COALESCE(?, last_country_code),
-          last_city = COALESCE(?, last_city),
-          last_region = COALESCE(?, last_region),
-          last_isp = COALESCE(?, last_isp),
-          last_os_version = COALESCE(?, last_os_version),
-          last_device_model = COALESCE(?, last_device_model)
-      WHERE id = ?
-    `, [
-      client.ip,
-      deviceSummary,
-      geo.country,
-      geo.countryCode,
-      geo.city,
-      geo.region,
-      geo.isp,
-      client.osVersion,
-      client.deviceModel,
-      userId,
-    ]);
+    // Update user metadata if authenticated
+    if (dbUserId) {
+      await pool.query(`
+        UPDATE users 
+        SET last_active_at = CURRENT_TIMESTAMP,
+            last_login_at = COALESCE(last_login_at, CURRENT_TIMESTAMP),
+            last_login_ip = ?,
+            last_device = ?,
+            last_country = COALESCE(?, last_country),
+            last_country_code = COALESCE(?, last_country_code),
+            last_city = COALESCE(?, last_city),
+            last_region = COALESCE(?, last_region),
+            last_isp = COALESCE(?, last_isp),
+            last_os_version = COALESCE(?, last_os_version),
+            last_device_model = COALESCE(?, last_device_model)
+        WHERE id = ?
+      `, [
+        client.ip,
+        deviceSummary,
+        geo.country,
+        geo.countryCode,
+        geo.city,
+        geo.region,
+        geo.isp,
+        client.osVersion,
+        client.deviceModel,
+        userId,
+      ]);
+    }
+
+    // Clean up stale playback rows older than 25 seconds
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 25 SECOND').catch(() => {});
 
     return res.json({
       success: true,
+      status: 'ping_received',
       timestamp: new Date().toISOString(),
-      location: {
-        city: geo.city,
-        country: geo.country,
-        isp: geo.isp,
-      },
     });
   } catch (err) {
     console.error('[Telemetry Ping Error]:', err);
     return res.status(500).json({ success: false, error: 'Error al procesar ping.' });
+  }
+});
+
+/**
+ * POST /api/telemetry/leave
+ * Notifies that the user disconnected / closed the application
+ */
+router.post('/leave', async (req, res) => {
+  try {
+    const client = parseFullClientInfo(req);
+    const pool = getPool();
+    const userId = req.user?.id || 0;
+    const platform = req.body?.platform || client.os;
+    const deviceModel = req.body?.deviceModel || client.deviceModel;
+
+    // 1. Remove live playback presence only for this device
+    if (userId > 0) {
+      await pool.query(
+        'DELETE FROM user_live_playback WHERE user_id = ? AND (platform = ? OR device_model = ? OR ip_address = ?)',
+        [userId, platform, deviceModel, client.ip]
+      );
+    } else {
+      await pool.query('DELETE FROM user_live_playback WHERE ip_address = ?', [client.ip]);
+    }
+
+    // 2. Expire active sessions only for this client platform / device
+    if (userId > 0) {
+      await pool.query(`
+        UPDATE user_sessions 
+        SET last_active_at = NOW() - INTERVAL 1 HOUR 
+        WHERE user_id = ? AND (client_platform = ? OR device_model = ? OR device_os = ?)
+      `, [userId, client.clientPlatform, deviceModel, client.os]);
+    } else {
+      await pool.query(`
+        UPDATE user_sessions 
+        SET last_active_at = NOW() - INTERVAL 1 HOUR 
+        WHERE ip_address = ? AND (client_platform = ? OR device_model = ?)
+      `, [client.ip, client.clientPlatform, deviceModel]);
+    }
+
+    return res.json({ success: true, message: 'Presencia cerrada exitosamente' });
+  } catch (err) {
+    console.warn('[Telemetry Leave Warning]:', err.message);
+    return res.json({ success: true });
   }
 });
 

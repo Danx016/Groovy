@@ -18,11 +18,11 @@ router.get('/live-playback', async (req, res) => {
     // 1. Live playback stream presence (within last 5 minutes)
     const [rows] = await pool.query(`
       SELECT 
-        lp.user_id,
-        u.name as user_name,
-        u.email as user_email,
+        COALESCE(lp.user_id, 0) as user_id,
+        COALESCE(u.name, lp.device_model, lp.device_name, 'Usuario') as user_name,
+        COALESCE(u.email, 'Usuario Conectado') as user_email,
         u.avatar_url as user_avatar,
-        u.role as user_role,
+        COALESCE(u.role, 'user') as user_role,
         lp.song_id,
         lp.title,
         lp.artist,
@@ -42,20 +42,20 @@ router.get('/live-playback', async (req, res) => {
         lp.last_ping_at,
         TIMESTAMPDIFF(SECOND, lp.last_ping_at, NOW()) as seconds_since_ping
       FROM user_live_playback lp
-      JOIN users u ON lp.user_id = u.id
-      WHERE lp.last_ping_at >= NOW() - INTERVAL 600 SECOND
+      LEFT JOIN users u ON lp.user_id = u.id
+      WHERE lp.last_ping_at >= NOW() - INTERVAL 25 SECOND
       ORDER BY lp.last_ping_at DESC
     `);
 
-    // 2. Users active/connected in the app right now (within last 10 minutes)
+    // 2. Users active/connected in the app right now (within last 25 seconds)
     const [connectedRows] = await pool.query(`
       SELECT 
         s.id as session_id,
-        s.user_id,
-        u.name as user_name,
-        u.email as user_email,
+        COALESCE(s.user_id, 0) as user_id,
+        COALESCE(u.name, s.device_model, 'Usuario') as user_name,
+        COALESCE(u.email, 'Usuario Conectado') as user_email,
         u.avatar_url as user_avatar,
-        u.role as user_role,
+        COALESCE(u.role, 'user') as user_role,
         s.client_platform,
         s.device_model,
         s.device_os,
@@ -70,9 +70,10 @@ router.get('/live-playback', async (req, res) => {
         COALESCE(s.last_active_at, s.created_at) as last_active_at,
         TIMESTAMPDIFF(SECOND, COALESCE(s.last_active_at, s.created_at), NOW()) as seconds_since_active
       FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
-      WHERE s.last_active_at >= NOW() - INTERVAL 600 SECOND OR s.created_at >= NOW() - INTERVAL 600 SECOND
-      ORDER BY s.last_active_at DESC
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.last_active_at >= NOW() - INTERVAL 25 SECOND 
+         OR (s.created_at >= NOW() - INTERVAL 25 SECOND AND s.last_active_at IS NULL)
+      ORDER BY COALESCE(s.last_active_at, s.created_at) DESC
     `);
 
     return res.json({
@@ -91,7 +92,8 @@ router.get('/live-playback', async (req, res) => {
         coverArt: r.cover_art,
         duration: r.duration,
         position: r.position,
-        isPlaying: r.is_playing === 1 && (r.seconds_since_ping < 90),
+        isPlaying: r.is_playing === 1 && (r.seconds_since_ping < 25),
+        isPaused: r.is_playing === 0 || (r.seconds_since_ping >= 25),
         platform: r.platform || 'Desconocido',
         deviceName: r.device_name,
         ipAddress: r.ip_address,
@@ -142,11 +144,17 @@ router.get('/metrics', async (req, res) => {
     const [totalUsersRows] = await pool.query('SELECT COUNT(*) as count FROM users');
     const totalUsers = totalUsersRows[0].count;
 
-    // Active users in last 24h
+    // Active users in last 24h across sessions, playback, telemetry and user activity
     const [activeTodayRows] = await pool.query(`
-      SELECT COUNT(DISTINCT user_id) as count 
-      FROM user_sessions 
-      WHERE created_at >= NOW() - INTERVAL 1 DAY OR last_active_at >= NOW() - INTERVAL 1 DAY
+      SELECT COUNT(DISTINCT user_id) as count FROM (
+        SELECT user_id FROM user_sessions WHERE created_at >= NOW() - INTERVAL 1 DAY OR last_active_at >= NOW() - INTERVAL 1 DAY
+        UNION
+        SELECT user_id FROM playback_history WHERE played_at >= NOW() - INTERVAL 1 DAY
+        UNION
+        SELECT user_id FROM user_live_playback WHERE last_ping_at >= NOW() - INTERVAL 1 DAY
+        UNION
+        SELECT id as user_id FROM users WHERE last_active_at >= NOW() - INTERVAL 1 DAY
+      ) active_users
     `);
     const activeToday = activeTodayRows[0].count;
 
@@ -158,15 +166,17 @@ router.get('/metrics', async (req, res) => {
     `);
     const activeListeners = activeListenersRows[0].count;
 
-    // Total listen time in seconds across all users (sum of users table or playback_history)
+    // Total listen time in seconds across all users (Pure real-time music listened second-by-second via telemetry pings)
     const [listenTimeRows] = await pool.query(`
-      SELECT COALESCE(
-        NULLIF(SUM(u.total_listen_seconds), 0),
-        (SELECT SUM(COALESCE(h.listen_seconds, h.duration, 180)) FROM playback_history h),
-        0
-      ) as total_seconds FROM users u
+      SELECT COALESCE(SUM(u.total_listen_seconds), 0) as total_seconds FROM users u
     `);
     const totalListenSeconds = parseInt(listenTimeRows[0]?.total_seconds || 0, 10);
+
+    // Total song duration sum from history
+    const [durationRows] = await pool.query(`
+      SELECT COALESCE(SUM(duration), 0) as total_duration FROM playback_history
+    `);
+    const totalSongDurationSeconds = parseInt(durationRows[0]?.total_duration || 0, 10);
 
     // Total Favorites & Playlists & Plays & Sessions
     const [favRows] = await pool.query('SELECT COUNT(*) as count FROM favorites');
@@ -226,6 +236,7 @@ router.get('/metrics', async (req, res) => {
         activeToday,
         activeListeners,
         totalListenSeconds,
+        totalSongDurationSeconds,
         totalFavorites: favRows[0].count,
         totalPlaylists: playlistRows[0].count,
         totalPlays: historyRows[0].count,
@@ -323,11 +334,7 @@ router.get('/users', async (req, res) => {
           (SELECT s.device_model FROM user_sessions s WHERE s.user_id = u.id ORDER BY s.id DESC LIMIT 1), 
           NULL
         ) as last_device_model,
-        COALESCE(
-          NULLIF(u.total_listen_seconds, 0),
-          (SELECT SUM(COALESCE(NULLIF(h.listen_seconds, 0), NULLIF(h.duration, 0), 180)) FROM playback_history h WHERE h.user_id = u.id),
-          0
-        ) as total_listen_seconds,
+        COALESCE(u.total_listen_seconds, 0) as total_listen_seconds,
         u.created_at,
         (SELECT COUNT(*) FROM favorites f WHERE f.user_id = u.id) as favorites_count,
         (SELECT COUNT(*) FROM playlists p WHERE p.user_id = u.id) as playlists_count,
@@ -442,7 +449,9 @@ router.get('/users/:id', async (req, res) => {
     const [userRows] = await pool.query(
       `SELECT id, name, email, avatar_url, role, is_banned, last_login_at, last_active_at, 
               last_login_ip, last_device, last_country, last_country_code, last_city, last_region, 
-              last_isp, last_os_version, last_device_model, total_listen_seconds, created_at, updated_at 
+              last_isp, last_os_version, last_device_model, 
+              COALESCE(total_listen_seconds, 0) as total_listen_seconds,
+              created_at, updated_at 
        FROM users WHERE id = ? LIMIT 1`,
       [id]
     );
@@ -685,6 +694,12 @@ router.patch('/users/:id/ban', async (req, res) => {
     }
 
     await pool.query('UPDATE users SET is_banned = ? WHERE id = ?', [isBanned ? 1 : 0, id]);
+
+    // If banned, immediately wipe live playback and expire sessions so user gets disconnected immediately
+    if (isBanned) {
+      await pool.query('DELETE FROM user_live_playback WHERE user_id = ?', [id]).catch(() => {});
+      await pool.query('UPDATE user_sessions SET last_active_at = NOW() - INTERVAL 2 HOUR WHERE user_id = ?', [id]).catch(() => {});
+    }
 
     return res.json({
       success: true,

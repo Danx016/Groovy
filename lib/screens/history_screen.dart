@@ -79,9 +79,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     // The profiles are still tracked even when recommendations are off
 
     final profiles = recommendationService.profiles;
-    final allSongs = libraryProvider.cachedAllSongs;
-
-    final songMap = {for (var s in allSongs) s.id: s};
+    final songMap = libraryProvider.songsByIdMap;
 
     final playedSongs = profiles.entries
         .where((e) => e.value.playCount > 0 && songMap.containsKey(e.key))

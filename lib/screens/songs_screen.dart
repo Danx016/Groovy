@@ -19,7 +19,7 @@ class _SongsScreenState extends State<SongsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSongs();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadSongs());
   }
 
   Future<void> _loadSongs() async {

@@ -97,25 +97,25 @@ class _ArtistScreenState extends State<ArtistScreen> {
         final targetId = libraryMatch?.id ?? widget.artistId;
 
         try {
-          artist = await youtubeService.getArtist(targetId);
-          _artistInfo = await youtubeService.getArtistInfo(targetId);
+          final results = await Future.wait([
+            youtubeService.getArtist(targetId).then<Artist?>((a) => a).catchError((_) => null),
+            youtubeService.getArtistInfo(targetId).catchError((_) => null),
+            youtubeService.getArtistTopSongs(targetId).catchError((_) => <Song>[]),
+            youtubeService.getArtistAlbums(targetId).catchError((_) => <Album>[]),
+          ]);
+          artist = results[0] as Artist?;
+          _artistInfo = results[1] as ArtistInfo?;
+          topSongs = (results[2] as List<Song>?) ?? [];
+          albums = (results[3] as List<Album>?) ?? [];
 
-          topSongs = await youtubeService.getArtistTopSongs(targetId);
-          albums = await youtubeService.getArtistAlbums(targetId);
-          if (albums.isNotEmpty) {
+          if (topSongs.length < 5 && albums.isNotEmpty) {
             final topSongIds = topSongs.map((s) => s.id).toSet();
             final seenIds = {...topSongIds};
-            const chunkSize = 5;
-            final allAlbumSongs = <Song>[];
-            for (var i = 0; i < albums.length; i += chunkSize) {
-              final chunk =
-                  albums.sublist(i, (i + chunkSize).clamp(0, albums.length));
-              final results = await Future.wait(
-                  chunk.map((a) => youtubeService.getAlbumSongs(a.id)));
-              allAlbumSongs.addAll(results
-                  .expand((songs) => songs)
-                  .where((s) => seenIds.add(s.id)));
-            }
+            final albumsToFetch = albums.take(3).toList();
+            final albumSongResults = await Future.wait(
+              albumsToFetch.map((a) => youtubeService.getAlbumSongs(a.id).catchError((_) => <Song>[])),
+            );
+            final allAlbumSongs = albumSongResults.expand((songs) => songs).where((s) => seenIds.add(s.id));
             topSongs = [...topSongs, ...allAlbumSongs];
           }
         } catch (serverErr) {

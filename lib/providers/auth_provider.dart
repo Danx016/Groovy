@@ -37,8 +37,8 @@ class AuthProvider extends ChangeNotifier {
     // Immediate ping on active session
     _apiService.pingSession(_token!);
 
-    // Periodic heartbeat every 25 seconds while app is open and connected
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 25), (_) {
+    // Periodic heartbeat every 8 seconds while app is open and connected
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       if (_token != null && _token!.isNotEmpty && !_disposed) {
         _apiService.pingSession(_token!);
       }
@@ -48,6 +48,9 @@ class AuthProvider extends ChangeNotifier {
   void _stopSessionHeartbeat() {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
+    if (_token != null && _token!.isNotEmpty) {
+      _apiService.leaveSession(_token!);
+    }
   }
 
   @override

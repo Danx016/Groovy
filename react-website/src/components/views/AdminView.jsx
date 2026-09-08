@@ -161,6 +161,7 @@ export const AdminView = () => {
   const [editingUser, setEditingUser] = useState(null);
   const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'user', password: '' });
   const [userToDelete, setUserToDelete] = useState(null);
+  const [userToToggleBan, setUserToToggleBan] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
@@ -200,12 +201,11 @@ export const AdminView = () => {
   // Load deep user detail
   const handleOpenUserDetail = async (userId) => {
     setIsLoadingDetail(true);
-    setSelectedUserDetail(null);
     try {
       const data = await adminApi.getUserDetails(userId);
       setSelectedUserDetail(data);
     } catch (err) {
-      alert('Error al cargar detalles del usuario: ' + err.message);
+      alert('Error al cargar detalle del usuario: ' + err.message);
     } finally {
       setIsLoadingDetail(false);
     }
@@ -229,8 +229,8 @@ export const AdminView = () => {
     setIsSubmitting(true);
     try {
       const payload = {
-        name: editFormData.name,
-        email: editFormData.email,
+        name: editFormData.name.trim(),
+        email: editFormData.email.trim(),
         role: editFormData.role,
       };
       if (editFormData.password.trim()) {
@@ -248,21 +248,31 @@ export const AdminView = () => {
   };
 
   // Toggle Ban/Suspend
-  const handleToggleBan = async (user) => {
-    const nextStatus = !user.isBanned;
-    const confirmMsg = nextStatus
-      ? `¿Estás seguro de suspender el acceso a ${user.name} (${user.email})?`
-      : `¿Deseas reactivar la cuenta de ${user.name}?`;
-    if (!window.confirm(confirmMsg)) return;
+  const handleToggleBan = (user) => {
+    setUserToToggleBan(user);
+  };
 
+  const handleConfirmToggleBan = async () => {
+    if (!userToToggleBan) return;
+    const nextStatus = !userToToggleBan.isBanned;
+    setIsSubmitting(true);
     try {
-      await adminApi.toggleBanUser(user.id, nextStatus);
+      await adminApi.toggleBanUser(userToToggleBan.id, nextStatus);
+      setActionMessage({
+        type: 'success',
+        text: nextStatus
+          ? `Acceso de ${userToToggleBan.name} suspendido correctamente.`
+          : `Acceso de ${userToToggleBan.name} reactivado correctamente.`,
+      });
+      setUserToToggleBan(null);
       fetchData();
-      if (selectedUserDetail?.user?.id === user.id) {
-        handleOpenUserDetail(user.id);
+      if (selectedUserDetail?.user?.id === userToToggleBan.id) {
+        handleOpenUserDetail(userToToggleBan.id);
       }
     } catch (err) {
       alert('Error: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -1151,6 +1161,7 @@ export const AdminView = () => {
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
               <button
+                type="button"
                 onClick={() => setUserToDelete(null)}
                 disabled={isSubmitting}
                 style={{ padding: '10px 18px', borderRadius: '10px', background: '#282828', color: '#A1A1A6', border: 'none', cursor: 'pointer', fontWeight: 600 }}
@@ -1158,11 +1169,74 @@ export const AdminView = () => {
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleConfirmDelete}
                 disabled={isSubmitting}
                 style={{ padding: '10px 22px', borderRadius: '10px', background: '#FF453A', color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700 }}
               >
                 {isSubmitting ? 'Eliminando...' : 'Sí, Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: BAN / SUSPENSION CONFIRMATION */}
+      {userToToggleBan && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px',
+        }}>
+          <div style={{
+            background: '#181818',
+            border: `1px solid ${userToToggleBan.isBanned ? '#34C759' : '#FF9500'}`,
+            borderRadius: '20px',
+            width: '100%', maxWidth: '440px', padding: '24px', textAlign: 'center',
+          }}>
+            <div style={{
+              width: '56px', height: '56px', borderRadius: '50%',
+              background: userToToggleBan.isBanned ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+              color: userToToggleBan.isBanned ? '#34C759' : '#FF9500',
+            }}>
+              {userToToggleBan.isBanned ? <CheckCircle2 size={28} /> : <Ban size={28} />}
+            </div>
+
+            <h3 style={{ fontSize: '20px', fontWeight: 700, marginBottom: '8px' }}>
+              {userToToggleBan.isBanned ? '¿Reactivar cuenta?' : '¿Suspender cuenta?'}
+            </h3>
+            <p style={{ fontSize: '14px', color: '#A1A1A6', marginBottom: '20px', lineHeight: 1.5 }}>
+              {userToToggleBan.isBanned ? (
+                <>
+                  Se restaurará el acceso para <strong style={{ color: '#fff' }}>{userToToggleBan.name}</strong> ({userToToggleBan.email}) y podrá volver a iniciar sesión y sincronizar su música.
+                </>
+              ) : (
+                <>
+                  ¿Estás seguro de suspender el acceso a <strong style={{ color: '#fff' }}>{userToToggleBan.name}</strong> ({userToToggleBan.email})? No podrá iniciar sesión ni usar la app.
+                </>
+              )}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => setUserToToggleBan(null)}
+                disabled={isSubmitting}
+                style={{ padding: '10px 18px', borderRadius: '10px', background: '#282828', color: '#A1A1A6', border: 'none', cursor: 'pointer', fontWeight: 600 }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmToggleBan}
+                disabled={isSubmitting}
+                style={{
+                  padding: '10px 22px', borderRadius: '10px',
+                  background: userToToggleBan.isBanned ? '#34C759' : '#FF9500',
+                  color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700,
+                }}
+              >
+                {isSubmitting ? 'Procesando...' : (userToToggleBan.isBanned ? 'Reactivar Acceso' : 'Suspender Acceso')}
               </button>
             </div>
           </div>

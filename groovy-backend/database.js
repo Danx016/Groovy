@@ -255,19 +255,23 @@ async function runMigrations(conn) {
   await addColToTable('user_live_playback', 'city', 'VARCHAR(100) NULL');
   await addColToTable('user_live_playback', 'device_key', 'VARCHAR(255) NULL');
 
-  // Migrate user_live_playback to support simultaneous devices per user (Android + Windows)
+  // Allow guest sessions (user_id NULL) without foreign key constraints
   try {
-    const [pkRows] = await conn.query(`
-      SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
-      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_live_playback' AND CONSTRAINT_NAME = 'PRIMARY'
-    `);
-    if (pkRows.length === 1 && pkRows[0].COLUMN_NAME === 'user_id') {
-      await conn.query('ALTER TABLE user_live_playback DROP PRIMARY KEY, ADD PRIMARY KEY (user_id, platform, device_name)');
-      console.log('[Database] Migrated user_live_playback to multi-device composite key');
-    }
-  } catch (e) {
-    // Already migrated or managed
-  }
+    await conn.query('ALTER TABLE user_sessions MODIFY COLUMN user_id INT NULL');
+  } catch (_) {}
+  try {
+    await conn.query('ALTER TABLE playback_history MODIFY COLUMN user_id INT NULL');
+  } catch (_) {}
+  try {
+    await conn.query('ALTER TABLE user_live_playback MODIFY COLUMN user_id INT NULL');
+  } catch (_) {}
+  try {
+    await conn.query('ALTER TABLE user_live_playback DROP FOREIGN KEY fk_live_user');
+  } catch (_) {}
+  try {
+    await conn.query('ALTER TABLE user_live_playback DROP PRIMARY KEY, ADD PRIMARY KEY (device_key)');
+    console.log('[Database] Migrated user_live_playback to device_key primary key');
+  } catch (_) {}
 
   // Promote danilorodelo355@gmail.com and initial admin to admin role
   try {

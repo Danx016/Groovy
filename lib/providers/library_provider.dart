@@ -36,6 +36,16 @@ class LibraryProvider extends ChangeNotifier {
   List<Playlist> _cachedPlaylists = [];
   DateTime? _lastCacheUpdate;
 
+  List<Album>? _memoizedAllAlbums;
+  int _lastAlbumsHash = 0;
+
+  List<Song>? _memoizedAllSongs;
+  Map<String, Song>? _memoizedSongsById;
+  int _lastSongsHash = 0;
+
+  List<Artist>? _memoizedArtists;
+  int _lastArtistsHash = 0;
+
   bool _isLoading = false;
   bool _isInitialized = false;
   String? _error;
@@ -147,15 +157,20 @@ class LibraryProvider extends ChangeNotifier {
         _localMusicService!.isEmpty) {
       return _cachedAllAlbums;
     }
-    // Merge server albums with local albums
     final localAlbums = _localMusicService!.albums;
-    final merged = [..._cachedAllAlbums];
+    final currentHash = Object.hash(_cachedAllAlbums.length, localAlbums.length, _lastCacheUpdate);
+    if (_memoizedAllAlbums != null && _lastAlbumsHash == currentHash) {
+      return _memoizedAllAlbums!;
+    }
+    final existingIds = <String>{for (final a in _cachedAllAlbums) a.id};
+    final merged = List<Album>.from(_cachedAllAlbums);
     for (final localAlbum in localAlbums) {
-      // Avoid duplicates by checking ID
-      if (!merged.any((a) => a.id == localAlbum.id)) {
+      if (existingIds.add(localAlbum.id)) {
         merged.add(localAlbum);
       }
     }
+    _lastAlbumsHash = currentHash;
+    _memoizedAllAlbums = merged;
     return merged;
   }
 
@@ -165,17 +180,34 @@ class LibraryProvider extends ChangeNotifier {
         _localMusicService!.isEmpty) {
       return _cachedAllSongs;
     }
-    // Merge server songs with local songs
     final localSongs = _localMusicService!.songs;
-    final merged = [..._cachedAllSongs];
+    final currentHash = Object.hash(_cachedAllSongs.length, localSongs.length, _lastCacheUpdate);
+    if (_memoizedAllSongs != null && _lastSongsHash == currentHash) {
+      return _memoizedAllSongs!;
+    }
+    final existingIds = <String>{for (final s in _cachedAllSongs) s.id};
+    final merged = List<Song>.from(_cachedAllSongs);
     for (final localSong in localSongs) {
-      // Avoid duplicates by checking ID
-      if (!merged.any((s) => s.id == localSong.id)) {
+      if (existingIds.add(localSong.id)) {
         merged.add(localSong);
       }
     }
+    _lastSongsHash = currentHash;
+    _memoizedAllSongs = merged;
+    _memoizedSongsById = null;
     return merged;
   }
+
+  Map<String, Song> get songsByIdMap {
+    final songs = cachedAllSongs;
+    if (_memoizedSongsById != null && _memoizedSongsById!.length == songs.length) {
+      return _memoizedSongsById!;
+    }
+    _memoizedSongsById = {for (final s in songs) s.id: s};
+    return _memoizedSongsById!;
+  }
+
+  Song? getSongById(String id) => songsByIdMap[id];
 
   List<Artist> get artists {
     if (!_mergeLocalLibrary ||
@@ -183,15 +215,20 @@ class LibraryProvider extends ChangeNotifier {
         _localMusicService!.isEmpty) {
       return _artists;
     }
-    // Merge server artists with local artists
     final localArtists = _localMusicService!.artists;
-    final merged = [..._artists];
+    final currentHash = Object.hash(_artists.length, localArtists.length, _lastCacheUpdate);
+    if (_memoizedArtists != null && _lastArtistsHash == currentHash) {
+      return _memoizedArtists!;
+    }
+    final existingIds = <String>{for (final a in _artists) a.id};
+    final merged = List<Artist>.from(_artists);
     for (final localArtist in localArtists) {
-      // Avoid duplicates by checking ID
-      if (!merged.any((a) => a.id == localArtist.id)) {
+      if (existingIds.add(localArtist.id)) {
         merged.add(localArtist);
       }
     }
+    _lastArtistsHash = currentHash;
+    _memoizedArtists = merged;
     return merged;
   }
 

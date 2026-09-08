@@ -34,7 +34,7 @@ void initializeTestEnvironment() {
       return {
         'appName': 'Groovy',
         'packageName': 'com.devid.musly',
-        'version': '1.0.65',
+        'version': '1.0.66',
         'buildNumber': '56',
       };
     },

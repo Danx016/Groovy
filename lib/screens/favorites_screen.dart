@@ -35,8 +35,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
 
     try {
-      final songs = await libraryProvider.getStarredSongs();
-      final albums = await libraryProvider.database.getStarredAlbums();
+      final results = await Future.wait([
+        libraryProvider.getStarredSongs(),
+        libraryProvider.database.getStarredAlbums(),
+      ]);
+      final songs = results[0] as List<Song>;
+      final albums = results[1] as List<Album>;
       if (mounted) {
         setState(() {
           _favoriteSongs = songs;
@@ -211,24 +215,29 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16).copyWith(bottom: 150),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        mainAxisSpacing: 16,
-        crossAxisSpacing: 16,
-        childAspectRatio: 0.75,
-      ),
-      itemCount: _favoriteAlbums.length,
-      itemBuilder: (context, index) {
-        final album = _favoriteAlbums[index];
-        return AlbumCard(
-          album: album,
-          size: double.infinity,
-          onTap: () => NavigationHelper.push(
-            context,
-            AlbumScreen(albumId: album.id, album: album),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = (constraints.maxWidth / 180).floor().clamp(2, 8);
+        return GridView.builder(
+          padding: const EdgeInsets.all(16).copyWith(bottom: 150),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.75,
           ),
+          itemCount: _favoriteAlbums.length,
+          itemBuilder: (context, index) {
+            final album = _favoriteAlbums[index];
+            return AlbumCard(
+              album: album,
+              size: double.infinity,
+              onTap: () => NavigationHelper.push(
+                context,
+                AlbumScreen(albumId: album.id, album: album),
+              ),
+            );
+          },
         );
       },
     );

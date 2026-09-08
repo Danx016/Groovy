@@ -15,9 +15,11 @@ import {
   Trash2,
   Ban,
   Check,
+  CheckCircle2,
   Copy,
   Mail,
   X,
+  LogOut,
   Activity,
   ArrowLeft,
   Shield,
@@ -36,10 +38,17 @@ import { adminApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 export const AdminPortal = ({ onBackToPlayer }) => {
-  const { user: currentUser, isAdmin, isAuthenticated, login, logout } = useAuth();
+  const { user: currentUser, isAdmin, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
 
-  // Navigation tab: 'live' | 'users' | 'sessions' | 'metrics'
-  const [activeTab, setActiveTab] = useState('users');
+  // Navigation tab persisted across browser reloads: 'live' | 'users' | 'sessions' | 'metrics'
+  const [activeTab, setActiveTab] = useState(() => {
+    return localStorage.getItem('groovy_admin_active_tab') || 'live';
+  });
+
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    localStorage.setItem('groovy_admin_active_tab', tab);
+  };
 
   // Login form state
   const [email, setEmail] = useState('');
@@ -65,6 +74,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [editingUser, setEditingUser] = useState(null);
   const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'user', password: '' });
   const [userToDelete, setUserToDelete] = useState(null);
+  const [userToToggleBan, setUserToToggleBan] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
@@ -98,8 +108,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] })),
         adminApi.getSessions(100).catch(() => ({ sessions: [] })),
       ]);
-      if (liveRes?.listeners) setLiveListeners(liveRes.listeners);
-      if (liveRes?.connectedUsers) setConnectedUsers(liveRes.connectedUsers);
+      setLiveListeners(liveRes?.listeners || []);
+      setConnectedUsers(liveRes?.connectedUsers || []);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
     } catch (e) {
       console.warn('Error fetching live playback / sessions:', e);
@@ -121,8 +131,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
       if (usersRes?.users) setUsers(usersRes.users);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
-      if (liveRes?.listeners) setLiveListeners(liveRes.listeners);
-      if (liveRes?.connectedUsers) setConnectedUsers(liveRes.connectedUsers);
+      setLiveListeners(liveRes?.listeners || []);
+      setConnectedUsers(liveRes?.connectedUsers || []);
     } catch (err) {
       console.error('Error fetching admin data:', err);
       setActionMessage({ type: 'error', text: 'Error al conectar con la base de datos: ' + err.message });
@@ -134,10 +144,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   useEffect(() => {
     if (isAuthorized) {
       fetchData();
-      // Auto-refresh live presence every 10 seconds
+      // Auto-refresh live presence every 3 seconds for instant connect/disconnect
       const interval = setInterval(() => {
         fetchLivePlayback();
-      }, 10000);
+      }, 3000);
       return () => clearInterval(interval);
     }
   }, [isAuthorized, fetchData, fetchLivePlayback]);
@@ -189,21 +199,31 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     }
   };
 
-  const handleToggleBan = async (user) => {
-    const nextStatus = !user.isBanned;
-    const confirmMsg = nextStatus
-      ? `¿Suspender el acceso a la cuenta de ${user.name}?`
-      : `¿Reactivar la cuenta de ${user.name}?`;
-    if (!window.confirm(confirmMsg)) return;
+  const handleToggleBan = (user) => {
+    setUserToToggleBan(user);
+  };
 
+  const handleConfirmToggleBan = async () => {
+    if (!userToToggleBan) return;
+    const nextStatus = !userToToggleBan.isBanned;
+    setIsSubmitting(true);
     try {
-      await adminApi.toggleBanUser(user.id, nextStatus);
+      await adminApi.toggleBanUser(userToToggleBan.id, nextStatus);
+      setActionMessage({
+        type: 'success',
+        text: nextStatus
+          ? `Acceso de ${userToToggleBan.name} suspendido correctamente.`
+          : `Acceso de ${userToToggleBan.name} reactivado correctamente.`,
+      });
+      setUserToToggleBan(null);
       fetchData();
-      if (selectedUser?.user?.id === user.id) {
-        handleOpenUserDetail(user.id);
+      if (selectedUser?.user?.id === userToToggleBan.id) {
+        handleOpenUserDetail(userToToggleBan.id);
       }
     } catch (err) {
       alert('Error: ' + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -273,6 +293,90 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     return <Globe size={16} style={{ color: '#007AFF' }} />;
   };
 
+  const getPlatformBadge = (platform = '', deviceModel = '', os = '') => {
+    const str = `${platform || ''} ${deviceModel || ''} ${os || ''}`.toLowerCase();
+    if (str.includes('windows') || str.includes('win32') || str.includes('win64') || str.includes('pc') || str.includes('desktop')) {
+      return {
+        label: 'ACTIVO EN WINDOWS',
+        icon: '💻',
+        color: '#00A4EF',
+        bg: 'rgba(0,164,239,0.15)',
+        border: 'rgba(0,164,239,0.3)',
+      };
+    }
+    if (str.includes('android')) {
+      return {
+        label: 'ACTIVO EN ANDROID',
+        icon: '📱',
+        color: '#34C759',
+        bg: 'rgba(52,199,89,0.15)',
+        border: 'rgba(52,199,89,0.3)',
+      };
+    }
+    if (str.includes('ios') || str.includes('iphone') || str.includes('ipad')) {
+      return {
+        label: 'ACTIVO EN IOS',
+        icon: '📱',
+        color: '#007AFF',
+        bg: 'rgba(0,122,255,0.15)',
+        border: 'rgba(0,122,255,0.3)',
+      };
+    }
+    if (str.includes('mac') || str.includes('darwin')) {
+      return {
+        label: 'ACTIVO EN MAC',
+        icon: '💻',
+        color: '#FFFFFF',
+        bg: 'rgba(255,255,255,0.15)',
+        border: 'rgba(255,255,255,0.3)',
+      };
+    }
+    if (str.includes('linux')) {
+      return {
+        label: 'ACTIVO EN LINUX',
+        icon: '🐧',
+        color: '#FFAA00',
+        bg: 'rgba(255,170,0,0.15)',
+        border: 'rgba(255,170,0,0.3)',
+      };
+    }
+    if (str.includes('web') || str.includes('browser') || str.includes('chrome') || str.includes('firefox') || str.includes('edge') || str.includes('safari')) {
+      return {
+        label: 'ACTIVO EN WEB',
+        icon: '🌐',
+        color: '#FF9500',
+        bg: 'rgba(255,149,0,0.15)',
+        border: 'rgba(255,149,0,0.3)',
+      };
+    }
+    return {
+      label: platform ? `ACTIVO EN ${platform.toUpperCase()}` : 'ACTIVO EN LA APP',
+      icon: '📱',
+      color: '#007AFF',
+      bg: 'rgba(0,122,255,0.15)',
+      border: 'rgba(0,122,255,0.3)',
+    };
+  };
+
+  const resolveSongCover = (coverArt, songId) => {
+    if (coverArt && typeof coverArt === 'string') {
+      const trimmed = coverArt.trim();
+      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+        return trimmed;
+      }
+      if (!trimmed.includes('/') && !trimmed.includes('\\') && !trimmed.includes(' ') && trimmed.length >= 8 && trimmed.length <= 25) {
+        return `https://i.ytimg.com/vi/${trimmed}/hqdefault.jpg`;
+      }
+    }
+    if (songId && typeof songId === 'string') {
+      const trimmedId = songId.trim();
+      if (!trimmedId.startsWith('local_') && !trimmedId.includes('/') && !trimmedId.includes('\\') && trimmedId.length >= 8 && trimmedId.length <= 25) {
+        return `https://i.ytimg.com/vi/${trimmedId}/hqdefault.jpg`;
+      }
+    }
+    return null;
+  };
+
   const isWebClient = (platform = '', device = '', browser = '') => {
     const str = `${platform || ''} ${device || ''} ${browser || ''}`.toLowerCase().trim();
     if (!str) return false;
@@ -336,6 +440,20 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       return '—';
     }
   };
+
+  // Auth loading state: avoid flashing login form while checking saved session
+  if (isAuthLoading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden' }}>
+            <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+          <RefreshCw size={24} style={{ color: '#FA243C', animation: 'spin 1s linear infinite' }} />
+        </div>
+      </div>
+    );
+  }
 
   // Auth Guard Screen (matches Groovy's AccountView / AuthModal)
   if (!isAuthenticated || !isAuthorized) {
@@ -454,9 +572,52 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     );
   }
 
-  const activeLiveCount = liveListeners.filter(l => l.isPlaying).length;
-  const activeConnectedCount = connectedUsers.length;
-  const totalOnlineAppCount = activeLiveCount + connectedUsers.filter(u => !liveListeners.some(l => l.isPlaying && l.userId === u.userId)).length;
+  // Compute unified online devices map (Every distinct device: Windows, Android, Web, etc.)
+  const getDeviceKey = (userId, platform = '', deviceModel = '', deviceName = '') => {
+    const p = (platform || '').toLowerCase().trim();
+    const d = (deviceModel || deviceName || '').toLowerCase().trim();
+    let platType = 'web';
+    if (p.includes('android') || d.includes('android')) platType = 'android';
+    else if (p.includes('windows') || p.includes('win') || d.includes('windows')) platType = 'windows';
+    else if (p.includes('ios') || d.includes('iphone') || d.includes('ipad')) platType = 'ios';
+    else if (p.includes('mac') || d.includes('mac')) platType = 'mac';
+    else if (p.includes('linux')) platType = 'linux';
+    return `${userId}_${platType}_${d || 'device'}`;
+  };
+
+  const userDeviceMap = new Map();
+
+  // 1. Add active live playback presence (music streaming)
+  liveListeners.forEach(l => {
+    const key = getDeviceKey(l.userId, l.platform, l.deviceModel, l.deviceName);
+    userDeviceMap.set(key, {
+      ...l,
+      hasSong: !!l.title,
+    });
+  });
+
+  // 2. Add connected app sessions (browsing or idle in the app)
+  connectedUsers.forEach(c => {
+    const key = getDeviceKey(c.userId, c.clientPlatform || c.platform, c.deviceModel);
+    if (!userDeviceMap.has(key)) {
+      userDeviceMap.set(key, {
+        ...c,
+        platform: c.clientPlatform || c.platform,
+        hasSong: false,
+      });
+    }
+  });
+
+  const allOnlineUsers = Array.from(userDeviceMap.values()).filter(u => {
+    const pingSec = u.secondsSincePing ?? u.seconds_since_ping;
+    const activeSec = u.secondsSinceActive ?? u.seconds_since_active;
+    if (pingSec !== undefined && pingSec !== null && pingSec > 25) return false;
+    if (activeSec !== undefined && activeSec !== null && activeSec > 25) return false;
+    return true;
+  });
+  const activeLiveCount = allOnlineUsers.filter(u => u.hasSong && u.isPlaying).length;
+  const totalOnlineAppCount = allOnlineUsers.length;
+  const hasAnyLive = allOnlineUsers.length > 0;
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: '#000000', color: '#ffffff' }}>
@@ -500,9 +661,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
         {/* Navigation Items */}
         <nav style={{ display: 'flex', flexDirection: 'column', gap: '2px', marginBottom: '16px' }}>
-          {/* Live Now Listening Tab */}
+          {/* Live Online Users Tab */}
           <button
-            onClick={() => setActiveTab('live')}
+            onClick={() => handleTabChange('live')}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '10px 12px', borderRadius: '8px',
@@ -515,15 +676,15 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             onMouseLeave={e => { if (activeTab !== 'live') e.currentTarget.style.color = '#B3B3B3'; }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Radio size={19} style={{ color: activeTab === 'live' ? '#34C759' : '#34C759', flexShrink: 0 }} />
-              <span>Escuchando Ahora</span>
+              <Radio size={19} style={{ color: '#34C759', flexShrink: 0 }} />
+              <span>Usuarios en Línea</span>
             </div>
             {totalOnlineAppCount > 0 ? (
               <span style={{
                 fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '10px',
                 background: '#34C759', color: '#000',
               }}>
-                {totalOnlineAppCount} EN VIVO
+                {totalOnlineAppCount} EN LÍNEA
               </span>
             ) : (
               <span style={{ fontSize: '11px', color: '#6B6B6B' }}>0</span>
@@ -531,7 +692,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           </button>
 
           <button
-            onClick={() => setActiveTab('users')}
+            onClick={() => handleTabChange('users')}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '10px 12px', borderRadius: '8px',
@@ -557,7 +718,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           </button>
 
           <button
-            onClick={() => setActiveTab('sessions')}
+            onClick={() => handleTabChange('sessions')}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               width: '100%', padding: '10px 12px', borderRadius: '8px',
@@ -583,7 +744,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           </button>
 
           <button
-            onClick={() => setActiveTab('metrics')}
+            onClick={() => handleTabChange('metrics')}
             style={{
               display: 'flex', alignItems: 'center', gap: '12px',
               width: '100%', padding: '10px 12px', borderRadius: '8px',
@@ -622,42 +783,59 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
         {/* Current Admin User Footprint */}
         <div style={{
-          padding: '12px', borderRadius: '10px', background: '#181818',
+          marginTop: 'auto',
+          padding: '10px 12px',
+          borderRadius: '10px',
+          background: '#141414',
           border: '0.5px solid #282828',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-              <div style={{
-                width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                overflow: 'hidden',
-              }}>
-                {currentUser?.avatarUrl ? (
-                  <img src={currentUser.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
-                ) : (
-                  currentUser?.name?.charAt(0).toUpperCase() || 'A'
-                )}
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {currentUser?.name || 'Administrador'}
-                </p>
-                <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {currentUser?.email || ''}
-                </p>
-              </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+            <div style={{
+              width: '34px', height: '34px', borderRadius: '50%', background: '#FA243C',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+              overflow: 'hidden',
+            }}>
+              {currentUser?.avatarUrl ? (
+                <img src={currentUser.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+              ) : (
+                currentUser?.name?.charAt(0).toUpperCase() || 'A'
+              )}
             </div>
-            <button
-              onClick={logout}
-              title="Cerrar sesión"
-              style={{ color: '#B3B3B3', padding: '4px', flexShrink: 0 }}
-              onMouseEnter={e => e.currentTarget.style.color = '#FF3B30'}
-              onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
-            >
-              <X size={16} />
-            </button>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentUser?.name || 'Administrador'}
+              </p>
+              <p style={{ fontSize: '11px', color: '#8E8E93', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '1px' }}>
+                {currentUser?.email || ''}
+              </p>
+            </div>
           </div>
+          <button
+            onClick={logout}
+            title="Cerrar sesión"
+            style={{
+              color: '#8E8E93',
+              background: 'transparent',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.color = '#FA243C'; e.currentTarget.style.background = 'rgba(250,36,60,0.12)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = '#8E8E93'; e.currentTarget.style.background = 'transparent'; }}
+          >
+            <LogOut size={16} />
+          </button>
         </div>
       </aside>
 
@@ -703,34 +881,6 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
           {/* Right Header items */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            {/* Live Streaming Pill */}
-            {totalOnlineAppCount > 0 && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                background: 'rgba(52,199,89,0.15)', border: '0.5px solid rgba(52,199,89,0.4)',
-                borderRadius: '20px', padding: '5px 12px',
-                fontSize: '12px', color: '#34C759', fontWeight: 600,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '12px' }}>
-                  <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
-                  <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
-                  <div className="eq-bar" style={{ background: '#34C759', width: '2px' }} />
-                </div>
-                <span>{totalOnlineAppCount} en la App en Vivo</span>
-              </div>
-            )}
-
-            {/* Live VPS MySQL Connection Status pill */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              background: '#181818', border: '0.5px solid #404040',
-              borderRadius: '20px', padding: '5px 12px',
-              fontSize: '12px', color: '#B3B3B3',
-            }}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
-              <span>VPS MySQL Online</span>
-            </div>
-
             {/* Refresh Button */}
             <button
               onClick={fetchData}
@@ -757,7 +907,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           {/* Header Title Section */}
           <div style={{ marginBottom: '24px' }}>
             <h1 style={{ fontSize: '28px', fontWeight: 700, letterSpacing: '-0.5px', marginBottom: '6px' }}>
-              {activeTab === 'live' && 'En Vivo: Telemetría y Streaming en Tiempo Real'}
+              {activeTab === 'live' && 'Usuarios en Línea en la App'}
               {activeTab === 'users' && 'Usuarios y Telemetría de Dispositivos'}
               {activeTab === 'sessions' && 'Auditoría de Inicios de Sesión e IPs'}
               {activeTab === 'metrics' && 'Top Canciones en Streaming'}
@@ -825,13 +975,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               padding: '18px 20px',
             }}>
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                Tiempo Total de Música
+                Tiempo Real Escuchado
               </span>
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
                 {formatListeningTime(metrics?.totalListenSeconds ?? 0)}
               </div>
-              <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
-                Reproducido por los usuarios
+              <p style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', fontWeight: 600 }}>
+                {formatListeningTime(metrics?.totalSongDurationSeconds || 170000)} en catálogo
               </p>
             </div>
 
@@ -846,27 +996,21 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 {metrics?.totalPlays ?? 0}
               </div>
               <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
-                Historial de reproducciones en nube
+                {metrics?.totalPlays ?? 0} pistas iniciadas en la nube
               </p>
             </div>
           </div>
 
-          {/* TAB 0: LIVE STREAMING & ESCUCHANDO AHORA (Only visible when activeTab === 'live') */}
-          {activeTab === 'live' && (() => {
-            const activeLiveListeners = liveListeners.filter(l => l.isPlaying);
-            const playingUserIds = new Set(activeLiveListeners.map(l => l.userId));
-            const browsingUsers = connectedUsers.filter(u => !playingUserIds.has(u.userId));
-            const hasAnyLive = activeLiveListeners.length > 0 || browsingUsers.length > 0;
-
-            return (
-              <div style={{
-                background: '#181818',
-                borderRadius: '16px',
-                border: '0.5px solid #282828',
-                padding: '24px',
-                marginBottom: '28px',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+          {/* TAB 0: USUARIOS EN LÍNEA EN LA APP (Visible when activeTab === 'live') */}
+          {activeTab === 'live' && (
+            <div style={{
+              background: '#181818',
+              borderRadius: '16px',
+              border: '0.5px solid #282828',
+              padding: '24px',
+              marginBottom: '28px',
+            }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: '2px', height: '16px' }}>
                       <div className="eq-bar" style={{ width: '3px' }} />
@@ -875,229 +1019,233 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       <div className="eq-bar" style={{ width: '3px' }} />
                     </div>
                     <h3 style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px' }}>
-                      En Vivo: Actividad en Tiempo Real
+                      Usuarios en Línea en la App ({allOnlineUsers.length})
                     </h3>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <span style={{ fontSize: '11px', background: 'rgba(52,199,89,0.15)', color: '#34C759', padding: '3px 9px', borderRadius: '12px', fontWeight: 700 }}>
-                      🟢 Actualización en tiempo real (cada 10s)
-                    </span>
                   </div>
                 </div>
 
-                {/* Sub-section 1: Streaming Audio */}
-                {activeLiveListeners.length > 0 && (
-                  <div style={{ marginBottom: browsingUsers.length > 0 ? '24px' : '0' }}>
-                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#34C759', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759', display: 'inline-block' }} />
-                      Reproduciendo Música Ahora ({activeLiveListeners.length})
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {activeLiveListeners.map((item, idx) => (
+                {/* Unified Online Users List */}
+                {hasAnyLive ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    {allOnlineUsers.map((item, idx) => {
+                      const badge = getPlatformBadge(item.platform, item.deviceModel || item.deviceName, item.osVersion);
+                      const p = (item.platform || item.clientPlatform || '').toLowerCase();
+                      const d = item.deviceModel || item.deviceName || '';
+                      const os = item.osVersion || item.deviceOs || '';
+
+                      let deviceTitle = d;
+                      let deviceSubtitle = '';
+
+                      if (p.includes('windows') || d.toLowerCase().includes('windows')) {
+                        deviceTitle = (d && !d.toLowerCase().includes('windows') && !d.toLowerCase().includes('win32')) ? d : (item.userName || 'Windows PC / Laptop');
+                        deviceSubtitle = `Groovy (Windows)${os ? ` · ${os}` : ''}`;
+                      } else if (p.includes('android')) {
+                        deviceTitle = d || 'Android Device';
+                        deviceSubtitle = `Groovy (Android)${os ? ` · ${os}` : ''}`;
+                      } else if (p.includes('web')) {
+                        deviceTitle = d || 'Windows PC / Laptop';
+                        deviceSubtitle = `Windows Web${os ? ` · ${os}` : ''}`;
+                      } else if (p.includes('ios')) {
+                        deviceTitle = d || 'iPhone / iPad';
+                        deviceSubtitle = `Groovy (iOS)${os ? ` · ${os}` : ''}`;
+                      } else if (p.includes('mac')) {
+                        deviceTitle = d || 'Mac Desktop';
+                        deviceSubtitle = `Groovy (Mac)${os ? ` · ${os}` : ''}`;
+                      } else {
+                        deviceTitle = d || item.userName || 'Dispositivo';
+                        deviceSubtitle = `${item.platform || 'App'}${os ? ` · ${os}` : ''}`;
+                      }
+
+                      const formatSessionDuration = (seconds = 0) => {
+                        if (!seconds || seconds < 60) return '< 1 min';
+                        const mins = Math.floor(seconds / 60);
+                        if (mins < 60) return `${mins} min`;
+                        const hrs = Math.floor(mins / 60);
+                        const remMins = mins % 60;
+                        return `${hrs}h ${remMins}m`;
+                      };
+
+                      const formatTimeAgo = (seconds = 0) => {
+                        if (seconds === undefined || seconds === null) return 'hace instantes';
+                        if (seconds < 10) return 'hace instantes';
+                        if (seconds < 60) return `hace ${seconds}s`;
+                        const mins = Math.floor(seconds / 60);
+                        if (mins < 60) return `hace ${mins}m`;
+                        return `hace ${Math.floor(mins / 60)}h`;
+                      };
+
+                      return (
                         <div
                           key={`${item.userId}_${item.platform}_${item.deviceModel || item.deviceName || idx}`}
                           style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            background: '#202020', borderRadius: '12px', padding: '14px 18px',
-                            border: '0.5px solid rgba(52,199,89,0.3)',
+                            background: '#161616', borderRadius: '12px', padding: '16px 20px',
+                            border: '0.5px solid #282828',
+                            flexWrap: 'wrap',
+                            gap: '14px',
                           }}
                         >
-                          {/* User Profile */}
+                          {/* 1. User Profile: Avatar + Name + Email */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
                             <div style={{
-                              width: '44px', height: '44px', borderRadius: '50%', background: '#FA243C',
+                              width: '46px', height: '46px', borderRadius: '50%',
+                              background: item.hasSong ? '#FA243C' : '#007AFF',
                               display: 'flex', alignItems: 'center', justifyContent: 'center',
                               fontSize: '16px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                              overflow: 'hidden',
+                              overflow: 'hidden', position: 'relative',
                             }}>
                               {item.userAvatar ? (
                                 <img src={item.userAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
                               ) : (
                                 item.userName?.charAt(0).toUpperCase() || 'U'
                               )}
+                              <span style={{
+                                position: 'absolute', bottom: '2px', right: '2px',
+                                width: '10px', height: '10px', borderRadius: '50%',
+                                background: '#34C759', border: '2px solid #161616',
+                              }} />
                             </div>
                             <div>
-                              <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
-                              <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail}</p>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName || 'Usuario'}</p>
+                                {item.userRole === 'admin' && (
+                                  <span style={{ fontSize: '10px', background: 'rgba(250,36,60,0.2)', color: '#FA243C', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                    ADMIN
+                                  </span>
+                                )}
+                              </div>
+                              <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail || ''}</p>
                             </div>
                           </div>
 
-                          {/* Song Playing */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, margin: '0 24px', minWidth: 0 }}>
-                            {item.coverArt ? (
-                              <img src={item.coverArt} alt={item.title} style={{ width: '44px', height: '44px', borderRadius: '8px', objectFit: 'cover' }} />
+                          {/* 2. Middle: Song Playing OR Browsing Session Duration */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flex: 1, margin: '0 12px', minWidth: '240px' }}>
+                            {item.hasSong && item.title ? (
+                              <>
+                                {resolveSongCover(item.coverArt, item.songId) ? (
+                                  <img
+                                    src={resolveSongCover(item.coverArt, item.songId)}
+                                    alt={item.title}
+                                    style={{ width: '48px', height: '48px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0, border: '0.5px solid #333' }}
+                                    onError={(e) => {
+                                      if (item.songId && !e.currentTarget.dataset.retried) {
+                                        e.currentTarget.dataset.retried = 'true';
+                                        e.currentTarget.src = `https://i.ytimg.com/vi/${item.songId}/hqdefault.jpg`;
+                                      } else {
+                                        e.currentTarget.style.display = 'none';
+                                      }
+                                    }}
+                                  />
+                                ) : (
+                                  <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                    <Music size={24} style={{ color: item.isPlaying ? '#34C759' : '#FF9500' }} />
+                                  </div>
+                                )}
+                                <div style={{ minWidth: 0 }}>
+                                  <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {item.title}
+                                  </p>
+                                  <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                                    {item.artist}
+                                  </p>
+                                </div>
+                              </>
                             ) : (
-                              <div style={{ width: '44px', height: '44px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <Music size={20} style={{ color: '#FA243C' }} />
+                              <div>
+                                <p style={{ fontSize: '14px', color: '#B3B3B3' }}>
+                                  Navegando · Sesión activa: <span style={{ color: '#fff', fontWeight: 600 }}>{formatSessionDuration(item.durationSeconds || item.session_duration_seconds || item.duration_seconds || 0)}</span>
+                                </p>
                               </div>
                             )}
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {item.title}
-                                </p>
-                                <span style={{ fontSize: '10px', color: '#34C759', fontWeight: 700, background: 'rgba(52,199,89,0.15)', padding: '1px 6px', borderRadius: '4px' }}>
-                                  EN REPRODUCCIÓN
-                                </span>
+                          </div>
+
+                          {/* 3. Right: Device Title + OS Subtitle + Location / IP / time ago + Button */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                            <div style={{ textAlign: 'right' }}>
+                              {/* Line 1: Icon + Device Title */}
+                              <div style={{
+                                fontSize: '14px',
+                                fontWeight: 700,
+                                color: badge.color || '#00A4EF',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                justifyContent: 'flex-end',
+                              }}>
+                                {getDeviceIcon(item.osVersion || item.platform, item.deviceModel)}
+                                <span style={{ color: '#fff' }}>{deviceTitle}</span>
                               </div>
-                              <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {item.artist}
+
+                              {/* Line 2: Groovy (Windows) · OS version */}
+                              <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '2px', whiteSpace: 'nowrap' }}>
+                                {deviceSubtitle}
                               </p>
-                            </div>
-                          </div>
 
-                          {/* Device, OS & Location */}
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                              {getDeviceIcon(item.platform, item.deviceName)}
-                              <span style={{ fontSize: '12px', fontWeight: 600, color: '#fff' }}>
-                                {item.deviceModel || item.deviceName || `${item.platform} App`}
-                              </span>
+                              {/* Line 3: Location + IP + time ago */}
+                              <div style={{
+                                fontSize: '11px',
+                                color: '#8E8E93',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '6px',
+                                justifyContent: 'flex-end',
+                                marginTop: '4px',
+                                flexWrap: 'wrap',
+                              }}>
+                                {renderCountryFlag(item.country, item.countryCode)}
+                                <span>{item.city ? `${formatCountryName(item.country)} · ${item.city}` : formatCountryName(item.country)}</span>
+                                {item.ipAddress && (
+                                  <span style={{
+                                    background: '#111',
+                                    border: '0.5px solid #282828',
+                                    padding: '1px 6px',
+                                    borderRadius: '4px',
+                                    fontFamily: 'monospace',
+                                    color: '#B3B3B3',
+                                  }}>
+                                    {item.ipAddress}
+                                  </span>
+                                )}
+                                <span>{formatTimeAgo(item.secondsSinceActive ?? item.secondsSincePing ?? 0)}</span>
+                              </div>
                             </div>
-                            <div style={{ fontSize: '11px', color: '#B3B3B3' }}>
-                              {item.osVersion ? `${item.platform} · ${item.osVersion}` : `${item.platform} App`}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                              {item.country && (
-                                <span style={{ fontSize: '11px', color: '#9E9E9E', display: 'flex', alignItems: 'center' }}>
-                                  {renderCountryFlag(item.country, item.countryCode)}
-                                  {formatCountryName(item.country)}{item.city ? ` · ${item.city}` : ''}
-                                </span>
-                              )}
-                              <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
-                                {item.ipAddress || 'IP no reg.'}
-                              </code>
-                              <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
-                                hace {item.secondsSincePing || 0}s
-                              </span>
-                            </div>
-                          </div>
 
-                          {/* View Details Button */}
-                          <button
-                            onClick={() => handleOpenUserDetail(item.userId)}
-                            style={{
-                              marginLeft: '16px', padding: '7px 14px', borderRadius: '8px',
-                              background: '#282828', border: '0.5px solid #404040', color: '#fff',
-                              fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#333'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#282828'}
-                          >
-                            Ver Usuario
-                          </button>
+                            {/* Button Ver Usuario */}
+                            <button
+                              onClick={() => handleOpenUserDetail(item.userId)}
+                              style={{
+                                background: '#202020',
+                                border: '0.5px solid #3a3a3a',
+                                borderRadius: '8px',
+                                padding: '8px 14px',
+                                color: '#fff',
+                                fontSize: '13px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                transition: 'all 0.15s',
+                                whiteSpace: 'nowrap',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#333'}
+                              onMouseLeave={e => e.currentTarget.style.background = '#202020'}
+                            >
+                              Ver Usuario
+                            </button>
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      );
+                    })}
                   </div>
-                )}
-
-                {/* Sub-section 2: Connected Users in App (Browsing / Online) */}
-                {browsingUsers.length > 0 && (
-                  <div>
-                    <h4 style={{ fontSize: '12px', fontWeight: 700, color: '#007AFF', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#007AFF', display: 'inline-block' }} />
-                      Usuarios Conectados en la App ({browsingUsers.length})
-                    </h4>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                      {browsingUsers.map((item, idx) => (
-                        <div
-                          key={`${item.userId}_${item.platform}_${item.deviceModel || idx}`}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            background: '#202020', borderRadius: '12px', padding: '14px 18px',
-                            border: '0.5px solid rgba(0,122,255,0.3)',
-                          }}
-                        >
-                          {/* User Profile */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: '220px' }}>
-                            <div style={{
-                              width: '44px', height: '44px', borderRadius: '50%', background: '#007AFF',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                              fontSize: '16px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                              overflow: 'hidden',
-                            }}>
-                              {item.userAvatar ? (
-                                <img src={item.userAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
-                              ) : (
-                                item.userName?.charAt(0).toUpperCase() || 'U'
-                              )}
-                            </div>
-                            <div>
-                              <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{item.userName}</p>
-                              <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{item.userEmail}</p>
-                            </div>
-                          </div>
-
-                          {/* App Status */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, margin: '0 24px', minWidth: 0 }}>
-                            <span style={{ fontSize: '11px', color: '#007AFF', fontWeight: 700, background: 'rgba(0,122,255,0.15)', padding: '3px 8px', borderRadius: '6px' }}>
-                              📱 ACTIVO EN LA APP
-                            </span>
-                            <span style={{ fontSize: '12px', color: '#B3B3B3' }}>
-                              Navegando · Sesión activa: {formatSessionDuration(item.durationSeconds || 0)}
-                            </span>
-                          </div>
-
-                          {/* Device, OS & Location */}
-                          <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '3px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                              {getDeviceIcon(item.platform, item.deviceModel)}
-                              <span style={{ fontSize: '13px', fontWeight: 600, color: '#fff' }}>
-                                {item.deviceModel || `${item.platform} App`}
-                              </span>
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#B3B3B3' }}>
-                              {item.osVersion ? `${item.platform} · ${item.osVersion}` : `${item.platform} App`}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px' }}>
-                              {item.country && (
-                                <span style={{ fontSize: '11px', color: '#9E9E9E', display: 'flex', alignItems: 'center' }}>
-                                  {renderCountryFlag(item.country, item.countryCode)}
-                                  {formatCountryName(item.country)}{item.city ? ` · ${item.city}` : ''}
-                                </span>
-                              )}
-                              <code style={{ fontSize: '11px', background: '#181818', padding: '2px 6px', borderRadius: '4px', color: '#B3B3B3', fontFamily: 'monospace' }}>
-                                {item.ipAddress || 'IP no reg.'}
-                              </code>
-                              <span style={{ fontSize: '11px', color: '#6B6B6B' }}>
-                                hace {item.secondsSinceActive || 0}s
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* View Details Button */}
-                          <button
-                            onClick={() => handleOpenUserDetail(item.userId)}
-                            style={{
-                              marginLeft: '16px', padding: '7px 14px', borderRadius: '8px',
-                              background: '#282828', border: '0.5px solid #404040', color: '#fff',
-                              fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-                            }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#333'}
-                            onMouseLeave={e => e.currentTarget.style.background = '#282828'}
-                          >
-                            Ver Usuario
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty State */}
-                {!hasAnyLive && (
-                  <div style={{ textAlign: 'center', padding: '28px', color: '#6B6B6B' }}>
-                    <Radio size={28} style={{ margin: '0 auto 8px', opacity: 0.4 }} />
-                    <p style={{ fontSize: '14px', color: '#B3B3B3' }}>No hay usuarios activos en la app en este momento.</p>
-                    <p style={{ fontSize: '12px', marginTop: '4px', color: '#8E8E93' }}>
-                      Cuando alguien abra la app en Android o Windows o reproduzca una canción, aparecerá aquí inmediatamente en tiempo real.
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '36px 20px', color: '#6B6B6B' }}>
+                    <Radio size={32} style={{ margin: '0 auto 10px', opacity: 0.4 }} />
+                    <p style={{ fontSize: '15px', color: '#B3B3B3', fontWeight: 600 }}>No hay usuarios activos en la app en este momento.</p>
+                    <p style={{ fontSize: '12px', marginTop: '6px', color: '#8E8E93', maxWidth: '480px', margin: '6px auto 0' }}>
+                      Cuando cualquier usuario abra la app en Android, Windows o Web (incluso si no reproduce canciones), aparecerá aquí inmediatamente en tiempo real.
                     </p>
                   </div>
                 )}
               </div>
-            );
-          })()}
+            )}
 
           {/* TAB 1: USERS LIST & TELEMETRY */}
           {activeTab === 'users' && (
@@ -1662,12 +1810,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {metrics?.topSongs?.map((song, i) => {
-                  const coverImg = (song.cover_art && song.cover_art.startsWith('http')) 
-                    ? song.cover_art 
-                    : (song.song_id ? `https://i.ytimg.com/vi/${song.song_id}/hqdefault.jpg` : null);
-
-                  return (
+                {metrics?.topSongs?.map((song, i) => (
                     <div
                       key={song.song_id || i}
                       style={{
@@ -1698,12 +1841,19 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
                       {/* Song Title, Artist & Cover */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0, paddingRight: '12px' }}>
-                        {coverImg ? (
+                        {resolveSongCover(song.cover_art, song.song_id) ? (
                           <img
-                            src={coverImg}
+                            src={resolveSongCover(song.cover_art, song.song_id)}
                             alt={song.title}
                             style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
-                            onError={e => { e.currentTarget.style.display = 'none'; }}
+                            onError={e => {
+                              if (song.song_id && !e.currentTarget.dataset.retried) {
+                                e.currentTarget.dataset.retried = 'true';
+                                e.currentTarget.src = `https://i.ytimg.com/vi/${song.song_id}/hqdefault.jpg`;
+                              } else {
+                                e.currentTarget.style.display = 'none';
+                              }
+                            }}
                           />
                         ) : (
                           <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -1748,8 +1898,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                         </span>
                       </div>
                     </div>
-                  );
-                })}
+                  ))}
 
                 {(!metrics?.topSongs || metrics.topSongs.length === 0) && (
                   <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
@@ -1817,24 +1966,37 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
             {/* Live Playback Banner(s) in Modal */}
             {(selectedUser.livePlaybacks?.length > 0 ? selectedUser.livePlaybacks : (selectedUser.livePlayback ? [selectedUser.livePlayback] : []))
-              .filter(lp => lp?.isPlaying)
+              .filter(lp => lp?.title)
               .map((lp, idx) => (
                 <div key={idx} style={{
-                  background: 'linear-gradient(135deg, rgba(52,199,89,0.15), rgba(24,24,24,0.9))',
-                  border: '1px solid rgba(52,199,89,0.4)', borderRadius: '12px',
+                  background: lp.isPlaying ? 'linear-gradient(135deg, rgba(52,199,89,0.15), rgba(24,24,24,0.9))' : 'linear-gradient(135deg, rgba(255,149,0,0.12), rgba(24,24,24,0.9))',
+                  border: `1px solid ${lp.isPlaying ? 'rgba(52,199,89,0.4)' : 'rgba(255,149,0,0.4)'}`,
+                  borderRadius: '12px',
                   padding: '14px 18px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    {lp.coverArt ? (
-                      <img src={lp.coverArt} alt="" style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover' }} />
+                    {resolveSongCover(lp.coverArt, lp.songId) ? (
+                      <img
+                        src={resolveSongCover(lp.coverArt, lp.songId)}
+                        alt=""
+                        style={{ width: '42px', height: '42px', borderRadius: '8px', objectFit: 'cover', flexShrink: 0 }}
+                        onError={e => {
+                          if (lp.songId && !e.currentTarget.dataset.retried) {
+                            e.currentTarget.dataset.retried = 'true';
+                            e.currentTarget.src = `https://i.ytimg.com/vi/${lp.songId}/hqdefault.jpg`;
+                          } else {
+                            e.currentTarget.style.display = 'none';
+                          }
+                        }}
+                      />
                     ) : (
-                      <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Music size={20} color="#34C759" />
+                      <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <Music size={20} color={lp.isPlaying ? '#34C759' : '#FF9500'} />
                       </div>
                     )}
                     <div>
-                      <span style={{ fontSize: '11px', color: '#34C759', fontWeight: 700, textTransform: 'uppercase' }}>
-                        🟢 Reproduciendo en vivo en {lp.platform} {lp.deviceModel ? `· ${lp.deviceModel}` : ''}
+                      <span style={{ fontSize: '11px', color: lp.isPlaying ? '#34C759' : '#FF9500', fontWeight: 700, textTransform: 'uppercase' }}>
+                        {lp.isPlaying ? '🟢 Reproduciendo en vivo' : '⏸️ En pausa'} en {lp.platform || 'App'} {lp.deviceModel ? `· ${lp.deviceModel}` : ''}
                       </span>
                       <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{lp.title}</p>
                       <p style={{ fontSize: '12px', color: '#B3B3B3' }}>{lp.artist}</p>
@@ -1976,10 +2138,22 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     padding: '8px 14px', borderBottom: '0.5px solid #333', fontSize: '13px',
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
-                      {h.cover_art ? (
-                        <img src={h.cover_art} alt="" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} />
+                      {resolveSongCover(h.cover_art, h.song_id) ? (
+                        <img
+                          src={resolveSongCover(h.cover_art, h.song_id)}
+                          alt=""
+                          style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }}
+                          onError={e => {
+                            if (h.song_id && !e.currentTarget.dataset.retried) {
+                              e.currentTarget.dataset.retried = 'true';
+                              e.currentTarget.src = `https://i.ytimg.com/vi/${h.song_id}/hqdefault.jpg`;
+                            } else {
+                              e.currentTarget.style.display = 'none';
+                            }
+                          }}
+                        />
                       ) : (
-                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: '#202020', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ width: '32px', height: '32px', borderRadius: '6px', background: '#202020', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <Music size={14} color="#B3B3B3" />
                         </div>
                       )}
@@ -2247,24 +2421,97 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
               <button
+                type="button"
                 onClick={() => setUserToDelete(null)}
                 disabled={isSubmitting}
                 style={{
                   padding: '10px 18px', borderRadius: '10px', background: '#282828',
-                  color: '#B3B3B3', fontSize: '13px', fontWeight: 600,
+                  color: '#B3B3B3', fontSize: '13px', fontWeight: 600, cursor: 'pointer', border: 'none',
                 }}
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={handleConfirmDelete}
                 disabled={isSubmitting}
                 style={{
                   padding: '10px 20px', borderRadius: '10px', background: '#FF3B30',
-                  color: '#fff', fontSize: '13px', fontWeight: 700,
+                  color: '#fff', fontSize: '13px', fontWeight: 700, cursor: 'pointer', border: 'none',
                 }}
               >
                 {isSubmitting ? 'Eliminando...' : 'Eliminar Cuenta'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. BAN / SUSPENSION CONFIRMATION DIALOG */}
+      {userToToggleBan && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(20px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: '20px',
+        }}>
+          <div style={{
+            background: '#181818', border: '0.5px solid #282828', borderRadius: '20px',
+            width: '100%', maxWidth: '420px', padding: '28px', textAlign: 'center',
+            boxShadow: '0 24px 60px rgba(0,0,0,0.8)',
+          }}>
+            <div style={{
+              width: '52px', height: '52px', borderRadius: '50%',
+              background: userToToggleBan.isBanned ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
+            }}>
+              {userToToggleBan.isBanned ? (
+                <CheckCircle2 size={26} style={{ color: '#34C759' }} />
+              ) : (
+                <Ban size={26} style={{ color: '#FF9500' }} />
+              )}
+            </div>
+
+            <h3 style={{ fontSize: '19px', fontWeight: 700, letterSpacing: '-0.3px', marginBottom: '8px' }}>
+              {userToToggleBan.isBanned ? '¿Reactivar cuenta?' : '¿Suspender cuenta?'}
+            </h3>
+            <p style={{ fontSize: '14px', color: '#B3B3B3', marginBottom: '24px', lineHeight: 1.5 }}>
+              {userToToggleBan.isBanned ? (
+                <>
+                  Se restaurará el acceso a la cuenta de <strong style={{ color: '#fff' }}>{userToToggleBan.name}</strong> ({userToToggleBan.email}) y podrá iniciar sesión normalmente.
+                </>
+              ) : (
+                <>
+                  ¿Estás seguro de suspender el acceso a la cuenta de <strong style={{ color: '#fff' }}>{userToToggleBan.name}</strong> ({userToToggleBan.email})? No podrá iniciar sesión ni reproducir música.
+                </>
+              )}
+            </p>
+
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setUserToToggleBan(null)}
+                disabled={isSubmitting}
+                style={{
+                  padding: '10px 18px', borderRadius: '10px', background: '#282828',
+                  color: '#B3B3B3', fontSize: '13px', fontWeight: 600,
+                  cursor: 'pointer', border: 'none',
+                }}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmToggleBan}
+                disabled={isSubmitting}
+                style={{
+                  padding: '10px 20px', borderRadius: '10px',
+                  background: userToToggleBan.isBanned ? '#34C759' : '#FF9500',
+                  color: '#fff', fontSize: '13px', fontWeight: 700,
+                  cursor: 'pointer', border: 'none',
+                }}
+              >
+                {isSubmitting
+                  ? 'Procesando...'
+                  : (userToToggleBan.isBanned ? 'Reactivar Acceso' : 'Suspender Acceso')}
               </button>
             </div>
           </div>

@@ -113,22 +113,24 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    _debounceTimer = Timer(const Duration(milliseconds: 140), () {
-      final libraryProvider = Provider.of<LibraryProvider>(
-        context,
-        listen: false,
-      );
-
-      final instantLocal = libraryProvider.searchLocal(value);
-      if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
-        if (mounted && _searchController.text.trim() == value.trim()) {
-          setState(() {
-            _searchResult = instantLocal;
-            _query = value;
-          });
-        }
+    // 1. Instant local match (0ms latency)
+    final libraryProvider = Provider.of<LibraryProvider>(
+      context,
+      listen: false,
+    );
+    final instantLocal = libraryProvider.searchLocal(value);
+    if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
+      if (mounted && _searchController.text.trim() == value.trim()) {
+        setState(() {
+          _searchResult = instantLocal;
+          _query = value;
+        });
       }
+    }
 
+    // 2. Smooth debounced online search (280ms)
+    _debounceTimer = Timer(const Duration(milliseconds: 280), () {
+      if (!mounted || _searchController.text.trim() != value.trim()) return;
       if (_liveSearch) {
         _search(value);
       } else {

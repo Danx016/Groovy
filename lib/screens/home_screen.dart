@@ -26,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static final _numberOnlyRegex = RegExp(r'^\d{8,}$');
   Map<String, List<Song>> _cachedMixes = const {};
   List<Song> _cachedPersonalized = const [];
   String _lastRandomKey = '';
@@ -172,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     : _cachedPersonalized
                         .where((s) =>
                             s.title.trim().isNotEmpty &&
-                            !RegExp(r'^\d{8,}$').hasMatch(s.title.trim()) &&
+                            !_numberOnlyRegex.hasMatch(s.title.trim()) &&
                             !s.title.startsWith('AUD-') &&
                             !s.title.startsWith('PTT-') &&
                             (s.duration == null || s.duration! >= 15))
@@ -181,14 +182,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 List<Album> recentAlbums = libraryProvider.recentAlbums
                     .where((a) =>
                         a.name.trim().isNotEmpty &&
-                        !RegExp(r'^\d{8,}$').hasMatch(a.name.trim()) &&
+                        !_numberOnlyRegex.hasMatch(a.name.trim()) &&
                         a.name.toLowerCase() != 'unknown' &&
                         a.name.toLowerCase() != 'unknown album')
                     .toList();
                 List<Playlist> playlists = libraryProvider.playlists;
 
-                // Extract recent songs from profiles / recentlyPlayed
-                final cachedSongMap = {for (var s in libraryProvider.cachedAllSongs) s.id: s};
+                // Extract recent songs from profiles / recentlyPlayed with O(1) indexed lookup
+                final cachedSongMap = libraryProvider.songsByIdMap;
                 final recentSongsFromProfiles = recommendationService.recentlyPlayed
                     .where((id) => cachedSongMap.containsKey(id))
                     .map((id) => cachedSongMap[id]!)

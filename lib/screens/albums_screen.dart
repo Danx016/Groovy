@@ -24,7 +24,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAlbums();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadAlbums());
   }
 
   @override

@@ -102,7 +102,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
-    _telemetryTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 8), (_) {
       _sendTelemetryHeartbeat();
     });
   }
@@ -112,15 +112,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (song == null) return;
     final isPl = overridePlaying ?? _isPlaying;
     StorageService().getUserToken().then((token) {
-      if (token != null && token.isNotEmpty) {
-        GroovyApiService().reportPlaybackState(
-          token: token,
-          song: song,
-          isPlaying: isPl,
-          position: _position.inSeconds,
-          listenDeltaSeconds: isPl ? 15 : 0,
-        );
-      }
+      GroovyApiService().reportPlaybackState(
+        token: token ?? '',
+        song: song,
+        isPlaying: isPl,
+        position: _position.inSeconds,
+        listenDeltaSeconds: isPl ? 8 : 0,
+      );
     }).catchError((_) {});
   }
 
@@ -979,8 +977,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final secondsRemaining = totalSeconds - position.inSeconds;
     final progressRatio = position.inSeconds / totalSeconds;
 
-    // Start preloading when <= 25 seconds remain, or when 75% of the song has played
-    final shouldPreload = (secondsRemaining <= 25 && secondsRemaining > 0) ||
+    // Start preloading early (after 2 seconds of playback so initial buffering isn't contested)
+    // or when nearing end of the song
+    final shouldPreload = position.inSeconds >= 2 ||
+        (secondsRemaining <= 25 && secondsRemaining > 0) ||
         (progressRatio >= 0.75 && position.inSeconds >= 5);
 
     if (!shouldPreload) return;
@@ -1572,6 +1572,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _saveQueueState();
 
+      // Immediately report live playback presence to backend
+      _startTelemetryHeartbeat();
+      _sendTelemetryHeartbeat(overridePlaying: true);
+
       // Immediately publish song info to lockscreen / notification widget
       _updateAndroidAuto();
 
@@ -1782,15 +1786,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       StorageService().getUserToken().then((token) {
         if (token != null && token.isNotEmpty) {
           GroovyApiService().recordHistory(token, song);
-          GroovyApiService().reportPlaybackState(
-            token: token,
-            song: song,
-            isPlaying: true,
-            position: _position.inSeconds,
-            listenDeltaSeconds: 0,
-          );
-          _startTelemetryHeartbeat();
         }
+        GroovyApiService().reportPlaybackState(
+          token: token ?? '',
+          song: song,
+          isPlaying: true,
+          position: _position.inSeconds,
+          listenDeltaSeconds: 0,
+        );
+        _startTelemetryHeartbeat();
       }).catchError((_) {});
 
       _hasRetriedCurrentPlay = false;

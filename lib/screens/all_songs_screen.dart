@@ -27,6 +27,7 @@ class AllSongsScreen extends StatefulWidget {
 class _AllSongsScreenState extends State<AllSongsScreen> {
   List<Song> _songs = [];
   List<Song> _sortedSongs = [];
+  Set<String> _songIds = {};
   bool _isLoading = true;
   final ScrollController _scrollController = ScrollController();
   SongSortOption _currentSort = SongSortOption.titleAsc;
@@ -115,6 +116,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
         });
         break;
     }
+    _songIds = _sortedSongs.map((s) => s.id).toSet();
   }
 
   void _showSortOptions() {
@@ -317,18 +319,15 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                           const SizedBox(width: 8),
                           Consumer<PlayerProvider>(
                             builder: (context, playerProvider, _) {
-                              final isCurrentPlaylist =
-                                  playerProvider.queue.isNotEmpty &&
-                                      playerProvider.queue.any(
-                                        (song) => _sortedSongs
-                                            .any((s) => s.id == song.id),
-                                      );
+                              final isCurrentSongInList =
+                                  playerProvider.currentSong != null &&
+                                      _songIds.contains(playerProvider.currentSong!.id);
                               final isPlaying =
-                                  isCurrentPlaylist && playerProvider.isPlaying;
+                                  isCurrentSongInList && playerProvider.isPlaying;
 
                               return GestureDetector(
                                 onTap: () {
-                                  if (isCurrentPlaylist &&
+                                  if (isCurrentSongInList &&
                                       playerProvider.currentSong != null) {
                                     if (playerProvider.isPlaying) {
                                       playerProvider.pause();

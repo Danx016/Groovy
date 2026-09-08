@@ -12,11 +12,16 @@ import { CreatePlaylistModal } from './components/ui/CreatePlaylistModal';
 import { HomeView } from './components/views/HomeView';
 import { LibraryView } from './components/views/LibraryView';
 import { SearchView } from './components/views/SearchView';
+import { RadioView } from './components/views/RadioView';
+import { HistoryView } from './components/views/HistoryView';
 import { PlaylistDetailView } from './components/views/PlaylistDetailView';
+import { ArtistDetailView } from './components/views/ArtistDetailView';
+import { AlbumDetailView } from './components/views/AlbumDetailView';
 import { AccountView } from './components/views/AccountView';
 import { SettingsView } from './components/views/SettingsView';
 import { AdminPortal } from './components/admin/AdminPortal';
 import { LandingDownloadPage } from './components/views/LandingDownloadPage';
+import { usePlayer } from './context/PlayerContext';
 
 /* Global layout + responsive styles */
 const layoutStyles = `
@@ -27,18 +32,18 @@ const layoutStyles = `
     .mobile-brand { display: none !important; }
     .desktop-search { display: flex !important; }
     .desktop-ctrl { display: flex !important; }
-    .mini-player-wrapper { left: 240px; bottom: 0; }
   }
   @media (max-width: 767px) {
     .desktop-search { display: none !important; }
     .desktop-nav { display: none !important; }
     .hide-mobile { display: none !important; }
+    .desktop-player-bar { bottom: 64px !important; height: 68px !important; padding: 0 12px !important; }
   }
 
   /* Song card hover overlay */
   .song-play-overlay { opacity: 0 !important; }
-  [style*="background: #181818"]:hover .song-play-overlay,
-  [style*="background:#181818"]:hover .song-play-overlay { opacity: 1 !important; }
+  div:hover > .song-play-overlay,
+  div:hover .song-play-overlay { opacity: 1 !important; }
 
   /* Input placeholder */
   input::placeholder { color: #6B6B6B; }
@@ -55,6 +60,11 @@ function MainApp() {
   const [activeTab, setActiveTab] = useState('home');
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
   const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
+
+  const {
+    selectedArtist, setSelectedArtist,
+    selectedAlbum, setSelectedAlbum,
+  } = usePlayer();
 
   const isDownloadRoute = (h, p, s) => {
     if (p.startsWith('/download') || s.includes('download=true')) return true;
@@ -105,6 +115,8 @@ function MainApp() {
       return;
     }
     setSelectedPlaylist(null);
+    setSelectedArtist(null);
+    setSelectedAlbum(null);
     setActiveTab(tab);
     if (currentRoute !== 'player') {
       window.location.hash = '';
@@ -158,13 +170,33 @@ function MainApp() {
         <Header activeTab={activeTab} setActiveTab={switchTab} />
 
         <main style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
-          {selectedPlaylist ? (
+          {selectedArtist ? (
+            <ArtistDetailView
+              artistName={selectedArtist}
+              onBack={() => setSelectedArtist(null)}
+              onSelectAlbum={(alb) => {
+                setSelectedAlbum(alb);
+                setSelectedArtist(null);
+              }}
+            />
+          ) : selectedAlbum ? (
+            <AlbumDetailView
+              album={selectedAlbum}
+              onBack={() => setSelectedAlbum(null)}
+              onSelectArtist={(art) => {
+                setSelectedArtist(art);
+                setSelectedAlbum(null);
+              }}
+            />
+          ) : selectedPlaylist ? (
             <PlaylistDetailView playlist={selectedPlaylist} onBack={() => setSelectedPlaylist(null)} />
           ) : (
             <>
-              {activeTab === 'home'    && <HomeView setActiveTab={switchTab} />}
-              {activeTab === 'library' && <LibraryView onSelectPlaylist={setSelectedPlaylist} onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)} />}
-              {activeTab === 'search'  && <SearchView />}
+              {activeTab === 'home'    && <HomeView setActiveTab={switchTab} onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} />}
+              {activeTab === 'search'  && <SearchView onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} />}
+              {activeTab === 'library' && <LibraryView onSelectPlaylist={setSelectedPlaylist} onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)} />}
+              {activeTab === 'history' && <HistoryView onBack={() => switchTab('home')} onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} />}
+              {activeTab === 'radio'   && <RadioView />}
               {activeTab === 'account' && <AccountView setActiveTab={switchTab} />}
               {activeTab === 'settings' && <SettingsView />}
             </>

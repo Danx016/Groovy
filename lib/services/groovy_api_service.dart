@@ -108,7 +108,7 @@ class GroovyApiService {
       'X-Client-Platform': platform,
       'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
       'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
-      'X-App-Version': dev?.appVersion ?? '1.0.65',
+      'X-App-Version': dev?.appVersion ?? '1.0.66',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
@@ -171,6 +171,25 @@ class GroovyApiService {
       ).timeout(const Duration(seconds: 5));
     } catch (e) {
       debugPrint('[GroovyApiService] pingSession note: $e');
+    }
+  }
+
+  Future<void> leaveSession(String token) async {
+    try {
+      final dev = await _getDeviceInfo();
+      final uri = Uri.parse('$_baseUrl/telemetry/leave');
+      await http.post(
+        uri,
+        headers: _headers(token),
+        body: jsonEncode({
+          'platform': dev.platform,
+          'deviceName': dev.deviceModel,
+          'deviceModel': dev.deviceModel,
+          'osVersion': dev.osVersion,
+        }),
+      ).timeout(const Duration(seconds: 3));
+    } catch (e) {
+      debugPrint('[GroovyApiService] leaveSession note: $e');
     }
   }
 

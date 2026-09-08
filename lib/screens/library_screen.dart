@@ -29,9 +29,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
       await libraryProvider.ensureLibraryLoaded();
-      await libraryProvider.loadPlaylists();
-      await libraryProvider.loadArtists();
-      await libraryProvider.loadRecentAlbums();
+      await Future.wait([
+        libraryProvider.loadPlaylists(),
+        libraryProvider.loadArtists(),
+        libraryProvider.loadRecentAlbums(),
+      ]);
     });
   }
 

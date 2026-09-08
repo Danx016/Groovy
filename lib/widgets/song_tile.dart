@@ -136,9 +136,10 @@ class SongTile extends StatelessWidget {
                 ),
               ),
             ),
-          Consumer<LibraryProvider>(
-            builder: (context, lib, _) {
-              final isFav = lib.isSongStarred(song.id) || (song.starred == true);
+          Selector<LibraryProvider, bool>(
+            selector: (_, lib) => lib.isSongStarred(song.id),
+            builder: (context, isStarred, _) {
+              final isFav = isStarred || (song.starred == true);
               if (!isFav) return const SizedBox.shrink();
               return Positioned(
                 bottom: 2,
@@ -192,9 +193,10 @@ class SongTile extends StatelessWidget {
   }
 
   Widget _buildTrailing(BuildContext context) {
-    return Consumer<LibraryProvider>(
-      builder: (context, lib, _) {
-        final isFav = lib.isSongStarred(song.id) || (song.starred == true);
+    return Selector<LibraryProvider, bool>(
+      selector: (_, lib) => lib.isSongStarred(song.id),
+      builder: (context, isStarred, _) {
+        final isFav = isStarred || (song.starred == true);
         return ValueListenableBuilder<Set<String>>(
           valueListenable: OfflineService().downloadedSongIds,
           builder: (context, ids, _) {

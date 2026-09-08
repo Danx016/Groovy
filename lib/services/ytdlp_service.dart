@@ -59,7 +59,7 @@ class YtDlpService {
   // Stream Info cache: videoId -> YtStreamInfo
   final Map<String, YtStreamInfo> _streamInfoCache = {};
   final Map<String, DateTime> _streamCacheTime = {};
-  static const Duration _cacheTtl = Duration(hours: 2);
+  static const Duration _cacheTtl = Duration(hours: 5, minutes: 30);
 
   // Search Caches: query -> result
   final Map<String, Map<String, List<Map<String, dynamic>>>> _dualSearchCache = {};
@@ -638,7 +638,41 @@ class YtDlpService {
       }
     }
 
-    // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
+    // 1. Ultra-fast direct Innertube manifest resolution in pure Dart (~150-350ms on all platforms)
+    final clientSets = [
+      null,
+      [yt.YoutubeApiClient.androidMusic, yt.YoutubeApiClient.mweb],
+      [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],
+    ];
+
+    for (final clientList in clientSets) {
+      try {
+        final manifest = await _fallbackClient.videos.streamsClient
+            .getManifest(cleanId, ytClients: clientList)
+            .timeout(const Duration(seconds: 5));
+        final audioOnly = manifest.audioOnly;
+        if (audioOnly.isNotEmpty) {
+          final best = _selectBestAudioStream(audioOnly);
+          final url = best.url.toString();
+          final info = YtStreamInfo(
+            url: url,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            ext: best.container.name,
+          );
+          _streamInfoCache[cleanId] = info;
+          _streamCacheTime[cleanId] = DateTime.now();
+          debugPrint('[yt-dlp/Innertube] Ultra-fast resolved stream info for $cleanId in pure Dart');
+          return info;
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Innertube] Pure-Dart attempt failed for $cleanId: $e');
+      }
+    }
+
+    // 2. Android fallback: Execute embedded Python interpreter with yt-dlp (Chaquopy)
     if (Platform.isAndroid) {
       try {
         final jsonStr = await _androidChannel.invokeMethod<String>('getStreamUrl', {'videoId': cleanId});
@@ -653,7 +687,7 @@ class YtDlpService {
             final info = YtStreamInfo(url: url, headers: headers, ext: ext);
             _streamInfoCache[cleanId] = info;
             _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Android Python] Successfully resolved stream info for $cleanId');
+            debugPrint('[yt-dlp/Android Python] Resolved stream info via Chaquopy fallback for $cleanId');
             return info;
           }
         }
@@ -662,7 +696,7 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop with bundled/detected yt-dlp: execute with resilient client args
+    // 3. Desktop fallback with bundled/detected yt-dlp: execute with resilient client args
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
       try {
@@ -688,47 +722,12 @@ class YtDlpService {
             final info = YtStreamInfo(url: url, headers: headers, ext: ext);
             _streamInfoCache[cleanId] = info;
             _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Desktop] Successfully resolved direct stream info for $cleanId');
+            debugPrint('[yt-dlp/Desktop] Resolved direct stream info via CLI fallback for $cleanId');
             return info;
           }
         }
       } catch (e) {
         debugPrint('[yt-dlp/Desktop] Subprocess stream resolution error: $e');
-      }
-    }
-
-    // 3. Pure-Dart Innertube manifest resolution fallback
-    final clientSets = [
-      [yt.YoutubeApiClient.androidMusic, yt.YoutubeApiClient.mweb],
-      [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],
-      null,
-    ];
-
-    for (final clientList in clientSets) {
-      try {
-        final manifest = await _fallbackClient.videos.streamsClient.getManifest(
-          cleanId,
-          ytClients: clientList,
-        );
-        final audioOnly = manifest.audioOnly;
-        if (audioOnly.isNotEmpty) {
-          final best = _selectBestAudioStream(audioOnly);
-          final url = best.url.toString();
-          final info = YtStreamInfo(
-            url: url,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-            ext: best.container.name,
-          );
-          _streamInfoCache[cleanId] = info;
-          _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp] Instantly resolved stream info via Innertube for $cleanId');
-          return info;
-        }
-      } catch (e) {
-        debugPrint('[yt-dlp] Innertube getManifest attempt error for $cleanId: $e');
       }
     }
 
@@ -750,7 +749,29 @@ class YtDlpService {
       return _dualSearchCache[cleanQuery]!;
     }
 
-    // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
+    // 1. Ultra-fast direct native Innertube queries (~150-300ms on all platforms)
+    try {
+      final results = await Future.wait([
+        searchYtMusicInnertube(query, limit: limit),
+        searchYoutubeVideoInnertube(query, limit: limit),
+      ]).timeout(const Duration(seconds: 8));
+      final musicTracks = results[0];
+      final ytTracks = results[1];
+
+      if (musicTracks.isNotEmpty || ytTracks.isNotEmpty) {
+        final res = {
+          'music': musicTracks,
+          'youtube': ytTracks,
+        };
+        debugPrint('[yt-dlp/Innertube] Fast dual search "$query": ${musicTracks.length} music, ${ytTracks.length} youtube');
+        if (cleanQuery.isNotEmpty) _dualSearchCache[cleanQuery] = res;
+        return res;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp/Innertube] Fast dual search error: $e');
+    }
+
+    // 2. Android fallback: Execute embedded Python interpreter with yt-dlp (Chaquopy)
     if (Platform.isAndroid) {
       try {
         final jsonStr = await _androidChannel.invokeMethod<String>('searchDual', {
@@ -768,28 +789,6 @@ class YtDlpService {
       } catch (e) {
         debugPrint('[yt-dlp/Android Python] searchDual error: $e');
       }
-    }
-
-    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Direct native Innertube queries
-    try {
-      final results = await Future.wait([
-        searchYtMusicInnertube(query, limit: limit),
-        searchYoutubeVideoInnertube(query, limit: limit),
-      ]);
-      final musicTracks = results[0];
-      final ytTracks = results[1];
-
-      if (musicTracks.isNotEmpty || ytTracks.isNotEmpty) {
-        final res = {
-          'music': musicTracks,
-          'youtube': ytTracks,
-        };
-        debugPrint('[yt-dlp/Desktop Innertube] Dual search "$query": ${musicTracks.length} music, ${ytTracks.length} youtube');
-        if (cleanQuery.isNotEmpty) _dualSearchCache[cleanQuery] = res;
-        return res;
-      }
-    } catch (e) {
-      debugPrint('[yt-dlp/Desktop Innertube] Dual search error: $e');
     }
 
     // 3. Fallback: Process execution or youtube_explode_dart
@@ -822,7 +821,25 @@ class YtDlpService {
       return _searchCache[cleanQuery]!;
     }
 
-    // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
+    // 1. Ultra-fast native Innertube query (~150-300ms on all platforms)
+    try {
+      final musicItems = await searchYtMusicInnertube(query, limit: limit).timeout(const Duration(seconds: 6));
+      if (musicItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Innertube] Fast search "$query" returned ${musicItems.length} items');
+        _searchCache[cleanQuery] = musicItems;
+        return musicItems;
+      }
+      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 6));
+      if (ytItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Innertube] Fast video search "$query" returned ${ytItems.length} items');
+        _searchCache[cleanQuery] = ytItems;
+        return ytItems;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp/Innertube] Fast search error: $e');
+    }
+
+    // 2. Android fallback: Execute embedded Python interpreter with yt-dlp (Chaquopy)
     if (Platform.isAndroid) {
       try {
         final jsonStr = await _androidChannel.invokeMethod<String>('search', {
@@ -840,24 +857,6 @@ class YtDlpService {
       } catch (e) {
         debugPrint('[yt-dlp/Android Python] Search error: $e');
       }
-    }
-
-    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Native Innertube query
-    try {
-      final musicItems = await searchYtMusicInnertube(query, limit: limit);
-      if (musicItems.isNotEmpty) {
-        debugPrint('[yt-dlp/Desktop Innertube] Search "$query" returned ${musicItems.length} items');
-        _searchCache[cleanQuery] = musicItems;
-        return musicItems;
-      }
-      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit);
-      if (ytItems.isNotEmpty) {
-        debugPrint('[yt-dlp/Desktop Innertube] Video search "$query" returned ${ytItems.length} items');
-        _searchCache[cleanQuery] = ytItems;
-        return ytItems;
-      }
-    } catch (e) {
-      debugPrint('[yt-dlp/Desktop Innertube] Search error: $e');
     }
 
     // 3. Desktop: Execute host Python / yt-dlp subprocess

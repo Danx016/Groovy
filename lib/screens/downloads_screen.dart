@@ -146,26 +146,31 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16).copyWith(bottom: 120),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-      ),
-      itemCount: _downloadedAlbums.length,
-      itemBuilder: (context, index) {
-        final album = _downloadedAlbums[index];
-        return AlbumCard(
-          album: album,
-          size: double.infinity,
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AlbumScreen(albumId: album.id, album: album),
-            ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = (constraints.maxWidth / 180).floor().clamp(2, 8);
+        return GridView.builder(
+          padding: const EdgeInsets.all(16).copyWith(bottom: 120),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: 0.75,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
           ),
+          itemCount: _downloadedAlbums.length,
+          itemBuilder: (context, index) {
+            final album = _downloadedAlbums[index];
+            return AlbumCard(
+              album: album,
+              size: double.infinity,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AlbumScreen(albumId: album.id, album: album),
+                ),
+              ),
+            );
+          },
         );
       },
     );

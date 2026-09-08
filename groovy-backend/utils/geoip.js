@@ -282,7 +282,7 @@ function parseFullClientInfo(req) {
 
   if (isNativeApp) {
     browser = `Groovy App (${customPlatform || os})`;
-    browserVersion = customAppVersion || '1.0.65';
+    browserVersion = customAppVersion || '1.0.66';
   } else if (/edg\/(\d+(\.\d+)?)/i.test(ua)) {
     const m = ua.match(/edg\/(\d+(\.\d+)?)/i);
     browser = 'Microsoft Edge';

@@ -35,13 +35,31 @@ export const AuthProvider = ({ children }) => {
     loadSession();
   }, []);
 
-  // Periodic heartbeat while web app is open
+  // Periodic heartbeat and window unload cleanup while web app is open
   useEffect(() => {
     if (!token || !user) return;
+    // Immediate ping
+    telemetryApi.ping().catch(() => {});
+
+    // Heartbeat every 8 seconds (fast response for online status)
     const interval = setInterval(() => {
       telemetryApi.ping().catch(() => {});
-    }, 20000);
-    return () => clearInterval(interval);
+    }, 8000);
+
+    const handleUnload = () => {
+      telemetryApi.leave();
+    };
+
+    window.addEventListener('beforeunload', handleUnload);
+    window.addEventListener('pagehide', handleUnload);
+    window.addEventListener('unload', handleUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('unload', handleUnload);
+    };
   }, [token, user]);
 
   const login = async (email, password) => {
@@ -75,6 +93,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
+    telemetryApi.leave();
     setAuthToken(null);
     setToken(null);
     setUser(null);

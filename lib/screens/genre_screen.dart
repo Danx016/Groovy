@@ -32,6 +32,10 @@ class _GenreScreenState extends State<GenreScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  void _loadData() {
     _loadSongs();
     _loadAlbums();
   }
@@ -246,21 +250,26 @@ class _GenreScreenState extends State<GenreScreen>
         ),
       );
     }
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.75,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-      ),
-      itemCount: _albums!.length,
-      itemBuilder: (context, index) {
-        final album = _albums![index];
-        return AlbumCard(
-          album: album,
-          onTap: () =>
-              NavigationHelper.push(context, AlbumScreen(albumId: album.id, album: album)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = (constraints.maxWidth / 180).floor().clamp(2, 8);
+        return GridView.builder(
+          padding: const EdgeInsets.all(16).copyWith(bottom: 120),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            childAspectRatio: 0.75,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 16,
+          ),
+          itemCount: _albums!.length,
+          itemBuilder: (context, index) {
+            final album = _albums![index];
+            return AlbumCard(
+              album: album,
+              onTap: () =>
+                  NavigationHelper.push(context, AlbumScreen(albumId: album.id, album: album)),
+            );
+          },
         );
       },
     );

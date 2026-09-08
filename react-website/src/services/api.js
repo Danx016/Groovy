@@ -57,7 +57,7 @@ const getClientHeaders = () => {
     'X-Client-Platform': 'Web',
     'X-Device-Model': device,
     'X-OS-Version': osVersion,
-    'X-App-Version': '1.0.65',
+    'X-App-Version': '1.0.66',
   };
 };
 
@@ -228,4 +228,10 @@ export const telemetryApi = {
       method: 'POST',
       body: JSON.stringify({ platform }),
     }),
+
+  leave: () =>
+    authFetch('/telemetry/leave', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }).catch(() => {}),
 };

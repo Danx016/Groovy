@@ -31,6 +31,7 @@ class AlbumScreen extends StatefulWidget {
 }
 
 class _AlbumScreenState extends State<AlbumScreen> {
+  static final _ytIdRegex = RegExp(r'^[a-zA-Z0-9_-]{11}$');
   Album? _album;
   List<Song> _songs = [];
   bool _isLoading = true;
@@ -204,14 +205,14 @@ class _AlbumScreenState extends State<AlbumScreen> {
     if (raw != null && raw.isNotEmpty) {
       if (raw.startsWith('http') ||
           raw.startsWith('/') ||
-          RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(raw.replaceFirst('ytmusic://', '').replaceFirst('yt_', ''))) {
+          _ytIdRegex.hasMatch(raw.replaceFirst('ytmusic://', '').replaceFirst('yt_', ''))) {
         return raw;
       }
     }
     for (final s in _songs) {
       if (s.coverArt != null && s.coverArt!.isNotEmpty) return s.coverArt;
       final cleanId = s.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
-      if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+      if (_ytIdRegex.hasMatch(cleanId)) {
         return cleanId;
       }
     }

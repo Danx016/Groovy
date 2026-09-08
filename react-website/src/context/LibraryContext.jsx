@@ -30,12 +30,12 @@ export const LibraryProvider = ({ children }) => {
       if (favRes.status === 'fulfilled' && favRes.value.favorites) {
         setFavorites(
           favRes.value.favorites.map((f) => ({
-            id: f.song_id,
+            id: f.id || f.song_id || f.songId,
             title: f.title,
             artist: f.artist,
             album: f.album,
-            coverArt: f.cover_art,
-            duration: f.duration,
+            coverArt: f.coverArt || f.cover_art,
+            duration: f.duration || 0,
           }))
         );
       }
@@ -47,13 +47,13 @@ export const LibraryProvider = ({ children }) => {
       if (histRes.status === 'fulfilled' && histRes.value.history) {
         setHistory(
           histRes.value.history.map((h) => ({
-            id: h.song_id,
+            id: h.id || h.song_id || h.songId,
             title: h.title,
             artist: h.artist,
             album: h.album,
-            coverArt: h.cover_art,
-            duration: h.duration,
-            playedAt: h.played_at,
+            coverArt: h.coverArt || h.cover_art,
+            duration: h.duration || 0,
+            playedAt: h.played_at || h.playedAt,
           }))
         );
       }
@@ -137,13 +137,30 @@ export const LibraryProvider = ({ children }) => {
   };
 
   const recordPlayHistory = async (song) => {
-    if (!isAuthenticated || !song) return;
-    try {
-      await libraryApi.addToHistory(song);
-      setHistory((prev) => [song, ...prev.slice(0, 49)]);
-    } catch (e) {
-      // Quiet fail for history
+    if (!song) return;
+    setHistory((prev) => {
+      const filtered = prev.filter(s => s.id !== song.id);
+      const updated = [song, ...filtered].slice(0, 50);
+      try {
+        localStorage.setItem('groovy_local_history', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+
+    if (isAuthenticated) {
+      try {
+        await libraryApi.addToHistory(song);
+      } catch (e) {
+        // Quiet fail
+      }
     }
+  };
+
+  const clearHistory = () => {
+    setHistory([]);
+    try {
+      localStorage.removeItem('groovy_local_history');
+    } catch (_) {}
   };
 
   return (
@@ -160,6 +177,7 @@ export const LibraryProvider = ({ children }) => {
         addSongToPlaylist,
         removeSongFromPlaylist,
         recordPlayHistory,
+        clearHistory,
         refreshLibrary: fetchLibrary,
       }}
     >

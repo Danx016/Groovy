@@ -5,7 +5,7 @@ import { useLibrary } from '../../context/LibraryContext';
 import { useAuth } from '../../context/AuthContext';
 
 export const SongCard = ({ song, queue = [] }) => {
-  const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
+  const { currentSong, isPlaying, playSong, togglePlay, openArtist, openAlbum } = usePlayer();
   const { isFavorite, toggleFavorite, playlists, addSongToPlaylist } = useLibrary();
   const { isAuthenticated, openAuthModal } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
@@ -64,7 +64,33 @@ export const SongCard = ({ song, queue = [] }) => {
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
         }}>{song.title}</p>
         <p style={{ fontSize: '13px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {song.artist}{song.album ? ` · ${song.album}` : ''}
+          <span
+            onClick={(e) => {
+              e.stopPropagation();
+              if (openArtist && song.artist) openArtist(song.artist);
+            }}
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+            onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
+          >
+            {song.artist}
+          </span>
+          {song.album && (
+            <>
+              {' · '}
+              <span
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (openAlbum) openAlbum({ id: song.albumId || song.id, name: song.album, artist: song.artist, coverArt: song.coverArt });
+                }}
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                onMouseLeave={e => e.currentTarget.style.color = '#B3B3B3'}
+              >
+                {song.album}
+              </span>
+            </>
+          )}
         </p>
       </div>
 

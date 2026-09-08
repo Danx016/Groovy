@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
-import '../services/youtube_service.dart';
+import '../providers/library_provider.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
 import 'album_screen.dart';
@@ -28,16 +28,27 @@ class _LikedAlbumsScreenState extends State<LikedAlbumsScreen> {
   Future<void> _loadLikedAlbums() async {
     setState(() => _isLoading = true);
 
-    final youtubeService = Provider.of<YoutubeService>(
+    final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
     );
+    final youtubeService = libraryProvider.youtubeService;
 
     try {
-      final starred = await youtubeService.getStarred();
+      final results = await Future.wait([
+        youtubeService.getStarred().then((s) => s.albums).catchError((_) => <Album>[]),
+        libraryProvider.database.getStarredAlbums().catchError((_) => <Album>[]),
+      ]);
+      final map = <String, Album>{};
+      for (final a in results[0]) {
+        map[a.id] = a;
+      }
+      for (final a in results[1]) {
+        map[a.id] = a;
+      }
       if (mounted) {
         setState(() {
-          _likedAlbums = starred.albums;
+          _likedAlbums = map.values.toList();
           _isLoading = false;
         });
       }

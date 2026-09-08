@@ -4,6 +4,25 @@ const { authenticateToken } = require('../middleware/auth');
 
 const router = express.Router();
 
+const normalizeCoverArt = (coverArt, songId) => {
+  if (coverArt && typeof coverArt === 'string') {
+    const trimmed = coverArt.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    if (!trimmed.includes('/') && !trimmed.includes('\\') && !trimmed.includes(' ') && trimmed.length >= 8 && trimmed.length <= 25) {
+      return `https://i.ytimg.com/vi/${trimmed}/hqdefault.jpg`;
+    }
+  }
+  if (songId && typeof songId === 'string') {
+    const trimmedId = String(songId).trim();
+    if (!trimmedId.startsWith('local_') && !trimmedId.includes('/') && !trimmedId.includes('\\') && trimmedId.length >= 8 && trimmedId.length <= 25) {
+      return `https://i.ytimg.com/vi/${trimmedId}/hqdefault.jpg`;
+    }
+  }
+  return (coverArt && typeof coverArt === 'string') ? coverArt : '';
+};
+
 // Apply auth middleware to all library routes
 router.use(authenticateToken);
 
@@ -43,11 +62,12 @@ router.post('/favorites', async (req, res) => {
     }
 
     const pool = getPool();
+    const resolvedCoverArt = normalizeCoverArt(coverArt, songId);
     await pool.query(
       `INSERT INTO favorites (user_id, song_id, title, artist, album, cover_art, duration)
        VALUES (?, ?, ?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE title = VALUES(title), artist = VALUES(artist), album = VALUES(album), cover_art = VALUES(cover_art), duration = VALUES(duration)`,
-      [req.user.id, songId, title, artist || '', album || '', coverArt || '', duration || 0]
+      [req.user.id, songId, title, artist || '', album || '', resolvedCoverArt, duration || 0]
     );
 
     return res.status(201).json({
@@ -197,10 +217,11 @@ router.post('/playlists/:id/songs', async (req, res) => {
     );
     const nextPos = posRow[0]?.nextPos || 0;
 
+    const resolvedCoverArt = normalizeCoverArt(coverArt, songId);
     await pool.query(
       `INSERT INTO playlist_songs (playlist_id, song_id, title, artist, album, cover_art, duration, position)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.params.id, songId, title, artist || '', album || '', coverArt || '', duration || 0, nextPos]
+      [req.params.id, songId, title, artist || '', album || '', resolvedCoverArt, duration || 0, nextPos]
     );
 
     await pool.query(
@@ -281,9 +302,10 @@ router.post('/history', async (req, res) => {
     const clientDevice = deviceName || `${clientPlatform} Client`;
 
     const pool = getPool();
+    const resolvedCoverArt = normalizeCoverArt(coverArt, songId);
     await pool.query(
       'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, songId, title, artist || '', album || '', coverArt || '', duration || 0, clientPlatform, clientDevice, ip]
+      [req.user.id, songId, title, artist || '', album || '', resolvedCoverArt, duration || 0, clientPlatform, clientDevice, ip]
     );
 
     // Update user active timestamp and listening time (minimum 30s)
