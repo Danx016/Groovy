@@ -113,11 +113,22 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   static const _remoteMaxVolume = 100;
   static const _remoteVolumeStep = 5;
 
+  StreamSubscription<PlaybackState>? _playbackEventSubscription;
+
   GroovyAudioHandler() {
     // Forward just_audio playback events → audio_service playback state.
     // This drives the iOS Control Center / lock screen widget and the
     // Android media notification automatically.
-    _player.playbackEventStream.map(_buildPlaybackState).pipe(playbackState);
+    // NOTE: Using pipe(playbackState) caused "Bad state: You cannot add items while
+    // items are being added from addStream" whenever updateRemotePlaybackState was called
+    // because pipe keeps an active addStream open. We use listen() instead.
+    _playbackEventSubscription = _player.playbackEventStream
+        .map(_buildPlaybackState)
+        .listen((state) {
+      if (!_remotePlayback) {
+        playbackState.add(state);
+      }
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -382,8 +393,13 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   // ---------------------------------------------------------------------------
 
   void setRemotePlayback({required bool isRemote, int volume = 50}) {
-    if (kIsWeb || !Platform.isAndroid) return;
     _remotePlayback = isRemote;
+    if (kIsWeb || !Platform.isAndroid) {
+      if (!isRemote) {
+        playbackState.add(_buildPlaybackState(_player.playbackEvent));
+      }
+      return;
+    }
     if (isRemote) {
       _remoteVolume = volume.clamp(0, _remoteMaxVolume);
       androidPlaybackInfo.add(
@@ -476,6 +492,7 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
     required bool playing,
     required Duration position,
   }) {
+    _remotePlayback = true;
     playbackState.add(
       playbackState.value.copyWith(
         controls: [
@@ -503,14 +520,6 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   // ---------------------------------------------------------------------------
 
   PlaybackState _buildPlaybackState(PlaybackEvent event) {
-    final processingStateMap = {
-      ProcessingState.idle: AudioProcessingState.idle,
-      ProcessingState.loading: AudioProcessingState.loading,
-      ProcessingState.buffering: AudioProcessingState.buffering,
-      ProcessingState.ready: AudioProcessingState.ready,
-      ProcessingState.completed: AudioProcessingState.completed,
-    };
-
     return PlaybackState(
       controls: [
         MediaControl.skipToPrevious,
@@ -525,9 +534,13 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
         MediaAction.playFromSearch,
       },
       androidCompactActionIndices: const [0, 1, 2],
-      processingState:
-          processingStateMap[_player.processingState] ??
-          AudioProcessingState.idle,
+      processingState: const {
+        ProcessingState.idle: AudioProcessingState.idle,
+        ProcessingState.loading: AudioProcessingState.loading,
+        ProcessingState.buffering: AudioProcessingState.buffering,
+        ProcessingState.ready: AudioProcessingState.ready,
+        ProcessingState.completed: AudioProcessingState.completed,
+      }[_player.processingState]!,
       playing: _player.playing,
       updatePosition: _player.position,
       bufferedPosition: _player.bufferedPosition,
@@ -536,7 +549,6 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
     );
   }
 
-  // ---------------------------------------------------------------------------
 
   /// Propagates speed+pitch to the native player via platform channel.
   /// Returns true if the native plugin succeeded.
@@ -557,6 +569,7 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
     if (name == 'dispose') {
+      await _playbackEventSubscription?.cancel();
       await _player.dispose();
     }
   }

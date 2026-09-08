@@ -10,6 +10,7 @@ import '../services/local_music_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/theme_service.dart';
 import '../services/update_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../utils/navigation_helper.dart';
 import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
@@ -256,7 +257,7 @@ class _MainScreenState extends State<MainScreen> {
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
-                                          'v${UpdateService.currentVersion}',
+                                          'v${UpdateService.currentVersionDisplay}',
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
@@ -271,7 +272,7 @@ class _MainScreenState extends State<MainScreen> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          'v${release.version}',
+                                          'v${UpdateService.cleanVersion(release.version)}',
                                           style: const TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.bold,
@@ -357,10 +358,29 @@ class _MainScreenState extends State<MainScreen> {
                             if (errorMessage != null)
                               Padding(
                                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                child: Text(
-                                  errorMessage,
-                                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                                  textAlign: TextAlign.center,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      errorMessage,
+                                      style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    TextButton.icon(
+                                      onPressed: () {
+                                        launchUrl(
+                                          Uri.parse(release.htmlUrl),
+                                          mode: LaunchMode.externalApplication,
+                                        );
+                                      },
+                                      icon: const Icon(Icons.open_in_browser, size: 16),
+                                      label: const Text(
+                                        'Descargar desde la web',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
 
@@ -372,7 +392,10 @@ class _MainScreenState extends State<MainScreen> {
                                   if (!isDownloading)
                                     Expanded(
                                       child: TextButton(
-                                        onPressed: () => Navigator.of(ctx).pop(),
+                                        onPressed: () {
+                                          UpdateService.snoozeUpdate(release.version);
+                                          Navigator.of(ctx).pop();
+                                        },
                                         style: TextButton.styleFrom(
                                           padding: const EdgeInsets.symmetric(vertical: 14),
                                           shape: RoundedRectangleBorder(
@@ -439,7 +462,9 @@ class _MainScreenState extends State<MainScreen> {
           },
         );
       },
-    );
+    ).then((_) {
+      UpdateService.snoozeUpdate(release.version);
+    });
   }
 
   bool get _isDesktop {

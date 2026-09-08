@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
@@ -68,6 +69,31 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   Timer? _colorDebounceTimer;
   Timer? _lyricsDebounceTimer;
 
+  bool _isLocalFilePath(String? s) {
+    if (s == null || s.isEmpty) return false;
+    if (s.startsWith('/')) return true;
+    if (s.length > 2 && s[1] == ':') return true;
+    return false;
+  }
+
+  ImageProvider _resolveImageProvider(Song? song, YoutubeService youtubeService) {
+    if (song == null || song.coverArt == null || song.coverArt!.isEmpty) {
+      return const AssetImage('assets/default_cover.png');
+    }
+    final raw = song.coverArt!;
+    if (song.isLocal || _isLocalFilePath(raw)) {
+      return FileImage(File(raw));
+    }
+    final coverUrl = youtubeService.getCoverArtUrl(raw, size: 600);
+    if (_isLocalFilePath(coverUrl)) {
+      return FileImage(File(coverUrl));
+    }
+    if (coverUrl.isNotEmpty) {
+      return CachedNetworkImageProvider(coverUrl);
+    }
+    return const AssetImage('assets/default_cover.png');
+  }
+
   @override
   void initState() {
     super.initState();
@@ -81,16 +107,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final cached = PaletteService.getCachedColors(songId);
     if (cached != null) {
       _bgColors = cached;
+    } else {
+      _bgColors = PaletteService.defaultPalette;
     }
 
-    // 2. Extract palette immediately (runs async, caches instantly)
-    if (_bgColors.isEmpty) {
-      _extractColors();
+    // 2. Instant lyrics cache check to prevent spinner flash
+    if (_fetchedLyrics.isEmpty && _lyricsCache.containsKey(songId)) {
+      _fetchedLyrics = _lyricsCache[songId]!;
+      _isLoadingLyrics = false;
     }
 
-    // 5. Defer network lyrics fetch slightly (160ms) to ensure 120Hz smooth entry
+    // 3. Defer palette extraction slightly until after the transition frame
+    // so entering NowPlayingScreen (bottom sheet on Android or fade on Windows)
+    // runs at 120 FPS buttery smooth without any frame drops!
+    if (cached == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _extractColors();
+      });
+    }
+
+    // 4. Defer network lyrics fetch slightly (200ms) to ensure smooth entry
     if (_fetchedLyrics.isEmpty) {
-      Future.delayed(const Duration(milliseconds: 160), () {
+      Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) _fetchLyrics();
       });
     }
@@ -115,8 +153,18 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final currentSong = _playerProvider!.currentSong;
     if (currentSong != null && _lastSong?.id != currentSong.id) {
       _lastSong = currentSong;
+      
+      // 1. Instant color update if already in PaletteService cache (0 ms!)
+      final cachedColors = PaletteService.getCachedColors(currentSong.id);
+      if (cachedColors != null) {
+        _colorDebounceTimer?.cancel();
+        _bgColors = cachedColors;
+      }
+
+      // 2. Update cover image provider
       _updateImageProviderAndColors();
       
+      // 3. Check lyrics cache or debounce network fetch
       _lyricsDebounceTimer?.cancel();
       if (_lyricsCache.containsKey(currentSong.id)) {
         setState(() {
@@ -125,7 +173,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         });
       } else {
         setState(() => _isLoadingLyrics = true);
-        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 150), () {
+        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 180), () {
           if (mounted) _fetchLyrics();
         });
       }
@@ -134,19 +182,29 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   static final Map<String, List<LyricLine>> _lyricsCache = {};
 
-  Future<void> _updateImageProviderAndColors() async {
+  void _updateImageProviderAndColors() {
     if (_lastSong == null) return;
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-    final coverUrl = _lastSong!.coverArt != null ? youtubeService.getCoverArtUrl(_lastSong!.coverArt, size: 600) : null;
-    if (coverUrl != null) {
-      _currentImageProvider = CachedNetworkImageProvider(coverUrl);
-    } else {
-      _currentImageProvider = const AssetImage('assets/default_cover.png');
-    }
+    final newImageProvider = _resolveImageProvider(_lastSong, youtubeService);
     
+    // Instant cache hit check (0 ms)
+    final cachedColors = PaletteService.getCachedColors(_lastSong!.id);
+    if (cachedColors != null) {
+      _colorDebounceTimer?.cancel();
+      setState(() {
+        _currentImageProvider = newImageProvider;
+        _bgColors = cachedColors;
+      });
+      return;
+    }
+
+    setState(() {
+      _currentImageProvider = newImageProvider;
+    });
+
     // Debounce palette extraction to keep UI butter-smooth during rapid skips
     _colorDebounceTimer?.cancel();
-    _colorDebounceTimer = Timer(const Duration(milliseconds: 80), () {
+    _colorDebounceTimer = Timer(const Duration(milliseconds: 60), () {
       if (mounted) _extractColors();
     });
   }
@@ -274,7 +332,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     if (_currentImageProvider == null || _lastSong == null) return;
     final imageId = _lastSong!.id;
     final colors = await PaletteService.extractColors(_currentImageProvider!, imageId);
-    if (mounted) {
+    if (mounted && _lastSong?.id == imageId && _bgColors != colors) {
       setState(() {
         _bgColors = colors;
       });

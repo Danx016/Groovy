@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -71,9 +72,16 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
     final coverUrl = song.coverArt != null
         ? youtubeService.getCoverArtUrl(song.coverArt, size: 600)
         : null;
-    final imageProvider = coverUrl != null
-        ? CachedNetworkImageProvider(coverUrl)
-        : const AssetImage('assets/default_cover.png') as ImageProvider;
+    final ImageProvider imageProvider;
+    if (coverUrl != null && coverUrl.isNotEmpty) {
+      if (song.isLocal || isLocalFilePath(coverUrl)) {
+        imageProvider = FileImage(File(coverUrl));
+      } else {
+        imageProvider = CachedNetworkImageProvider(coverUrl);
+      }
+    } else {
+      imageProvider = const AssetImage('assets/default_cover.png');
+    }
 
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
@@ -619,8 +627,16 @@ class _PlayerControls extends StatelessWidget {
   }
 }
 
-class _ProgressBar extends StatelessWidget {
+class _ProgressBar extends StatefulWidget {
   const _ProgressBar();
+
+  @override
+  State<_ProgressBar> createState() => _ProgressBarState();
+}
+
+class _ProgressBarState extends State<_ProgressBar> {
+  bool _isDragging = false;
+  double _dragValue = 0.0;
 
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
@@ -643,12 +659,19 @@ class _ProgressBar extends StatelessWidget {
       builder: (context, data, _) {
         final (position, duration) = data;
         final provider = context.read<PlayerProvider>();
+        final maxMs = duration.inMilliseconds.toDouble();
+        final currentMs = _isDragging
+            ? _dragValue
+            : position.inMilliseconds.toDouble().clamp(0.0, maxMs > 0 ? maxMs : 0.0);
+        final displayPos = _isDragging
+            ? Duration(milliseconds: _dragValue.round())
+            : position;
 
         return SizedBox(
           width: 400,
           child: Row(
             children: [
-              Text(_formatDuration(position), style: timeStyle),
+              Text(_formatDuration(displayPos), style: timeStyle),
               const SizedBox(width: 8),
               Expanded(
                 child: SizedBox(
@@ -671,13 +694,26 @@ class _ProgressBar extends StatelessWidget {
                       ),
                     ),
                     child: Slider(
-                      value: position.inMilliseconds.toDouble().clamp(
-                            0.0,
-                            duration.inMilliseconds.toDouble(),
-                          ),
+                      value: maxMs > 0 ? currentMs.clamp(0.0, maxMs) : 0.0,
                       min: 0.0,
-                      max: duration.inMilliseconds.toDouble(),
-                      onChanged: (value) {
+                      max: maxMs > 0 ? maxMs : 1.0,
+                      onChangeStart: (value) {
+                        setState(() {
+                          _isDragging = true;
+                          _dragValue = value;
+                        });
+                      },
+                      onChanged: maxMs > 0
+                          ? (value) {
+                              setState(() {
+                                _dragValue = value;
+                              });
+                            }
+                          : null,
+                      onChangeEnd: (value) {
+                        setState(() {
+                          _isDragging = false;
+                        });
                         provider.seek(Duration(milliseconds: value.round()));
                       },
                     ),

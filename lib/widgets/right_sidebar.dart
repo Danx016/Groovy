@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
@@ -229,9 +230,16 @@ class _RightSidebarState extends State<RightSidebar> {
     final coverUrl = song.coverArt != null
         ? youtubeService.getCoverArtUrl(song.coverArt, size: 600)
         : null;
-    final imageProvider = coverUrl != null
-        ? CachedNetworkImageProvider(coverUrl)
-        : const AssetImage('assets/default_cover.png') as ImageProvider;
+    final ImageProvider imageProvider;
+    if (coverUrl != null && coverUrl.isNotEmpty) {
+      if (song.isLocal || isLocalFilePath(coverUrl)) {
+        imageProvider = FileImage(File(coverUrl));
+      } else {
+        imageProvider = CachedNetworkImageProvider(coverUrl);
+      }
+    } else {
+      imageProvider = const AssetImage('assets/default_cover.png');
+    }
 
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(

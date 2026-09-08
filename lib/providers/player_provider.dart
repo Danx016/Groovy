@@ -169,7 +169,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
   }
 
-  /// Handle app lifecycle changes - save queue state when going to background (important for iOS)
+  /// Handle app lifecycle changes - save queue state when going to background (important for iOS/Android)
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
@@ -177,6 +177,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint(
           '[Player] App lifecycle state: $state - saving queue state immediately');
       _saveQueueStateImmediate();
+    } else if (state == AppLifecycleState.resumed) {
+      if (!_isRenderingRemotely && _audioPlayer.playing) {
+        _position = _audioPlayer.position;
+        _positionController.add(_position);
+        notifyListeners();
+      }
     }
   }
 
@@ -368,6 +374,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void _onGroovyConnectChanged() {
     if (_groovyConnectService?.isConnected != true && _isRenderingRemotely) {
       _isRenderingRemotely = false;
+      _audioHandler.setRemotePlayback(isRemote: false);
       notifyListeners();
       _updateAllServices();
     }
@@ -378,6 +385,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _audioPlayer.stop();
     }
     _isRenderingRemotely = true;
+    _audioHandler.setRemotePlayback(isRemote: true);
     notifyListeners();
     _updateAllServices();
     _updateAndroidAuto();
@@ -385,6 +393,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void disableGroovyConnectRemote() {
     _isRenderingRemotely = false;
+    _audioHandler.setRemotePlayback(isRemote: false);
     notifyListeners();
     _updateAllServices();
     _updateAndroidAuto();
@@ -402,6 +411,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     bool changed = false;
     if (song != null && _currentSong?.id != song.id) {
       _currentSong = song;
+      // Sync queue index if this song exists in our local queue
+      final qIndex = _queue.indexWhere((s) => s.id == song.id);
+      if (qIndex != -1) {
+        _currentIndex = qIndex;
+      }
+      _refreshArtworkUrl().catchError((_) {});
       _audioHandler.updateNowPlaying(
         id: song.id,
         title: song.title,
@@ -418,7 +433,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       changed = true;
     }
 
-    if ((_position.inMilliseconds - position.inMilliseconds).abs() > 1200) {
+    if ((_position.inMilliseconds - position.inMilliseconds).abs() > 800) {
       _position = position;
       _positionController.add(position);
       changed = true;
@@ -924,26 +939,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _resolvedArtworkUrl = directUrl;
     if (_currentSong?.id == song.id) _updateAndroidAuto();
 
+    // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
+    final songId = song.id;
+    if (PaletteService.getCachedColors(songId) == null) {
+      final ImageProvider imgProvider = CachedNetworkImageProvider(directUrl);
+      PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
+    }
+
     // Cache the image file locally so Android notification / lock screen loads it instantly from disk!
-    File? cachedFile;
     try {
       final file = await DefaultCacheManager().getSingleFile(directUrl);
       if (file.existsSync() && _currentSong?.id == song.id) {
         _resolvedArtworkUrl = Uri.file(file.path).toString();
-        cachedFile = file;
         _updateAndroidAuto();
       }
     } catch (e) {
       debugPrint('[Artwork] Cache file download note: $e');
-    }
-
-    // Pre-warm background palette cache so entering NowPlayingScreen has a 0ms instant cache hit
-    final songId = song.id;
-    if (PaletteService.getCachedColors(songId) == null) {
-      final ImageProvider imgProvider = cachedFile != null
-          ? FileImage(cachedFile) as ImageProvider
-          : CachedNetworkImageProvider(directUrl) as ImageProvider;
-      PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
     }
   }
 
@@ -1324,6 +1335,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  Future<void> _cleanOldStreamCache() async {
+    try {
+      final cacheDir = await getTemporaryDirectory();
+      final entities = cacheDir.listSync();
+      final now = DateTime.now();
+      for (final e in entities) {
+        final name = e.uri.pathSegments.isNotEmpty ? e.uri.pathSegments.last : '';
+        if (e is File && name.startsWith('groovy_stream_') && name.endsWith('.tmp')) {
+          try {
+            final stat = e.statSync();
+            if (now.difference(stat.modified).inDays > 2) {
+              e.deleteSync();
+            }
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
   void _initializePlayer() {
     _configureAudioSession();
 
@@ -1342,6 +1372,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _offlineService.initialize().then((_) {
       _offlineService.resumeIncompleteDownloads(_youtubeService);
     });
+
+    _cleanOldStreamCache().catchError((_) {});
 
 
     _storageService.getRepeatMode().then((saved) {
@@ -1371,8 +1403,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint(
               '[Player] ${_isPlaying ? '▶ Playing' : '⏸ Paused'} — "${_currentSong?.title ?? 'unknown'}" (${state.processingState.name})');
 
-          // Start/stop Windows position polling timer
-          if (_isPlaying && Platform.isWindows && !_isRenderingRemotely) {
+          // Start/stop desktop position polling timer (Windows and Linux both use just_audio_media_kit)
+          if (_isPlaying && (Platform.isWindows || Platform.isLinux) && !_isRenderingRemotely) {
             _windowsPositionTimer?.cancel();
             _lastPolledPosition = null;
             Duration? lastSystemUpdate;
@@ -1648,25 +1680,36 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Groovy Connect mode: route playback directly to connected device (Spotify Connect style)
     if (_groovyConnectService?.isConnected == true) {
-      final targetPlaylist = (playlist ?? (_queue.isNotEmpty ? _queue : [song])).toList();
-      final targetIndex = startIndex ??
-          targetPlaylist
-              .indexWhere((s) => s.id == song.id)
-              .clamp(0, targetPlaylist.length - 1);
+      final List<Song> targetPlaylist;
+      final int targetIndex;
+      if (playlist != null && playlist.isNotEmpty) {
+        targetPlaylist = List.from(playlist);
+        targetIndex = startIndex ?? targetPlaylist.indexWhere((s) => s.id == song.id);
+      } else if (_queue.any((s) => s.id == song.id)) {
+        targetPlaylist = List.from(_queue);
+        targetIndex = startIndex ?? _queue.indexWhere((s) => s.id == song.id);
+      } else {
+        targetPlaylist = [song];
+        targetIndex = 0;
+      }
+
+      final safeIndex = targetIndex >= 0 ? targetIndex : 0;
       _queue = targetPlaylist;
-      _currentIndex = targetIndex;
+      _currentIndex = safeIndex;
       _currentSong = song;
       _position = initialPosition ?? Duration.zero;
       _duration = song.duration != null ? Duration(seconds: song.duration!) : Duration.zero;
       _isRenderingRemotely = true;
       _isPlaying = true;
       _isLoading = false;
+      _audioHandler.setRemotePlayback(isRemote: true);
       if (_audioPlayer.playing) {
         await _audioPlayer.stop();
       }
       notifyListeners();
       _updateAndroidAuto();
       _updateAllServices();
+      _refreshArtworkUrl().catchError((_) {});
       await _groovyConnectService!.sendPlaySong(
         song,
         positionMs: initialPosition?.inMilliseconds ?? 0,
@@ -2298,6 +2341,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_groovyConnectService?.isConnected == true) {
+      if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
+        _currentIndex++;
+        _currentSong = _queue[_currentIndex];
+        _position = Duration.zero;
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        notifyListeners();
+        _refreshArtworkUrl().catchError((_) {});
+      }
       await _groovyConnectService!.sendControl('skipNext');
       return;
     }
@@ -2367,6 +2418,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_groovyConnectService?.isConnected == true) {
+      if (_position.inSeconds > 3) {
+        await seek(Duration.zero);
+        return;
+      }
+      if (_queue.isNotEmpty && _currentIndex > 0) {
+        _currentIndex--;
+        _currentSong = _queue[_currentIndex];
+        _position = Duration.zero;
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        notifyListeners();
+        _refreshArtworkUrl().catchError((_) {});
+      }
       await _groovyConnectService!.sendControl('skipPrevious');
       return;
     }

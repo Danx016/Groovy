@@ -1,9 +1,23 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to Groovy will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.0.73] - 2026-09-08
+
+### Fixed & Optimized
+- **Bucle de Actualización Resuelto (Windows & Android)**:
+  - Corrección de comparación de versiones semánticas en `UpdateService.isNewer`: soporte completo para metadatos de build (`1.0.73+64`) y sufijos, eliminando el falso positivo que reabría el diálogo de actualización en cada inicio.
+  - Silenciamiento persistente (Snooze): Si el usuario selecciona "Más tarde" o descarta el diálogo, la decisión se guarda en `SharedPreferences` por 24 horas para esa versión.
+  - Gestión de permisos en Android: Solicitud interactiva del permiso `REQUEST_INSTALL_PACKAGES` ("Instalar apps desconocidas") para Android 8.0+ al actualizar el APK, con enlace de contingencia directa a GitHub.
+  - Asistente de instalación en Windows (`installer.iss`): Casilla de acceso directo en el escritorio marcada por defecto para garantizar que siempre apunte al binario actualizado en `AppData\Local\Programs\Groovy`.
+- **Rendimiento, Lag al Cambiar Canciones & Groovy Connect**:
+  - Corrección de `Bad state: You cannot add items while items are being added from addStream` en `AudioHandlerService`.
+  - Extracción y caché ultrarrápida de paletas de color a 36x36 px con memoria LRU en `PaletteService`, eliminando el congelamiento al abrir carátulas.
+  - Arrastre suave de barra de progreso y optimización de notificaciones SMTC en Windows.
+  - Sincronización bidireccional estable en `GroovyConnectService` sin desconexiones al buscar o cambiar canciones.
 
 ## [1.0.67] - 2026-09-07
 

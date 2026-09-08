@@ -134,6 +134,7 @@ class GroovyConnectService extends ChangeNotifier {
   Timer? _statusSyncTimer;
   Timer? _presenceHeartbeatTimer;
   bool _isPollingCommands = false;
+  bool _isSyncingStatus = false;
 
   // Callbacks hooked to PlayerProvider
   Future<void> Function(
@@ -392,6 +393,7 @@ class GroovyConnectService extends ChangeNotifier {
   }
 
   Future<void> _sendPresencePing() async {
+    if (_cachedAuthToken == null || _cachedAuthToken!.isEmpty) return;
     try {
       final status = onProvidePlayerStatus?.call() ?? {};
       final songMap = status['song'] as Map<String, dynamic>?;
@@ -403,7 +405,7 @@ class GroovyConnectService extends ChangeNotifier {
       }
 
       await GroovyApiService().reportPlaybackState(
-        token: _cachedAuthToken ?? '',
+        token: _cachedAuthToken!,
         song: song ?? Song(id: '', title: ''),
         isPlaying: status['isPlaying'] == true,
         position: ((status['positionMs'] as num?)?.toInt() ?? 0) ~/ 1000,
@@ -432,6 +434,7 @@ class GroovyConnectService extends ChangeNotifier {
   /// Polls pending cloud commands targeting this device.
   Future<void> _pollCloudCommands() async {
     if (_localDeviceId.isEmpty || _isPollingCommands) return;
+    if (_cachedAuthToken == null || _cachedAuthToken!.isEmpty) return;
     _isPollingCommands = true;
 
     try {
@@ -581,16 +584,22 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
-  /// Removes devices that haven't sent a ping in over 45 seconds.
+  /// Removes devices that haven't sent a ping in over 60 seconds.
+  /// Never prunes the active connected device while connected.
   void _pruneStaleDevices() {
     final now = DateTime.now();
     _discoveredDevices.removeWhere((id, dev) {
-      final isStale = now.difference(dev.lastSeen).inSeconds > 45;
-      if (isStale && _connectedDevice?.id == id) {
-        _connectedDevice = null;
-        _statusSyncTimer?.cancel();
+      if (_connectedDevice?.id == id) {
+        // Never disconnect the active device unless completely silent for > 120s
+        final isConnectedStale = now.difference(_connectedDevice!.lastSeen).inSeconds > 120;
+        if (isConnectedStale) {
+          _connectedDevice = null;
+          _statusSyncTimer?.cancel();
+          return true;
+        }
+        return false;
       }
-      return isStale;
+      return now.difference(dev.lastSeen).inSeconds > 60;
     });
     notifyListeners();
   }
@@ -604,6 +613,19 @@ class GroovyConnectService extends ChangeNotifier {
     List<Song>? queue,
     int? queueIndex,
   }) async {
+    // Sanitize and trim queue to a reasonable window (current + 25 upcoming songs)
+    // to keep the JSON payload lightweight (< 10KB) and prevent transfer timeouts
+    List<Map<String, dynamic>>? conciseQueue;
+    int? effectiveQueueIndex = queueIndex;
+    if (queue != null && queue.isNotEmpty) {
+      final qIndex = queueIndex ?? queue.indexWhere((s) => s.id == song.id);
+      final startIndex = qIndex > 0 ? (qIndex - 2).clamp(0, queue.length - 1) : 0;
+      final endIndex = (startIndex + 25).clamp(0, queue.length);
+      final sub = queue.sublist(startIndex, endIndex);
+      conciseQueue = sub.map((s) => s.toJson()).toList();
+      effectiveQueueIndex = (qIndex - startIndex).clamp(0, sub.length - 1);
+    }
+
     // 1. Try direct local network P2P HTTP transfer if device is on LAN
     if (device.isLocalLan && device.host.isNotEmpty && device.port > 0) {
       try {
@@ -617,17 +639,20 @@ class GroovyConnectService extends ChangeNotifier {
             'positionMs': position.inMilliseconds,
             'isPlaying': isPlaying,
             'fromDevice': _localDeviceName,
-            'queue': queue?.map((s) => s.toJson()).toList(),
-            'queueIndex': queueIndex,
+            'queue': conciseQueue,
+            'queueIndex': effectiveQueueIndex,
           }),
-        ).timeout(const Duration(seconds: 3));
+        ).timeout(const Duration(seconds: 4));
 
         if (response.statusCode == 200) {
-          _connectedDevice = device.copyWith(
+          final now = DateTime.now();
+          final updated = device.copyWith(
             currentSong: song,
             isPlaying: isPlaying,
-            lastSeen: DateTime.now(),
+            lastSeen: now,
           );
+          _connectedDevice = updated;
+          _discoveredDevices[device.id] = updated;
           _startStatusSyncTimer();
           notifyListeners();
           debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via LAN');
@@ -650,18 +675,21 @@ class GroovyConnectService extends ChangeNotifier {
           'positionMs': position.inMilliseconds,
           'isPlaying': isPlaying,
           'fromDevice': _localDeviceName,
-          'queue': queue?.map((s) => s.copyWith(isLocal: false).toJson()).toList(),
-          'queueIndex': queueIndex,
+          'queue': conciseQueue,
+          'queueIndex': effectiveQueueIndex,
         },
         token: _cachedAuthToken,
       );
 
       if (success) {
-        _connectedDevice = device.copyWith(
+        final now = DateTime.now();
+        final updated = device.copyWith(
           currentSong: song,
           isPlaying: isPlaying,
-          lastSeen: DateTime.now(),
+          lastSeen: now,
         );
+        _connectedDevice = updated;
+        _discoveredDevices[device.id] = updated;
         _startStatusSyncTimer();
         notifyListeners();
         debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via cloud');
@@ -748,8 +776,8 @@ class GroovyConnectService extends ChangeNotifier {
   void _startStatusSyncTimer() {
     _statusSyncTimer?.cancel();
     final interval = (_connectedDevice?.isLocalLan == true)
-        ? const Duration(milliseconds: 850)
-        : const Duration(milliseconds: 1400);
+        ? const Duration(milliseconds: 1000)
+        : const Duration(milliseconds: 1500);
     _statusSyncTimer = Timer.periodic(interval, (_) {
       _syncRemoteStatus();
     });
@@ -761,94 +789,108 @@ class GroovyConnectService extends ChangeNotifier {
       _statusSyncTimer?.cancel();
       return;
     }
+    if (_isSyncingStatus) return;
+    _isSyncingStatus = true;
 
-    // 1. Query local device status if on LAN
-    if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty && _connectedDevice!.port > 0) {
-      try {
-        final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/status');
-        final response = await http.get(uri).timeout(const Duration(milliseconds: 900));
-
-        if (response.statusCode == 200) {
-          final data = jsonDecode(response.body) as Map<String, dynamic>;
-          final isPlaying = data['isPlaying'] as bool? ?? false;
-          final positionMs = (data['positionMs'] as num?)?.toInt() ?? 0;
-          final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
-          final volume = (data['volume'] as num?)?.toDouble() ?? 1.0;
-          final songData = data['song'] as Map<String, dynamic>?;
-
-          Song? song;
-          if (songData != null) {
-            try {
-              song = Song.fromJson(songData);
-            } catch (_) {}
-          }
-
-          _connectedDevice = _connectedDevice!.copyWith(
-            currentSong: song ?? _connectedDevice!.currentSong,
-            isPlaying: isPlaying,
-            lastSeen: DateTime.now(),
-          );
-          notifyListeners();
-
-          onRemoteStatusUpdated?.call(
-            song: song,
-            position: Duration(milliseconds: positionMs),
-            duration: Duration(milliseconds: durationMs),
-            isPlaying: isPlaying,
-            volume: volume,
-          );
-          return;
-        }
-      } catch (_) {
-        // Fall back to cloud query below if LAN packet dropped
-      }
-    }
-
-    // 2. Cloud status query
     try {
-      final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
-      final targetDev = devicesList.firstWhere(
-        (d) =>
-            d['device_key']?.toString() == _connectedDevice!.id ||
-            d['device_id']?.toString() == _connectedDevice!.id,
-        orElse: () => {},
-      );
+      // 1. Query local device status if on LAN
+      if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty && _connectedDevice!.port > 0) {
+        try {
+          final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/status');
+          final response = await http.get(uri).timeout(const Duration(milliseconds: 1400));
 
-      if (targetDev.isNotEmpty) {
-        final isPlaying = targetDev['is_playing'] == 1 || targetDev['is_playing'] == true;
-        final positionSec = (targetDev['position'] as num?)?.toInt() ?? 0;
-        final durationSec = (targetDev['duration'] as num?)?.toInt() ?? 0;
+          if (response.statusCode == 200) {
+            final data = jsonDecode(response.body) as Map<String, dynamic>;
+            final isPlaying = data['isPlaying'] as bool? ?? false;
+            final positionMs = (data['positionMs'] as num?)?.toInt() ?? 0;
+            final durationMs = (data['durationMs'] as num?)?.toInt() ?? 0;
+            final volume = (data['volume'] as num?)?.toDouble() ?? 1.0;
+            final songData = data['song'] as Map<String, dynamic>?;
 
-        Song? song;
-        if (targetDev['song_id'] != null && targetDev['title'] != null && targetDev['title'].toString().isNotEmpty) {
-          song = Song(
-            id: targetDev['song_id'].toString(),
-            title: targetDev['title'].toString(),
-            artist: targetDev['artist']?.toString() ?? '',
-            album: targetDev['album']?.toString(),
-            coverArt: targetDev['cover_art']?.toString(),
-            duration: durationSec,
-            isLocal: false,
-          );
+            Song? song;
+            if (songData != null) {
+              try {
+                song = Song.fromJson(songData);
+              } catch (_) {}
+            }
+
+            final now = DateTime.now();
+            final updated = _connectedDevice!.copyWith(
+              currentSong: song ?? _connectedDevice!.currentSong,
+              isPlaying: isPlaying,
+              lastSeen: now,
+            );
+            _connectedDevice = updated;
+            _discoveredDevices[updated.id] = updated;
+            notifyListeners();
+
+            onRemoteStatusUpdated?.call(
+              song: song,
+              position: Duration(milliseconds: positionMs),
+              duration: Duration(milliseconds: durationMs),
+              isPlaying: isPlaying,
+              volume: volume,
+            );
+            return;
+          }
+        } catch (_) {
+          // Fall back to cloud query below if LAN packet dropped
         }
-
-        _connectedDevice = _connectedDevice!.copyWith(
-          currentSong: song ?? _connectedDevice!.currentSong,
-          isPlaying: isPlaying,
-          lastSeen: DateTime.now(),
-        );
-        notifyListeners();
-
-        onRemoteStatusUpdated?.call(
-          song: song,
-          position: Duration(seconds: positionSec),
-          duration: Duration(seconds: durationSec),
-          isPlaying: isPlaying,
-          volume: 1.0,
-        );
       }
-    } catch (_) {
-      // Ignore intermittent network drop
+
+      // 2. Cloud status query
+      if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
+        try {
+          final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
+          final targetDev = devicesList.firstWhere(
+            (d) =>
+                d['device_key']?.toString() == _connectedDevice!.id ||
+                d['device_id']?.toString() == _connectedDevice!.id,
+            orElse: () => {},
+          );
+
+          if (targetDev.isNotEmpty) {
+            final isPlaying = targetDev['is_playing'] == 1 || targetDev['is_playing'] == true;
+            final positionSec = (targetDev['position'] as num?)?.toInt() ?? 0;
+            final durationSec = (targetDev['duration'] as num?)?.toInt() ?? 0;
+
+            Song? song;
+            if (targetDev['song_id'] != null && targetDev['title'] != null && targetDev['title'].toString().isNotEmpty) {
+              song = Song(
+                id: targetDev['song_id'].toString(),
+                title: targetDev['title'].toString(),
+                artist: targetDev['artist']?.toString() ?? '',
+                album: targetDev['album']?.toString(),
+                coverArt: targetDev['cover_art']?.toString(),
+                duration: durationSec,
+                isLocal: false,
+              );
+            }
+
+            final now = DateTime.now();
+            final updated = _connectedDevice!.copyWith(
+              currentSong: song ?? _connectedDevice!.currentSong,
+              isPlaying: isPlaying,
+              lastSeen: now,
+            );
+            _connectedDevice = updated;
+            _discoveredDevices[updated.id] = updated;
+            notifyListeners();
+
+            onRemoteStatusUpdated?.call(
+              song: song,
+              position: Duration(seconds: positionSec),
+              duration: Duration(seconds: durationSec),
+              isPlaying: isPlaying,
+              volume: 1.0,
+            );
+          }
+        } catch (_) {
+          // Ignore intermittent network drop
+        }
+      }
+    } finally {
+      _isSyncingStatus = false;
     }
   }
 

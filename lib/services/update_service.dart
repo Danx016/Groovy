@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ReleaseAsset {
   final String name;
@@ -65,11 +66,14 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.72';
+  static String currentVersion = '1.0.73';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
       'https://api.github.com/repos/Danx016/Groovy/releases/latest';
+
+  static const String _prefKeyDismissedVersion = 'dismissed_update_version';
+  static const String _prefKeyDismissedTime = 'dismissed_update_time';
 
   // Global background download state notifiers
   static final ValueNotifier<bool> isDownloadingNotifier = ValueNotifier<bool>(false);
@@ -88,14 +92,52 @@ class UpdateService {
     ),
   );
 
+  static String cleanVersion(String v) {
+    return v.split('+')[0].trim().replaceFirst(RegExp(r'^v', caseSensitive: false), '');
+  }
+
+  static String get currentVersionDisplay => cleanVersion(currentVersion);
+
   static Future<void> initVersion() async {
     try {
       final info = await PackageInfo.fromPlatform();
-      currentVersion = info.version;
+      if (info.version.isNotEmpty) {
+        currentVersion = info.version;
+      }
     } catch (_) {}
   }
 
-  static Future<ReleaseInfo?> checkForUpdate() async {
+  /// Snooze an update version for 24 hours so it won't prompt repeatedly on launch
+  static Future<void> snoozeUpdate(String version) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_prefKeyDismissedVersion, cleanVersion(version));
+      await prefs.setInt(_prefKeyDismissedTime, DateTime.now().millisecondsSinceEpoch);
+    } catch (e) {
+      debugPrint('UpdateService: failed to save snoozed update: $e');
+    }
+  }
+
+  /// Checks whether a specific update version has been snoozed within the last 24 hours
+  static Future<bool> isUpdateSnoozed(String version) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dismissedVersion = prefs.getString(_prefKeyDismissedVersion);
+      final dismissedTime = prefs.getInt(_prefKeyDismissedTime) ?? 0;
+
+      if (dismissedVersion == cleanVersion(version)) {
+        final elapsed = DateTime.now().millisecondsSinceEpoch - dismissedTime;
+        if (elapsed < const Duration(hours: 24).inMilliseconds) {
+          return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static Future<ReleaseInfo?> checkForUpdate({bool force = false}) async {
     try {
       await initVersion();
       final response = await _dio.get<Map<String, dynamic>>(_apiUrl);
@@ -103,7 +145,14 @@ class UpdateService {
       if (data == null) return null;
 
       final release = ReleaseInfo.fromJson(data);
-      if (_isNewer(release.version, currentVersion)) {
+      if (isNewer(release.version, currentVersion)) {
+        if (!force) {
+          final snoozed = await isUpdateSnoozed(release.version);
+          if (snoozed) {
+            debugPrint('UpdateService: update ${release.version} is currently snoozed');
+            return null;
+          }
+        }
         availableUpdateNotifier.value = release;
         return release;
       }
@@ -125,7 +174,10 @@ class UpdateService {
       filename = 'app-update.apk';
     }
 
-    if (downloadUrl == null || downloadUrl.isEmpty) return;
+    if (downloadUrl == null || downloadUrl.isEmpty) {
+      downloadErrorNotifier.value = 'No se encontró un archivo instalador para tu plataforma.';
+      return;
+    }
     if (isDownloadingNotifier.value) return;
 
     isDownloadingNotifier.value = true;
@@ -157,7 +209,17 @@ class UpdateService {
       downloadProgressNotifier.value = 1.0;
 
       if (!kIsWeb && Platform.isAndroid) {
-        await _channel.invokeMethod('installApk', {'filePath': filePath});
+        try {
+          await _channel.invokeMethod('installApk', {'filePath': filePath});
+        } on PlatformException catch (pe) {
+          if (pe.code == 'NEED_PERMISSION') {
+            downloadErrorNotifier.value =
+                'Activa el permiso "Instalar apps desconocidas" en Ajustes y pulsa Actualizar de nuevo.';
+          } else {
+            downloadErrorNotifier.value =
+                'Error al iniciar instalación: ${pe.message ?? pe.code}';
+          }
+        }
       } else if (!kIsWeb && Platform.isWindows) {
         try {
           await Process.start(
@@ -178,6 +240,8 @@ class UpdateService {
             exit(0);
           } catch (err) {
             debugPrint('Failed to launch Windows update installer: $err');
+            downloadErrorNotifier.value =
+                'No se pudo ejecutar el instalador. Descárgalo directamente de GitHub.';
           }
         }
       } else if (!kIsWeb && Platform.isLinux) {
@@ -210,29 +274,57 @@ class UpdateService {
     }
   }
 
-  static bool _isNewer(String remote, String current) {
+  /// Robust semantic version comparator that supports build metadata (+63) and pre-releases (-beta)
+  static bool isNewer(String remote, String current) {
     try {
-      List<int> parse(String v) =>
-          v.split('.').map((p) => int.tryParse(p) ?? 0).toList();
+      final (rParts, rBuild) = _parseVersion(remote);
+      final (cParts, cBuild) = _parseVersion(current);
 
-      final r = parse(remote);
-      final c = parse(current);
-      final len = r.length > c.length ? r.length : c.length;
-      while (r.length < len) {
+      final maxLen = rParts.length > cParts.length ? rParts.length : cParts.length;
+      final r = List<int>.from(rParts);
+      final c = List<int>.from(cParts);
+      while (r.length < maxLen) {
         r.add(0);
       }
-      while (c.length < len) {
+      while (c.length < maxLen) {
         c.add(0);
       }
 
-      for (int i = 0; i < len; i++) {
+      for (int i = 0; i < maxLen; i++) {
         if (r[i] > c[i]) return true;
         if (r[i] < c[i]) return false;
       }
+
+      // If major.minor.patch are equal (e.g. 1.0.72 vs 1.0.72),
+      // only consider newer if BOTH specify a build number and remote build is strictly greater.
+      if (rBuild > 0 && cBuild > 0 && rBuild > cBuild) {
+        return true;
+      }
+
       return false;
     } catch (_) {
       return false;
     }
+  }
+
+  static (List<int>, int) _parseVersion(String v) {
+    var clean = v.trim().replaceFirst(RegExp(r'^v', caseSensitive: false), '');
+    int buildNumber = 0;
+    if (clean.contains('+')) {
+      final parts = clean.split('+');
+      clean = parts[0];
+      if (parts.length > 1) {
+        buildNumber = int.tryParse(parts[1].replaceAll(RegExp(r'\D'), '')) ?? 0;
+      }
+    }
+    if (clean.contains('-')) {
+      clean = clean.split('-')[0];
+    }
+    final components = clean
+        .split('.')
+        .map((p) => int.tryParse(p.replaceAll(RegExp(r'\D'), '')) ?? 0)
+        .toList();
+    return (components, buildNumber);
   }
 
   static String stripMarkdown(String md) {

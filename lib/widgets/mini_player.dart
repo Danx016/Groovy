@@ -43,9 +43,16 @@ class MiniPlayer extends StatelessWidget {
           if (currentSong != null) {
             final youtubeService = Provider.of<YoutubeService>(context, listen: false);
             final coverUrl = currentSong.coverArt != null ? youtubeService.getCoverArtUrl(currentSong.coverArt, size: 600) : null;
-            final imageProvider = coverUrl != null 
-                ? CachedNetworkImageProvider(coverUrl) as ImageProvider
-                : const AssetImage('assets/default_cover.png') as ImageProvider;
+            final ImageProvider imageProvider;
+            if (coverUrl != null && coverUrl.isNotEmpty) {
+              if (currentSong.isLocal || isLocalFilePath(coverUrl)) {
+                imageProvider = FileImage(File(coverUrl));
+              } else {
+                imageProvider = CachedNetworkImageProvider(coverUrl);
+              }
+            } else {
+              imageProvider = const AssetImage('assets/default_cover.png');
+            }
             final topPadding = MediaQuery.of(context).padding.top;    
 
             showModalBottomSheet(

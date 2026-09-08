@@ -130,6 +130,25 @@ class MainActivity : AudioServiceFragmentActivity() {
                             result.error("FILE_NOT_FOUND", "APK file does not exist at $filePath", null)
                             return@setMethodCallHandler
                         }
+                        // Ensure unknown sources permission is granted on Android 8.0+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            if (!packageManager.canRequestPackageInstalls()) {
+                                val manageIntent = android.content.Intent(
+                                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                    android.net.Uri.parse("package:$packageName")
+                                ).apply {
+                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(manageIntent)
+                                result.error(
+                                    "NEED_PERMISSION",
+                                    "Activa el permiso para instalar aplicaciones desde Groovy y pulsa Actualizar de nuevo.",
+                                    null
+                                )
+                                return@setMethodCallHandler
+                            }
+                        }
+
                         val apkUri = androidx.core.content.FileProvider.getUriForFile(
                             this@MainActivity,
                             "${applicationContext.packageName}.fileProvider",

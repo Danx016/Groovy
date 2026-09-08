@@ -64,6 +64,7 @@ class WindowsSystemService {
   /// Update current song info for lyrics display
   Future<void> updateSongInfo(Song? song) async {
     if (!kIsWeb && Platform.isWindows) {
+      if (_currentSong?.id == song?.id) return;
       _currentSong = song;
       // Clear lyrics when song changes
       await clearLyrics();

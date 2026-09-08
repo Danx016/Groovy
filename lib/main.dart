@@ -168,6 +168,9 @@ void main() async {
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
     const windowOptions = WindowOptions(
+      size: Size(1280, 800),
+      minimumSize: Size(800, 500),
+      center: true,
       title: 'Groovy',
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -208,7 +211,7 @@ void main() async {
       platform: 'Unknown',
       deviceModel: 'Groovy Device',
       osVersion: 'Unknown',
-      appVersion: '1.0.72',
+      appVersion: '1.0.73',
       userAgent: 'GroovyApp/1.0',
     );
   });
