@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.76] - 2026-09-08
+
+### Fixed & Optimized
+- **Corrección Definitiva del Salto y Parpadeo de Canciones en Groovy Connect**:
+  - Resuelto el bug donde la música saltaba o se revertía cíclicamente entre la canción anterior ("Para Siempre") y la nueva al cambiar de pista en remoto.
+  - Implementación de **Bloqueo Optimista de Transición de Pista** (*Optimistic Track Transition Lock*): el dispositivo controlador ignora reportes obsoletos de la canción previa mientras el reproductor remoto termina de cargar el nuevo stream.
+  - Corrección de la verificación de `_isRenderingRemotely`: cuando un dispositivo actúa como receptor (reproduce por sus altavoces), ahora ejecuta los comandos de cambio de pista (`skipNext`, `skipPrevious`, `playSong`) en su reproductor local en lugar de reenviarlos de vuelta por la red en un bucle infinito.
+  - Desconexión automática de conexiones salientes en `onTransferReceived` y `onCommandReceived` para evitar que ambos dispositivos se consideren controladores mutuos simultáneos.
+
 ## [1.0.75] - 2026-09-08
 
 ### Fixed & Optimized

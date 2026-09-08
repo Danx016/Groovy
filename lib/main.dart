@@ -211,7 +211,7 @@ void main() async {
       platform: 'Unknown',
       deviceModel: 'Groovy Device',
       osVersion: 'Unknown',
-      appVersion: '1.0.75',
+      appVersion: '1.0.76',
       userAgent: 'GroovyApp/1.0',
     );
   });
@@ -309,6 +309,7 @@ void main() async {
     int? queueIndex,
   ) async {
     debugPrint('[GroovyConnect] Playback transferred from $fromDevice: ${song.title} at ${positionMs}ms');
+    groovyConnectService.disconnect();
     playerProvider.disableGroovyConnectRemote();
     await playerProvider.playSong(
       song,
@@ -323,6 +324,7 @@ void main() async {
 
   groovyConnectService.onCommandReceived = (String action, dynamic value) {
     debugPrint('[GroovyConnect] Remote command received: $action ($value)');
+    playerProvider.disableGroovyConnectRemote();
     switch (action) {
       case 'play':
         playerProvider.play();

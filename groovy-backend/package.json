@@ -1,6 +1,6 @@
 {
   "name": "groovy-backend",
-  "version": "1.0.75",
+  "version": "1.0.76",
   "description": "Groovy Cloud Music - Authentication & User Library API (MySQL)",
   "main": "server.js",
   "scripts": {

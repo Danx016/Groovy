@@ -74,6 +74,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _remoteAnchorPosition = Duration.zero;
   DateTime? _remoteAnchorTime;
   int _lastRemoteNotifiedSecond = -1;
+  String? _optimisticRemoteSongId;
+  DateTime? _optimisticRemoteSongUntil;
 
   String? _resolvedArtworkUrl;
 
@@ -421,6 +423,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }) {
     final bool isRemote = _isRenderingRemotely || _groovyConnectService?.isConnected == true;
     if (!isRemote) return;
+
+    // If we recently initiated an optimistic song change, ignore stale reports of the old song
+    if (_optimisticRemoteSongUntil != null && DateTime.now().isBefore(_optimisticRemoteSongUntil!)) {
+      if (song != null && song.id == _optimisticRemoteSongId) {
+        _optimisticRemoteSongUntil = null;
+        _optimisticRemoteSongId = null;
+      } else {
+        // Remote device is still transitioning; ignore stale song to prevent flickering/reverting
+        return;
+      }
+    }
 
     bool changed = false;
     if (song != null && _currentSong?.id != song.id) {
@@ -1755,7 +1768,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     // Groovy Connect mode: route playback directly to connected device (Spotify Connect style)
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       final List<Song> targetPlaylist;
       final int targetIndex;
       if (playlist != null && playlist.isNotEmpty) {
@@ -1775,6 +1788,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentSong = song;
       _position = initialPosition ?? Duration.zero;
       _duration = song.duration != null ? Duration(seconds: song.duration!) : Duration.zero;
+      _remoteAnchorPosition = _position;
+      _remoteAnchorTime = DateTime.now();
+      _optimisticRemoteSongId = song.id;
+      _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 3500));
       _isRenderingRemotely = true;
       _isPlaying = true;
       _isLoading = false;
@@ -1782,6 +1799,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (_audioPlayer.playing) {
         await _audioPlayer.stop();
       }
+      _manageRemotePositionTicker();
       notifyListeners();
       _updateAndroidAuto();
       _updateAllServices();
@@ -2163,7 +2181,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
       return;
     }
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       await _groovyConnectService!.sendControl('play');
       _isPlaying = true;
       _remoteAnchorPosition = _position;
@@ -2219,7 +2237,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
       return;
     }
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       await _groovyConnectService!.sendControl('pause');
       _isPlaying = false;
       _remoteAnchorPosition = _position;
@@ -2255,7 +2273,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> stop() async {
     _telemetryTimer?.cancel();
     _sendTelemetryHeartbeat(overridePlaying: false);
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       await _groovyConnectService!.sendControl('pause');
       _isPlaying = false;
       notifyListeners();
@@ -2381,7 +2399,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       // Jukebox doesn't support seek by position; ignore.
       return;
     }
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       _remoteAnchorPosition = position;
       _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
       _position = position;
@@ -2427,12 +2445,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _jukeboxService.skipNext(_youtubeService);
       return;
     }
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
         _currentIndex++;
         _currentSong = _queue[_currentIndex];
         _position = Duration.zero;
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _remoteAnchorPosition = _position;
+        _remoteAnchorTime = DateTime.now();
+        _optimisticRemoteSongId = _currentSong?.id;
+        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 3500));
+        _manageRemotePositionTicker();
         notifyListeners();
         _refreshArtworkUrl().catchError((_) {});
       }
@@ -2504,7 +2527,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _jukeboxService.skipPrevious(_youtubeService);
       return;
     }
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       if (_position.inSeconds > 3) {
         await seek(Duration.zero);
         return;
@@ -2514,6 +2537,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentSong = _queue[_currentIndex];
         _position = Duration.zero;
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _remoteAnchorPosition = _position;
+        _remoteAnchorTime = DateTime.now();
+        _optimisticRemoteSongId = _currentSong?.id;
+        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 3500));
+        _manageRemotePositionTicker();
         notifyListeners();
         _refreshArtworkUrl().catchError((_) {});
       }
@@ -2718,7 +2746,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
     await _storageService.saveVolume(_volume);
-    if (_groovyConnectService?.isConnected == true) {
+    if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
       await _groovyConnectService!.sendControl('volume', _volume);
     } else if (_castService.isConnected) {
       await _castService.setVolume(_volume);
