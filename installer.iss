@@ -1,7 +1,7 @@
 ; Groovy Inno Setup Script
 
 #define MyAppName "Groovy"
-#define MyAppVersion "1.0.67"
+#define MyAppVersion "1.0.72"
 #define MyAppPublisher "Danx016"
 #define MyAppURL "https://github.com/Danx016/Groovy"
 #define MyAppExeName "groovy.exe"
@@ -27,6 +27,8 @@ WizardStyle=modern
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 ArchitecturesInstallIn64BitMode=x64
+CloseApplications=force
+RestartApplications=yes
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"

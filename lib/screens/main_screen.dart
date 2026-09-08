@@ -142,7 +142,11 @@ class _MainScreenState extends State<MainScreen> {
     });
   }
 
+  static bool _hasCheckedUpdateThisSession = false;
+
   Future<void> _checkForUpdate() async {
+    if (_hasCheckedUpdateThisSession) return;
+    _hasCheckedUpdateThisSession = true;
     final release = await UpdateService.checkForUpdate();
     if (release == null || !mounted) return;
     _showUpdateDialog(release);

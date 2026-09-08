@@ -65,7 +65,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.71';
+  static String currentVersion = '1.0.72';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -161,13 +161,21 @@ class UpdateService {
       } else if (!kIsWeb && Platform.isWindows) {
         try {
           await Process.start(
-            'cmd.exe',
-            ['/c', 'start', '""', filePath],
+            filePath,
+            ['/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
             mode: ProcessStartMode.detached,
           );
+          await Future.delayed(const Duration(milliseconds: 1500));
+          exit(0);
         } catch (_) {
           try {
-            await Process.start(filePath, [], mode: ProcessStartMode.detached);
+            await Process.start(
+              'cmd.exe',
+              ['/c', 'start', '""', filePath],
+              mode: ProcessStartMode.detached,
+            );
+            await Future.delayed(const Duration(milliseconds: 1500));
+            exit(0);
           } catch (err) {
             debugPrint('Failed to launch Windows update installer: $err');
           }
