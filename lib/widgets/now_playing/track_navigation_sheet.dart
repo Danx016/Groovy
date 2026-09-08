@@ -10,6 +10,7 @@ import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/album_resolver_service.dart';
+import '../../utils/album_sanitizer.dart';
 
 class TrackNavigationBottomSheet extends StatefulWidget {
   final Song? song;
@@ -287,13 +288,11 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
             onTap: () {
               final nav = Navigator.of(context, rootNavigator: true);
               nav.pop(); // Close sheet
-              final alb = (effectiveAlbumName != null &&
-                      effectiveAlbumName.isNotEmpty &&
-                      effectiveAlbumName != 'Álbum' &&
-                      effectiveAlbumName != 'Album')
+              final cleanTitle = AlbumSanitizer.cleanTitle(effectiveAlbumName);
+              final alb = (cleanTitle.isNotEmpty)
                   ? Album(
                       id: effectiveAlbumId,
-                      name: effectiveAlbumName,
+                      name: cleanTitle,
                       artist: song?.artist,
                       coverArt: coverUrl,
                     )

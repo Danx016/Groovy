@@ -16,6 +16,7 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import 'album_screen.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/album_sanitizer.dart';
 import '../models/song.dart';
 import '../models/album.dart';
 import '../services/palette_service.dart';
@@ -479,18 +480,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               GestureDetector(
                 onTap: () {
                   if (currentSong != null) {
+                    final cleanAlb = AlbumSanitizer.cleanTitle(currentSong.album);
                     final effectiveAlbumId = (currentSong.albumId != null && currentSong.albumId!.isNotEmpty)
                         ? currentSong.albumId!
-                        : (currentSong.album != null && currentSong.album!.isNotEmpty && currentSong.album != 'Album' && currentSong.album != 'Álbum')
-                            ? currentSong.album!
-                            : '${currentSong.title} ${currentSong.artist ?? ""}';
-                    final alb = (currentSong.album != null &&
-                            currentSong.album!.isNotEmpty &&
-                            currentSong.album != 'Album' &&
-                            currentSong.album != 'Álbum')
+                        : (cleanAlb.isNotEmpty
+                            ? cleanAlb
+                            : '${currentSong.title} ${currentSong.artist ?? ""}');
+                    final alb = (cleanAlb.isNotEmpty)
                         ? Album(
                             id: effectiveAlbumId,
-                            name: currentSong.album!,
+                            name: cleanAlb,
                             artist: currentSong.artist,
                             coverArt: currentSong.coverArt,
                           )

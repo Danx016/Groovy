@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
+import '../utils/album_sanitizer.dart';
 
 /// SQLite-based persistent storage for the music library.
 ///
@@ -308,9 +309,27 @@ class LibraryDatabaseService {
 
   Future<void> insertOrUpdateAlbum(Album album) async {
     final db = await database;
+    final cleanName = AlbumSanitizer.cleanTitle(album.name);
+    final safeAlbum = (cleanName.isNotEmpty && cleanName != album.name)
+        ? Album(
+            id: album.id,
+            name: cleanName,
+            artist: album.artist,
+            artistId: album.artistId,
+            coverArt: album.coverArt,
+            songCount: album.songCount,
+            duration: album.duration,
+            year: album.year,
+            genre: album.genre,
+            created: album.created,
+            isLocal: album.isLocal,
+            artistParticipants: album.artistParticipants,
+            starred: album.starred,
+          )
+        : album;
     await db.insert(
       'albums',
-      _albumToMap(album),
+      _albumToMap(safeAlbum),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
@@ -757,9 +776,11 @@ class LibraryDatabaseService {
 
   Album _albumFromMap(Map<String, dynamic> m) {
     final participantsJson = m['artistParticipants'] as String?;
+    final rawName = m['name'] as String;
+    final cleanName = AlbumSanitizer.cleanTitle(rawName);
     return Album(
       id: m['id'] as String,
-      name: m['name'] as String,
+      name: cleanName.isNotEmpty ? cleanName : rawName,
       artist: m['artist'] as String?,
       artistId: m['artistId'] as String?,
       coverArt: m['coverArt'] as String?,

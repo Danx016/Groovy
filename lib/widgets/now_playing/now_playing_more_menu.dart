@@ -12,6 +12,7 @@ import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
+import '../../utils/album_sanitizer.dart';
 import 'add_to_menu.dart';
 
 class NowPlayingMoreMenu extends StatefulWidget {
@@ -257,17 +258,15 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               textColor: textColor,
               onTap: () {
                 Navigator.of(context).pop();
+                final cleanAlb = AlbumSanitizer.cleanTitle(currentSong.album);
                 final effectiveAlbumId = currentSong.albumId ??
-                    (currentSong.album != null && currentSong.album!.isNotEmpty
-                        ? currentSong.album!
+                    (cleanAlb.isNotEmpty
+                        ? cleanAlb
                         : '${currentSong.title} ${currentSong.artist ?? ""}');
-                final alb = (currentSong.album != null &&
-                        currentSong.album!.isNotEmpty &&
-                        currentSong.album != 'Album' &&
-                        currentSong.album != 'Álbum')
+                final alb = (cleanAlb.isNotEmpty)
                     ? Album(
                         id: effectiveAlbumId,
-                        name: currentSong.album!,
+                        name: cleanAlb,
                         artist: currentSong.artist,
                         coverArt: currentSong.coverArt,
                       )

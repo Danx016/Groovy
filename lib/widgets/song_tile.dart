@@ -22,6 +22,7 @@ import 'multi_artist_widget.dart';
 import '../screens/album_screen.dart';
 import '../screens/artist_screen.dart';
 import '../screens/song_credits_screen.dart';
+import '../utils/album_sanitizer.dart';
 
 class SongTile extends StatelessWidget {
   final Song song;
@@ -459,17 +460,15 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                       onTap: () {
                         Navigator.pop(context);
                         final song = widget.song;
+                        final cleanAlb = AlbumSanitizer.cleanTitle(song.album);
                         final effectiveAlbumId = song.albumId ??
-                            (song.album != null && song.album!.isNotEmpty
-                                ? song.album!
+                            (cleanAlb.isNotEmpty
+                                ? cleanAlb
                                 : '${song.title} ${song.artist ?? ""}');
-                        final alb = (song.album != null &&
-                                song.album!.isNotEmpty &&
-                                song.album != 'Album' &&
-                                song.album != 'Álbum')
+                        final alb = (cleanAlb.isNotEmpty)
                             ? Album(
                                 id: effectiveAlbumId,
-                                name: song.album!,
+                                name: cleanAlb,
                                 artist: song.artist,
                                 coverArt: song.coverArt,
                               )

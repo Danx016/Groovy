@@ -9,7 +9,7 @@ import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
-
+import '../utils/album_sanitizer.dart';
 import '../services/services.dart';
 
 class ArtistScreen extends StatefulWidget {
@@ -216,9 +216,10 @@ class _ArtistScreenState extends State<ArtistScreen> {
         if (aName != null && aName.isNotEmpty) {
           final key = aName.toLowerCase();
           if (!albumMap.containsKey(key)) {
+            final cleanTitle = AlbumSanitizer.cleanTitle(aName);
             albumMap[key] = Album(
               id: s.albumId ?? 'album_${aName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
-              name: aName,
+              name: cleanTitle.isNotEmpty ? cleanTitle : aName,
               artist: s.artist ?? artist.name,
               coverArt: s.coverArt,
               year: s.year,

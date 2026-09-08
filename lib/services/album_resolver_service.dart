@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
+import '../utils/album_sanitizer.dart';
 
 /// Service that accurately resolves real album metadata, cover art, and playable tracks
 /// using official YouTube Music and Deezer endpoints, preventing generic "Album"/"Artist"
@@ -33,17 +34,7 @@ class AlbumResolverService {
   }
 
   /// Clean helper to check if a string is a dummy/placeholder
-  bool _isPlaceholder(String? s) {
-    if (s == null) return true;
-    final t = s.trim().toLowerCase();
-    return t.isEmpty ||
-        t == 'album' ||
-        t == 'álbum' ||
-        t == 'unknown album' ||
-        t == 'artist' ||
-        t == 'artista' ||
-        t == 'unknown artist';
-  }
+  bool _isPlaceholder(String? s) => AlbumSanitizer.isPlaceholder(s);
 
   /// Resolves the album and its tracklist from online sources
   Future<({Album album, List<Song> songs})?> resolveAlbum({
@@ -58,15 +49,22 @@ class AlbumResolverService {
     if (_isPlaceholder(title)) title = null;
     if (_isPlaceholder(artist)) artist = null;
 
-    // If title is missing or albumId is clean text, use albumId if it's not a technical ID
+    if (title != null) {
+      final cleaned = AlbumSanitizer.cleanTitle(title);
+      if (cleaned.isNotEmpty) title = cleaned;
+    }
+    if (artist != null) {
+      artist = AlbumSanitizer.cleanArtist(artist);
+    }
+
+    // If title is missing or albumId is a slug/name, clean it
     if (title == null &&
-        !albumId.startsWith('dz_album_') &&
-        !albumId.startsWith('local_album_') &&
         !albumId.startsWith('MPREb_') &&
         !albumId.startsWith('OLAK') &&
-        !albumId.startsWith('PL') &&
-        !_isPlaceholder(albumId)) {
-      title = albumId;
+        !albumId.startsWith('VLOLAK') &&
+        !albumId.startsWith('PL')) {
+      final cleaned = AlbumSanitizer.cleanTitle(albumId);
+      if (cleaned.isNotEmpty) title = cleaned;
     }
 
     // Step 1: If albumId is already a YouTube Music browseId (MPREb_..., OLAK..., VLOLAK...), browse directly!

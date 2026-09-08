@@ -9,6 +9,7 @@ import '../services/services.dart';
 import '../services/audio_handler.dart';
 import '../services/local_music_service.dart';
 import '../services/groovy_api_service.dart';
+import '../utils/album_sanitizer.dart';
 
 class LibraryProvider extends ChangeNotifier {
   final YoutubeService _youtubeService;
@@ -376,10 +377,11 @@ class LibraryProvider extends ChangeNotifier {
           final seen = <String>{};
           for (final s in _cachedAllSongs) {
             final albName = (s.album != null && s.album!.trim().isNotEmpty) ? s.album!.trim() : s.title.trim();
+            final cleanAlbName = AlbumSanitizer.cleanTitle(albName);
             if (seen.add(albName.toLowerCase())) {
               final alb = Album(
                 id: s.albumId ?? 'album_${albName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
-                name: albName,
+                name: cleanAlbName.isNotEmpty ? cleanAlbName : albName,
                 artist: s.artist,
                 artistId: s.artistId,
                 coverArt: s.coverArt,
@@ -861,20 +863,51 @@ class LibraryProvider extends ChangeNotifier {
 
   Future<List<Song>> getAlbumSongs(String albumId) async {
     if (_localOnlyMode && _localMusicService != null) {
-      return _localMusicService!.getSongsByAlbum(albumId);
-    }
-    try {
-      final songs = await _youtubeService.getAlbumSongs(albumId);
-      if (songs.isNotEmpty) return songs;
-    } catch (e) {
-      debugPrint('Error loading album songs: $e');
+      final local = _localMusicService!.getSongsByAlbum(albumId);
+      if (local.isNotEmpty) return local;
     }
 
-    final localSongs = _cachedAllSongs.where((s) => s.albumId == albumId || (s.album != null && s.album!.toLowerCase() == albumId.toLowerCase())).toList();
+    if (!albumId.startsWith('album_') && !albumId.startsWith('local_album_')) {
+      try {
+        final songs = await _youtubeService.getAlbumSongs(albumId);
+        if (songs.isNotEmpty) return songs;
+      } catch (e) {
+        debugPrint('Error loading album songs: $e');
+      }
+    }
+
+    // 1. Check in cached songs with robust matching
+    final localSongs = _cachedAllSongs.where((s) {
+      if (s.albumId == albumId) return true;
+      if (s.album != null && s.album!.toLowerCase() == albumId.toLowerCase()) return true;
+      return AlbumSanitizer.matches(s.album, albumId) ||
+          AlbumSanitizer.matches(s.albumId, albumId);
+    }).toList();
     if (localSongs.isNotEmpty) return localSongs;
 
+    // 2. Check in database songs
     final dbSongs = await _db.getAllSongs();
-    return dbSongs.where((s) => s.albumId == albumId || (s.album != null && s.album!.toLowerCase() == albumId.toLowerCase())).toList();
+    final matchedDbSongs = dbSongs.where((s) {
+      if (s.albumId == albumId) return true;
+      if (s.album != null && s.album!.toLowerCase() == albumId.toLowerCase()) return true;
+      return AlbumSanitizer.matches(s.album, albumId) ||
+          AlbumSanitizer.matches(s.albumId, albumId);
+    }).toList();
+    if (matchedDbSongs.isNotEmpty) return matchedDbSongs;
+
+    // 3. Check if albumId corresponds to an album in cachedAllAlbums or DB
+    final cachedAlbum = _cachedAllAlbums.firstWhere(
+      (a) => a.id == albumId || AlbumSanitizer.matches(a.id, albumId) || AlbumSanitizer.matches(a.name, albumId),
+      orElse: () => Album(id: '', name: ''),
+    );
+    if (cachedAlbum.name.isNotEmpty) {
+      final byAlb = _cachedAllSongs.where((s) => AlbumSanitizer.matches(s.album, cachedAlbum.name)).toList();
+      if (byAlb.isNotEmpty) return byAlb;
+      final dbByAlb = dbSongs.where((s) => AlbumSanitizer.matches(s.album, cachedAlbum.name)).toList();
+      if (dbByAlb.isNotEmpty) return dbByAlb;
+    }
+
+    return [];
   }
 
   Future<Playlist> getPlaylist(String playlistId) async {
@@ -1026,9 +1059,21 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> addSongToLibrary(Song song) async {
-    final songToAdd = (song.created != null)
+    var songToAdd = (song.created != null)
         ? song
         : song.copyWith(created: DateTime.now());
+
+    // Ensure album exists in library
+    final albumName = (songToAdd.album != null && songToAdd.album!.trim().isNotEmpty)
+        ? songToAdd.album!.trim()
+        : '${songToAdd.title.trim()} - Single';
+    final cleanAlbumTitle = AlbumSanitizer.cleanTitle(albumName);
+    final albumId = songToAdd.albumId ?? 'album_${albumName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
+
+    // Propagate albumId to the song if missing
+    if (songToAdd.albumId == null) {
+      songToAdd = songToAdd.copyWith(albumId: albumId);
+    }
 
     final index = _cachedAllSongs.indexWhere((s) => s.id == songToAdd.id);
     if (index != -1) {
@@ -1057,19 +1102,14 @@ class LibraryProvider extends ChangeNotifier {
       }
     }
 
-    // Ensure album exists in library
-    final albumName = (songToAdd.album != null && songToAdd.album!.trim().isNotEmpty)
-        ? songToAdd.album!.trim()
-        : '${songToAdd.title.trim()} - Single';
-    final albumId = songToAdd.albumId ?? 'album_${albumName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}';
     final existingAlbumIndex = _cachedAllAlbums.indexWhere(
-      (a) => a.id == albumId || a.name.trim().toLowerCase() == albumName.toLowerCase(),
+      (a) => a.id == albumId || AlbumSanitizer.matches(a.name, albumName),
     );
     final Album targetAlbum;
     if (existingAlbumIndex == -1) {
       final newAlbum = Album(
         id: albumId,
-        name: albumName,
+        name: cleanAlbumTitle.isNotEmpty ? cleanAlbumTitle : albumName,
         artist: songToAdd.artist,
         artistId: songToAdd.artistId,
         coverArt: songToAdd.coverArt,

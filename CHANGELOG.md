@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.78] - 2026-09-08
+
+### Fixed
+- **Resolución y Carga de Álbumes (Offline y Online)**:
+  - Corregido el problema donde al abrir un álbum guardado o derivado de canciones se mostraba un slug con guiones bajos (ej. `album_mi_mejor_momento`), "Artista desconocido" en rojo, duración "0 MIN" y 0 canciones.
+  - Creado `AlbumSanitizer`: limpia automáticamente prefijos técnicos (`album_`, `local_album_`, `dz_album_`), convierte guiones bajos en espacios y aplica mayúsculas/formato humano adecuado.
+  - Búsqueda y cotejo elástico en `LibraryProvider.getAlbumSongs`: ahora empareja canciones locales/descargadas tanto por `albumId`, nombre de álbum normalizado y slug de álbum, asegurando que todas las canciones de álbumes locales o importados se carguen instantáneamente.
+  - Actualizado `AlbumResolverService`: ahora traduce slugs a títulos limpios para que las búsquedas en YouTube Music y Deezer resuelvan el álbum real y su lista de pistas en vez de fallar con el slug raw.
+  - Asegurada la consistencia de metadatos (portadas, artista, duración total, conteo de canciones) en `AlbumScreen`, `SongTile`, `NowPlayingMoreMenu`, `TrackNavigationBottomSheet` y `NowPlayingScreen`.
+
 ## [1.0.77] - 2026-09-08
 
 ### Performance & High Refresh Rate (120Hz / 144Hz)
