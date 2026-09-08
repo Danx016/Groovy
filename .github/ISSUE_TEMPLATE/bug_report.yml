@@ -1,5 +1,5 @@
 name: Bug Report
-description: Create a report to help us improve Musly
+description: Create a report to help us improve Groovy
 labels: ["bug"]
 body:
   - type: markdown

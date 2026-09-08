@@ -5,8 +5,8 @@
 set -euo pipefail
 
 OUTPUT_DIR="${1:-$(pwd)/release-apk}"
-IMAGE_TAG="musly-release-builder"
-CONTAINER_NAME="musly-apk-build"
+IMAGE_TAG="groovy-release-builder"
+CONTAINER_NAME="groovy-apk-build"
 
 cd "$(dirname "$0")"
 
@@ -19,9 +19,9 @@ sudo docker create --name "$CONTAINER_NAME" "$IMAGE_TAG" echo done
 mkdir -p "$OUTPUT_DIR"
 sudo docker cp \
     "$CONTAINER_NAME:/app/build/app/outputs/flutter-apk/app-release.apk" \
-    "$OUTPUT_DIR/musly-release.apk"
+    "$OUTPUT_DIR/groovy-release.apk"
 sudo docker rm -f "$CONTAINER_NAME"
 
 echo ""
-echo "==> APK ready: $OUTPUT_DIR/musly-release.apk"
-ls -lh "$OUTPUT_DIR/musly-release.apk"
+echo "==> APK ready: $OUTPUT_DIR/groovy-release.apk"
+ls -lh "$OUTPUT_DIR/groovy-release.apk"

@@ -6,7 +6,7 @@ import AVKit
 /// Call from AppDelegate after GeneratedPluginRegistrant.register().
 func registerAirPlayButtonFactory(with registrar: FlutterPluginRegistrar) {
     let factory = AirPlayButtonFactory(messenger: registrar.messenger())
-    registrar.register(factory, withId: "musly/airplay_button")
+    registrar.register(factory, withId: "groovy/airplay_button")
 }
 
 // MARK: - Factory

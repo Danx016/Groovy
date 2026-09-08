@@ -11,7 +11,7 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
-musly-1.0.4-setup.exe
+groovy-*-setup.exe
 Groovy-Setup*.exe
 *.exe
 *.zip

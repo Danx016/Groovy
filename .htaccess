@@ -1,4 +1,4 @@
-# Musly - Navidrome Client - Apache Configuration for SEO
+# Groovy - Music Streaming & Subsonic Player - Apache Configuration
 # Enable mod_rewrite
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -47,10 +47,7 @@
     Header set Permissions-Policy "interest-cohort=()"
 </IfModule>
 
-# Canonical URL header
-<IfModule mod_headers.c>
-    Header set Link "<https://musly.devid.ink>; rel=\"canonical\""
-</IfModule>
+
 
 # Error pages with SEO-friendly messages
 ErrorDocument 404 /index.html

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:groovy/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:groovy/providers/providers.dart';
@@ -64,10 +64,10 @@ Widget createTestApp({
         create: (_) =>
             playerProvider ??
             PlayerProvider(service, storage, FakeCastService(), UpnpService(),
-                MuslyAudioHandler(), JukeboxService(), TranscodingService()),
+                GroovyAudioHandler(), JukeboxService(), TranscodingService()),
       ),
       ChangeNotifierProvider<LibraryProvider>(
-        create: (_) => libraryProvider ?? LibraryProvider(service, MuslyAudioHandler()),
+        create: (_) => libraryProvider ?? LibraryProvider(service, GroovyAudioHandler()),
       ),
       ChangeNotifierProvider<TranscodingService>(
           create: (_) => TranscodingService()),

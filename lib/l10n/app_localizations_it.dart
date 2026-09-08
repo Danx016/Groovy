@@ -9,7 +9,7 @@ class AppLocalizationsIt extends AppLocalizations {
   AppLocalizationsIt([String locale = 'it']) : super(locale);
 
   @override
-  String get appName => 'Musly';
+  String get appName => 'Groovy';
 
   @override
   String get emulatorDetected => 'Emulator Detected';
@@ -441,7 +441,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get communityTranslationsSubtitle =>
-      'Aiuta a tradurre Musly su Crowdin';
+      'Aiuta a tradurre Groovy su Crowdin';
 
   @override
   String get yourLibrary => 'La Tua Libreria';
@@ -1221,7 +1221,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get updateAvailableSubtitle =>
-      'Una nuova versione di Musly è disponibile!';
+      'Una nuova versione di Groovy è disponibile!';
 
   @override
   String updateCurrentVersion(String version) {
@@ -1489,7 +1489,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get discordRpcStyleSong => 'Titolo del brano';
 
   @override
-  String get discordRpcStyleApp => 'Nome app (Musly)';
+  String get discordRpcStyleApp => 'Nome app (Groovy)';
 
   @override
   String get sectionVolumeNormalization =>
@@ -1651,7 +1651,7 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get anonymousAnalyticsSubtitle =>
-      'Help improve Musly with anonymous crash reports and usage stats';
+      'Help improve Groovy with anonymous crash reports and usage stats';
 
   @override
   String get deviceId => 'Device ID';
@@ -1677,15 +1677,15 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get supportParagraph1 =>
-      'Sono Devid, lo sviluppatore di Musly. Ho creato questa app perché amo la musica e credo che tutti meritino un lettore musicale bellissimo e gratuito.';
+      'Sono Danil, lo sviluppatore di Groovy. Ho creato questa app perché amo la musica e credo che tutti meritino un lettore musicale bellissimo e gratuito.';
 
   @override
   String get supportParagraph2 =>
-      'Musly è completamente gratuito e open-source. Nessuna pubblicità, nessun abbonamento. Ci lavoro nel tempo libero perché mi piace davvero creare qualcosa di utile per persone come te.';
+      'Groovy è completamente gratuito e open-source. Nessuna pubblicità, nessun abbonamento. Ci lavoro nel tempo libero perché mi piace davvero creare qualcosa di utile per persone come te.';
 
   @override
   String get supportParagraph3 =>
-      'Ma server, strumenti di sviluppo e caffè non sono gratis 😅 Se Musly è diventato parte della tua giornata e vuoi dire \"grazie\", una piccola donazione significherebbe tantissimo per me. Aiuta a coprire i costi e mi motiva ad aggiungere nuove funzionalità.';
+      'Ma server, strumenti di sviluppo e caffè non sono gratis 😅 Se Groovy è diventato parte della tua giornata e vuoi dire \"grazie\", una piccola donazione significherebbe tantissimo per me. Aiuta a coprire i costi e mi motiva ad aggiungere nuove funzionalità.';
 
   @override
   String get supportParagraph4 =>
@@ -1711,7 +1711,7 @@ class AppLocalizationsIt extends AppLocalizations {
   String get supportWayRate => 'Lascia una recensione sull\'app store';
 
   @override
-  String get supportWayShare => 'Parla di Musly ai tuoi amici';
+  String get supportWayShare => 'Parla di Groovy ai tuoi amici';
 
   @override
   String get supportWayBugs => 'Segnala bug o suggerisci funzionalità';

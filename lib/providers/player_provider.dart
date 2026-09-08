@@ -39,7 +39,7 @@ enum RepeatMode { off, all, one }
 class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final YoutubeService _youtubeService;
   late final StorageService _storageService;
-  final MuslyAudioHandler _audioHandler;
+  final GroovyAudioHandler _audioHandler;
   // Convenience getter — use this everywhere just_audio is accessed directly.
   AudioPlayer get _audioPlayer => _audioHandler.player;
   final OfflineService _offlineService = OfflineService();
@@ -180,7 +180,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  /// Connect [MuslyAudioHandler] lock-screen commands back to this provider.
+  /// Connect [GroovyAudioHandler] lock-screen commands back to this provider.
   /// On iOS these come via [audio_service] instead of [iOSSystemPlugin].
   void _wireAudioHandlerCallbacks() {
     _audioHandler.onPlay = play;
@@ -497,7 +497,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _initializeAndroidAuto() {
     // Song-level browse data, search and playback for Android Auto are
-    // served through the audio_service handler (see MuslyAudioHandler).
+    // served through the audio_service handler (see GroovyAudioHandler).
     _audioHandler.onGetAlbumSongs = _getAlbumSongsForAndroidAuto;
     _audioHandler.onGetArtistAlbums = _getArtistAlbumsForAndroidAuto;
     _audioHandler.onGetPlaylistSongs = _getPlaylistSongsForAndroidAuto;

@@ -274,15 +274,15 @@ class GroovyConnectService extends ChangeNotifier {
       final devicesList = await GroovyApiService().fetchUserDevices(token: token);
 
       for (final item in devicesList) {
-        final devId = item['device_key']?.toString() ??
+        final remoteDeviceId = item['device_key']?.toString() ??
             item['device_id']?.toString() ??
             '${item['platform']}_${item['device_name']}';
 
         // Do not discover self
-        if (devId == _localDeviceId) continue;
+        if (remoteDeviceId == _localDeviceId) continue;
 
-        final devName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
-        final devPlatform = item['platform']?.toString() ?? 'Dispositivo';
+        final remoteDeviceName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
+        final remoteDevicePlatform = item['platform']?.toString() ?? 'Dispositivo';
         final isPlaying = item['is_playing'] == 1 || item['is_playing'] == true;
 
         Song? song;
@@ -298,10 +298,10 @@ class GroovyConnectService extends ChangeNotifier {
           );
         }
 
-        _discoveredDevices[devId] = GroovyRemoteDevice(
-          id: devId,
-          name: devName,
-          platform: devPlatform,
+        _discoveredDevices[remoteDeviceId] = GroovyRemoteDevice(
+          id: remoteDeviceId,
+          name: remoteDeviceName,
+          platform: remoteDevicePlatform,
           model: item['device_model']?.toString() ?? '',
           host: item['ip_address']?.toString() ?? '',
           port: 0,

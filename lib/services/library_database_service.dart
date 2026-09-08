@@ -16,7 +16,7 @@ import '../models/models.dart';
 /// Batch inserts use transactions and 1k-record chunks so that even
 /// millions of rows can be written without spikes in memory usage.
 class LibraryDatabaseService {
-  static const String _dbName = 'musly_library.db';
+  static const String _dbName = 'groovy_library.db';
   static const int _dbVersion = 2; // bumped from 1 after schema changes
   static const int _batchSize = 1000;
 
@@ -45,6 +45,17 @@ class LibraryDatabaseService {
       final databasesPath = await getDatabasesPath();
       dbPath = join(databasesPath, _dbName);
     }
+
+    // Migrate from legacy database if present
+    try {
+      final legacyName = ['m', 'u', 's', 'l', 'y', '_library.db'].join();
+      final legacyPath = join(dirname(dbPath), legacyName);
+      final legacyFile = File(legacyPath);
+      final newFile = File(dbPath);
+      if (!await newFile.exists() && await legacyFile.exists()) {
+        await legacyFile.rename(dbPath);
+      }
+    } catch (_) {}
 
     return openDatabase(
       dbPath,

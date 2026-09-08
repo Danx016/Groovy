@@ -12,7 +12,7 @@ import '../services/groovy_api_service.dart';
 
 class LibraryProvider extends ChangeNotifier {
   final YoutubeService _youtubeService;
-  final MuslyAudioHandler _audioHandler;
+  final GroovyAudioHandler _audioHandler;
 
   bool _localOnlyMode = false;
   bool _serverOfflineMode = false;
@@ -674,7 +674,7 @@ class LibraryProvider extends ChangeNotifier {
       _artists = map.values.toList();
       _artists.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       notifyListeners();
-      _audioHandler.notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdArtists]);
+      _audioHandler.notifyAutoChildrenChanged([GroovyAudioHandler.mediaIdArtists]);
       _saveCachedData();
     } catch (e) {
       debugPrint('Error loading artists: $e');
@@ -730,7 +730,7 @@ class LibraryProvider extends ChangeNotifier {
       }
 
       notifyListeners();
-      _audioHandler.notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdAlbums]);
+      _audioHandler.notifyAutoChildrenChanged([GroovyAudioHandler.mediaIdAlbums]);
     } catch (e) {
       debugPrint('Error loading recent albums: $e');
     }
@@ -798,7 +798,7 @@ class LibraryProvider extends ChangeNotifier {
       _saveCachedData();
       notifyListeners();
       _audioHandler
-          .notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdPlaylists]);
+          .notifyAutoChildrenChanged([GroovyAudioHandler.mediaIdPlaylists]);
     } catch (e) {
       debugPrint('Error loading playlists: $e');
       if (_playlists.isEmpty && _cachedPlaylists.isNotEmpty) {
@@ -814,7 +814,7 @@ class LibraryProvider extends ChangeNotifier {
       _randomSongs = await _youtubeService.getRandomSongs(size: 50);
       notifyListeners();
       _audioHandler
-          .notifyAutoChildrenChanged([MuslyAudioHandler.mediaIdRecent]);
+          .notifyAutoChildrenChanged([GroovyAudioHandler.mediaIdRecent]);
     } catch (e) {
       debugPrint('Error loading random songs: $e');
     }

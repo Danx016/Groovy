@@ -26,7 +26,7 @@ import 'package:rxdart/rxdart.dart';
 /// just_audio operations.  It calls [updateNowPlaying] whenever the current
 /// song changes to push metadata up to the lock screen / Control Center /
 /// Android Auto.
-class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
+class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   // On Android, audio focus is owned entirely by AndroidSystemPlugin.kt (see
   // PlayerProvider._ensureAudioFocus). just_audio's own automatic
   // audio_session activation/interruption handling is disabled here so it
@@ -113,7 +113,7 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
   static const _remoteMaxVolume = 100;
   static const _remoteVolumeStep = 5;
 
-  MuslyAudioHandler() {
+  GroovyAudioHandler() {
     // Forward just_audio playback events → audio_service playback state.
     // This drives the iOS Control Center / lock screen widget and the
     // Android media notification automatically.
@@ -562,27 +562,16 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
   }
 }
 
-/// Initialises [audio_service] and returns the singleton [MuslyAudioHandler].
+/// Initialises [audio_service] and returns the singleton [GroovyAudioHandler].
 /// Call this once from [main()] before [runApp()].
-///
-/// On iOS and Android, AudioService.init() is called so the audio engine runs
-/// as a proper background service. On Android this also registers the
-/// MediaBrowserService that Android Auto connects to: when Auto starts with
-/// the app closed, audio_service spawns a headless Flutter engine, runs
-/// main(), and this handler serves the browse tree, search and playback.
-/// On desktop/web the handler is created directly (audio_service has no
-/// backend there).
-Future<MuslyAudioHandler> initAudioService() async {
+Future<GroovyAudioHandler> initAudioService() async {
   if (!kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS || Platform.isWindows)) {
     return AudioService.init(
-      builder: () => MuslyAudioHandler(),
+      builder: () => GroovyAudioHandler(),
       config: const AudioServiceConfig(
         androidNotificationChannelId: 'com.groovy.music.channel.audio',
         androidNotificationChannelName: 'Groovy',
         androidNotificationChannelDescription: 'Groovy Music Playback',
-        // With androidStopForegroundOnPause=false the service never leaves
-        // the foreground, so androidNotificationOngoing would have no
-        // effect (audio_service asserts against combining the two).
         androidNotificationOngoing: false,
         androidStopForegroundOnPause: false,
         androidNotificationIcon: 'mipmap/ic_launcher',
@@ -595,5 +584,6 @@ Future<MuslyAudioHandler> initAudioService() async {
     );
   }
   // Desktop / web: no AudioService wrapper needed.
-  return MuslyAudioHandler();
+  return GroovyAudioHandler();
 }
+

@@ -1,11 +1,11 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Musly</string>
+	<string>Groovy</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -13,7 +13,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>musly</string>
+	<string>Groovy</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -48,7 +48,7 @@
 
 	<!-- Google Cast Support -->
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Musly uses the local network to discover and connect to Google Cast devices.</string>
+	<string>Groovy uses the local network to discover and connect to Google Cast devices.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_googlecast._tcp</string>
@@ -99,9 +99,9 @@
 	
 	<!-- Bluetooth Permissions (iOS 13+) -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Musly uses Bluetooth to send song information and album artwork to your connected audio devices (car stereo, headphones, speakers).</string>
+	<string>Groovy uses Bluetooth to send song information and album artwork to your connected audio devices (car stereo, headphones, speakers).</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
-	<string>Musly uses Bluetooth to connect to audio devices and display current playing music information.</string>
+	<string>Groovy uses Bluetooth to connect to audio devices and display current playing music information.</string>
 	
 	<!-- Network Usage -->
 	<key>NSAppTransportSecurity</key>
@@ -112,17 +112,17 @@
 
 	<!-- Media Library / Music -->
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Musly needs access to your music library to browse and play your songs.</string>
+	<string>Groovy needs access to your music library to browse and play your songs.</string>
 
 	<!-- Photo Library (album artwork import) -->
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Musly needs access to your photo library to set custom album artwork.</string>
+	<string>Groovy needs access to your photo library to set custom album artwork.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Musly needs permission to save album artwork to your photo library.</string>
+	<string>Groovy needs permission to save album artwork to your photo library.</string>
 
 	<!-- File access via Files app / iCloud Drive -->
 	<key>NSDocumentsFolderUsageDescription</key>
-	<string>Musly needs access to your files to import local music tracks.</string>
+	<string>Groovy needs access to your files to import local music tracks.</string>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
@@ -130,7 +130,7 @@
 
 	<!-- Microphone (required by some audio APIs) -->
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Musly requires microphone access for certain audio features.</string>
+	<string>Groovy requires microphone access for certain audio features.</string>
 	
 </dict>
 </plist>

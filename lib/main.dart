@@ -259,7 +259,7 @@ void main() async {
     initAudioService(),
   ]);
 
-  final audioHandler = initResults[2] as MuslyAudioHandler;
+  final audioHandler = initResults[2] as GroovyAudioHandler;
 
   // Create TranscodingService instance to share across providers
   final transcodingService = TranscodingService();

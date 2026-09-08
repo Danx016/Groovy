@@ -1,4 +1,4 @@
-{
+﻿{
   "@@locale": "en",
   "@@last_modified": "2026-02-07T16:10:00Z",
 
@@ -691,7 +691,7 @@
     "description": "Community translations credit label"
   },
 
-  "communityTranslationsSubtitle": "Help translate Musly on Crowdin",
+  "communityTranslationsSubtitle": "Help translate Groovy on Crowdin",
   "@communityTranslationsSubtitle": {
     "description": "Community translations credit subtitle"
   },
@@ -1621,7 +1621,7 @@
   "discordRpcStyleSong": "Song title",
   "@discordRpcStyleSong": { "description": "Discord RPC state style option: show song title" },
 
-  "discordRpcStyleApp": "App name (Musly)",
+  "discordRpcStyleApp": "App name (Groovy)",
   "@discordRpcStyleApp": { "description": "Discord RPC state style option: show app name" },
 
   "sectionAutoDj": "AUTO DJ",
@@ -1803,7 +1803,7 @@
   "@sectionAnalyticsPrivacy": { "description": "Analytics and Privacy section header" },
   "anonymousAnalytics": "Anonymous Analytics",
   "@anonymousAnalytics": { "description": "Title for anonymous analytics toggle" },
-  "anonymousAnalyticsSubtitle": "Help improve Musly with anonymous crash reports and usage stats",
+  "anonymousAnalyticsSubtitle": "Help improve Groovy with anonymous crash reports and usage stats",
   "@anonymousAnalyticsSubtitle": { "description": "Subtitle explaining anonymous analytics" },
   "deviceId": "Device ID",
   "@deviceId": { "description": "Title for device ID row" },
@@ -1823,9 +1823,9 @@
 
   "@_SUPPORT": {},
   "supportGreeting": "Hey there! 👋",
-  "supportParagraph1": "I'm Devid, the developer behind Musly. I built this app because I love music and believe everyone deserves a beautiful, free music player.",
-  "supportParagraph2": "Musly is completely free and open-source. No ads and no subscription fees. I work on it in my free time because I genuinely enjoy making something useful for people like you.",
-  "supportParagraph3": "But servers, development tools, and coffee aren't free 😅 If Musly has become a part of your daily life and you'd like to say \"thanks,\" a small donation would mean the world to me. It helps cover costs and keeps me motivated to add new features.",
+  "supportParagraph1": "I'm Danil, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.",
+  "supportParagraph2": "Groovy is completely free and open-source. No ads and no subscription fees. I work on it in my free time because I genuinely enjoy making something useful for people like you.",
+  "supportParagraph3": "But servers, development tools, and coffee aren't free 😅 If Groovy has become a part of your daily life and you'd like to say \"thanks,\" a small donation would mean the world to me. It helps cover costs and keeps me motivated to add new features.",
   "supportParagraph4": "No pressure at all though - your enjoyment of the app is already the best reward! 💙",
   "supportDonationTitle": "Support with a Donation",
   "supportDonationSubtitle": "via Revolut - any amount helps!",
@@ -1833,7 +1833,7 @@
   "supportDiscordSubtitle": "Get help, suggest features, or just chat",
   "supportWaysTitle": "Other ways to support",
   "supportWayRate": "Leave a rating on the app store",
-  "supportWayShare": "Tell your friends about Musly",
+  "supportWayShare": "Tell your friends about Groovy",
   "supportWayBugs": "Report bugs or suggest features",
   "supportWayEnjoy": "Just enjoy the music! 🎵",
   "supportMadeWithLove": "Made with 💙 in Italy",
@@ -1983,7 +1983,7 @@
   "themeAuthor": "by {author}",
   "@themeAuthor": { "description": "Author attribution shown on theme preview card", "placeholders": { "author": { "type": "String" } } },
   "audioFocusDenied": "Couldn't start playback — another app has audio focus",
-  "@audioFocusDenied": { "description": "Shown when the OS denies Musly audio focus (e.g. another app refuses to yield)" },
+  "@audioFocusDenied": { "description": "Shown when the OS denies Groovy audio focus (e.g. another app refuses to yield)" },
   "addToLibrary": "Add to Library",
   "@addToLibrary": { "description": "Add to library option in menu" },
   "alreadyInLibrary": "Song already in server library",

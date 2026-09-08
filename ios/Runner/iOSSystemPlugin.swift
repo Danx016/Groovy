@@ -120,7 +120,7 @@ public class iOSSystemPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     private func initialize() {
         // Remote command center (lock screen / Control Center) and
         // MPNowPlayingInfoCenter are now managed by the audio_service Flutter
-        // plugin (MuslyAudioHandler) to avoid conflict with double registration.
+        // plugin (GroovyAudioHandler) to avoid conflict with double registration.
         // This plugin only keeps audio session configuration and OS notification
         // handlers (interruptions, route changes) so audio focus is correctly
         // handled on phone calls and headphone disconnects.
@@ -217,9 +217,9 @@ public class iOSSystemPlugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         // @objc handlers and observers below are commented out until the
         // com.apple.developer.carplay-audio entitlement is approved by Apple.
         //
-        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlayTogglePlayPause), name: .muslyCarPlayTogglePlayPause, object: nil)
-        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlaySkipNext), name: .muslyCarPlaySkipNext, object: nil)
-        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlaySkipPrevious), name: .muslyCarPlaySkipPrevious, object: nil)
+        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlayTogglePlayPause), name: .groovyCarPlayTogglePlayPause, object: nil)
+        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlaySkipNext), name: .groovyCarPlaySkipNext, object: nil)
+        // NotificationCenter.default.addObserver(self, selector: #selector(handleCarPlaySkipPrevious), name: .groovyCarPlaySkipPrevious, object: nil)
     }
 
     // @objc private func handleCarPlayTogglePlayPause() {

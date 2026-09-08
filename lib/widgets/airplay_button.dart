@@ -22,7 +22,7 @@ class AirPlayButton extends StatelessWidget {
       width: size + 16, 
       height: size + 16,
       child: UiKitView(
-        viewType: 'musly/airplay_button',
+        viewType: 'groovy/airplay_button',
         layoutDirection: TextDirection.ltr,
         creationParams: {'tintColor': colorInt},
         creationParamsCodec: const StandardMessageCodec(),

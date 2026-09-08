@@ -6,7 +6,7 @@
 // import AVFoundation
 #if false
 
-/// CarPlay integration for Musly.
+/// CarPlay integration for Groovy.
 ///
 /// Uses CPNowPlayingTemplate (iOS 14+) which is automatically populated from
 /// MPNowPlayingInfoCenter — already maintained by iOSSystemPlugin. A browsing
@@ -65,7 +65,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         )
         playPauseItem.handler = { [weak self] _, completion in
             MPRemoteCommandCenter.shared().togglePlayPauseCommand.addTarget { _ in .success }
-            NotificationCenter.default.post(name: .muslyCarPlayTogglePlayPause, object: nil)
+            NotificationCenter.default.post(name: .groovyCarPlayTogglePlayPause, object: nil)
             completion()
         }
 
@@ -75,7 +75,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             image: UIImage(systemName: "forward.fill")
         )
         skipNextItem.handler = { [weak self] _, completion in
-            NotificationCenter.default.post(name: .muslyCarPlaySkipNext, object: nil)
+            NotificationCenter.default.post(name: .groovyCarPlaySkipNext, object: nil)
             completion()
         }
 
@@ -85,12 +85,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             image: UIImage(systemName: "backward.fill")
         )
         skipPrevItem.handler = { [weak self] _, completion in
-            NotificationCenter.default.post(name: .muslyCarPlaySkipPrevious, object: nil)
+            NotificationCenter.default.post(name: .groovyCarPlaySkipPrevious, object: nil)
             completion()
         }
 
         let section = CPListSection(items: [playPauseItem, skipNextItem, skipPrevItem])
-        let list = CPListTemplate(title: "Musly", sections: [section])
+        let list = CPListTemplate(title: "Groovy", sections: [section])
         list.tabImage = UIImage(systemName: "music.note.list")
         list.tabTitle = "Actions"
         return list
@@ -107,8 +107,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 // MARK: - Notification names used by CarPlaySceneDelegate + iOSSystemPlugin
 
 extension Notification.Name {
-    static let muslyCarPlayTogglePlayPause = Notification.Name("muslyCarPlayTogglePlayPause")
-    static let muslyCarPlaySkipNext        = Notification.Name("muslyCarPlaySkipNext")
-    static let muslyCarPlaySkipPrevious    = Notification.Name("muslyCarPlaySkipPrevious")
+    static let groovyCarPlayTogglePlayPause = Notification.Name("groovyCarPlayTogglePlayPause")
+    static let groovyCarPlaySkipNext        = Notification.Name("groovyCarPlaySkipNext")
+    static let groovyCarPlaySkipPrevious    = Notification.Name("groovyCarPlaySkipPrevious")
 }
 #endif // CARPLAY SUPPORT TEMPORARILY DISABLED

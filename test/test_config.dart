@@ -1,4 +1,4 @@
-// Test configuration loader for Navidrome integration tests.
+﻿// Test configuration loader for Navidrome integration tests.
 //
 // Reads the server URL from (in order of priority):
 //   1. `NAVIDROME_TEST_URL` environment variable

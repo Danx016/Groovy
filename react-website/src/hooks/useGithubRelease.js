@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 
-const CACHE_KEY = 'musly_github_release_cache'
+const CACHE_KEY = 'groovy_github_release_cache'
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
 /**
- * Fetches the latest Musly release from the GitHub public API (no auth required).
+ * Fetches the latest Groovy release from the GitHub public API (no auth required).
  * Results are cached in sessionStorage for 10 minutes to stay within the 60 req/hr limit.
  *
  * Returns: { version, date, url, loading, error }
@@ -32,7 +32,7 @@ export function useGithubRelease() {
 
         let cancelled = false
 
-        fetch('https://api.github.com/repos/dddevid/Musly/releases/latest', {
+        fetch('https://api.github.com/repos/Danx016/Groovy/releases/latest', {
             headers: { Accept: 'application/vnd.github+json' },
         })
             .then(res => {
@@ -49,7 +49,7 @@ export function useGithubRelease() {
                           day: 'numeric',
                       })
                     : null
-                const url = json.html_url ?? 'https://github.com/dddevid/Musly/releases/latest'
+                const url = json.html_url ?? 'https://github.com/Danx016/Groovy/releases/latest'
                 const data = { version, date, url }
 
                 // Cache result

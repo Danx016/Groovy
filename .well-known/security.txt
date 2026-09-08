@@ -1,9 +1,9 @@
-Contact: https://github.com/dddevid/Musly/issues
+Contact: https://github.com/Danx016/Groovy/issues
 Expires: 2027-01-05T23:59:59.000Z
-Preferred-Languages: en, it
-Canonical: https://musly.devid.ink/.well-known/security.txt
-Policy: https://github.com/dddevid/Musly/blob/master/LICENSE
-Acknowledgments: https://github.com/dddevid/Musly/graphs/contributors
+Preferred-Languages: en, es
+Policy: https://github.com/Danx016/Groovy/blob/main/LICENSE
+Acknowledgments: https://github.com/Danx016/Groovy/graphs/contributors
 
-# Musly - Best Free Navidrome Client & Subsonic Music Player
+# Groovy - Music Streaming & Subsonic Player
 # Security vulnerability reporting
+

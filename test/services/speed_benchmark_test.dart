@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/services/ytdlp_service.dart';
 import 'package:groovy/providers/library_provider.dart';
@@ -87,7 +87,7 @@ void main() {
     });
 
     test('LibraryProvider memoized collection and songsByIdMap benchmark', () {
-      final libraryProvider = LibraryProvider(YoutubeService(), MuslyAudioHandler());
+      final libraryProvider = LibraryProvider(YoutubeService(), GroovyAudioHandler());
       
       final sw = Stopwatch()..start();
       final map = libraryProvider.songsByIdMap;

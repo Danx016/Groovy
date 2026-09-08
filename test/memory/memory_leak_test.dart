@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/providers/auth_provider.dart';
 import 'package:groovy/providers/library_provider.dart';
@@ -25,7 +25,7 @@ void main() {
         storage,
         FakeCastService(),
         UpnpService(),
-        MuslyAudioHandler(),
+        GroovyAudioHandler(),
         JukeboxService(),
         TranscodingService(),
       );
@@ -63,7 +63,7 @@ void main() {
       WidgetTester tester,
     ) async {
       final youtube = YoutubeService();
-      final provider = LibraryProvider(youtube, MuslyAudioHandler());
+      final provider = LibraryProvider(youtube, GroovyAudioHandler());
 
       await tester.pumpWidget(
         ChangeNotifierProvider<LibraryProvider>.value(

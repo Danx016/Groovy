@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest an idea for Musly
+description: Suggest an idea for Groovy
 labels: ["enhancement"]
 body:
   - type: textarea

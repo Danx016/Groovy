@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import '../test_config.dart';
@@ -43,7 +43,7 @@ void main() {
           'u': config['username'] ?? 'admin',
           'p': config['password'] ?? 'admin',
           'v': '1.16.1',
-          'c': 'musly-test',
+          'c': 'groovy-test',
           'f': 'json',
         },
       );
@@ -64,7 +64,7 @@ void main() {
           'u': config['username'] ?? 'admin',
           'p': config['password'] ?? 'admin',
           'v': '1.16.1',
-          'c': 'musly-test',
+          'c': 'groovy-test',
           'f': 'json',
           'type': 'random',
           'size': '1',

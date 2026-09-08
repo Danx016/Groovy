@@ -1,4 +1,4 @@
-{
+﻿{
   "@@locale": "zh",
   "@@last_modified": "2026-02-07T16:10:00Z",
   "goodMorning": "早上好",
@@ -502,7 +502,7 @@
   "@communityTranslations": {
     "description": "Community translations credit label"
   },
-  "communityTranslationsSubtitle": "在 Crowdin 上帮助翻译 Musly",
+  "communityTranslationsSubtitle": "在 Crowdin 上帮助翻译 Groovy",
   "@communityTranslationsSubtitle": {
     "description": "Community translations credit subtitle"
   },
@@ -1160,7 +1160,7 @@
   "@updateAvailable": {
     "description": "Title of the update available dialog"
   },
-  "updateAvailableSubtitle": "新版本的 Musly 已可用！",
+  "updateAvailableSubtitle": "新版本的 Groovy 已可用！",
   "@updateAvailableSubtitle": {
     "description": "Subtitle in the update dialog"
   },

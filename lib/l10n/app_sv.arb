@@ -1,7 +1,7 @@
-{
+﻿{
   "@@locale": "sv",
   "@@last_modified": "2026-02-07T16:10:00Z",
-  "appName": "Musly",
+  "appName": "Groovy",
   "@appName": {
     "description": "Application name"
   },
@@ -506,7 +506,7 @@
   "@communityTranslations": {
     "description": "Community translations credit label"
   },
-  "communityTranslationsSubtitle": "Hjälp översätta Musly på Crowdin",
+  "communityTranslationsSubtitle": "Hjälp översätta Groovy på Crowdin",
   "@communityTranslationsSubtitle": {
     "description": "Community translations credit subtitle"
   },
@@ -1167,7 +1167,7 @@
   "@updateAvailable": {
     "description": "Title of the update available dialog"
   },
-  "updateAvailableSubtitle": "En ny version av Musly finns tillgänglig!",
+  "updateAvailableSubtitle": "En ny version av Groovy finns tillgänglig!",
   "@updateAvailableSubtitle": {
     "description": "Subtitle in the update dialog"
   },
@@ -1537,7 +1537,7 @@
   "@discordRpcStyleSong": {
     "description": "Discord RPC state style option: show song title"
   },
-  "discordRpcStyleApp": "Appnamn (Musly)",
+  "discordRpcStyleApp": "Appnamn (Groovy)",
   "@discordRpcStyleApp": {
     "description": "Discord RPC state style option: show app name"
   },

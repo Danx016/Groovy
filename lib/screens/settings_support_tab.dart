@@ -15,7 +15,7 @@ class SettingsSupportTab extends StatelessWidget {
   }
 
   Future<void> _launchDonation() async {
-    final uri = Uri.parse('https://revolut.me/ddevid_1');
+    final uri = Uri.parse('https://github.com/Danx016/Groovy');
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }

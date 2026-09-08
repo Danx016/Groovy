@@ -1,6 +1,6 @@
-# Changelog
+﻿# Changelog
 
-All notable changes to Musly will be documented in this file.
+All notable changes to Groovy will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -248,7 +248,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Theme manager screen with create, edit, duplicate, export/import, and delete
   - 5 editor tabs: Background, Artwork, Text, Controls, Animations
   - Background types: Solid color, Gradient, Blur, Mesh gradient, Custom Flutter code (with safe mode)
-  - Artwork shapes: Circle, Rounded Rectangle (fixed Musly default 12 px radius), Square (configurable corner radius 0–50 px)
+  - Artwork shapes: Circle, Rounded Rectangle (fixed Groovy default 12 px radius), Square (configurable corner radius 0–50 px)
   - Shadow intensity, rotation, and size factor controls
   - Cover rotation animation with configurable speed (3–60 seconds per full turn)
   - Pulse effect animation for artwork
@@ -267,9 +267,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Playback Resume After App Restart** — Correctly restores playback position and prepares the audio source after cold start ([#171](https://github.com/dddevid/Musly/issues/171))
-- **Seek with Transcoding** — Fixed broken seeking when using transcoding via `LockCachingAudioSource` ([#170](https://github.com/dddevid/Musly/issues/170))
-- **Jukebox Mode UI** — Jukebox controls now properly integrated into the main playback controls ([#173](https://github.com/dddevid/Musly/issues/173))
+- **Playback Resume After App Restart** — Correctly restores playback position and prepares the audio source after cold start ([#171](https://github.com/Danx016/Groovy/issues/171))
+- **Seek with Transcoding** — Fixed broken seeking when using transcoding via `LockCachingAudioSource` ([#170](https://github.com/Danx016/Groovy/issues/170))
+- **Jukebox Mode UI** — Jukebox controls now properly integrated into the main playback controls ([#173](https://github.com/Danx016/Groovy/issues/173))
 - **Cache Memory Optimization** — Replaced JSON bulk cache with SQLite to prevent OOM crashes on libraries with 100 000+ items
 - **iOS Deployment Target** — Lowered minimum iOS version from 16.1 back to 15.0 (removes Live Activities dependency on iOS)
 - **Theme Editor Overflow** — Fixed all `RenderFlex` overflow errors in `ThemePreviewCard` and `ThemeEditorScreen`
@@ -287,14 +287,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.12] - 2026-05-09
 
 ### Added
-- **Persistent Queue Across Restarts** ([#156](https://github.com/dddevid/Musly/issues/156))
+- **Persistent Queue Across Restarts** ([#156](https://github.com/Danx016/Groovy/issues/156))
   - Queue state (songs, current index, current song ID) saved to SharedPreferences
   - Automatically restores queue on app launch without auto-playing
   - Validates local file paths exist before restoring
   - Debounced save (200ms) to avoid excessive writes
   - Clears persisted data on explicit queue clear
 - **Shuffle Persistence** — Shuffled queue order is now persisted alongside the queue, so reopening the app restores the correct shuffled sequence when shuffle mode is enabled
-- **Artist Play Enhancement** ([#151](https://github.com/dddevid/Musly/pull/151))
+- **Artist Play Enhancement** ([#151](https://github.com/Danx016/Groovy/pull/151))
   - "Play" button on artist screens now appends rest of artist's songs to their top songs
   - Provides fuller artist experience when pressing play
 - **Collapsible Playlist Cover Art** — `PlaylistScreen` now uses a `SliverAppBar` with `FlexibleSpaceBar`, matching the collapsible behavior of `AlbumScreen`
@@ -316,18 +316,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **History Screen Loading** - Improved history loading and listener management
-- **Library Refresh** ([#152](https://github.com/dddevid/Musly/issues/152))
+- **Library Refresh** ([#152](https://github.com/Danx016/Groovy/issues/152))
   - Refresh button now forces full re-sync by bypassing 6-hour cooldown
   - Fixes stale library content after user clicks refresh
-- **Accent Color Consistency** ([#158](https://github.com/dddevid/Musly/issues/158))
+- **Accent Color Consistency** ([#158](https://github.com/Danx016/Groovy/issues/158))
   - Play/Shuffle buttons now use theme accent color instead of hardcoded red
   - Applied to album, artist, and playlist screens
-- **Emby/Jellyfin Library Sync** ([#160](https://github.com/dddevid/Musly/issues/160))
+- **Emby/Jellyfin Library Sync** ([#160](https://github.com/Danx016/Groovy/issues/160))
   - Added `getAllSongs()` to JellyfinService for O(1) API call
   - SubsonicService proxy for Jellyfin compatibility
   - Fixed albumId and artistId fallbacks in item parsing
   - Fixed pagination loop early-break issue
-- **Play/Shuffle Button Design** ([#157](https://github.com/dddevid/Musly/issues/157))
+- **Play/Shuffle Button Design** ([#157](https://github.com/Danx016/Groovy/issues/157))
   - Consistent pill-shaped design across artist, album, and playlist screens
   - Play/Shuffle row added below artist header
 - **Now Playing Screen**
@@ -355,7 +355,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Localization** - Updated l10n keys for empty states and scan actions
 
 ### Changed
-- **Android Build** - Bumped version to 1.0.12+1 for update support ([#148](https://github.com/dddevid/Musly/issues/148))
+- **Android Build** - Bumped version to 1.0.12+1 for update support ([#148](https://github.com/Danx016/Groovy/issues/148))
 - **MusicService** - Cleaned up comments and streamlined code
 - **Artwork Loading** - Optimized loading and metadata updates in MusicService
 - **Recommendation Service** - Enhanced with improved data handling and caching
@@ -363,7 +363,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.11] - 2026-05-04
 
 ### Added
-- **Pitch Control & Speed Adjustment** ([#145](https://github.com/dddevid/Musly/issues/145))
+- **Pitch Control & Speed Adjustment** ([#145](https://github.com/Danx016/Groovy/issues/145))
   - Independent pitch slider (0.5× – 2.0×) in the speed bottom sheet
   - "Preserve pitch" toggle: keeps original pitch when changing playback speed (time-stretching)
   - When disabled, pitch follows speed like a vinyl record
@@ -375,7 +375,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `ScreenHelper` utility for adaptive sizing based on screen width
 
 ### Fixed
-- **Listening History Blank** ([#146](https://github.com/dddevid/Musly/issues/146))
+- **Listening History Blank** ([#146](https://github.com/Danx016/Groovy/issues/146))
   - History screen was empty when recommendations were disabled
   - `trackSongPlay`, `trackSkip`, `trackSongRating`, and `trackStarred` now always record listening data regardless of recommendation toggle
 - **Emulator Detection (Pixel 9+)**
@@ -431,7 +431,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **CI/CD Auto-Release**: Fully automated GitHub Actions workflow
   - Automated builds and releases for Android, iOS, Windows, Linux, and macOS
-  - Windows NSIS installer (`musly-setup.exe`) automatically generated
+  - Windows NSIS installer (`Groovy-setup.exe`) automatically generated
   - Fixed ALSA dependency for Linux builds
   - Automatic artifact upload and GitHub Release creation
 - **Privacy Policy Dialog**: Implemented dialog for privacy policy acceptance
@@ -444,7 +444,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Forward/backward swipe navigation between tracks
 - **Artist to Queue**: Added "Add artist to queue" button on artist screens
 - **Tap Cover for Lyrics**: Tap album cover in player to show lyrics
-- **Analytics**: Countly Analytics and crash reports (https://musly.devid.lol/privacy)
+- **Analytics**: Countly Analytics and crash reports (https://Groovy.Danil.lol/privacy)
 
 ### Changed
 - **Flutter 3.41.7**: Updated Flutter to version 3.41.7
@@ -517,16 +517,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Shape**: Rounded rectangle, Circle, or Square
   - **Corner Radius**: slider (0–24 px), only visible when shape is *Rounded*
   - **Shadow intensity**: None, Soft, Medium, Strong
-  - **Shadow color**: Black or Accent (Musly red)
+  - **Shadow color**: Black or Accent (Groovy red)
   - Live 108 px animated preview updates in real-time
   - All options persisted to `SharedPreferences` and restored on next launch (awaited before `runApp`)
 - **No-artwork placeholder in mobile player**: Songs without cover art now show a clean dark gradient tile with a music note icon and localised "No artwork" label instead of an infinite shimmer loader. Shimmer is still used while the image is actually fetching.
 
 ### Changed
-- **Desktop player bar accent colors**: All active-state indicators (shuffle, repeat, progress slider, volume slider, favorite heart, lyrics button) now use Musly red
-- **Update dialog colors**: Header gradient and download button changed from purple/blue (`#6C5CE7 → #00B4D8`) to Musly red/pink (`appleMusicRed → appleMusicPink`)
+- **Desktop player bar accent colors**: All active-state indicators (shuffle, repeat, progress slider, volume slider, favorite heart, lyrics button) now use Groovy red
+- **Update dialog colors**: Header gradient and download button changed from purple/blue (`#6C5CE7 → #00B4D8`) to Groovy red/pink (`appleMusicRed → appleMusicPink`)
 - **Desktop lyrics**: Lyrics view now uses `rootNavigator: true` so it covers the full window (sidebar + content + player bar); close button pops from the root navigator correctly
-- **React marketing website**: Version number and release date in Hero and Download sections are now fetched live from the GitHub public API (`/repos/dddevid/Musly/releases/latest`) with a 10-minute session cache — no auth token required
+- **React marketing website**: Version number and release date in Hero and Download sections are now fetched live from the GitHub public API (`/repos/Danx016/Groovy/releases/latest`) with a 10-minute session cache — no auth token required
 
 ### Fixed
 - **Library list alignment**: Album/artist tiles in the Library screen now use an explicit `InkWell → Padding → Row` layout so artwork and text align with section headers on all platforms
@@ -535,7 +535,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.0.6] - 2026-02-20
 
 ### Added
-- **Jukebox Mode** ([#41](https://github.com/dddevid/Musly/issues/41)): Server-side audio playback via the Subsonic jukebox API
+- **Jukebox Mode** ([#41](https://github.com/Danx016/Groovy/issues/41)): Server-side audio playback via the Subsonic jukebox API
   - New `JukeboxService` wrapping all jukebox API calls (`get`, `start`, `stop`, `skip`, `set`, `add`, `clear`, `shuffle`, `remove`, `setGain`)
   - Dedicated `JukeboxScreen` remote-control UI with now-playing artwork, playback controls, volume slider, and queue list
   - Toggle in Settings → Server to enable/disable jukebox mode
@@ -547,9 +547,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Genre screen rebuilt with two tabs: Songs and Albums
 
 ### Fixed
-- **[#29](https://github.com/dddevid/Musly/issues/29) Offline Playlists**: Playlists are now correctly restored from local cache when the server is unreachable
-- **[#37](https://github.com/dddevid/Musly/issues/37) Music Folder Selection**: Fixed the music folder selection dialog in Server settings
-- **[#44](https://github.com/dddevid/Musly/issues/44) Album Art Aspect Ratio**: Album artwork now preserves its original aspect ratio (`BoxFit.contain`) instead of stretching
+- **[#29](https://github.com/Danx016/Groovy/issues/29) Offline Playlists**: Playlists are now correctly restored from local cache when the server is unreachable
+- **[#37](https://github.com/Danx016/Groovy/issues/37) Music Folder Selection**: Fixed the music folder selection dialog in Server settings
+- **[#44](https://github.com/Danx016/Groovy/issues/44) Album Art Aspect Ratio**: Album artwork now preserves its original aspect ratio (`BoxFit.contain`) instead of stretching
 
 ### Improved
 - **Localizations**: Removed duplicate keys from `app_en.arb`; cleaned non-English ARB files of orphaned section markers and English fallback strings
@@ -650,7 +650,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - 2026-01-17
 
 ### Added
-- **[#27](https://github.com/dddevid/Musly/issues/27) Star Rating System**: Added 1-5 star rating support for songs
+- **[#27](https://github.com/Danx016/Groovy/issues/27) Star Rating System**: Added 1-5 star rating support for songs
   - Rate songs via the song options menu (three-dot menu)
   - Rating dialog with visual star picker
   - Shows current rating in menu title
@@ -714,72 +714,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **[#26](https://github.com/dddevid/Musly/issues/26)**: Transcoding/streaming quality settings
+- **[#26](https://github.com/Danx016/Groovy/issues/26)**: Transcoding/streaming quality settings
   - Added WiFi and Mobile bitrate configuration in Server settings
   - Support for format selection (MP3, Opus, AAC)
   - Bitrate options from 64kbps to 320kbps or original quality
 
-- **[#25](https://github.com/dddevid/Musly/issues/25)**: Library search now works on all items, not just playlists
+- **[#25](https://github.com/Danx016/Groovy/issues/25)**: Library search now works on all items, not just playlists
   - Implemented `LibrarySearchDelegate` that searches across playlists, albums, and artists
   
-- **[#24](https://github.com/dddevid/Musly/issues/24)**: Artists tab now displays content
+- **[#24](https://github.com/Danx016/Groovy/issues/24)**: Artists tab now displays content
   - Fixed `_getFilteredItems` to properly filter and return artists list
   
-- **[#22](https://github.com/dddevid/Musly/issues/22)**: Homepage shows fallback when no content available
+- **[#22](https://github.com/Danx016/Groovy/issues/22)**: Homepage shows fallback when no content available
   - Added empty state widget with refresh button when no albums/songs loaded
   
-- **[#20](https://github.com/dddevid/Musly/issues/20)**: Shuffle button now always shuffles instead of acting as play/pause
+- **[#20](https://github.com/Danx016/Groovy/issues/20)**: Shuffle button now always shuffles instead of acting as play/pause
   - Modified shuffle logic to always shuffle the playlist, even when already playing
   
-- **[#19](https://github.com/dddevid/Musly/issues/19)**: Download button in playlist now downloads all songs
+- **[#19](https://github.com/Danx016/Groovy/issues/19)**: Download button in playlist now downloads all songs
   - Implemented batch download functionality in playlist screen
   
-- **[#18](https://github.com/dddevid/Musly/issues/18)**: Play/Pause state now correctly shows only for the active playlist
+- **[#18](https://github.com/Danx016/Groovy/issues/18)**: Play/Pause state now correctly shows only for the active playlist
   - Fixed playlist header to compare current playing context
   
-- **[#17](https://github.com/dddevid/Musly/issues/17)**: Lyrics scroll now uses smooth animations without line-break changes
+- **[#17](https://github.com/Danx016/Groovy/issues/17)**: Lyrics scroll now uses smooth animations without line-break changes
   - Used fixed font size for all lines to prevent layout shifts
   
-- **[#16](https://github.com/dddevid/Musly/issues/16)**: Library search button now works
+- **[#16](https://github.com/Danx016/Groovy/issues/16)**: Library search button now works
   - Connected search icon to `LibrarySearchDelegate`
   
-- **[#15](https://github.com/dddevid/Musly/issues/15)**: Swipe down to minimize player implemented
+- **[#15](https://github.com/Danx016/Groovy/issues/15)**: Swipe down to minimize player implemented
   - Added gesture detector for vertical swipe to dismiss full player
   
-- **[#14](https://github.com/dddevid/Musly/issues/14)**: Option to hide volume bar from player
+- **[#14](https://github.com/Danx016/Groovy/issues/14)**: Option to hide volume bar from player
   - Added toggle in Display settings to show/hide volume slider
   
-- **[#13](https://github.com/dddevid/Musly/issues/13)**: Click on album/artist name navigates to respective screen
+- **[#13](https://github.com/Danx016/Groovy/issues/13)**: Click on album/artist name navigates to respective screen
   - Made album and artist names tappable in now playing screen
   
-- **[#12](https://github.com/dddevid/Musly/issues/12)**: Internet radio station support
+- **[#12](https://github.com/Danx016/Groovy/issues/12)**: Internet radio station support
   - Added `RadioScreen` with server radio stations
   - Support for streaming internet radio URLs
   
-- **[#11](https://github.com/dddevid/Musly/issues/11)**: All Songs view with sort options and playback
+- **[#11](https://github.com/Danx016/Groovy/issues/11)**: All Songs view with sort options and playback
   - Added `AllSongsScreen` with play/shuffle buttons
   
-- **[#10](https://github.com/dddevid/Musly/issues/10)**: Auto-DJ feature for queue
+- **[#10](https://github.com/Danx016/Groovy/issues/10)**: Auto-DJ feature for queue
   - Implemented smart queue that adds similar songs when queue ends
   
-- **[#9](https://github.com/dddevid/Musly/issues/9)**: ReplayGain support
+- **[#9](https://github.com/Danx016/Groovy/issues/9)**: ReplayGain support
   - Added ReplayGain toggle in Playback settings
   
-- **[#8](https://github.com/dddevid/Musly/issues/8)**: Progress bar freezes on rewind
+- **[#8](https://github.com/Danx016/Groovy/issues/8)**: Progress bar freezes on rewind
   - Fixed position stream subscription to properly update on seek
   
-- **[#7](https://github.com/dddevid/Musly/issues/7)**: Custom TLS/SSL certificates 
+- **[#7](https://github.com/Danx016/Groovy/issues/7)**: Custom TLS/SSL certificates 
   - Added option to allow self-signed certificates in login
   - Added custom certificate file picker in Advanced Options
   
-- **[#5](https://github.com/dddevid/Musly/issues/5)**: Lyrics text stability
+- **[#5](https://github.com/Danx016/Groovy/issues/5)**: Lyrics text stability
   - Fixed line break changes during playback by using consistent font sizing
   
-- **[#4](https://github.com/dddevid/Musly/issues/4)**: Music Folders support
+- **[#4](https://github.com/Danx016/Groovy/issues/4)**: Music Folders support
   - Added music folder selection in Server settings
   
-- **[#3](https://github.com/dddevid/Musly/issues/3)**: Error messages for incorrect URL
+- **[#3](https://github.com/Danx016/Groovy/issues/3)**: Error messages for incorrect URL
   - Added proper error handling and snackbar messages for connection failures
   
-- **[#1](https://github.com/dddevid/Musly/issues/1)**: Miniplayer persists
+- **[#1](https://github.com/Danx016/Groovy/issues/1)**: Miniplayer persists
   - Implemented nested navigator architecture to maintain miniplayer state

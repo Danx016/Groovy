@@ -1,7 +1,7 @@
-{
+﻿{
   "@@locale": "sq",
   "@@last_modified": "2026-02-07T16:10:00Z",
-  "appName": "Musly",
+  "appName": "Groovy",
   "@appName": {
     "description": "Application name"
   },
@@ -506,7 +506,7 @@
   "@communityTranslations": {
     "description": "Community translations credit label"
   },
-  "communityTranslationsSubtitle": "Ndihmoni në përkthimin e Musly në Crowdin",
+  "communityTranslationsSubtitle": "Ndihmoni në përkthimin e Groovy në Crowdin",
   "@communityTranslationsSubtitle": {
     "description": "Community translations credit subtitle"
   },

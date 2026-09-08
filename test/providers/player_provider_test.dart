@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/models/song.dart';
 import 'package:groovy/providers/player_provider.dart';
 import 'package:groovy/services/youtube_service.dart';
@@ -25,7 +25,7 @@ void main() {
         StorageService(),
         FakeCastService(),
         UpnpService(),
-        MuslyAudioHandler(),
+        GroovyAudioHandler(),
         JukeboxService(),
         TranscodingService(),
       );

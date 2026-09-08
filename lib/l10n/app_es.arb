@@ -1,4 +1,4 @@
-{
+﻿{
   "@@locale": "es",
   "@@last_modified": "2026-02-07T16:10:00Z",
   "appName": "Groovy",
@@ -506,7 +506,7 @@
   "@communityTranslations": {
     "description": "Community translations credit label"
   },
-  "communityTranslationsSubtitle": "Ayude a traducir Musly en Crowdin",
+  "communityTranslationsSubtitle": "Ayude a traducir Groovy en Crowdin",
   "@communityTranslationsSubtitle": {
     "description": "Community translations credit subtitle"
   },
@@ -1545,7 +1545,7 @@
   "@discordRpcStyleSong": {
     "description": "Discord RPC state style option: show song title"
   },
-  "discordRpcStyleApp": "Nombre de la aplicación (Musly)",
+  "discordRpcStyleApp": "Nombre de la aplicación (Groovy)",
   "@discordRpcStyleApp": {
     "description": "Discord RPC state style option: show app name"
   },
@@ -1894,7 +1894,7 @@
   "@anonymousAnalytics": {
     "description": "Title for anonymous analytics toggle"
   },
-  "anonymousAnalyticsSubtitle": "Ayuda a mejorar Musly con reportes anónimos de errores y estadísticas de uso",
+  "anonymousAnalyticsSubtitle": "Ayuda a mejorar Groovy con reportes anónimos de errores y estadísticas de uso",
   "@anonymousAnalyticsSubtitle": {
     "description": "Subtitle explaining anonymous analytics"
   },
@@ -1924,9 +1924,9 @@
     "description": "Explanation of what device ID is"
   },
   "supportGreeting": "¡Hola! 👋",
-  "supportParagraph1": "Soy Devid, el desarrollador detrás de Musly. Creé esta aplicación porque amo la música y creo que todos merecen un reproductor de música hermoso y gratuito.",
-  "supportParagraph2": "Musly es completamente gratuito y de código abierto. Sin anuncios y sin suscripciones. Trabajo en él en mi tiempo libre porque realmente disfruto crear algo útil para personas como tú.",
-  "supportParagraph3": "Pero los servidores, herramientas de desarrollo y café no son gratis 😅 Si Musly se ha convertido en parte de tu día a día y quieres decir \"gracias\", una pequeña donación significaría muchísimo para mí. Ayuda a cubrir costes y me mantiene motivado para añadir nuevas funciones.",
+  "supportParagraph1": "Soy Danil, el desarrollador detrás de Groovy. Creé esta aplicación porque amo la música y creo que todos merecen un reproductor de música hermoso y gratuito.",
+  "supportParagraph2": "Groovy es completamente gratuito y de código abierto. Sin anuncios y sin suscripciones. Trabajo en él en mi tiempo libre porque realmente disfruto crear algo útil para personas como tú.",
+  "supportParagraph3": "Pero los servidores, herramientas de desarrollo y café no son gratis 😅 Si Groovy se ha convertido en parte de tu día a día y quieres decir \"gracias\", una pequeña donación significaría muchísimo para mí. Ayuda a cubrir costes y me mantiene motivado para añadir nuevas funciones.",
   "supportParagraph4": "¡Sin ningún tipo de compromiso, tu disfrute de la app ya es la mejor recompensa! 💙",
   "supportDonationTitle": "Apoyar con una donación",
   "supportDonationSubtitle": "vía Revolut - ¡cualquier aporte ayuda!",
@@ -1934,7 +1934,7 @@
   "supportDiscordSubtitle": "Obtén ayuda, sugiere funciones o simplemente charla",
   "supportWaysTitle": "Otras formas de apoyar",
   "supportWayRate": "Deja una reseña en la tienda de apps",
-  "supportWayShare": "Cuéntales a tus amigos sobre Musly",
+  "supportWayShare": "Cuéntales a tus amigos sobre Groovy",
   "supportWayBugs": "Reporta errores o sugiere funciones",
   "supportWayEnjoy": "¡Solo disfruta la música! 🎵",
   "supportMadeWithLove": "Hecho con 💙 en Italia",
@@ -2139,7 +2139,7 @@
   },
   "audioFocusDenied": "No se pudo iniciar la reproducción: otra app tiene el foco de audio",
   "@audioFocusDenied": {
-    "description": "Shown when the OS denies Musly audio focus (e.g. another app refuses to yield)"
+    "description": "Shown when the OS denies Groovy audio focus (e.g. another app refuses to yield)"
   },
   "addToLibrary": "Añadir a biblioteca",
   "@addToLibrary": {

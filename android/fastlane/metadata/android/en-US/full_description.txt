@@ -1,19 +1,15 @@
 
-Musly is a beautiful Flutter client for Subsonic-compatible music servers (Subsonic, Navidrome, Airsonic, Gonic). Stream music from your own server using an Apple Music-inspired UI that adapts to phones and tablets.
+Groovy is a beautiful music streaming application with an Apple Music-inspired UI that adapts to phones and tablets.
 
 Features:
-- Stream music from Subsonic-compatible servers
+- Ultra-fast music streaming and offline playback
 - Apple Music-style UI with automatic dark/light theming
 - Powerful search, library browsing, and playlist management
-- Full-featured Now Playing screen with shuffle, repeat, and queue controls
+- Full-featured Now Playing screen with lyrics, shuffle, repeat, and queue controls
 - Android Auto support and hardware media controls
 - Offline playback and caching for listening without a connection
-- Rich artist and album metadata with artwork
+- Rich artist and album metadata with high-res artwork
 
-Getting started:
-1. Launch the app and enter your Subsonic server URL, username, and password.
-2. Toggle "Legacy Authentication" if your server requires it.
+Groovy is cross-platform (Android, iOS, Windows, Linux, macOS) and optimized for Android with a prebuilt APK available on the project's GitHub releases page.
 
-Musly is cross-platform (Android, iOS, Windows, Linux, macOS) and optimized for Android with a prebuilt APK available on the project's GitHub releases page.
-
-Try the latest APK from the releases to test new features. Musly is open source and actively maintained on GitHub.
+Try the latest APK from the releases to test new features. Groovy is open source and actively maintained on GitHub.

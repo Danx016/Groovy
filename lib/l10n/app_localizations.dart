@@ -949,7 +949,7 @@ abstract class AppLocalizations {
   /// Community translations credit subtitle
   ///
   /// In en, this message translates to:
-  /// **'Help translate Musly on Crowdin'**
+  /// **'Help translate Groovy on Crowdin'**
   String get communityTranslationsSubtitle;
 
   /// No description provided for @yourLibrary.
@@ -2851,7 +2851,7 @@ abstract class AppLocalizations {
   /// Discord RPC state style option: show app name
   ///
   /// In en, this message translates to:
-  /// **'App name (Musly)'**
+  /// **'App name (Groovy)'**
   String get discordRpcStyleApp;
 
   /// Playback settings section header for ReplayGain
@@ -3139,7 +3139,7 @@ abstract class AppLocalizations {
   /// Subtitle explaining anonymous analytics
   ///
   /// In en, this message translates to:
-  /// **'Help improve Musly with anonymous crash reports and usage stats'**
+  /// **'Help improve Groovy with anonymous crash reports and usage stats'**
   String get anonymousAnalyticsSubtitle;
 
   /// Title for device ID row
@@ -3181,19 +3181,19 @@ abstract class AppLocalizations {
   /// No description provided for @supportParagraph1.
   ///
   /// In en, this message translates to:
-  /// **'I\'m Devid, the developer behind Musly. I built this app because I love music and believe everyone deserves a beautiful, free music player.'**
+  /// **'I\'m Danil, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.'**
   String get supportParagraph1;
 
   /// No description provided for @supportParagraph2.
   ///
   /// In en, this message translates to:
-  /// **'Musly is completely free and open-source. No ads and no subscription fees. I work on it in my free time because I genuinely enjoy making something useful for people like you.'**
+  /// **'Groovy is completely free and open-source. No ads and no subscription fees. I work on it in my free time because I genuinely enjoy making something useful for people like you.'**
   String get supportParagraph2;
 
   /// No description provided for @supportParagraph3.
   ///
   /// In en, this message translates to:
-  /// **'But servers, development tools, and coffee aren\'t free 😅 If Musly has become a part of your daily life and you\'d like to say \"thanks,\" a small donation would mean the world to me. It helps cover costs and keeps me motivated to add new features.'**
+  /// **'But servers, development tools, and coffee aren\'t free 😅 If Groovy has become a part of your daily life and you\'d like to say \"thanks,\" a small donation would mean the world to me. It helps cover costs and keeps me motivated to add new features.'**
   String get supportParagraph3;
 
   /// No description provided for @supportParagraph4.
@@ -3241,7 +3241,7 @@ abstract class AppLocalizations {
   /// No description provided for @supportWayShare.
   ///
   /// In en, this message translates to:
-  /// **'Tell your friends about Musly'**
+  /// **'Tell your friends about Groovy'**
   String get supportWayShare;
 
   /// No description provided for @supportWayBugs.
@@ -3496,7 +3496,7 @@ abstract class AppLocalizations {
   /// **'by {author}'**
   String themeAuthor(String author);
 
-  /// Shown when the OS denies Musly audio focus (e.g. another app refuses to yield)
+  /// Shown when the OS denies Groovy audio focus (e.g. another app refuses to yield)
   ///
   /// In en, this message translates to:
   /// **'Couldn\'t start playback — another app has audio focus'**

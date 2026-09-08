@@ -1,7 +1,7 @@
-{
+﻿{
   "@@locale": "fr",
   "@@last_modified": "2026-02-07T16:10:00Z",
-  "appName": "Musly",
+  "appName": "Groovy",
   "@appName": {
     "description": "Application name"
   },
@@ -506,7 +506,7 @@
   "@communityTranslations": {
     "description": "Community translations credit label"
   },
-  "communityTranslationsSubtitle": "Aidez-nous à traduire Musly sur Crowdin",
+  "communityTranslationsSubtitle": "Aidez-nous à traduire Groovy sur Crowdin",
   "@communityTranslationsSubtitle": {
     "description": "Community translations credit subtitle"
   },
@@ -1167,7 +1167,7 @@
   "@updateAvailable": {
     "description": "Title of the update available dialog"
   },
-  "updateAvailableSubtitle": "Une nouvelle version de Musly est disponible !",
+  "updateAvailableSubtitle": "Une nouvelle version de Groovy est disponible !",
   "@updateAvailableSubtitle": {
     "description": "Subtitle in the update dialog"
   },
@@ -1545,7 +1545,7 @@
   "@discordRpcStyleSong": {
     "description": "Discord RPC state style option: show song title"
   },
-  "discordRpcStyleApp": "Nom de l'application (Musly)",
+  "discordRpcStyleApp": "Nom de l'application (Groovy)",
   "@discordRpcStyleApp": {
     "description": "Discord RPC state style option: show app name"
   },
