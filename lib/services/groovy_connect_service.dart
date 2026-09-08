@@ -452,43 +452,57 @@ class GroovyConnectService extends ChangeNotifier {
       );
 
       for (final cmd in commands) {
-        final action = cmd['action']?.toString() ?? '';
-        final payload = cmd['payload'];
+        try {
+          final action = cmd['action']?.toString() ?? '';
+          final payload = cmd['payload'];
 
-        debugPrint('[GroovyConnect] Cloud command received: $action');
+          debugPrint('[GroovyConnect] Cloud command received: $action');
 
-        if (action == 'transfer' && payload is Map) {
-          final songData = payload['song'] as Map<String, dynamic>?;
-          final positionMs = (payload['positionMs'] as num?)?.toInt() ?? 0;
-          final isPlaying = payload['isPlaying'] as bool? ?? true;
-          final fromDevice = payload['fromDevice']?.toString() ?? 'Dispositivo Remoto';
+          if (action == 'transfer' && payload is Map) {
+            final songData = payload['song'] as Map<String, dynamic>?;
+            final positionMs = (payload['positionMs'] as num?)?.toInt() ?? 0;
+            final isPlaying = payload['isPlaying'] as bool? ?? true;
+            final fromDevice = payload['fromDevice']?.toString() ?? 'Dispositivo Remoto';
 
-          if (songData != null && onTransferReceived != null) {
-            final song = Song.fromJson(songData).copyWith(isLocal: false);
+            if (songData != null && onTransferReceived != null) {
+              final song = Song.fromJson(songData).copyWith(isLocal: false);
 
-            List<Song>? queue;
-            final queueData = payload['queue'] as List<dynamic>?;
-            if (queueData != null) {
-              queue = queueData.map((s) {
-                return Song.fromJson(s as Map<String, dynamic>).copyWith(isLocal: false);
-              }).toList();
+              List<Song>? queue;
+              final queueData = payload['queue'] as List<dynamic>?;
+              if (queueData != null) {
+                queue = queueData.map((s) {
+                  return Song.fromJson(s as Map<String, dynamic>).copyWith(isLocal: false);
+                }).toList();
+              }
+              final queueIndex = (payload['queueIndex'] as num?)?.toInt();
+
+              // Run asynchronously without blocking the command polling loop
+              unawaited(
+                onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex)
+                    .catchError((e) {
+                  debugPrint('[GroovyConnect] Error executing onTransferReceived: $e');
+                }),
+              );
             }
-            final queueIndex = (payload['queueIndex'] as num?)?.toInt();
-
-            await onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex);
+          } else if (action == 'control' || action == 'play' || action == 'pause' || action == 'skipNext' || action == 'skipPrevious' || action == 'seek' || action == 'volume' || action == 'togglePlayPause') {
+            String controlAction = action;
+            dynamic controlValue;
+            if (payload is Map) {
+              controlAction = payload['action']?.toString() ?? action;
+              controlValue = payload['value'];
+            } else if (payload is num) {
+              controlValue = payload;
+            }
+            if (onCommandReceived != null && controlAction.isNotEmpty) {
+              try {
+                onCommandReceived!(controlAction, controlValue);
+              } catch (e) {
+                debugPrint('[GroovyConnect] Error executing onCommandReceived: $e');
+              }
+            }
           }
-        } else if (action == 'control' || action == 'play' || action == 'pause' || action == 'skipNext' || action == 'skipPrevious' || action == 'seek' || action == 'volume' || action == 'togglePlayPause') {
-          String controlAction = action;
-          dynamic controlValue;
-          if (payload is Map) {
-            controlAction = payload['action']?.toString() ?? action;
-            controlValue = payload['value'];
-          } else if (payload is num) {
-            controlValue = payload;
-          }
-          if (onCommandReceived != null && controlAction.isNotEmpty) {
-            onCommandReceived!(controlAction, controlValue);
-          }
+        } catch (cmdError) {
+          debugPrint('[GroovyConnect] Error processing command: $cmdError');
         }
       }
     } catch (e) {

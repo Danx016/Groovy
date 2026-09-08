@@ -9,7 +9,6 @@ import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
 import '../widgets/now_playing/playback_controls.dart';
 import '../widgets/now_playing/playback_progress_slider.dart';
-import '../widgets/now_playing/volume_slider.dart';
 import '../widgets/now_playing/now_playing_bottom_actions.dart';
 import '../widgets/lyrics/lyrics_list_view.dart';
 import '../models/lyric_line.dart';
@@ -974,14 +973,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   onShuffleToggle: () => provider.toggleShuffle(),
                   onRepeatToggle: () => provider.toggleRepeat(),
                 ),
-              ),
-
-              SizedBox(height: isCompact ? 4 : 8),
-
-              // Volume Slider (Apple Music style)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: const VolumeSlider(),
               ),
 
               SizedBox(height: isCompact ? 4 : 8),

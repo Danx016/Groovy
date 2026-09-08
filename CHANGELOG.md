@@ -5,6 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.82] - 2026-09-08
+
+### Fixed & Improved
+- **Corrección Crítica de Groovy Connect (Windows ⇄ Android)**:
+  - Resuelto el bloqueo donde los comandos de reproducción (skipNext, skipPrevious, transfer, búsqueda de canciones) expiraban en el servidor y la app regresaba a la canción previa.
+  - El bucle de sondeo de comandos (`_pollCloudCommands`) ahora ejecuta las transferencias de forma asíncrona no bloqueante, evitando que el sondeo se congele mientras la canción se descarga o inicializa.
+  - Se eliminó el bloqueo síncrono al iniciar la reproducción (`_audioPlayer.play()`), permitiendo que el hilo responda inmediatamente a nuevos comandos y sincronice el estado con el servidor en tiempo real.
+  - La sincronización de `skipNext` y `skipPrevious` en modo remoto ahora envía el track exacto de la cola con respaldo automático a canciones similares de la radio.
+  - Se eliminó la verificación errónea de auto-eco en `onCommandReceived` para procesar de inmediato comandos dirigidos al dispositivo objetivo.
+- **Eliminación de Barra de Volumen Horizontal**:
+  - Eliminado el control deslizante horizontal de volumen en la pantalla de reproducción (`NowPlayingScreen`) según lo solicitado por el usuario.
+
 ## [1.0.81] - 2026-09-08
 
 ### Fixed & Improved

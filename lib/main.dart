@@ -197,7 +197,7 @@ void main() async {
       platform: 'Unknown',
       deviceModel: 'Groovy Device',
       osVersion: 'Unknown',
-      appVersion: '1.0.81',
+      appVersion: '1.0.82',
       userAgent: 'GroovyApp/1.0',
     );
   });
@@ -297,6 +297,8 @@ void main() async {
     debugPrint('[GroovyConnect] Playback transferred from $fromDevice: ${song.title} at ${positionMs}ms');
     groovyConnectService.disconnect();
     playerProvider.disableGroovyConnectRemote();
+    // Immediately report heartbeat with new song to backend so controller sees it instantly
+    playerProvider.sendTelemetryHeartbeatNow(overridePlaying: isPlaying);
     await playerProvider.playSong(
       song,
       playlist: queue,
@@ -311,10 +313,6 @@ void main() async {
 
   groovyConnectService.onCommandReceived = (String action, dynamic value) {
     debugPrint('[GroovyConnect] Remote command received: $action ($value)');
-    if (groovyConnectService.isConnected) {
-      debugPrint('[GroovyConnect] Controller ignoring self-echo command: $action');
-      return;
-    }
     if (action != 'volume') {
       playerProvider.disableGroovyConnectRemote();
     }

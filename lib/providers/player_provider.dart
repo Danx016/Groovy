@@ -2032,7 +2032,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
           _isPlaying = true;
           _isLoading = false;
           notifyListeners();
@@ -2053,7 +2053,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.setUrl(playUrl, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
         } else if (_gaplessEnabled) {
           try {
             await _buildAndSetConcatenatingSource(
@@ -2078,7 +2078,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (currentGen != _playGeneration) return;
           await _audioPlayer.seek(initialPosition ?? Duration.zero);
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
         } else {
           final String playUrl;
           if (song.isLocal == true && song.path != null) {
@@ -2121,7 +2121,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
         }
       }
 
@@ -2305,7 +2305,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _ensureAudioFocus(() async {
         // Ensure volume is properly restored to effective volume before playing
         await _audioPlayer.setVolume(_effectiveVolume);
-        await _audioPlayer.play();
+        unawaited(_audioPlayer.play());
         if (_fadeSettingsService.getFadeEnabled()) {
           await _fadeIn();
         }
@@ -2558,6 +2558,43 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _optimisticRemoteSongId = _currentSong?.id;
         _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
         _refreshArtworkUrl().catchError((_) {});
+        _manageRemotePositionTicker();
+        notifyListeners();
+        unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
+        unawaited(_groovyConnectService!.sendControl('skipNext'));
+        return;
+      } else if (_currentSong != null) {
+        try {
+          final moreSimilar = await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
+          final existingIds = _queue.map((s) => s.id).toSet();
+          final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
+          if (toAdd.isNotEmpty) {
+            _queue.addAll(toAdd);
+            _currentIndex++;
+            _currentSong = _queue[_currentIndex];
+            _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+            _optimisticRemoteSongId = _currentSong?.id;
+            _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+            _refreshArtworkUrl().catchError((_) {});
+            _manageRemotePositionTicker();
+            notifyListeners();
+            _saveQueueState();
+            unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
+            return;
+          }
+        } catch (_) {}
+      }
+      if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
+        _currentIndex = 0;
+        _currentSong = _queue[0];
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _optimisticRemoteSongId = _currentSong?.id;
+        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+        _refreshArtworkUrl().catchError((_) {});
+        _manageRemotePositionTicker();
+        notifyListeners();
+        unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: 0));
+        return;
       }
       _manageRemotePositionTicker();
       notifyListeners();
@@ -2647,6 +2684,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _optimisticRemoteSongId = _currentSong?.id;
         _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
         _refreshArtworkUrl().catchError((_) {});
+        _manageRemotePositionTicker();
+        notifyListeners();
+        unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
+        unawaited(_groovyConnectService!.sendControl('skipPrevious'));
+        return;
       }
       _manageRemotePositionTicker();
       notifyListeners();
