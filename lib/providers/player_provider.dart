@@ -70,6 +70,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Distinct from isConnected: if the user plays a radio station while a
   /// UPnP renderer is connected, the audio is still local, so this stays false.
   bool _isRenderingRemotely = false;
+  Timer? _remotePositionTickerTimer;
+  Duration _remoteAnchorPosition = Duration.zero;
+  DateTime? _remoteAnchorTime;
+  int _lastRemoteNotifiedSecond = -1;
 
   String? _resolvedArtworkUrl;
 
@@ -374,6 +378,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void _onGroovyConnectChanged() {
     if (_groovyConnectService?.isConnected != true && _isRenderingRemotely) {
       _isRenderingRemotely = false;
+      _remotePositionTickerTimer?.cancel();
+      _remotePositionTickerTimer = null;
+      _remoteAnchorTime = null;
       _audioHandler.setRemotePlayback(isRemote: false);
       notifyListeners();
       _updateAllServices();
@@ -385,6 +392,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _audioPlayer.stop();
     }
     _isRenderingRemotely = true;
+    _remoteAnchorPosition = _position;
+    _remoteAnchorTime = DateTime.now();
+    _manageRemotePositionTicker();
     _audioHandler.setRemotePlayback(isRemote: true);
     notifyListeners();
     _updateAllServices();
@@ -393,6 +403,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void disableGroovyConnectRemote() {
     _isRenderingRemotely = false;
+    _remotePositionTickerTimer?.cancel();
+    _remotePositionTickerTimer = null;
+    _remoteAnchorTime = null;
     _audioHandler.setRemotePlayback(isRemote: false);
     notifyListeners();
     _updateAllServices();
@@ -406,7 +419,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     required bool isPlaying,
     required double volume,
   }) {
-    if (!_isRenderingRemotely && _groovyConnectService?.isConnected != true) return;
+    final bool isRemote = _isRenderingRemotely || _groovyConnectService?.isConnected == true;
+    if (!isRemote) return;
 
     bool changed = false;
     if (song != null && _currentSong?.id != song.id) {
@@ -425,15 +439,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         artworkUrl: _resolveArtworkUrl(),
         duration: duration,
       );
-      changed = true;
-    }
-
-    if (_isPlaying != isPlaying) {
-      _isPlaying = isPlaying;
-      changed = true;
-    }
-
-    if ((_position.inMilliseconds - position.inMilliseconds).abs() > 800) {
+      _remoteAnchorPosition = position;
+      _remoteAnchorTime = DateTime.now();
       _position = position;
       _positionController.add(position);
       changed = true;
@@ -444,10 +451,39 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       changed = true;
     }
 
+    if (_isPlaying != isPlaying) {
+      _isPlaying = isPlaying;
+      _remoteAnchorPosition = position;
+      _remoteAnchorTime = isPlaying ? DateTime.now() : null;
+      _position = position;
+      _positionController.add(position);
+      changed = true;
+    }
+
+    // Reconcile extrapolated position with actual remote reported position
+    final currentExtrapolated = _remoteAnchorTime != null && _isPlaying
+        ? _remoteAnchorPosition + DateTime.now().difference(_remoteAnchorTime!)
+        : _position;
+
+    if ((currentExtrapolated.inMilliseconds - position.inMilliseconds).abs() > 1200 ||
+        _remoteAnchorTime == null) {
+      _remoteAnchorPosition = position;
+      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+      _position = position;
+      _positionController.add(position);
+      changed = true;
+    } else {
+      // Soft drift correction: update anchor point smoothly without visual jump
+      _remoteAnchorPosition = position;
+      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+    }
+
     if ((_volume - volume).abs() > 0.05) {
       _volume = volume;
       changed = true;
     }
+
+    _manageRemotePositionTicker();
 
     if (changed) {
       _audioHandler.updateRemotePlaybackState(
@@ -457,6 +493,46 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAllServices();
       _updateAndroidAuto();
+    }
+  }
+
+  void _manageRemotePositionTicker() {
+    final bool isRemote = _isRenderingRemotely || _groovyConnectService?.isConnected == true;
+    if (isRemote && _isPlaying) {
+      if (_remotePositionTickerTimer == null || !_remotePositionTickerTimer!.isActive) {
+        _remotePositionTickerTimer?.cancel();
+        _remotePositionTickerTimer = Timer.periodic(
+          const Duration(milliseconds: 250),
+          (_) => _tickRemotePosition(),
+        );
+      }
+    } else {
+      _remotePositionTickerTimer?.cancel();
+      _remotePositionTickerTimer = null;
+    }
+  }
+
+  void _tickRemotePosition() {
+    final bool isRemote = _isRenderingRemotely || _groovyConnectService?.isConnected == true;
+    if (!isRemote || !_isPlaying || _remoteAnchorTime == null) {
+      _remotePositionTickerTimer?.cancel();
+      _remotePositionTickerTimer = null;
+      return;
+    }
+
+    final elapsed = DateTime.now().difference(_remoteAnchorTime!);
+    var est = _remoteAnchorPosition + elapsed;
+    if (_duration > Duration.zero && est > _duration) {
+      est = _duration;
+    }
+
+    _position = est;
+    _positionController.add(est);
+
+    // Notify listeners every full second so widgets like DesktopPlayerBar text and slider update live
+    if (est.inSeconds != _lastRemoteNotifiedSecond) {
+      _lastRemoteNotifiedSecond = est.inSeconds;
+      notifyListeners();
     }
   }
 
@@ -2089,6 +2165,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_groovyConnectService?.isConnected == true) {
       await _groovyConnectService!.sendControl('play');
       _isPlaying = true;
+      _remoteAnchorPosition = _position;
+      _remoteAnchorTime = DateTime.now();
+      _manageRemotePositionTicker();
       notifyListeners();
       _updateAndroidAuto();
       return;
@@ -2142,6 +2221,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_groovyConnectService?.isConnected == true) {
       await _groovyConnectService!.sendControl('pause');
       _isPlaying = false;
+      _remoteAnchorPosition = _position;
+      _remoteAnchorTime = null;
+      _manageRemotePositionTicker();
       notifyListeners();
       _updateAndroidAuto();
       return;
@@ -2299,6 +2381,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_groovyConnectService?.isConnected == true) {
+      _remoteAnchorPosition = position;
+      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+      _position = position;
+      _positionController.add(position);
       await _groovyConnectService!.sendControl('seek', position.inMilliseconds);
       _updateAndroidAuto();
       return;
@@ -2978,6 +3064,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _jukeboxPollTimer?.cancel();
     _jukeboxService.removeListener(_onJukeboxEnabledChanged);
     _windowsPositionTimer?.cancel();
+    _remotePositionTickerTimer?.cancel();
     _castService.removeListener(_onCastStateChanged);
     _upnpService.removeListener(_onUpnpStateChanged);
     if (_upnpService.onRendererLost == _onUpnpRendererLost) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:provider/provider.dart';
@@ -637,11 +638,43 @@ class _ProgressBar extends StatefulWidget {
 class _ProgressBarState extends State<_ProgressBar> {
   bool _isDragging = false;
   double _dragValue = 0.0;
+  StreamSubscription<Duration>? _positionSub;
+  Duration _currentPosition = Duration.zero;
+  PlayerProvider? _playerProvider;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final provider = Provider.of<PlayerProvider>(context, listen: false);
+    if (_playerProvider != provider) {
+      _playerProvider = provider;
+      _positionSub?.cancel();
+      _currentPosition = provider.position;
+      _positionSub = provider.positionStream.listen((pos) {
+        if (!_isDragging && mounted) {
+          setState(() {
+            _currentPosition = pos;
+          });
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    super.dispose();
+  }
 
   String _formatDuration(Duration duration) {
+    if (duration.isNegative) duration = Duration.zero;
     String twoDigits(int n) => n.toString().padLeft(2, '0');
-    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
-    return '${duration.inMinutes}:$twoDigitSeconds';
+    final minutes = duration.inMinutes.remainder(60);
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    if (duration.inHours > 0) {
+      return '${duration.inHours}:${twoDigits(minutes)}:$seconds';
+    }
+    return '$minutes:$seconds';
   }
 
   @override
@@ -657,15 +690,25 @@ class _ProgressBarState extends State<_ProgressBar> {
     return Selector<PlayerProvider, (Duration, Duration)>(
       selector: (_, p) => (p.position, p.duration),
       builder: (context, data, _) {
-        final (position, duration) = data;
+        final (providerPos, duration) = data;
         final provider = context.read<PlayerProvider>();
+
+        // Resync if track changed or position leaped significantly
+        if (!_isDragging) {
+          if (duration > Duration.zero && _currentPosition > duration) {
+            _currentPosition = duration;
+          } else if ((_currentPosition.inMilliseconds - providerPos.inMilliseconds).abs() > 2500) {
+            _currentPosition = providerPos;
+          }
+        }
+
         final maxMs = duration.inMilliseconds.toDouble();
         final currentMs = _isDragging
             ? _dragValue
-            : position.inMilliseconds.toDouble().clamp(0.0, maxMs > 0 ? maxMs : 0.0);
+            : _currentPosition.inMilliseconds.toDouble().clamp(0.0, maxMs > 0 ? maxMs : 0.0);
         final displayPos = _isDragging
             ? Duration(milliseconds: _dragValue.round())
-            : position;
+            : _currentPosition;
 
         return SizedBox(
           width: 400,
@@ -711,10 +754,12 @@ class _ProgressBarState extends State<_ProgressBar> {
                             }
                           : null,
                       onChangeEnd: (value) {
+                        final newPos = Duration(milliseconds: value.round());
                         setState(() {
                           _isDragging = false;
+                          _currentPosition = newPos;
                         });
-                        provider.seek(Duration(milliseconds: value.round()));
+                        provider.seek(newPos);
                       },
                     ),
                   ),
