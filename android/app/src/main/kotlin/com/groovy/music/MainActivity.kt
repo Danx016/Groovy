@@ -48,6 +48,10 @@ class MainActivity : AudioServiceFragmentActivity() {
                     params.preferredDisplayModeId = maxMode.modeId
                     @Suppress("DEPRECATION")
                     params.preferredRefreshRate = maxMode.refreshRate
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        params.preferredMinDisplayRefreshRate = maxMode.refreshRate
+                        params.preferredMaxDisplayRefreshRate = maxMode.refreshRate
+                    }
                     window.attributes = params
                 }
             }

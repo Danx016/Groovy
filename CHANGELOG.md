@@ -5,6 +5,23 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.77] - 2026-09-08
+
+### Performance & High Refresh Rate (120Hz / 144Hz)
+- **Tasa de Refresco a 120Hz Nativo en Android**:
+  - Implementado `preferredMinDisplayRefreshRate` y `preferredMaxDisplayRefreshRate` en Android 11+ (API 30+) en `MainActivity.kt`. Se evita que el sistema operativo baje agresivamente la frecuencia a 60Hz/30Hz durante animaciones o momentos sin interacción táctil directa (pantallas LTPO y paneles dinámicos).
+  - Nuevo `DisplayModeService` con observador de ciclo de vida (`WidgetsBindingObserver`): detecta el modo de máxima tasa disponible (120Hz, 144Hz, 165Hz) y lo restaura de forma automática e inmediata cada vez que la app vuelve de segundo plano.
+- **Eliminación Total de Tirones al Desplazarse (Scroll Jank)**:
+  - Optimización de decodificación en `AlbumArtwork`: antes forzaba un mínimo de 300x300 px para cualquier tamaño de portada. Ahora clasifica en niveles dinámicos (miniaturas de 50px decodifican a ~100-140px), ahorrando hasta un 79% de consumo de memoria gráfica por elemento y acelerando la decodificación hasta 5 veces.
+  - Expansión de la memoria de caché de imágenes de Flutter (`ImageCacheConfig`) de 100MB / 400 imágenes a 250MB / 1,000 imágenes, previniendo el vaciado continuo de caché y recolección de basura durante desplazamientos ultrarrápidos.
+- **Aislamiento GPU en Windows & Escritorio**:
+  - `DesktopPlayerBar` y `RightSidebar` aislados mediante `RepaintBoundary`: los avances en tiempo real de milisegundos del seek bar y el ecualizador ya no provocan repintado de la pantalla principal ni de las vistas de lista.
+- **Modernización y Limpieza de Flutter 3.44**:
+  - Migración completa de `cacheExtent` a `scrollCacheExtent: const ScrollCacheExtent.pixels(500)` en todas las pantallas de listas.
+  - Implementación de `onReorderItem` y `PlayerProvider.moveQueueItem` eliminando llamadas deprecadas en listas reordenables y cola de reproducción.
+  - Corrección de llamadas deprecadas en `Countly.instance.events.recordEvent`.
+  - Proyecto con 0 errores y 0 advertencias en `flutter analyze`.
+
 ## [1.0.76] - 2026-09-08
 
 ### Fixed & Optimized

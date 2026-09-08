@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
 import '../services/recommendation_service.dart';
@@ -140,7 +141,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 )
               : ListView.builder(
                   itemExtent: 68.0,
-                  cacheExtent: 300,
+                  scrollCacheExtent: const ScrollCacheExtent.pixels(500),
                   itemCount: _recentSongs.length,
                   itemBuilder: (context, index) {
                     return SongTile(

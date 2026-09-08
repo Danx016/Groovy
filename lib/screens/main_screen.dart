@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_displaymode/flutter_displaymode.dart';
+import '../services/display_mode_service.dart';
 import '../providers/providers.dart';
 import '../services/local_music_service.dart';
 import '../services/recommendation_service.dart';
@@ -100,9 +100,7 @@ class _MainScreenState extends State<MainScreen> {
       );
 
       if (!kIsWeb && Platform.isAndroid) {
-        try {
-          await FlutterDisplayMode.setHighRefreshRate();
-        } catch (_) {}
+        DisplayModeService().setHighestRefreshRate().catchError((_) {});
       }
 
       playerProvider.setLibraryProvider(libraryProvider);

@@ -76,6 +76,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _lastRemoteNotifiedSecond = -1;
   String? _optimisticRemoteSongId;
   DateTime? _optimisticRemoteSongUntil;
+  DateTime? _lastRemoteSeekTime;
 
   String? _resolvedArtworkUrl;
 
@@ -110,7 +111,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
-    _telemetryTimer = Timer.periodic(const Duration(seconds: 8), (_) {
+    _telemetryTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       _sendTelemetryHeartbeat();
     });
   }
@@ -394,6 +395,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _audioPlayer.stop();
     }
     _isRenderingRemotely = true;
+    _lastRemoteSeekTime = null;
     _remoteAnchorPosition = _position;
     _remoteAnchorTime = DateTime.now();
     _manageRemotePositionTicker();
@@ -405,6 +407,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void disableGroovyConnectRemote() {
     _isRenderingRemotely = false;
+    _lastRemoteSeekTime = null;
     _remotePositionTickerTimer?.cancel();
     _remotePositionTickerTimer = null;
     _remoteAnchorTime = null;
@@ -478,17 +481,41 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         ? _remoteAnchorPosition + DateTime.now().difference(_remoteAnchorTime!)
         : _position;
 
-    if ((currentExtrapolated.inMilliseconds - position.inMilliseconds).abs() > 1200 ||
-        _remoteAnchorTime == null) {
-      _remoteAnchorPosition = position;
-      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
-      _position = position;
-      _positionController.add(position);
-      changed = true;
-    } else {
-      // Soft drift correction: update anchor point smoothly without visual jump
-      _remoteAnchorPosition = position;
-      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+    // Ignore remote reported positions for 4 seconds after an intentional seek on controller
+    final bool isRecentSeek = _lastRemoteSeekTime != null &&
+        DateTime.now().difference(_lastRemoteSeekTime!) < const Duration(seconds: 4);
+
+    if (!isRecentSeek) {
+      if (!_isPlaying) {
+        _remoteAnchorPosition = position;
+        _remoteAnchorTime = null;
+        _position = position;
+        _positionController.add(position);
+        changed = true;
+      } else {
+        final diffMs = position.inMilliseconds - currentExtrapolated.inMilliseconds;
+        if (diffMs < -8000) {
+          // Significant backward seek on the remote device
+          _remoteAnchorPosition = position;
+          _remoteAnchorTime = DateTime.now();
+          _position = position;
+          _positionController.add(position);
+          changed = true;
+        } else if (diffMs > 2500) {
+          // Significant forward jump on remote device
+          _remoteAnchorPosition = position;
+          _remoteAnchorTime = DateTime.now();
+          _position = position;
+          _positionController.add(position);
+          changed = true;
+        } else if (diffMs > 0) {
+          // Remote report is slightly ahead; catch up anchor smoothly without snapping
+          _remoteAnchorPosition = position;
+          _remoteAnchorTime = DateTime.now();
+        }
+        // When diffMs is between -8000 and 0: network latency or coarse seconds lag.
+        // DO NOT pull anchor or position backward! Let extrapolation proceed seamlessly.
+      }
     }
 
     if ((_volume - volume).abs() > 0.05) {
@@ -2182,13 +2209,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
-      await _groovyConnectService!.sendControl('play');
       _isPlaying = true;
       _remoteAnchorPosition = _position;
       _remoteAnchorTime = DateTime.now();
       _manageRemotePositionTicker();
       notifyListeners();
       _updateAndroidAuto();
+      unawaited(_groovyConnectService!.sendControl('play'));
       return;
     }
     if (_castService.isConnected) {
@@ -2238,13 +2265,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
-      await _groovyConnectService!.sendControl('pause');
       _isPlaying = false;
       _remoteAnchorPosition = _position;
       _remoteAnchorTime = null;
       _manageRemotePositionTicker();
       notifyListeners();
       _updateAndroidAuto();
+      unawaited(_groovyConnectService!.sendControl('pause'));
       return;
     }
     if (_castService.isConnected) {
@@ -2400,12 +2427,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
+      _lastRemoteSeekTime = DateTime.now();
       _remoteAnchorPosition = position;
       _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
       _position = position;
       _positionController.add(position);
-      await _groovyConnectService!.sendControl('seek', position.inMilliseconds);
+      notifyListeners();
       _updateAndroidAuto();
+      unawaited(_groovyConnectService!.sendControl('seek', position.inMilliseconds));
       return;
     }
     if (_castService.isConnected) {
@@ -2415,6 +2444,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       await _audioPlayer.seek(position);
     }
+    _sendTelemetryHeartbeat();
     _updateAndroidAuto();
   }
 
@@ -2446,20 +2476,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
+      _lastRemoteSeekTime = DateTime.now();
+      _position = Duration.zero;
+      _remoteAnchorPosition = Duration.zero;
+      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+      _positionController.add(Duration.zero);
       if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
         _currentIndex++;
         _currentSong = _queue[_currentIndex];
-        _position = Duration.zero;
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
-        _remoteAnchorPosition = _position;
-        _remoteAnchorTime = DateTime.now();
         _optimisticRemoteSongId = _currentSong?.id;
         _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 3500));
-        _manageRemotePositionTicker();
-        notifyListeners();
         _refreshArtworkUrl().catchError((_) {});
       }
-      await _groovyConnectService!.sendControl('skipNext');
+      _manageRemotePositionTicker();
+      notifyListeners();
+      unawaited(_groovyConnectService!.sendControl('skipNext'));
       return;
     }
 
@@ -2532,20 +2564,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await seek(Duration.zero);
         return;
       }
+      _lastRemoteSeekTime = DateTime.now();
+      _position = Duration.zero;
+      _remoteAnchorPosition = Duration.zero;
+      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+      _positionController.add(Duration.zero);
       if (_queue.isNotEmpty && _currentIndex > 0) {
         _currentIndex--;
         _currentSong = _queue[_currentIndex];
-        _position = Duration.zero;
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
-        _remoteAnchorPosition = _position;
-        _remoteAnchorTime = DateTime.now();
         _optimisticRemoteSongId = _currentSong?.id;
         _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 3500));
-        _manageRemotePositionTicker();
-        notifyListeners();
         _refreshArtworkUrl().catchError((_) {});
       }
-      await _groovyConnectService!.sendControl('skipPrevious');
+      _manageRemotePositionTicker();
+      notifyListeners();
+      unawaited(_groovyConnectService!.sendControl('skipPrevious'));
       return;
     }
     if (_position.inSeconds > 3) {
@@ -2715,9 +2749,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAndroidAuto();
   }
 
-  void reorderQueue(int oldIndex, int newIndex) {
-    if (oldIndex < newIndex) {
-      newIndex -= 1;
+  void moveQueueItem(int oldIndex, int newIndex) {
+    if (oldIndex == newIndex ||
+        oldIndex < 0 ||
+        oldIndex >= _queue.length ||
+        newIndex < 0 ||
+        newIndex >= _queue.length) {
+      return;
     }
 
     final song = _queue.removeAt(oldIndex);
@@ -2743,11 +2781,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _saveQueueState();
   }
 
+  void reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    moveQueueItem(oldIndex, newIndex);
+  }
+
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
-    await _storageService.saveVolume(_volume);
+    notifyListeners();
+    unawaited(_storageService.saveVolume(_volume));
     if (_isRenderingRemotely && _groovyConnectService?.isConnected == true) {
-      await _groovyConnectService!.sendControl('volume', _volume);
+      unawaited(_groovyConnectService!.sendControl('volume', _volume));
     } else if (_castService.isConnected) {
       await _castService.setVolume(_volume);
     } else if (_upnpService.isConnected) {
@@ -2755,7 +2801,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else {
       await _applyReplayGain(_currentSong);
     }
-    notifyListeners();
   }
 
   bool _upnpVolumeWriteInProgress = false;

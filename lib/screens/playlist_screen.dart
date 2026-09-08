@@ -152,7 +152,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     });
   }
 
-  Future<void> _onSongReordered(int oldIndex, int newIndex) async {
+  Future<void> _onSongReorderedItem(int oldIndex, int newIndex) async {
     if (oldIndex == newIndex) return;
 
     final youtubeService = Provider.of<YoutubeService>(
@@ -163,7 +163,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     setState(() {
       final updatedSongs = List<Song>.from(_playlist!.songs!);
       final song = updatedSongs.removeAt(oldIndex);
-      updatedSongs.insert(newIndex > oldIndex ? newIndex - 1 : newIndex, song);
+      updatedSongs.insert(newIndex, song);
       _playlist = _playlist!.copyWith(songs: updatedSongs);
     });
 
@@ -172,7 +172,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
         playlistId: widget.playlistId,
         songIndexesToRemove: [oldIndex],
         songIdsToAdd: [
-          _playlist!.songs![newIndex > oldIndex ? newIndex - 1 : newIndex].id,
+          _playlist!.songs![newIndex].id,
         ],
       );
     } catch (e) {
@@ -506,7 +506,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                 padding: const EdgeInsets.only(bottom: 150),
                 itemCount: _playlist!.songs!.length,
                 buildDefaultDragHandles: false,
-                onReorder: _onSongReordered,
+                onReorderItem: _onSongReorderedItem,
                 itemBuilder: (context, index) {
                   final song = _playlist!.songs![index];
                   return ListTile(

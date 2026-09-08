@@ -295,15 +295,16 @@ class _RightSidebarState extends State<RightSidebar> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Consumer<PlayerProvider>(
-      builder: (context, player, _) {
-        final currentSong = player.currentSong;
-        final radioStation = player.currentRadioStation;
-        final isPlayingRadio = player.isPlayingRadio && radioStation != null;
+    return RepaintBoundary(
+      child: Consumer<PlayerProvider>(
+        builder: (context, player, _) {
+          final currentSong = player.currentSong;
+          final radioStation = player.currentRadioStation;
+          final isPlayingRadio = player.isPlayingRadio && radioStation != null;
 
-        if (currentSong != null) {
-          _onSongChanged(currentSong);
-        }
+          if (currentSong != null) {
+            _onSongChanged(currentSong);
+          }
 
         return Container(
           width: 350,
@@ -344,8 +345,9 @@ class _RightSidebarState extends State<RightSidebar> {
           ),
         );
       },
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildTopHeader(
     BuildContext context,

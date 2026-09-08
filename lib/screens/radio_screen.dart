@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -270,7 +271,7 @@ class _RadioScreenState extends State<RadioScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.only(bottom: 100),
         itemExtent: 72.0,
-        cacheExtent: 300,
+        scrollCacheExtent: const ScrollCacheExtent.pixels(500),
         itemCount: _stations.length,
         itemBuilder: (context, index) {
           final station = _stations[index];

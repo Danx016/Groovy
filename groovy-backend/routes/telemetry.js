@@ -105,6 +105,9 @@ router.post('/command', async (req, res) => {
 router.get('/command', async (req, res) => {
   try {
     const deviceId = req.query.deviceId;
+    const platform = req.query.platform || '';
+    const model = req.query.model || '';
+    const userId = req.user?.id || 0;
     if (!deviceId) {
       return res.status(400).json({ success: false, error: 'deviceId es requerido' });
     }
@@ -118,14 +121,24 @@ router.get('/command', async (req, res) => {
       WHERE status = 'pending' AND created_at < NOW() - INTERVAL 45 SECOND
     `).catch(() => {});
 
-    // Fetch pending commands for this target device
+    // Construct alias patterns for target device matching
+    const platformModel = (platform && model) ? `${platform}_${model}` : '';
+    const platformDevice = platform ? `${platform}_%` : '';
+
+    // Fetch pending commands for this target device (exact ID, platform composite, or user device)
     const [commands] = await pool.query(`
       SELECT id, user_id, sender_device_id, target_device_id, action, payload, created_at
       FROM device_commands
-      WHERE target_device_id = ? AND status = 'pending'
+      WHERE status = 'pending'
+        AND sender_device_id != ?
+        AND (
+          target_device_id = ?
+          OR (? != '' AND target_device_id = ?)
+          OR (? > 0 AND user_id = ? AND (target_device_id LIKE ? OR target_device_id = ?))
+        )
       ORDER BY id ASC
       LIMIT 10
-    `, [deviceId]);
+    `, [deviceId, deviceId, platformModel, platformModel, userId, userId, platformDevice, deviceId]);
 
     if (commands.length > 0) {
       const ids = commands.map(c => c.id);

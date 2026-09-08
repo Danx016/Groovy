@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import '../models/album.dart';
@@ -192,7 +193,7 @@ class _GenreScreenState extends State<GenreScreen>
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 100),
       itemExtent: 68.0,
-      cacheExtent: 300,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(500),
       itemCount: _songs!.length,
       itemBuilder: (context, index) {
         return SongTile(

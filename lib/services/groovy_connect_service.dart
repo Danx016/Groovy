@@ -393,7 +393,6 @@ class GroovyConnectService extends ChangeNotifier {
   }
 
   Future<void> _sendPresencePing() async {
-    if (_cachedAuthToken == null || _cachedAuthToken!.isEmpty) return;
     try {
       final status = onProvidePlayerStatus?.call() ?? {};
       final songMap = status['song'] as Map<String, dynamic>?;
@@ -405,7 +404,7 @@ class GroovyConnectService extends ChangeNotifier {
       }
 
       await GroovyApiService().reportPlaybackState(
-        token: _cachedAuthToken!,
+        token: _cachedAuthToken ?? '',
         song: song ?? Song(id: '', title: ''),
         isPlaying: status['isPlaying'] == true,
         position: ((status['positionMs'] as num?)?.toInt() ?? 0) ~/ 1000,
@@ -434,7 +433,6 @@ class GroovyConnectService extends ChangeNotifier {
   /// Polls pending cloud commands targeting this device.
   Future<void> _pollCloudCommands() async {
     if (_localDeviceId.isEmpty || _isPollingCommands) return;
-    if (_cachedAuthToken == null || _cachedAuthToken!.isEmpty) return;
     _isPollingCommands = true;
 
     try {
@@ -666,7 +664,7 @@ class GroovyConnectService extends ChangeNotifier {
             'queue': conciseQueue,
             'queueIndex': effectiveQueueIndex,
           }),
-        ).timeout(const Duration(seconds: 4));
+        ).timeout(const Duration(milliseconds: 1200));
 
         if (response.statusCode == 200) {
           final now = DateTime.now();
@@ -738,7 +736,16 @@ class GroovyConnectService extends ChangeNotifier {
   Future<bool> sendControl(String action, [dynamic value]) async {
     if (_connectedDevice == null) return false;
 
-    // 1. Try local LAN P2P HTTP control if device is on LAN
+    // Optimistically update connected device local state immediately
+    if (action == 'play') {
+      _connectedDevice = _connectedDevice?.copyWith(isPlaying: true);
+      notifyListeners();
+    } else if (action == 'pause') {
+      _connectedDevice = _connectedDevice?.copyWith(isPlaying: false);
+      notifyListeners();
+    }
+
+    // 1. Try local LAN P2P HTTP control if device is on LAN (quick 500ms timeout)
     if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty && _connectedDevice!.port > 0) {
       try {
         final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/control');
@@ -746,7 +753,7 @@ class GroovyConnectService extends ChangeNotifier {
           uri,
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({'action': action, 'value': value}),
-        ).timeout(const Duration(seconds: 2));
+        ).timeout(const Duration(milliseconds: 500));
 
         if (response.statusCode == 200) {
           Future.delayed(const Duration(milliseconds: 150), () => _syncRemoteStatus());
@@ -770,7 +777,7 @@ class GroovyConnectService extends ChangeNotifier {
         token: _cachedAuthToken,
       );
 
-      Future.delayed(const Duration(milliseconds: 350), () => _syncRemoteStatus());
+      Future.delayed(const Duration(milliseconds: 250), () => _syncRemoteStatus());
       return success;
     } catch (e) {
       debugPrint('[GroovyConnect] Cloud sendControl error: $e');
@@ -821,7 +828,7 @@ class GroovyConnectService extends ChangeNotifier {
       if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty && _connectedDevice!.port > 0) {
         try {
           final uri = Uri.parse('http://${_connectedDevice!.host}:${_connectedDevice!.port}/groovy/status');
-          final response = await http.get(uri).timeout(const Duration(milliseconds: 1400));
+          final response = await http.get(uri).timeout(const Duration(milliseconds: 600));
 
           if (response.statusCode == 200) {
             final data = jsonDecode(response.body) as Map<String, dynamic>;

@@ -198,10 +198,10 @@ class QueueView extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 120),
                 sliver: SliverReorderableList(
                   itemCount: upcomingSongs.length,
-                  onReorder: (oldIndex, newIndex) {
+                  onReorderItem: (oldIndex, newIndex) {
                     final actualOldIndex = currentIndex + 1 + oldIndex;
                     final actualNewIndex = currentIndex + 1 + newIndex;
-                    provider.reorderQueue(actualOldIndex, actualNewIndex);
+                    provider.moveQueueItem(actualOldIndex, actualNewIndex);
                   },
                   itemBuilder: (context, index) {
                     final song = upcomingSongs[index];

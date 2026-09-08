@@ -113,20 +113,22 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
-    return Selector<PlayerProvider, (Song?, RadioStation?, bool)>(
-      selector: (_, p) =>
-          (p.currentSong, p.currentRadioStation, p.isPlayingRadio),
-      builder: (context, data, _) {
-        final (currentSong, radioStation, isPlayingRadio) = data;
+    return RepaintBoundary(
+      child: Selector<PlayerProvider, (Song?, RadioStation?, bool)>(
+        selector: (_, p) =>
+            (p.currentSong, p.currentRadioStation, p.isPlayingRadio),
+        builder: (context, data, _) {
+          final (currentSong, radioStation, isPlayingRadio) = data;
 
-        if (isPlayingRadio && radioStation != null) {
-          return _buildRadioBar(context, theme, isDark, radioStation);
-        }
+          if (isPlayingRadio && radioStation != null) {
+            return _buildRadioBar(context, theme, isDark, radioStation);
+          }
 
-        if (currentSong == null) return const SizedBox.shrink();
+          if (currentSong == null) return const SizedBox.shrink();
 
-        return _buildSongBar(context, theme, isDark, currentSong);
-      },
+          return _buildSongBar(context, theme, isDark, currentSong);
+        },
+      ),
     );
   }
 

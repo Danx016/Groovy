@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/library_provider.dart';
@@ -116,7 +117,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     return ListView.builder(
       padding: const EdgeInsets.only(bottom: 120),
       itemExtent: 68.0,
-      cacheExtent: 300,
+      scrollCacheExtent: const ScrollCacheExtent.pixels(500),
       itemCount: _downloadedSongs.length,
       itemBuilder: (context, index) {
         final song = _downloadedSongs[index];

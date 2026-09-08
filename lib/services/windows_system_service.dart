@@ -28,17 +28,17 @@ class WindowsSystemService {
       if (_isInitialized) return;
 
       try {
-        _isInitialized = true;
-
         // Initialize local notifier for lyrics
         await localNotifier.setup(
           appName: 'Groovy',
           shortcutPolicy: ShortcutPolicy.requireNoCreate,
         );
 
+        _isInitialized = true;
         debugPrint(
             'WindowsSystemService initialized (Taskbar & Lyrics Notification)');
       } catch (e) {
+        _isInitialized = false;
         debugPrint('Error initializing WindowsSystemService: $e');
       }
     }
@@ -54,7 +54,7 @@ class WindowsSystemService {
     if (!kIsWeb && Platform.isWindows && _isInitialized) {
       try {
         // Clear taskbar progress bar so it never looks like a file download (matches Spotify behavior)
-        WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);
+        await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);
       } catch (e) {
         debugPrint('Error updating Windows playback state: $e');
       }
@@ -125,7 +125,7 @@ class WindowsSystemService {
   bool get lyricsEnabled => _lyricsEnabled;
 
   Future<void> dispose() async {
-    if (!kIsWeb && Platform.isWindows) {
+    if (!kIsWeb && Platform.isWindows && _isInitialized) {
       try {
         await clearLyrics();
         await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);

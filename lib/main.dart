@@ -9,7 +9,6 @@ import 'package:window_manager/window_manager.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
 import 'package:safe_device/safe_device.dart';
-import 'package:flutter_displaymode/flutter_displaymode.dart';
 
 import 'l10n/app_localizations.dart';
 import 'services/services.dart';
@@ -136,22 +135,9 @@ void main() async {
   }
 
   if (!kIsWeb && Platform.isAndroid) {
-    try {
-      final modes = await FlutterDisplayMode.supported;
-      DisplayMode? highestMode;
-      for (final mode in modes) {
-        if (highestMode == null || mode.refreshRate > highestMode.refreshRate) {
-          highestMode = mode;
-        }
-      }
-      if (highestMode != null) {
-        await FlutterDisplayMode.setPreferredMode(highestMode);
-      } else {
-        await FlutterDisplayMode.setHighRefreshRate();
-      }
-    } catch (e) {
+    DisplayModeService().initialize().catchError((e) {
       debugPrint('Error enabling high refresh rate: $e');
-    }
+    });
   }
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {

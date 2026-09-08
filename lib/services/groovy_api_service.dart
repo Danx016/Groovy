@@ -203,7 +203,8 @@ class GroovyApiService {
     String? token,
   }) async {
     try {
-      final uri = Uri.parse('$_baseUrl/telemetry/command?deviceId=${Uri.encodeComponent(deviceId)}');
+      final dev = await _getDeviceInfo();
+      final uri = Uri.parse('$_baseUrl/telemetry/command?deviceId=${Uri.encodeComponent(deviceId)}&platform=${Uri.encodeComponent(dev.platform)}&model=${Uri.encodeComponent(dev.deviceModel)}');
       final res = await http.get(
         uri,
         headers: _headers(token),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../models/song.dart';
@@ -68,7 +69,7 @@ class _SongsScreenState extends State<SongsScreen> {
           : ListView.builder(
               padding: const EdgeInsets.only(bottom: 150),
               itemExtent: 68.0,
-              cacheExtent: 300,
+              scrollCacheExtent: const ScrollCacheExtent.pixels(500),
               itemCount: songs.length,
               itemBuilder: (context, index) {
                 final song = songs[index];

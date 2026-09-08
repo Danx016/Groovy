@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:provider/provider.dart';
 import '../providers/library_provider.dart';
@@ -36,7 +37,6 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadCachedData());
-    _scrollController.addListener(_onScroll);
   }
 
   @override
@@ -44,8 +44,6 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
     _scrollController.dispose();
     super.dispose();
   }
-
-  void _onScroll() {}
 
   Future<void> _loadCachedData() async {
     final libraryProvider = Provider.of<LibraryProvider>(
@@ -375,7 +373,7 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                         controller: _scrollController,
                         padding: const EdgeInsets.only(bottom: 100),
                         itemExtent: 68.0,
-                        cacheExtent: 300,
+                        scrollCacheExtent: const ScrollCacheExtent.pixels(500),
                         itemCount: _sortedSongs.length,
                         itemBuilder: (context, index) {
                           return SongTile(
