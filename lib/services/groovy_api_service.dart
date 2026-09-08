@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import 'device_info_service.dart';
 
@@ -108,7 +109,7 @@ class GroovyApiService {
       'X-Client-Platform': platform,
       'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
       'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
-      'X-App-Version': dev?.appVersion ?? '1.0.74',
+      'X-App-Version': dev?.appVersion ?? '1.0.75',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
@@ -130,13 +131,21 @@ class GroovyApiService {
     String? deviceId,
   }) async {
     try {
+      String? effectiveDeviceId = deviceId;
+      if (effectiveDeviceId == null || effectiveDeviceId.isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          effectiveDeviceId = prefs.getString('groovy_cloud_device_id_v2');
+        } catch (_) {}
+      }
+
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/playback');
       await http.post(
         uri,
         headers: _headers(token),
         body: jsonEncode({
-          if (deviceId != null) 'deviceId': deviceId,
+          if (effectiveDeviceId != null && effectiveDeviceId.isNotEmpty) 'deviceId': effectiveDeviceId,
           'songId': song.id,
           'title': song.title,
           'artist': song.artist ?? '',

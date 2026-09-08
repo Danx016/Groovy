@@ -2055,6 +2055,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           isPlaying: true,
           position: _position.inSeconds,
           listenDeltaSeconds: 0,
+          deviceId: _groovyConnectService?.localDeviceId,
         );
         _startTelemetryHeartbeat();
       }).catchError((_) {});

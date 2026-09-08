@@ -47,7 +47,20 @@ router.get('/playback', async (req, res) => {
       ORDER BY last_ping_at DESC
     `, [userId, userId, client.ip]);
 
-    return res.json({ success: true, devices: rows });
+    // Deduplicate by physical device (same platform and device name/model)
+    const seen = new Set();
+    const uniqueDevices = [];
+    for (const row of rows) {
+      const p = (row.platform || '').trim().toLowerCase();
+      const d = (row.device_name || row.device_model || '').trim().toLowerCase();
+      const key = `${p}_${d}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueDevices.push(row);
+      }
+    }
+
+    return res.json({ success: true, devices: uniqueDevices });
   } catch (err) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -240,6 +253,17 @@ router.post('/playback', async (req, res) => {
 
     // Cleanup stale live sessions older than 75 seconds
     pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 75 SECOND').catch(() => {});
+
+    // Purge any ghost/fallback rows for the same user and platform/model that have a different device_key
+    if (deviceId && dbUserId) {
+      pool.query(`
+        DELETE FROM user_live_playback
+        WHERE user_id = ?
+          AND device_key != ?
+          AND LOWER(platform) = LOWER(?)
+          AND (LOWER(device_name) = LOWER(?) OR LOWER(device_model) = LOWER(?))
+      `, [dbUserId, deviceKey, resolvedPlatform, resolvedDevice, client.deviceModel || '']).catch(() => {});
+    }
 
     // 2. Automatically log to playback_history if new song started
     const delta = Math.min(Math.max(parseInt(listenDeltaSeconds, 10) || 0, 0), 60);

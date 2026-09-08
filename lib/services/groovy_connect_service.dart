@@ -541,11 +541,35 @@ class GroovyConnectService extends ChangeNotifier {
             item['device_id']?.toString() ??
             '${item['platform']}_${item['device_name']}';
 
-        // Do not discover self
+        // Do not discover self by ID
         if (remoteDeviceId == _localDeviceId) continue;
 
         final remoteDeviceName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
         final remoteDevicePlatform = item['platform']?.toString() ?? 'Dispositivo';
+
+        // Do not discover self by matching name & platform
+        if (remoteDeviceName.trim().toLowerCase() == _localDeviceName.trim().toLowerCase() &&
+            remoteDevicePlatform.trim().toLowerCase() == _localPlatform.trim().toLowerCase()) {
+          continue;
+        }
+
+        // If we are currently connected to a device with the same name and platform,
+        // ignore duplicate ghost entries that have a different deviceId
+        if (_connectedDevice != null &&
+            _connectedDevice!.id != remoteDeviceId &&
+            _connectedDevice!.name.trim().toLowerCase() == remoteDeviceName.trim().toLowerCase() &&
+            _connectedDevice!.platform.trim().toLowerCase() == remoteDevicePlatform.trim().toLowerCase()) {
+          continue;
+        }
+
+        // Clean up any stale duplicate device entry with the same physical name and platform
+        _discoveredDevices.removeWhere((id, dev) {
+          if (id == remoteDeviceId) return false;
+          if (_connectedDevice?.id == id) return false;
+          return dev.name.trim().toLowerCase() == remoteDeviceName.trim().toLowerCase() &&
+              dev.platform.trim().toLowerCase() == remoteDevicePlatform.trim().toLowerCase();
+        });
+
         final isPlaying = item['is_playing'] == 1 || item['is_playing'] == true;
 
         Song? song;
@@ -846,7 +870,13 @@ class GroovyConnectService extends ChangeNotifier {
             (d) =>
                 d['device_key']?.toString() == _connectedDevice!.id ||
                 d['device_id']?.toString() == _connectedDevice!.id,
-            orElse: () => {},
+            orElse: () => devicesList.firstWhere(
+              (d) =>
+                  d['platform']?.toString().trim().toLowerCase() == _connectedDevice!.platform.trim().toLowerCase() &&
+                  (d['device_name']?.toString().trim().toLowerCase() == _connectedDevice!.name.trim().toLowerCase() ||
+                   d['device_model']?.toString().trim().toLowerCase() == _connectedDevice!.name.trim().toLowerCase()),
+              orElse: () => {},
+            ),
           );
 
           if (targetDev.isNotEmpty) {

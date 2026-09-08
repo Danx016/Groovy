@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.75] - 2026-09-08
+
+### Fixed & Optimized
+- **Corrección de Dispositivos Duplicados y Sincronización en Groovy Connect**:
+  - Eliminación de dispositivos duplicados/fantasmas (e.g. dos entradas de "Infinix X678B" en el modal de dispositivos).
+  - Inyección automática y persistente de `deviceId` único en `GroovyApiService.reportPlaybackState` y `PlayerProvider.play()`, evitando que el backend genere claves de dispositivo conflictivas.
+  - Deduplicación robusta de dispositivos por identidad física (nombre y plataforma) en backend (`GET /api/telemetry/playback`), en el servicio de descubrimiento (`GroovyConnectService`) y en la interfaz (`GroovyConnectModal`).
+  - Purga automática de registros obsoletos y fallback por nombre de dispositivo en `_syncRemoteStatus` para garantizar sincronización inmediata de la posición de reproducción y carátula.
+
 ## [1.0.74] - 2026-09-08
 
 ### Fixed & Optimized

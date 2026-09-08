@@ -375,7 +375,23 @@ class _GroovyConnectModalState extends State<GroovyConnectModal>
     final isGroovyConnected = groovyConnect.isConnected;
     final isRemoteConnected = isCastConnected || isUpnpConnected || isGroovyConnected;
 
-    final groovyDevices = groovyConnect.discoveredDevices;
+    // Filter and deduplicate devices by physical identity (name + platform)
+    final Map<String, GroovyRemoteDevice> uniqueDevices = {};
+    for (final dev in groovyConnect.discoveredDevices) {
+      final isThisDeviceConnected = isGroovyConnected &&
+          (groovyConnect.connectedDevice?.id == dev.id ||
+           (groovyConnect.connectedDevice?.name.trim().toLowerCase() == dev.name.trim().toLowerCase() &&
+            groovyConnect.connectedDevice?.platform.trim().toLowerCase() == dev.platform.trim().toLowerCase()));
+
+      final key = '${dev.platform.trim().toLowerCase()}_${dev.name.trim().toLowerCase()}';
+
+      if (!uniqueDevices.containsKey(key)) {
+        uniqueDevices[key] = dev;
+      } else if (isThisDeviceConnected) {
+        uniqueDevices[key] = dev;
+      }
+    }
+    final groovyDevices = uniqueDevices.values.toList();
 
     return Container(
       decoration: BoxDecoration(
