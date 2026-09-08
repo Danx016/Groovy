@@ -33,7 +33,7 @@ void initializeTestEnvironment() {
     (MethodCall methodCall) async {
       return {
         'appName': 'Groovy',
-        'packageName': 'com.devid.musly',
+        'packageName': 'com.groovy.music',
         'version': '1.0.67',
         'buildNumber': '56',
       };

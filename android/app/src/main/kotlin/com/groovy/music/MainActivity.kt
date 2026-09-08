@@ -1,4 +1,4 @@
-package com.devid.musly
+package com.groovy.music
 
 import android.os.Build
 import android.os.Bundle
@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : AudioServiceFragmentActivity() {
-    private val CHANNEL = "com.devid.musly/ytdlp"
+    private val CHANNEL = "com.groovy.music/ytdlp"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -116,7 +116,7 @@ class MainActivity : AudioServiceFragmentActivity() {
             }
         }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.devid.musly/app_updater").setMethodCallHandler { call, result ->
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.groovy.music/app_updater").setMethodCallHandler { call, result ->
             when (call.method) {
                 "installApk" -> {
                     val filePath = call.argument<String>("filePath")

@@ -41,7 +41,7 @@ class MuslyAudioHandler extends BaseAudioHandler with SeekHandler {
     handleAudioSessionActivation: !_ownsFocusNatively,
     handleInterruptions: !_ownsFocusNatively,
   );
-  static const _pitchChannel = MethodChannel('com.devid.musly/pitch');
+  static const _pitchChannel = MethodChannel('com.groovy.music/pitch');
 
   // ---------------------------------------------------------------------------
   // Android Auto browse tree media IDs.
@@ -577,7 +577,7 @@ Future<MuslyAudioHandler> initAudioService() async {
     return AudioService.init(
       builder: () => MuslyAudioHandler(),
       config: const AudioServiceConfig(
-        androidNotificationChannelId: 'com.devid.musly.channel.audio',
+        androidNotificationChannelId: 'com.groovy.music.channel.audio',
         androidNotificationChannelName: 'Groovy',
         androidNotificationChannelDescription: 'Groovy Music Playback',
         // With androidStopForegroundOnPause=false the service never leaves

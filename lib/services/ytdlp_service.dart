@@ -52,7 +52,7 @@ class YtDlpService {
   factory YtDlpService() => _instance;
   YtDlpService._internal();
 
-  static const MethodChannel _androidChannel = MethodChannel('com.devid.musly/ytdlp');
+  static const MethodChannel _androidChannel = MethodChannel('com.groovy.music/ytdlp');
 
   yt.YoutubeExplode? _fallbackYt;
 

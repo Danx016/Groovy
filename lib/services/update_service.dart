@@ -66,7 +66,7 @@ class ReleaseInfo {
 
 class UpdateService {
   static String currentVersion = '1.0.67';
-  static const MethodChannel _channel = MethodChannel('com.devid.musly/app_updater');
+  static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
       'https://api.github.com/repos/Danx016/Groovy/releases/latest';
