@@ -135,7 +135,7 @@ export const AccountView = ({ setActiveTab }) => {
           </button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <InfoRow label="Servidor Host:" value="157.137.233.119" accent="#34C759" />
+          <InfoRow label="Servidor Host:" value="groovyapi.duckdns.org" accent="#34C759" />
           <InfoRow label="Motor de BD:" value="MySQL 8.0 Community" />
           <InfoRow label="Puerto API:" value=":4000 → Nginx /api" />
           <InfoRow label="Estado:" value="● Conectado y Sincronizado" accent="#34C759" />

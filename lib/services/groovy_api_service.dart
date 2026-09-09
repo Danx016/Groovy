@@ -61,7 +61,7 @@ class GroovyApiService {
     initDeviceInfo();
   }
 
-  static const String defaultBaseUrl = 'http://157.137.233.119/api';
+  static const String defaultBaseUrl = 'https://groovyapi.duckdns.org/api';
   String _baseUrl = defaultBaseUrl;
 
   String get baseUrl => _baseUrl;
@@ -109,7 +109,7 @@ class GroovyApiService {
       'X-Client-Platform': platform,
       'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
       'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
-      'X-App-Version': dev?.appVersion ?? '1.0.85',
+      'X-App-Version': dev?.appVersion ?? '1.0.86',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {

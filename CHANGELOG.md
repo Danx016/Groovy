@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.86] - 2026-09-09
+
+### Security & Connectivity
+- **Dominio Seguro HTTPS para API Cloud**:
+  - Migración de la API de backend de dirección IP directa HTTP a dominio oficial con certificado SSL Let's Encrypt: `https://groovyapi.duckdns.org/api`.
+  - Habilita compatibilidad completa con redes de datos móviles (4G/5G) y operadores móviles que restringen o bloquean tráfico HTTP sin cifrar.
+  - Certificado SSL renovado y configurado en el servidor Nginx con cifrado TLS y HTTP/2.
+
 ## [1.0.85] - 2026-09-09
 
 ### Fixed & Improved

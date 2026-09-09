@@ -6,7 +6,7 @@ const getBaseUrl = () => {
       return '/api';
     }
   }
-  return 'http://157.137.233.119/api';
+  return 'https://groovyapi.duckdns.org/api';
 };
 
 export const API_BASE = getBaseUrl();
