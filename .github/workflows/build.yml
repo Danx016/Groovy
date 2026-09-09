@@ -211,14 +211,81 @@ jobs:
       
       - name: Download bundled yt-dlp for Linux
         run: |
-          sudo curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o build/linux/x64/release/bundle/yt-dlp
-          sudo chmod a+rx build/linux/x64/release/bundle/yt-dlp
+          curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+            -o build/linux/x64/release/bundle/yt-dlp
+          chmod a+rx build/linux/x64/release/bundle/yt-dlp
+
+      - name: Create AppImage
+        run: |
+          BUNDLE=build/linux/x64/release/bundle
+          APPDIR=build/linux/AppDir
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+
+          # Build AppDir structure
+          mkdir -p "${APPDIR}/usr/bin"
+          mkdir -p "${APPDIR}/usr/lib/groovy"
+          mkdir -p "${APPDIR}/usr/share/applications"
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/512x512/apps"
+
+          cp -r "${BUNDLE}/." "${APPDIR}/usr/lib/groovy/"
+
+          cat > "${APPDIR}/usr/bin/groovy" << 'WRAP'
+          #!/usr/bin/env bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          APPLIB="${HERE}/../lib/groovy"
+          export LD_LIBRARY_PATH="${APPLIB}/lib:${LD_LIBRARY_PATH:-}"
+          exec "${APPLIB}/groovy" "$@"
+          WRAP
+          chmod +x "${APPDIR}/usr/bin/groovy"
+
+          cat > "${APPDIR}/usr/share/applications/groovy.desktop" << 'DESK'
+          [Desktop Entry]
+          Name=Groovy
+          Comment=Stream music from YouTube Music
+          Exec=groovy
+          Icon=groovy
+          Terminal=false
+          Type=Application
+          Categories=Audio;Music;Player;AudioVideo;
+          Keywords=music;streaming;youtube;
+          StartupWMClass=groovy
+          DESK
+
+          cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/groovy.png"
+          cp assets/app_icon_1024.png "${APPDIR}/usr/share/icons/hicolor/512x512/apps/groovy.png"
+
+          cp "${APPDIR}/usr/share/applications/groovy.desktop" "${APPDIR}/groovy.desktop"
+          cp "${APPDIR}/usr/share/icons/hicolor/256x256/apps/groovy.png" "${APPDIR}/groovy.png"
+          ln -sf groovy.png "${APPDIR}/.DirIcon"
+
+          cat > "${APPDIR}/AppRun" << 'APPRUN'
+          #!/usr/bin/env bash
+          HERE="$(dirname "$(readlink -f "$0")")"
+          APPLIB="${HERE}/usr/lib/groovy"
+          export LD_LIBRARY_PATH="${APPLIB}/lib:${LD_LIBRARY_PATH:-}"
+          export XDG_DATA_DIRS="${HERE}/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+          exec "${APPLIB}/groovy" "$@"
+          APPRUN
+          chmod +x "${APPDIR}/AppRun"
+
+          # Download appimagetool
+          curl -L \
+            "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            -o appimagetool.AppImage
+          chmod +x appimagetool.AppImage
+
+          ARCH=x86_64 ./appimagetool.AppImage --no-appstream "${APPDIR}" "Groovy-${VERSION}-linux-x86_64.AppImage"
+          echo "✅ AppImage created: Groovy-${VERSION}-linux-x86_64.AppImage"
 
       - name: Upload Linux Build
         uses: actions/upload-artifact@v4
         with:
           name: linux-build
-          path: build/linux/x64/release/bundle/
+          path: |
+            build/linux/x64/release/bundle/
+            Groovy-*-linux-x86_64.AppImage
+
 
   # Create Release with Android, Windows, and Linux artifacts
   release:
@@ -277,9 +344,16 @@ jobs:
 
       - name: Package Linux
         run: |
-          cd artifacts/linux
-          tar -czf ../../groovy-linux-x64.tar.gz .
-          cd ../..
+          # Find the AppImage
+          APPIMAGE=$(find artifacts/linux -name '*.AppImage' 2>/dev/null | head -1)
+          if [ -n "$APPIMAGE" ]; then
+            cp "$APPIMAGE" ./Groovy-linux-x86_64.AppImage
+            echo "✅ AppImage packaged: Groovy-linux-x86_64.AppImage"
+          fi
+          # Also create tar.gz from bundle
+          mkdir -p linux_bundle
+          find artifacts/linux -not -name '*.AppImage' -exec cp -r {} linux_bundle/ \; 2>/dev/null || true
+          cd artifacts/linux && tar -czf ../../groovy-linux-x64.tar.gz . && cd ../..  
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -292,23 +366,28 @@ jobs:
             ## 🎵 Groovy ${{ steps.get_version.outputs.TAG }}
 
             ### ✨ Novedades y Mejoras:
-            - 🖥️ **Soporte Oficial para Windows y Linux**: Nuevo instalador ejecutable (`Groovy-Setup.exe`), versión portable (`.zip`) y paquete Linux (`.tar.gz`) con optimizaciones completas de escritorio.
+            - 🖥️ **Soporte Oficial para Windows, Linux y Android**: Instalador Windows (`Groovy-Setup.exe`), portable (`.zip`), AppImage para Linux y APK para Android.
             - ⚡ **Motor de Streaming yt-dlp & YouTube**: Reproducción ultrarrápida, streaming de audio directo y caché inteligente.
-            - 🎨 **Interfaz Renovada Estilo Apple Music**: Barra lateral, nuevo reproductor de escritorio, panel de letras sincronizadas y navegación fluida a 120 Hz.
-            - 📱 **Sincronización Multiplataforma**: Experiencia unificada entre móvil (Android) y escritorio (Windows / Linux).
+            - 🎨 **Interfaz Renovada Estilo Apple Music**: Barra lateral, reproductor de escritorio, panel de letras sincronizadas y navegación fluida a 120 Hz.
+            - 📱 **Sincronización Multiplataforma Groovy Connect**: Experiencia unificada entre móvil (Android) y escritorio (Windows / Linux).
             - 🛡️ **Correcciones y Rendimiento**: Mejoras de estabilidad, gestión de colas y consumo de memoria.
 
             ### 📦 Descargas Disponibles:
 
             **📱 Android:**
-            - `app-release.apk` (APK universal para cualquier dispositivo Android)
+            - `app-release.apk` — APK universal para cualquier dispositivo Android
 
             **🪟 Windows:**
-            - `Groovy-Setup.exe` (Instalador con asistente para Windows)
-            - `Groovy-Windows-Portable.zip` (Versión portable, descomprimir y usar)
+            - `Groovy-Setup.exe` — Instalador con asistente para Windows
+            - `Groovy-Windows-Portable.zip` — Versión portable, descomprimir y usar
 
             **🐧 Linux:**
-            - `groovy-linux-x64.tar.gz` (Binario empaquetado para Linux x64)
+            - `Groovy-linux-x86_64.AppImage` — **Recomendado.** Un solo archivo, sin instalación:
+              ```bash
+              chmod +x Groovy-linux-x86_64.AppImage
+              ./Groovy-linux-x86_64.AppImage
+              ```
+            - `groovy-linux-x64.tar.gz` — Binario empaquetado para instalación manual
 
             ### 📝 Registro de Cambios
             Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para más detalles.
@@ -317,6 +396,7 @@ jobs:
             artifacts/windows/Groovy-Setup.exe
             artifacts/windows/Groovy-Windows-Portable.zip
             Groovy-Windows-Portable.zip
+            Groovy-linux-x86_64.AppImage
             groovy-linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
