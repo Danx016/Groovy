@@ -99,6 +99,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   final bool _reactivatingSession = false;
 
+  /// Last playback error message, set when a song fails to load after all retries.
+  /// Cleared automatically when a new song starts successfully.
+  String? _lastPlaybackError;
+  String? get lastPlaybackError => _lastPlaybackError;
+
+  /// Optional callback invoked (in addition to notifyListeners) when playback
+  /// fails definitively — useful for showing a SnackBar from a widget.
+  void Function(String message)? onPlaybackError;
+
   Timer? _sleepTimer;
   DateTime? _sleepTimerEnd;
   bool _sleepTimerEndCurrentSong = false;
@@ -1944,6 +1953,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } catch (_) {}
 
     _isLoading = true;
+    _lastPlaybackError = null; // clear previous error on new play attempt
     notifyListeners();
 
     try {
@@ -2213,6 +2223,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _hasRetriedCurrentPlay = false;
       _isPlaying = false;
       _position = Duration.zero;
+      // Expose the error to the UI so a SnackBar / toast can be shown.
+      _lastPlaybackError = 'No se pudo reproducir "${song.title}". Verifica tu conexión a internet.';
+      onPlaybackError?.call(_lastPlaybackError!);
       try {
         await _audioPlayer.stop();
       } catch (_) {}

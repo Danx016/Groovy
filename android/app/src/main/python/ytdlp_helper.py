@@ -27,7 +27,9 @@ def _extract_stream(video_id_or_url):
         'youtube_include_hls_manifest': False,
         'extractor_args': {
             'youtube': {
-                'player_client': ['android', 'ios', 'mweb'],
+                # tv_embedded generates URLs without IP/UA restrictions — required for
+                # mobile data where the requesting IP may differ from extraction IP.
+                'player_client': ['tv_embedded', 'android', 'ios', 'mweb'],
                 'skip': ['translated_subs', 'comments', 'webpage', 'dash', 'hls']
             }
         }

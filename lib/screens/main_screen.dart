@@ -169,6 +169,20 @@ class _MainScreenState extends State<MainScreen> {
         );
       };
 
+      // Show an actionable SnackBar when a song fails to load (e.g. no internet
+      // on mobile data, YouTube stream rejected after retries).
+      playerProvider.onPlaybackError = (String message) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      };
+
       libraryProvider.setLocalMusicService(
         localMusicService,
         mergeWithServer: true,

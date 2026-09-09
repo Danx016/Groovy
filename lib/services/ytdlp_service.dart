@@ -95,6 +95,9 @@ class YtDlpService {
   }
 
   void invalidateCache(String videoId) {
+    final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+    _streamInfoCache.remove(cleanId);
+    _streamCacheTime.remove(cleanId);
     _streamInfoCache.remove(videoId);
     _streamCacheTime.remove(videoId);
   }
@@ -641,7 +644,9 @@ class YtDlpService {
     // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
     if (Platform.isAndroid) {
       try {
-        final jsonStr = await _androidChannel.invokeMethod<String>('getStreamUrl', {'videoId': cleanId});
+        final jsonStr = await _androidChannel
+            .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
+            .timeout(const Duration(seconds: 15));
         if (jsonStr != null && jsonStr.isNotEmpty) {
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final url = data['url'] as String? ?? '';
@@ -671,7 +676,9 @@ class YtDlpService {
           '-f',
           'ba/b[acodec!=none]/best',
           '--extractor-args',
-          'youtube:player_client=ios,android,mweb',
+          // tv_embedded generates URLs without IP/UA restrictions — required for
+          // mobile data where requesting IP may differ from extraction IP.
+          'youtube:player_client=tv_embedded,ios,android,mweb',
           '--no-warnings',
           '--no-check-certificates',
           targetUrl,
@@ -698,8 +705,9 @@ class YtDlpService {
     }
 
     // 3. Fallback: Pure-Dart Innertube manifest resolution
+    // Try TV clients first — they generate URLs without IP/UA restrictions, best for mobile data.
     final clientSets = [
-      [yt.YoutubeApiClient.androidMusic, yt.YoutubeApiClient.mweb],
+      [yt.YoutubeApiClient.tv, yt.YoutubeApiClient.mediaConnect],
       [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],
       null,
     ];
@@ -708,7 +716,7 @@ class YtDlpService {
       try {
         final manifest = await _fallbackClient.videos.streamsClient
             .getManifest(cleanId, ytClients: clientList)
-            .timeout(const Duration(seconds: 5));
+            .timeout(const Duration(seconds: 10)); // longer for mobile data
         final audioOnly = manifest.audioOnly;
         if (audioOnly.isNotEmpty) {
           final best = _selectBestAudioStream(audioOnly);
