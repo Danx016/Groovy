@@ -173,13 +173,16 @@ class _LyricsListViewState extends State<LyricsListView> {
       return;
     }
 
+    // Compensate for hardware/audio pipeline latency (~70ms) so lyrics highlight in real-time
+    final effectivePos = pos + const Duration(milliseconds: 70);
+
     int low = 0;
     int high = _items.length - 1;
     int newIndex = -1;
 
     while (low <= high) {
       final mid = (low + high) >> 1;
-      if (_items[mid].startTime <= pos) {
+      if (_items[mid].startTime <= effectivePos) {
         newIndex = mid;
         low = mid + 1;
       } else {

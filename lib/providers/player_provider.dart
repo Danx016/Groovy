@@ -27,7 +27,6 @@ import '../services/groovy_api_service.dart';
 import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
 import '../services/audio_handler.dart';
-import '../services/fade_settings_service.dart';
 
 import '../services/transcoding_service.dart';
 import '../services/groovy_connect_service.dart';
@@ -116,15 +115,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _sleepTimerFadeTimer;
   Timer? _sleepTimerFadePeriodicTimer;
 
-  // Fade in/out
-  final FadeSettingsService _fadeSettingsService = FadeSettingsService();
-  Timer? _fadeTimer;
-  bool _isFading = false;
   Timer? _telemetryTimer;
+  DateTime? _optimisticLocalPlayPauseTime;
+  bool? _optimisticLocalPlayPauseState;
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
-    _telemetryTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+    final interval = (_groovyConnectService?.isConnected == true)
+        ? const Duration(milliseconds: 350)
+        : const Duration(milliseconds: 1500);
+    _telemetryTimer = Timer.periodic(interval, (_) {
       if (_isPlaying) {
         _sendTelemetryHeartbeat();
       }
@@ -342,6 +342,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _onGroovyConnectChanged() {
     final isConnected = _groovyConnectService?.isConnected == true;
+    _startTelemetryHeartbeat();
     if (isConnected) {
       if (_audioPlayer.playing) {
         _audioPlayer.stop();
@@ -525,19 +526,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         changed = true;
       } else {
         final diffMs = position.inMilliseconds - currentExtrapolated.inMilliseconds;
-        if (diffMs.abs() > 4000) {
-          // Significant backward seek or forward jump on the remote device
+        if (diffMs < -4000) {
+          // Significant backward seek on the remote device
           _remoteAnchorPosition = position;
-          _remoteAnchorTime = DateTime.now();
+          _remoteAnchorTime = isPlaying ? DateTime.now() : null;
           _position = position;
           _positionController.add(position);
           changed = true;
-        } else if (diffMs > 600) {
-          // Remote report is slightly ahead; catch up anchor smoothly without snapping
+        } else if (diffMs > 150) {
+          // Remote report is ahead; catch up immediately so playback & lyrics stay tightly 'en vivo'
           _remoteAnchorPosition = position;
-          _remoteAnchorTime = DateTime.now();
+          _remoteAnchorTime = isPlaying ? DateTime.now() : null;
+          _position = position;
+          _positionController.add(position);
+          changed = true;
         }
-        // Small lag (diffMs between -4000 and 0) is ignored to eliminate timeline jitter completely!
+        // Small lag (diffMs between -4000 and 0) is ignored so dead reckoning extrapolation continues smoothly without jumping backward
       }
     }
 
@@ -576,7 +580,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (_remotePositionTickerTimer == null || !_remotePositionTickerTimer!.isActive) {
         _remotePositionTickerTimer?.cancel();
         _remotePositionTickerTimer = Timer.periodic(
-          const Duration(milliseconds: 250),
+          const Duration(milliseconds: 50),
           (_) => _tickRemotePosition(),
         );
       }
@@ -1545,7 +1549,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (_isRenderingRemotely) return;
 
         final wasPlaying = _isPlaying;
-        _isPlaying = state.playing;
+        final bool isOptimisticLocalActive = _optimisticLocalPlayPauseTime != null &&
+            DateTime.now().difference(_optimisticLocalPlayPauseTime!) < const Duration(milliseconds: 600);
+
+        if (isOptimisticLocalActive) {
+          if (state.playing == _optimisticLocalPlayPauseState) {
+            _optimisticLocalPlayPauseTime = null;
+            _optimisticLocalPlayPauseState = null;
+          }
+        } else {
+          _isPlaying = state.playing;
+        }
+
         if (state.playing || state.processingState == ProcessingState.ready) {
           _isLoading = false;
         }
@@ -1560,7 +1575,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _lastPolledPosition = null;
             Duration? lastSystemUpdate;
             _windowsPositionTimer = Timer.periodic(
-              const Duration(milliseconds: 500),
+              const Duration(milliseconds: 50),
               (_) {
                 final pos = _audioPlayer.position;
                 if (_lastPolledPosition == null ||
@@ -1607,7 +1622,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
 
     Duration? lastSystemUpdate;
-    _positionSub = _audioPlayer.positionStream.listen(
+    _positionSub = _audioPlayer.createPositionStream(
+      minPeriod: const Duration(milliseconds: 50),
+      maxPeriod: const Duration(milliseconds: 80),
+    ).listen(
       (position) {
         // In remote-playback mode the local player sits idle at position zero;
         // ignore its ticks so they don't overwrite the UPnP/Cast position.
@@ -2310,29 +2328,29 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> play() async {
+    // 1. Instant optimistic UI toggle (0ms latency)
+    _isPlaying = true;
+    _optimisticLocalPlayPauseState = true;
+    _optimisticLocalPlayPauseTime = DateTime.now();
+    notifyListeners();
+    _updateAndroidAuto();
+    _startTelemetryHeartbeat();
+    _sendTelemetryHeartbeat(overridePlaying: true);
+
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
-      _isPlaying = true;
       _optimisticRemotePlayPauseState = true;
       _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
       _remoteAnchorPosition = _position;
       _remoteAnchorTime = DateTime.now();
       _manageRemotePositionTicker();
-      notifyListeners();
-      _updateAndroidAuto();
       unawaited(_groovyConnectService!.sendControl('play'));
       return;
     }
     if (_castService.isConnected) {
       await _castService.play();
-      _isPlaying = true;
-      notifyListeners();
-      _updateAndroidAuto();
     } else if (_upnpService.isConnected) {
       await _upnpService.play();
-      _isPlaying = true;
-      notifyListeners();
-      _updateAndroidAuto();
     } else {
       // If no song is selected yet but queue has songs (e.g. headphone play button pressed on app start), start first/saved queue song
       if (_currentSong == null && _queue.isNotEmpty) {
@@ -2354,54 +2372,39 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // Ensure volume is properly restored to effective volume before playing
         await _audioPlayer.setVolume(_effectiveVolume);
         unawaited(_audioPlayer.play());
-        if (_fadeSettingsService.getFadeEnabled()) {
-          await _fadeIn();
-        }
       });
-      _isPlaying = true;
-      notifyListeners();
-      _updateAndroidAuto();
-      _startTelemetryHeartbeat();
-      _sendTelemetryHeartbeat(overridePlaying: true);
     }
   }
 
   Future<void> pause() async {
+    // 1. Instant optimistic UI toggle (0ms latency)
+    _isPlaying = false;
+    _optimisticLocalPlayPauseState = false;
+    _optimisticLocalPlayPauseTime = DateTime.now();
+    notifyListeners();
+    _updateAndroidAuto();
+    _telemetryTimer?.cancel();
+    _sendTelemetryHeartbeat(overridePlaying: false);
+
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
-      _isPlaying = false;
       _optimisticRemotePlayPauseState = false;
       _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
       _remoteAnchorPosition = _position;
       _remoteAnchorTime = null;
       _manageRemotePositionTicker();
-      notifyListeners();
-      _updateAndroidAuto();
       unawaited(_groovyConnectService!.sendControl('pause'));
       return;
     }
-    _telemetryTimer?.cancel();
-    _sendTelemetryHeartbeat(overridePlaying: false);
+
     if (_castService.isConnected) {
       await _castService.pause();
-      _isPlaying = false;
-      notifyListeners();
-      _updateAndroidAuto();
     } else if (_upnpService.isConnected) {
       await _upnpService.pause();
-      _isPlaying = false;
-      notifyListeners();
-      _updateAndroidAuto();
     } else {
-      if (_fadeSettingsService.getFadeEnabled()) {
-        await _fadeOut();
-      }
-      await _audioPlayer.pause();
-      // Ensure volume is restored to effective volume so it never stays mute
-      await _audioPlayer.setVolume(_effectiveVolume);
-      _isPlaying = false;
-      notifyListeners();
-      _updateAndroidAuto();
+      // Instantly pause local audio without waiting for fade-out lag
+      unawaited(_audioPlayer.pause());
+      unawaited(_audioPlayer.setVolume(_effectiveVolume));
     }
   }
 
@@ -2432,113 +2435,29 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAndroidAuto();
   }
 
-  // ── Fade In/Out ────────────────────────────────────────────────────────────
-
-  void _stopFade() {
-    _fadeTimer?.cancel();
-    _fadeTimer = null;
-    _isFading = false;
-  }
-
-  Future<void> _fadeIn() async {
-    _stopFade();
-
-    if (!_fadeSettingsService.getFadeEnabled()) {
-      await _audioPlayer.setVolume(_effectiveVolume);
-      return;
-    }
-
-    final targetVolume = _effectiveVolume;
-    if (targetVolume <= 0.0) return;
-
-    final fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
-    final steps = 15;
-    final stepDurationMs = (fadeDurationMs ~/ steps).clamp(10, 100);
-    final volumeStep = targetVolume / steps;
-
-    _isFading = true;
-    await _audioPlayer.setVolume(0.0);
-
-    var currentStep = 0;
-    _fadeTimer = Timer.periodic(Duration(milliseconds: stepDurationMs), (timer) async {
-      if (!_isFading || currentStep >= steps) {
-        timer.cancel();
-        _fadeTimer = null;
-        _isFading = false;
-        await _audioPlayer.setVolume(targetVolume);
-        return;
-      }
-      currentStep++;
-      final newVolume = (volumeStep * currentStep).clamp(0.0, targetVolume);
-      await _audioPlayer.setVolume(newVolume);
-    });
-  }
-
-  Future<void> _fadeOut() async {
-    _stopFade();
-
-    if (!_fadeSettingsService.getFadeEnabled()) {
-      return;
-    }
-
-    final currentVolume = _audioPlayer.volume;
-    if (currentVolume <= 0.0) return;
-
-    final fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
-    final steps = 15;
-    final stepDurationMs = (fadeDurationMs ~/ steps).clamp(10, 100);
-    final volumeStep = currentVolume / steps;
-
-    _isFading = true;
-
-    final completer = Completer<void>();
-    var currentStep = 0;
-    _fadeTimer = Timer.periodic(Duration(milliseconds: stepDurationMs), (timer) async {
-      if (!_isFading || currentStep >= steps) {
-        timer.cancel();
-        _fadeTimer = null;
-        _isFading = false;
-        if (!completer.isCompleted) completer.complete();
-        return;
-      }
-      currentStep++;
-      final newVolume = (currentVolume - (volumeStep * currentStep)).clamp(0.0, 1.0);
-      await _audioPlayer.setVolume(newVolume);
-    });
-
-    try {
-      await completer.future.timeout(
-        Duration(milliseconds: fadeDurationMs + 200),
-        onTimeout: () {
-          _stopFade();
-        },
-      );
-    } catch (_) {
-      _stopFade();
-    }
-  }
-
-
-
   Future<void> togglePlayPause() async {
     if (_isPlaying) {
+      _isPlaying = false;
+      notifyListeners();
+      _updateAndroidAuto();
       await pause();
     } else {
+      _isPlaying = true;
+      notifyListeners();
+      _updateAndroidAuto();
       await play();
     }
   }
 
   Future<void> seek(Duration position) async {
     _position = position;
+    _positionController.add(position);
     notifyListeners();
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       _lastRemoteSeekTime = DateTime.now();
       _remoteAnchorPosition = position;
       _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
-      _position = position;
-      _positionController.add(position);
-      notifyListeners();
       _updateAndroidAuto();
       unawaited(_groovyConnectService!.sendControl('seek', position.inMilliseconds));
       return;

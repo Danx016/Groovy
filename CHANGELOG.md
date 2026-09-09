@@ -5,6 +5,26 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.89] - 2026-09-09
+
+### Fixed & Improved
+- **Latencia Cero en Pausa y Controles**:
+  - Pausa y reproducción instantáneas (0ms de latencia) mediante actualización de estado optimista inmediata.
+  - Eliminado el retraso por fade progresivo al pausar que provocaba que la canción siguiera sonando después de presionar el botón.
+  - Protección optimista local contra rebotes de estado del reproductor.
+- **Sincronización Total en Vivo (Groovy Connect)**:
+  - Soporte de control y transferencia directa por red local (LAN HTTP) en menos de 5ms, eliminando el retraso de la nube.
+  - Frecuencia de sincronización de estado remoto acelerada a 250ms (anteriormente 750ms).
+  - Heartbeat de telemetría dinámica a 350ms al estar conectado remotamente.
+  - Reconciliación de posición precisa sin retrocesos bruscos en la barra de progreso.
+- **Letras Sincronizadas y Controles Fijos**:
+  - Stream de posición de alta frecuencia (50ms en Windows/Linux y móvil) para sincronizar letras 20 veces por segundo.
+  - Compensación de latencia de hardware de audio para resaltar cada verso exactamente al compás de la voz ("en vivo").
+  - Controles de reproducción, barra de progreso y acciones siempre visibles en la pantalla de letra (ya no se ocultan al tocar).
+- **Instalador Fácil para Linux (Doble Clic)**:
+  - Nuevo instalador `Groovy-linux-install.sh` que permite instalar Groovy con un solo doble clic.
+  - Otorga permisos de ejecución al AppImage automáticamente y crea el acceso directo en el menú de aplicaciones del sistema.
+
 ## [1.0.88] - 2026-09-09
 
 ### Fixed & Improved

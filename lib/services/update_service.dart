@@ -76,7 +76,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.88';
+  static String currentVersion = '1.0.89';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -462,6 +462,10 @@ class UpdateService {
     if (footerIndex != -1) {
       cleaned = cleaned.substring(0, footerIndex).trim();
     }
+
+    // Filter out top title and introductory headings
+    cleaned = cleaned.replaceAll(RegExp(r'^[#\s]*🎵\s*Groovy[^\n]*\n*', multiLine: true), '');
+    cleaned = cleaned.replaceAll(RegExp(r'^[#\s]*✨\s*Novedades[^\n]*\n*', multiLine: true), '');
 
     // Format markdown
     cleaned = cleaned

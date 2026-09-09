@@ -441,7 +441,7 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts the cloud command polling loop to receive actions from other devices.
   void _startCommandPollLoop() {
     _commandPollTimer?.cancel();
-    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
+    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
       _pollCloudCommands();
     });
   }
@@ -703,7 +703,20 @@ class GroovyConnectService extends ChangeNotifier {
     _startStatusSyncTimer();
     notifyListeners();
 
-    // Route playback transfer through Groovy Cloud Server
+    // 1. If device is available on local LAN, send directly over HTTP for instant transfer
+    if (device.isLocalLan && device.host.isNotEmpty) {
+      unawaited(_sendLanTransfer(
+        device.host,
+        device.port,
+        song,
+        position.inMilliseconds,
+        isPlaying,
+        conciseQueue,
+        effectiveQueueIndex,
+      ));
+    }
+
+    // 2. Route playback transfer through Groovy Cloud Server asynchronously
     try {
       debugPrint('[GroovyConnect] Sending transfer to server for device ${device.name} (${device.id})');
       final success = await GroovyApiService().sendDeviceCommand(
@@ -732,6 +745,38 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
+  Future<bool> _sendLanTransfer(
+    String host,
+    int port,
+    Song song,
+    int positionMs,
+    bool isPlaying,
+    List<Map<String, dynamic>>? queue,
+    int? queueIndex,
+  ) async {
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1000);
+      final uri = Uri.parse('http://$host:$port/groovy/transfer');
+      final request = await client.postUrl(uri).timeout(const Duration(milliseconds: 1000));
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode({
+        'song': song.copyWith(isLocal: false).toJson(),
+        'positionMs': positionMs,
+        'isPlaying': isPlaying,
+        'fromDevice': _localDeviceName,
+        'queue': queue,
+        'queueIndex': queueIndex,
+      }));
+      final response = await request.close().timeout(const Duration(milliseconds: 1000));
+      return response.statusCode == HttpStatus.ok;
+    } catch (_) {
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
   /// Connects to a target Groovy device without immediately transferring a song.
   Future<bool> connectToDevice(GroovyRemoteDevice device) async {
     _connectedDevice = device;
@@ -742,11 +787,47 @@ class GroovyConnectService extends ChangeNotifier {
     return true;
   }
 
-  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume) via Cloud Server.
+  Future<bool> _sendLanControl(String host, int port, String action, dynamic value) async {
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 600);
+      final uri = Uri.parse('http://$host:$port/groovy/control');
+      final request = await client.postUrl(uri).timeout(const Duration(milliseconds: 600));
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode({'action': action, 'value': value}));
+      final response = await request.close().timeout(const Duration(milliseconds: 600));
+      return response.statusCode == HttpStatus.ok;
+    } catch (_) {
+      return false;
+    } finally {
+      client?.close(force: true);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchLanStatus(String host, int port) async {
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 500);
+      final uri = Uri.parse('http://$host:$port/groovy/status');
+      final request = await client.getUrl(uri).timeout(const Duration(milliseconds: 500));
+      final response = await request.close().timeout(const Duration(milliseconds: 500));
+      if (response.statusCode == HttpStatus.ok) {
+        final body = await utf8.decodeStream(response);
+        return jsonDecode(body) as Map<String, dynamic>;
+      }
+    } catch (_) {
+      return null;
+    } finally {
+      client?.close(force: true);
+    }
+    return null;
+  }
+
+  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume) via LAN or Cloud Server.
   Future<bool> sendControl(String action, [dynamic value]) async {
     if (_connectedDevice == null) return false;
 
-    // Optimistically update connected device local state immediately
+    // Optimistically update connected device local state immediately (0ms UI latency)
     if (action == 'play') {
       _connectedDevice = _connectedDevice?.copyWith(isPlaying: true);
       notifyListeners();
@@ -758,7 +839,12 @@ class GroovyConnectService extends ChangeNotifier {
       notifyListeners();
     }
 
-    // Route control command through the Groovy Cloud Relay Server
+    // 1. If connected device is on local LAN, send immediately over HTTP for sub-5ms instantaneous response
+    if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty) {
+      unawaited(_sendLanControl(_connectedDevice!.host, _connectedDevice!.port, action, value));
+    }
+
+    // 2. Route control command through the Groovy Cloud Relay Server asynchronously
     try {
       final success = await GroovyApiService().sendDeviceCommand(
         targetDeviceId: _connectedDevice!.id,
@@ -804,12 +890,12 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts status synchronization timer to reflect remote playback progress in the UI.
   void _startStatusSyncTimer() {
     _statusSyncTimer?.cancel();
-    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 750), (_) {
+    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
       _syncRemoteStatus();
     });
   }
 
-  /// Synchronizes playback status with remote device via cloud server telemetry in real-time.
+  /// Synchronizes playback status with remote device via LAN or cloud server telemetry in real-time.
   Future<void> _syncRemoteStatus() async {
     if (_connectedDevice == null) {
       _statusSyncTimer?.cancel();
@@ -819,6 +905,46 @@ class GroovyConnectService extends ChangeNotifier {
     _isSyncingStatus = true;
 
     try {
+      // Prioritize high-frequency LAN status if target device is on local Wi-Fi
+      if (_connectedDevice!.isLocalLan && _connectedDevice!.host.isNotEmpty) {
+        final lanData = await _fetchLanStatus(_connectedDevice!.host, _connectedDevice!.port);
+        if (lanData != null) {
+          final isPlaying = lanData['isPlaying'] == true || lanData['isPlaying'] == 1;
+          final positionMs = (lanData['positionMs'] as num?)?.toInt() ?? 0;
+          final durationMs = (lanData['durationMs'] as num?)?.toInt() ?? 0;
+          final durationSec = durationMs ~/ 1000;
+
+          Song? song;
+          final songData = lanData['song'] as Map<String, dynamic>?;
+          if (songData != null && songData['id'] != null) {
+            try {
+              song = Song.fromJson(songData);
+            } catch (_) {}
+          }
+
+          final now = DateTime.now();
+          final remoteVol = (lanData['volume'] as num?)?.toDouble() ?? _connectedDevice?.volume ?? 1.0;
+          final updated = _connectedDevice!.copyWith(
+            currentSong: song ?? _connectedDevice!.currentSong,
+            isPlaying: isPlaying,
+            volume: remoteVol,
+            lastSeen: now,
+          );
+          _connectedDevice = updated;
+          _discoveredDevices[updated.id] = updated;
+          notifyListeners();
+
+          onRemoteStatusUpdated?.call(
+            song: song,
+            position: Duration(milliseconds: positionMs),
+            duration: Duration(seconds: durationSec),
+            isPlaying: isPlaying,
+            volume: remoteVol,
+          );
+          return;
+        }
+      }
+
       if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
         try {
           final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
