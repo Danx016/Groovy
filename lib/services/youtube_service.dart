@@ -304,7 +304,6 @@ class YoutubeService {
   }
 
   bool get isYoutube => true;
-  bool get isJellyfin => false;
   bool get isConfigured => true;
   dynamic get config => null;
 
