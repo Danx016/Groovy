@@ -128,6 +128,61 @@ class UpdateService {
     }
   }
 
+  /// Clears snoozed update state so the update dialog can be shown again immediately
+  static Future<void> clearSnooze([String? version]) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (version != null) {
+        final dismissedVersion = prefs.getString(_prefKeyDismissedVersion);
+        if (dismissedVersion == cleanVersion(version)) {
+          await prefs.remove(_prefKeyDismissedVersion);
+          await prefs.remove(_prefKeyDismissedTime);
+        }
+      } else {
+        await prefs.remove(_prefKeyDismissedVersion);
+        await prefs.remove(_prefKeyDismissedTime);
+      }
+    } catch (e) {
+      debugPrint('UpdateService: failed to clear snooze: $e');
+    }
+  }
+
+  /// Converts raw technical exceptions (Dio, sockets, timeouts) into clear, friendly messages
+  static String formatDownloadError(Object error) {
+    if (error is DioException) {
+      switch (error.type) {
+        case DioExceptionType.connectionTimeout:
+        case DioExceptionType.sendTimeout:
+        case DioExceptionType.receiveTimeout:
+          return 'Tiempo de espera agotado. Tu conexión a internet es lenta o inestable.';
+        case DioExceptionType.connectionError:
+          return 'Se perdió la conexión a internet durante la descarga. Comprueba tu conexión.';
+        case DioExceptionType.badResponse:
+          final code = error.response?.statusCode;
+          return 'El servidor de descarga respondió con error ($code). Intenta más tarde o descarga desde la web.';
+        case DioExceptionType.cancel:
+          return 'Descarga cancelada.';
+        default:
+          final msg = (error.message ?? '').toLowerCase();
+          if (msg.contains('socket') || msg.contains('network') || msg.contains('failed host lookup')) {
+            return 'Se perdió la conexión a internet durante la descarga. Comprueba tu conexión.';
+          }
+          return 'Error de red al descargar la actualización. Verifica tu conexión.';
+      }
+    }
+    final str = error.toString().toLowerCase();
+    if (str.contains('socketexception') || str.contains('failed host lookup') || str.contains('network')) {
+      return 'Se perdió la conexión a internet durante la descarga. Comprueba tu conexión.';
+    }
+    if (str.contains('space') || str.contains('storage') || str.contains('enospc')) {
+      return 'Espacio insuficiente en el almacenamiento del dispositivo.';
+    }
+    if (str.contains('permission')) {
+      return 'Permiso denegado para guardar la actualización.';
+    }
+    return 'No se pudo completar la descarga. Verifica tu conexión e inténtalo de nuevo.';
+  }
+
   /// Checks whether a specific update version has been snoozed within the last 24 hours
   static Future<bool> isUpdateSnoozed(String version) async {
     try {
@@ -301,7 +356,17 @@ class UpdateService {
       }
     } catch (e) {
       isDownloadingNotifier.value = false;
-      downloadErrorNotifier.value = e.toString();
+      downloadErrorNotifier.value = formatDownloadError(e);
+      // Delete any broken or incomplete temporary file
+      try {
+        final dir = await getTemporaryDirectory();
+        final file = File('${dir.path}/$filename');
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (_) {}
+      // Clear snooze so the update remains available next time app starts
+      await clearSnooze(release.version);
       debugPrint('Update download error: $e');
     }
   }

@@ -5,6 +5,7 @@ import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings/settings_section_card.dart';
 import '../utils/context_extensions.dart';
+import 'main_screen.dart';
 
 class SettingsAboutTab extends StatelessWidget {
   const SettingsAboutTab({super.key});
@@ -31,6 +32,50 @@ class SettingsAboutTab extends StatelessWidget {
               iconColor: Theme.of(context).colorScheme.primary,
               title: AppLocalizations.of(context)!.aboutVersion,
               subtitle: UpdateService.currentVersion,
+            ),
+            _buildDivider(context),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              leading: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE50914).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  CupertinoIcons.arrow_2_circlepath_circle,
+                  color: Color(0xFFE50914),
+                  size: 18,
+                ),
+              ),
+              title: const Text('Buscar actualizaciones', style: TextStyle(fontSize: 16)),
+              subtitle: const Text('Comprobar si hay una versión más reciente', style: TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right, size: 20),
+              onTap: () async {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Buscando actualizaciones...'),
+                    duration: Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                await UpdateService.clearSnooze();
+                final release = await UpdateService.checkForUpdate(force: true);
+                if (!context.mounted) return;
+                if (release != null) {
+                  MainScreen.showUpdateDialog(context, release);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('¡Tienes la última versión instalada (v${UpdateService.currentVersionDisplay})!'),
+                      backgroundColor: const Color(0xFF1DB954),
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                }
+              },
             ),
             _buildDivider(context),
             _buildInfoTile(

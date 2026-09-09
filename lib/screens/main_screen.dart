@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -105,6 +106,10 @@ class MainScreen extends StatefulWidget {
 
   const MainScreen({super.key, this.isOfflineMode = false});
 
+  static void showUpdateDialog(BuildContext context, ReleaseInfo release) {
+    _MainScreenState.showUpdateDialogStatic(context, release);
+  }
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
@@ -210,23 +215,37 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   static bool _hasCheckedUpdateThisSession = false;
+  Timer? _updateRetryTimer;
 
-  Future<void> _checkForUpdate() async {
-    if (_hasCheckedUpdateThisSession) return;
-    _hasCheckedUpdateThisSession = true;
-    final release = await UpdateService.checkForUpdate();
-    if (release == null || !mounted) return;
-    _showUpdateDialog(release);
+  Future<void> _checkForUpdate({bool force = false}) async {
+    if (!force && _hasCheckedUpdateThisSession) return;
+    try {
+      final release = await UpdateService.checkForUpdate(force: force);
+      if (release == null || !mounted) {
+        // If check failed (e.g. no internet on app start), retry once after 30s when network might be ready
+        if (!_hasCheckedUpdateThisSession && _updateRetryTimer == null) {
+          _updateRetryTimer = Timer(const Duration(seconds: 30), () {
+            if (mounted && !_hasCheckedUpdateThisSession) {
+              _checkForUpdate();
+            }
+          });
+        }
+        return;
+      }
+      _hasCheckedUpdateThisSession = true;
+      _updateRetryTimer?.cancel();
+      MainScreen.showUpdateDialog(context, release);
+    } catch (_) {}
   }
 
-  void _showUpdateDialog(ReleaseInfo release) {
+  static void showUpdateDialogStatic(BuildContext context, ReleaseInfo release) {
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final changelog = UpdateService.stripMarkdown(release.body);
 
     showDialog<void>(
       context: context,
-      barrierDismissible: true,
+      barrierDismissible: false,
       builder: (ctx) {
         return ValueListenableBuilder<bool>(
           valueListenable: UpdateService.isDownloadingNotifier,
@@ -421,32 +440,68 @@ class _MainScreenState extends State<MainScreen> {
                                 ),
                               ),
 
+                            // Clear error box with friendly Spanish message
                             if (errorMessage != null)
                               Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      errorMessage,
-                                      style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                                      textAlign: TextAlign.center,
+                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                child: Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: Colors.redAccent.withValues(alpha: 0.3),
                                     ),
-                                    const SizedBox(height: 6),
-                                    TextButton.icon(
-                                      onPressed: () {
-                                        launchUrl(
-                                          Uri.parse(release.htmlUrl),
-                                          mode: LaunchMode.externalApplication,
-                                        );
-                                      },
-                                      icon: const Icon(Icons.open_in_browser, size: 16),
-                                      label: const Text(
-                                        'Descargar desde la web',
-                                        style: TextStyle(fontSize: 12),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          const Icon(
+                                            Icons.wifi_off_rounded,
+                                            color: Colors.redAccent,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              errorMessage,
+                                              style: const TextStyle(
+                                                color: Colors.redAccent,
+                                                fontSize: 12.5,
+                                                fontWeight: FontWeight.w500,
+                                                height: 1.3,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ),
-                                  ],
+                                      const SizedBox(height: 8),
+                                      Align(
+                                        alignment: Alignment.centerRight,
+                                        child: TextButton.icon(
+                                          onPressed: () {
+                                            launchUrl(
+                                              Uri.parse(release.htmlUrl),
+                                              mode: LaunchMode.externalApplication,
+                                            );
+                                          },
+                                          icon: const Icon(Icons.open_in_browser, size: 15),
+                                          label: const Text(
+                                            'Descargar desde la web',
+                                            style: TextStyle(fontSize: 12),
+                                          ),
+                                          style: TextButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ),
 
@@ -459,7 +514,10 @@ class _MainScreenState extends State<MainScreen> {
                                     Expanded(
                                       child: TextButton(
                                         onPressed: () {
-                                          UpdateService.snoozeUpdate(release.version);
+                                          if (errorMessage == null) {
+                                            // Only snooze if user explicitly chose "Remind Later"
+                                            UpdateService.snoozeUpdate(release.version);
+                                          }
                                           Navigator.of(ctx).pop();
                                         },
                                         style: TextButton.styleFrom(
@@ -471,7 +529,7 @@ class _MainScreenState extends State<MainScreen> {
                                               isDark ? Colors.white60 : Colors.black54,
                                         ),
                                         child: Text(
-                                          l10n.remindLater,
+                                          errorMessage != null ? 'Cerrar' : l10n.remindLater,
                                           style: const TextStyle(fontWeight: FontWeight.w600),
                                         ),
                                       ),
@@ -491,13 +549,15 @@ class _MainScreenState extends State<MainScreen> {
                                       icon: Icon(
                                         isDownloading
                                             ? CupertinoIcons.check_mark_circled
-                                            : CupertinoIcons.arrow_down_to_line_alt,
+                                            : (errorMessage != null
+                                                ? CupertinoIcons.arrow_clockwise
+                                                : CupertinoIcons.arrow_down_to_line_alt),
                                         size: 18,
                                       ),
                                       label: Text(
                                         isDownloading
                                             ? 'Continuar en segundo plano'
-                                            : 'Actualizar ahora',
+                                            : (errorMessage != null ? 'Reintentar descarga' : 'Actualizar ahora'),
                                         style: const TextStyle(
                                           fontSize: 15,
                                           fontWeight: FontWeight.bold,
@@ -528,9 +588,7 @@ class _MainScreenState extends State<MainScreen> {
           },
         );
       },
-    ).then((_) {
-      UpdateService.snoozeUpdate(release.version);
-    });
+    );
   }
 
   bool get _isDesktop {

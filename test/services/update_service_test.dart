@@ -34,5 +34,20 @@ void main() {
       expect(UpdateService.cleanVersion('v1.0.72+63'), '1.0.72');
       expect(UpdateService.cleanVersion('v1.0.65'), '1.0.65');
     });
+
+    test('formatDownloadError returns user-friendly messages instead of raw tech stack traces', () {
+      expect(
+        UpdateService.formatDownloadError('SocketException: OS Error: Network is unreachable, errno = 101'),
+        contains('Se perdió la conexión a internet'),
+      );
+      expect(
+        UpdateService.formatDownloadError('Failed host lookup: api.github.com'),
+        contains('Se perdió la conexión a internet'),
+      );
+      expect(
+        UpdateService.formatDownloadError('No space left on device'),
+        contains('Espacio insuficiente'),
+      );
+    });
   });
 }
