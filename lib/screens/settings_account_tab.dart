@@ -9,14 +9,14 @@ import '../utils/context_extensions.dart';
 import '../utils/navigation_helper.dart';
 import 'edit_profile_screen.dart';
 
-class SettingsServerTab extends StatefulWidget {
-  const SettingsServerTab({super.key});
+class SettingsAccountTab extends StatefulWidget {
+  const SettingsAccountTab({super.key});
 
   @override
-  State<SettingsServerTab> createState() => _SettingsServerTabState();
+  State<SettingsAccountTab> createState() => _SettingsAccountTabState();
 }
 
-class _SettingsServerTabState extends State<SettingsServerTab> {
+class _SettingsAccountTabState extends State<SettingsAccountTab> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);

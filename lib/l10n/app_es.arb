@@ -1,4 +1,4 @@
-﻿{
+{
   "@@locale": "es",
   "@@last_modified": "2026-02-07T16:10:00Z",
   "appName": "Groovy",
@@ -966,12 +966,12 @@
   "@noRadioStations": {
     "description": "Empty state headline on the radio screen"
   },
-  "noRadioStationsHint": "Añade emisoras de radio en la configuración de tu servidor Navidrome para verlas aquí.",
+  "noRadioStationsHint": "No hay emisoras de radio disponibles en este momento.",
   "@noRadioStationsHint": {
     "description": "Empty state subtitle on the radio screen"
   },
   "@_LOGIN_SCREEN": {},
-  "connectToServerSubtitle": "Conectar a tu servidor de Subsonic",
+  "connectToServerSubtitle": "Conectar a tu cuenta de Groovy",
   "@connectToServerSubtitle": {
     "description": "Subtitle below the app name on the login screen"
   },
@@ -991,13 +991,13 @@
   "@pleaseEnterPassword": {
     "description": "Validation message when password is empty"
   },
-  "legacyAuthentication": "Autenticación heredada",
+  "legacyAuthentication": "Autenticación estándar",
   "@legacyAuthentication": {
-    "description": "Toggle label for legacy Subsonic authentication"
+    "description": "Toggle label for standard authentication"
   },
-  "legacyAuthSubtitle": "Usar para servidores Subsonic antiguos",
+  "legacyAuthSubtitle": "Usar autenticación estándar de Groovy",
   "@legacyAuthSubtitle": {
-    "description": "Subtitle for the legacy authentication toggle"
+    "description": "Subtitle for the standard authentication toggle"
   },
   "allowSelfSignedCerts": "Permitir certificados autofirmados",
   "@allowSelfSignedCerts": {
@@ -1380,7 +1380,7 @@
   "@addToJukeboxQueue": {
     "description": "Option to append a song to the jukebox queue"
   },
-  "jukeboxNotSupported": "El modo Jukebox no es compatible con este servidor. Actívalo en la configuración del servidor (p. ej. EnableJukebox = true en Navidrome).",
+  "jukeboxNotSupported": "Utiliza Groovy Connect para controlar la reproducción remota en otros dispositivos.",
   "@jukeboxNotSupported": {
     "description": "Error shown when the server returns 501 for jukebox API calls"
   },
@@ -2065,9 +2065,9 @@
   },
   "enableLrcLibFallback": "Obtener letras de LRCLIB",
   "@enableLrcLibFallback": {
-    "description": "Toggle label for enabling LRCLIB lyrics fallback when the Subsonic server has no lyrics"
+    "description": "Toggle label for enabling LRCLIB lyrics fallback when the track has no embedded lyrics"
   },
-  "lrcLibFallbackSubtitle": "Buscar automáticamente letras en LRCLIB cuando tu servidor no las tenga",
+  "lrcLibFallbackSubtitle": "Buscar automáticamente letras en LRCLIB cuando la canción no las tenga",
   "@lrcLibFallbackSubtitle": {
     "description": "Subtitle explaining the LRCLIB fallback toggle"
   },

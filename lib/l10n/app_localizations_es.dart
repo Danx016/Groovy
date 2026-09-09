@@ -1074,10 +1074,10 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get noRadioStationsHint =>
-      'Añade emisoras de radio en la configuración de tu servidor Navidrome para verlas aquí.';
+      'No hay emisoras de radio disponibles en este momento.';
 
   @override
-  String get connectToServerSubtitle => 'Conectar a tu servidor de Subsonic';
+  String get connectToServerSubtitle => 'Conectar a tu cuenta de Groovy';
 
   @override
   String get pleaseEnterServerUrl =>
@@ -1094,10 +1094,10 @@ class AppLocalizationsEs extends AppLocalizations {
   String get pleaseEnterPassword => 'Por favor, introduzca contraseña';
 
   @override
-  String get legacyAuthentication => 'Autenticación heredada';
+  String get legacyAuthentication => 'Autenticación estándar';
 
   @override
-  String get legacyAuthSubtitle => 'Usar para servidores Subsonic antiguos';
+  String get legacyAuthSubtitle => 'Usar autenticación estándar de Groovy';
 
   @override
   String get allowSelfSignedCerts => 'Permitir certificados autofirmados';
@@ -1369,7 +1369,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get jukeboxNotSupported =>
-      'El modo Jukebox no es compatible con este servidor. Actívalo en la configuración del servidor (p. ej. EnableJukebox = true en Navidrome).';
+      'Utiliza Groovy Connect para controlar la reproducción remota en otros dispositivos.';
 
   @override
   String get musicFoldersDialogTitle => 'Seleccionar Carpetas de Música';
@@ -1816,7 +1816,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get lrcLibFallbackSubtitle =>
-      'Buscar automáticamente letras en LRCLIB cuando tu servidor no las tenga';
+      'Buscar automáticamente letras en LRCLIB cuando la canción no las tenga';
 
   @override
   String get themeSaved => 'Tema guardado';

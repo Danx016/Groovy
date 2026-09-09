@@ -1803,7 +1803,7 @@ class AppLocalizationsSv extends AppLocalizations {
 
   @override
   String get lrcLibFallbackSubtitle =>
-      'Automatically search LRCLIB for lyrics when your server does not provide them';
+      'Automatically search LRCLIB for lyrics when unavailable';
 
   @override
   String get themeSaved => 'Theme saved';

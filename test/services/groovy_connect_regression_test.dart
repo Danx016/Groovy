@@ -6,7 +6,6 @@ import 'package:groovy/services/youtube_service.dart';
 import 'package:groovy/services/storage_service.dart';
 import 'package:groovy/services/upnp_service.dart';
 import 'package:groovy/services/audio_handler.dart';
-import 'package:groovy/services/jukebox_service.dart';
 import 'package:groovy/services/transcoding_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../test_helpers.dart';
@@ -31,7 +30,6 @@ void main() {
         FakeCastService(),
         UpnpService(),
         GroovyAudioHandler(),
-        JukeboxService(),
         TranscodingService(),
       );
 

@@ -26,7 +26,6 @@ import '../services/storage_service.dart';
 import '../services/groovy_api_service.dart';
 import '../services/cast_service.dart';
 import '../services/upnp_service.dart';
-import '../services/jukebox_service.dart';
 import '../services/audio_handler.dart';
 import '../services/fade_settings_service.dart';
 
@@ -107,7 +106,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   int _sleepTimerFadeDurationSeconds = 30;
   Timer? _sleepTimerFadeTimer;
   Timer? _sleepTimerFadePeriodicTimer;
-  Timer? _jukeboxPollTimer;
 
   // Fade in/out
   final FadeSettingsService _fadeSettingsService = FadeSettingsService();
@@ -162,7 +160,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _sendTelemetryHeartbeat(overridePlaying: overridePlaying);
   }
 
-  final JukeboxService _jukeboxService;
   final TranscodingService _transcodingService;
 
   double _playbackSpeed = 1.0;
@@ -178,7 +175,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     this._castService,
     this._upnpService,
     this._audioHandler,
-    this._jukeboxService,
     this._transcodingService,
   ) {
     _storageService = storageService;
@@ -186,9 +182,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _castService.addListener(_onCastStateChanged);
     _upnpService.addListener(_onUpnpStateChanged);
     _upnpService.onRendererLost = _onUpnpRendererLost;
-    _jukeboxService.addListener(_onJukeboxEnabledChanged);
     _initializePlayer();
-    _onJukeboxEnabledChanged();
     try {
       _initializeAndroidAuto();
     } catch (_) {}
@@ -321,77 +315,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         p.remove(_keyQueueSongId);
       });
     } catch (_) {}
-  }
-
-  // ── Jukebox mode ─────────────────────────────────────────────────────────
-
-  void _onJukeboxEnabledChanged() {
-    if (_jukeboxService.enabled) {
-      _startJukeboxPolling();
-    } else {
-      _stopJukeboxPolling();
-    }
-  }
-
-  void _startJukeboxPolling() {
-    _stopJukeboxPolling();
-    _jukeboxPollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-      _pollJukebox();
-    });
-    _pollJukebox();
-  }
-
-  void _stopJukeboxPolling() {
-    _jukeboxPollTimer?.cancel();
-    _jukeboxPollTimer = null;
-  }
-
-  Future<void> _pollJukebox() async {
-    if (!_jukeboxService.enabled) return;
-    try {
-      await _jukeboxService.refresh(_youtubeService);
-      _syncFromJukeboxStatus();
-    } catch (e) {
-      debugPrint('Jukebox poll error: $e');
-    }
-  }
-
-  void _syncFromJukeboxStatus() {
-    if (!_jukeboxService.enabled) return;
-    final status = _jukeboxService.status;
-    final song = status.currentSong;
-
-    bool changed = false;
-    if (song != null && song.id != _currentSong?.id) {
-      _currentSong = song;
-      _resolvedArtworkUrl = null;
-      changed = true;
-    }
-    if (_isPlaying != status.playing) {
-      _isPlaying = status.playing;
-      changed = true;
-    }
-    if (_position != status.position) {
-      _position = status.position;
-      changed = true;
-    }
-    if (status.playlist.isNotEmpty && !identical(_queue, status.playlist)) {
-      _queue = List.from(status.playlist);
-      changed = true;
-    }
-    final clampedIndex = status.currentIndex.clamp(
-      0,
-      (_queue.length - 1).clamp(0, double.maxFinite.toInt()),
-    );
-    if (_currentIndex != clampedIndex) {
-      _currentIndex = clampedIndex;
-      changed = true;
-    }
-    if (changed) {
-      notifyListeners();
-      _updateAllServices();
-      _updateAndroidAuto();
-    }
   }
 
   GroovyConnectService? _groovyConnectService;
@@ -1199,7 +1122,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // While rendering on a remote target the local just_audio player is
     // paused, so push the real playback state to the media session manually.
-    if (_isRenderingRemotely || _jukeboxService.enabled) {
+    if (_isRenderingRemotely) {
       _audioHandler.updateRemotePlaybackState(
         playing: _isPlaying,
         position: _position,
@@ -1966,26 +1889,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isPlayingRadio = false;
     _currentRadioStation = null;
 
-    // Jukebox mode: send to server instead of playing locally.
-    if (_jukeboxService.enabled) {
-      final targetPlaylist = (playlist ?? [song]).toList();
-      final targetIndex = startIndex ??
-          targetPlaylist
-              .indexWhere((s) => s.id == song.id)
-              .clamp(0, targetPlaylist.length - 1);
-      await _jukeboxService.setQueue(
-        _youtubeService,
-        targetPlaylist,
-        startIndex: targetIndex,
-      );
-      _isPlaying = true;
-      _isLoading = false;
-      notifyListeners();
-      _updateAllServices();
-      _updateAndroidAuto();
-      return;
-    }
-
     // Groovy Connect mode: route playback directly to connected device (Spotify Connect style)
     if (_groovyConnectService?.isConnected == true) {
       final List<Song> targetPlaylist;
@@ -2394,13 +2297,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> play() async {
-    if (_jukeboxService.enabled) {
-      await _jukeboxService.play(_youtubeService);
-      _isPlaying = true;
-      notifyListeners();
-      _updateAndroidAuto();
-      return;
-    }
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       _isPlaying = true;
@@ -2473,13 +2369,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     _telemetryTimer?.cancel();
     _sendTelemetryHeartbeat(overridePlaying: false);
-    if (_jukeboxService.enabled) {
-      await _jukeboxService.pause(_youtubeService);
-      _isPlaying = false;
-      notifyListeners();
-      _updateAndroidAuto();
-      return;
-    }
     if (_castService.isConnected) {
       await _castService.pause();
       _isPlaying = false;
@@ -2629,10 +2518,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> seek(Duration position) async {
     _position = position;
     notifyListeners();
-    if (_jukeboxService.enabled) {
-      // Jukebox doesn't support seek by position; ignore.
-      return;
-    }
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       _lastRemoteSeekTime = DateTime.now();
@@ -2679,10 +2564,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    if (_jukeboxService.enabled) {
-      await _jukeboxService.skipNext(_youtubeService);
-      return;
-    }
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       _lastRemoteSeekTime = DateTime.now();
@@ -2801,10 +2682,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipPrevious() async {
     _hasRetriedCurrentPlay = false;
-    if (_jukeboxService.enabled) {
-      await _jukeboxService.skipPrevious(_youtubeService);
-      return;
-    }
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       if (_position.inSeconds > 3) {
@@ -3144,8 +3021,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _prepareCurrentSong() async {
     if (_currentSong == null) return;
-    // When jukebox mode is active, the server handles playback.
-    if (_jukeboxService.enabled) return;
     try {
       final ytSource = _currentSong!.isLocal != true
           ? await _youtubeService.getYoutubeAudioSource(_currentSong!)
@@ -3404,8 +3279,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Save queue state immediately before cancelling the debounce timer
     _saveQueueStateImmediate();
     _persistDebounceTimer?.cancel();
-    _jukeboxPollTimer?.cancel();
-    _jukeboxService.removeListener(_onJukeboxEnabledChanged);
     _windowsPositionTimer?.cancel();
     _remotePositionTickerTimer?.cancel();
     _castService.removeListener(_onCastStateChanged);

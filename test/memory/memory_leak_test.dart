@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/providers/auth_provider.dart';
 import 'package:groovy/providers/library_provider.dart';
@@ -26,7 +26,6 @@ void main() {
         FakeCastService(),
         UpnpService(),
         GroovyAudioHandler(),
-        JukeboxService(),
         TranscodingService(),
       );
 

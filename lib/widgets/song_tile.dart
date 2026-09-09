@@ -9,7 +9,6 @@ import '../models/album.dart';
 import '../utils/navigation_helper.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
-import '../services/jukebox_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/youtube_service.dart';
 import '../services/offline_service.dart';
@@ -401,51 +400,7 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
                         Navigator.pop(context);
                       },
                     ),
-                    Builder(
-                      builder: (context) {
-                        final jukebox = Provider.of<JukeboxService>(
-                          context,
-                          listen: false,
-                        );
-                        final youtubeService = Provider.of<YoutubeService>(
-                          context,
-                          listen: false,
-                        );
-                        if (!jukebox.enabled) return const SizedBox.shrink();
-                        return Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _OptionTile(
-                              icon: Icons.speaker_rounded,
-                              title: AppLocalizations.of(
-                                context,
-                              )!
-                                  .playOnJukebox,
-                              onTap: () {
-                                Navigator.pop(context);
-                                jukebox.setQueue(
-                                    youtubeService,
-                                    [
-                                      widget.song,
-                                    ],
-                                    startIndex: 0);
-                              },
-                            ),
-                            _OptionTile(
-                              icon: Icons.queue_rounded,
-                              title: AppLocalizations.of(
-                                context,
-                              )!
-                                  .addToJukeboxQueue,
-                              onTap: () {
-                                Navigator.pop(context);
-                                jukebox.addToQueue(youtubeService, [widget.song]);
-                              },
-                            ),
-                          ],
-                        );
-                      },
-                    ),
+
                     _OptionTile(
                       icon: Icons.playlist_add_rounded,
                       title: AppLocalizations.of(context)!.addToPlaylist,

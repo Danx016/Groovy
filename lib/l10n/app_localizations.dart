@@ -2089,13 +2089,13 @@ abstract class AppLocalizations {
   /// Empty state subtitle on the radio screen
   ///
   /// In en, this message translates to:
-  /// **'Add radio stations in your Navidrome server settings to see them here.'**
+  /// **'No radio stations are available at this time.'**
   String get noRadioStationsHint;
 
   /// Subtitle below the app name on the login screen
   ///
   /// In en, this message translates to:
-  /// **'Connect to your Subsonic server'**
+  /// **'Connect to your Groovy account'**
   String get connectToServerSubtitle;
 
   /// Validation message when server URL is empty
@@ -2122,16 +2122,16 @@ abstract class AppLocalizations {
   /// **'Please enter password'**
   String get pleaseEnterPassword;
 
-  /// Toggle label for legacy Subsonic authentication
+  /// Toggle label for standard authentication
   ///
   /// In en, this message translates to:
-  /// **'Legacy Authentication'**
+  /// **'Standard Authentication'**
   String get legacyAuthentication;
 
-  /// Subtitle for the legacy authentication toggle
+  /// Subtitle for the standard authentication toggle
   ///
   /// In en, this message translates to:
-  /// **'Use for older Subsonic servers'**
+  /// **'Use standard Groovy authentication'**
   String get legacyAuthSubtitle;
 
   /// Toggle label to allow self-signed TLS certificates
@@ -2614,10 +2614,10 @@ abstract class AppLocalizations {
   /// **'Add to Jukebox Queue'**
   String get addToJukeboxQueue;
 
-  /// Error shown when the server returns 501 for jukebox API calls
+  /// Notice recommending Groovy Connect for remote playback
   ///
   /// In en, this message translates to:
-  /// **'Jukebox mode is not supported by this server. Enable it in your server configuration (e.g. EnableJukebox = true in Navidrome).'**
+  /// **'Use Groovy Connect to control playback on your other devices.'**
   String get jukeboxNotSupported;
 
   /// Title of the music folders selection dialog
@@ -3400,7 +3400,7 @@ abstract class AppLocalizations {
   /// **'Your Playlists'**
   String get yourPlaylistsLabel;
 
-  /// Toggle label for enabling LRCLIB lyrics fallback when the Subsonic server has no lyrics
+  /// Toggle label for enabling LRCLIB lyrics fallback when the track has no embedded lyrics
   ///
   /// In en, this message translates to:
   /// **'Fetch lyrics from LRCLIB'**
@@ -3409,7 +3409,7 @@ abstract class AppLocalizations {
   /// Subtitle explaining the LRCLIB fallback toggle
   ///
   /// In en, this message translates to:
-  /// **'Automatically search LRCLIB for lyrics when your server does not provide them'**
+  /// **'Automatically search LRCLIB for lyrics when unavailable'**
   String get lrcLibFallbackSubtitle;
 
   /// Snackbar message after saving a Now Playing theme

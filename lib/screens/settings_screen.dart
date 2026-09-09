@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import '../l10n/app_localizations.dart';
-import 'settings_server_tab.dart';
+import 'settings_account_tab.dart';
 import 'settings_display_tab.dart';
 import 'settings_about_tab.dart';
 import '../theme/app_theme.dart';
@@ -57,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen>
     ];
     
     final tabViews = const [
-      SettingsServerTab(),
+      SettingsAccountTab(),
       SettingsDisplayTab(),
       SettingsAboutTab(),
     ];

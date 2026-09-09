@@ -11,7 +11,6 @@ export 'cast_service.dart';
 export 'locale_service.dart';
 export 'update_service.dart';
 export 'upnp_service.dart';
-export 'jukebox_service.dart';
 export 'theme_service.dart';
 export 'library_database_service.dart';
 export 'ytdlp_service.dart';

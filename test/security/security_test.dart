@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/models/models.dart';
 import 'package:groovy/services/youtube_service.dart';
 import '../bootstrap.dart';
@@ -43,27 +43,6 @@ void main() {
         expect(json['title'], contains('<script>'));
         expect(json['artist'], contains('<img'));
         expect(json['album'], contains('<body'));
-      });
-    });
-
-    group('Password / credential handling', () {
-      test('ServerConfig password should be stored', () {
-        final config = ServerConfig(
-          serverUrl: 'http://test',
-          username: 'admin',
-          password: 'secret123',
-        );
-        expect(config.password, 'secret123');
-      });
-
-      test('toJson should include password (for persistence)', () {
-        final config = ServerConfig(
-          serverUrl: 'http://test',
-          username: 'u',
-          password: 'p',
-        );
-        final json = config.toJson();
-        expect(json['password'], 'p');
       });
     });
   });

@@ -188,7 +188,6 @@ void main() async {
   final castService = CastService();
   final localeService = LocaleService();
   final upnpService = UpnpService();
-  final jukeboxService = JukeboxService();
   final themeService = ThemeService();
 
   DeviceInfoService().getDeviceInfo().catchError((e) {
@@ -197,7 +196,7 @@ void main() async {
       platform: 'Unknown',
       deviceModel: 'Groovy Device',
       osVersion: 'Unknown',
-      appVersion: '1.0.84',
+      appVersion: UpdateService.currentVersion,
       userAgent: 'GroovyApp/1.0',
     );
   });
@@ -215,9 +214,6 @@ void main() async {
   });
   localeService.loadSavedLocale().catchError((e) {
     debugPrint('Failed to load saved locale: $e');
-  });
-  jukeboxService.initialize().catchError((e) {
-    debugPrint('Failed to initialize jukebox service: $e');
   });
   FavoritePlaylistsService().initialize().catchError((e) {
     debugPrint('Failed to initialize favorite playlists service: $e');
@@ -265,7 +261,6 @@ void main() async {
     castService,
     upnpService,
     audioHandler,
-    jukeboxService,
     transcodingService,
   );
   final libraryProvider = LibraryProvider(youtubeService, audioHandler);
@@ -376,7 +371,6 @@ void main() async {
       ChangeNotifierProvider<LocaleService>.value(value: localeService),
       ChangeNotifierProvider<ThemeService>.value(value: themeService),
       ChangeNotifierProvider<UpnpService>.value(value: upnpService),
-      ChangeNotifierProvider<JukeboxService>.value(value: jukeboxService),
       ChangeNotifierProvider<GroovyConnectService>.value(value: groovyConnectService),
       ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider),
       ChangeNotifierProvider<LibraryProvider>.value(value: libraryProvider),

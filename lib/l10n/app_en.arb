@@ -1,4 +1,4 @@
-﻿{
+{
   "@@locale": "en",
   "@@last_modified": "2026-02-07T16:10:00Z",
 
@@ -1165,11 +1165,11 @@
   "noRadioStations": "No Radio Stations",
   "@noRadioStations": { "description": "Empty state headline on the radio screen" },
 
-  "noRadioStationsHint": "Add radio stations in your Navidrome server settings to see them here.",
+  "noRadioStationsHint": "No radio stations are available at this time.",
   "@noRadioStationsHint": { "description": "Empty state subtitle on the radio screen" },
 
   "@_LOGIN_SCREEN": {},
-  "connectToServerSubtitle": "Connect to your Subsonic server",
+  "connectToServerSubtitle": "Connect to your Groovy account",
   "@connectToServerSubtitle": { "description": "Subtitle below the app name on the login screen" },
 
   "pleaseEnterServerUrl": "Please enter server URL",
@@ -1184,11 +1184,11 @@
   "pleaseEnterPassword": "Please enter password",
   "@pleaseEnterPassword": { "description": "Validation message when password is empty" },
 
-  "legacyAuthentication": "Legacy Authentication",
-  "@legacyAuthentication": { "description": "Toggle label for legacy Subsonic authentication" },
+  "legacyAuthentication": "Standard Authentication",
+  "@legacyAuthentication": { "description": "Toggle label for standard authentication" },
 
-  "legacyAuthSubtitle": "Use for older Subsonic servers",
-  "@legacyAuthSubtitle": { "description": "Subtitle for the legacy authentication toggle" },
+  "legacyAuthSubtitle": "Use standard Groovy authentication",
+  "@legacyAuthSubtitle": { "description": "Subtitle for the standard authentication toggle" },
 
   "allowSelfSignedCerts": "Allow Self-Signed Certificates",
   "@allowSelfSignedCerts": { "description": "Toggle label to allow self-signed TLS certificates" },
@@ -1489,8 +1489,8 @@
   "addToJukeboxQueue": "Add to Jukebox Queue",
   "@addToJukeboxQueue": { "description": "Option to append a song to the jukebox queue" },
 
-  "jukeboxNotSupported": "Jukebox mode is not supported by this server. Enable it in your server configuration (e.g. EnableJukebox = true in Navidrome).",
-  "@jukeboxNotSupported": { "description": "Error shown when the server returns 501 for jukebox API calls" },
+  "jukeboxNotSupported": "Use Groovy Connect to control playback on your other devices.",
+  "@jukeboxNotSupported": { "description": "Notice recommending Groovy Connect for remote playback" },
 
   "@_MUSIC_FOLDERS": {},
   "musicFoldersDialogTitle": "Select Music Folders",
@@ -1944,10 +1944,10 @@
 
   "enableLrcLibFallback": "Fetch lyrics from LRCLIB",
   "@enableLrcLibFallback": {
-    "description": "Toggle label for enabling LRCLIB lyrics fallback when the Subsonic server has no lyrics"
+    "description": "Toggle label for enabling LRCLIB lyrics fallback when the track has no embedded lyrics"
   },
 
-  "lrcLibFallbackSubtitle": "Automatically search LRCLIB for lyrics when your server does not provide them",
+  "lrcLibFallbackSubtitle": "Automatically search LRCLIB for lyrics when unavailable",
   "@lrcLibFallbackSubtitle": {
     "description": "Subtitle explaining the LRCLIB fallback toggle"
   },

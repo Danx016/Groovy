@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/screens/all_songs_screen.dart';
 import 'package:groovy/screens/library_screen.dart';
 import 'package:groovy/screens/playlists_screen.dart';
@@ -9,7 +9,6 @@ import 'package:groovy/screens/downloads_screen.dart';
 import 'package:groovy/screens/artists_screen.dart';
 import 'package:groovy/screens/albums_screen.dart';
 import 'package:groovy/screens/genre_screen.dart';
-import 'package:groovy/screens/radio_screen.dart';
 import 'package:groovy/screens/account_screen.dart';
 import 'package:groovy/screens/songs_screen.dart';
 import 'package:groovy/screens/history_screen.dart';
@@ -99,12 +98,6 @@ void main() {
       ));
       await tester.pump();
       expect(find.byType(GenreScreen), findsOneWidget);
-    });
-
-    testWidgets('RadioScreen builds without exception', (tester) async {
-      await tester.pumpWidget(createTestApp(child: const RadioScreen()));
-      await tester.pump();
-      expect(find.byType(RadioScreen), findsOneWidget);
     });
 
     testWidgets('AccountScreen builds with user profile', (tester) async {

@@ -1368,7 +1368,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get jukeboxNotSupported =>
-      'Jukebox mode is not supported by this server. Enable it in your server configuration (e.g. EnableJukebox = true in Navidrome).';
+      'Use Groovy Connect to control playback on your other devices.';
 
   @override
   String get musicFoldersDialogTitle => 'Select Music Folders';
@@ -1808,7 +1808,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get lrcLibFallbackSubtitle =>
-      'Automatically search LRCLIB for lyrics when your server does not provide them';
+      'Automatically search LRCLIB for lyrics when unavailable';
 
   @override
   String get themeSaved => 'Theme saved';

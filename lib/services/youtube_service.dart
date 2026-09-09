@@ -413,30 +413,12 @@ class YoutubeService {
 
   Future<Artist> getArtist(String id) async => Artist(id: id, name: id);
 
-  Future<List<MusicFolder>> getMusicFolders() async => [];
-
-  Future<List<Song>> getAllSongs() async => [];
-
   Future<void> setRating(String id, int rating) async {}
 
-  String getDownloadUrl(String songId) => '';
-
-  Future<List<RadioStation>> getInternetRadioStations() async => [];
-
-  Future<Map<String, dynamic>> jukeboxControl(String action, {int? index, int? offset, List<String>? ids, double? gain}) async => {};
-  Future<Map<String, dynamic>> jukeboxGet() async => {};
-  Future<Map<String, dynamic>> jukeboxStatus() async => {};
-  Future<Map<String, dynamic>> jukeboxStart() async => {};
-  Future<Map<String, dynamic>> jukeboxStop() async => {};
-  Future<Map<String, dynamic>> jukeboxSkip(int index, {int offset = 0}) async => {};
-  Future<Map<String, dynamic>> jukeboxAdd(List<String> ids) async => {};
-  Future<Map<String, dynamic>> jukeboxClear() async => {};
-  Future<Map<String, dynamic>> jukeboxSet(List<String> ids) async => {};
-  Future<Map<String, dynamic>> jukeboxShuffle() async => {};
-  Future<Map<String, dynamic>> jukeboxRemove(int index) async => {};
-  Future<Map<String, dynamic>> jukeboxSetGain(double gain) async => {};
+  String getDownloadUrl(String songId) => getStreamUrl(songId);
 
   Future<Map<String, dynamic>?> getLyricsBySongId(String songId) async => null;
+
   Future<Map<String, dynamic>?> getLyrics({String? artist, String? title, int? duration}) async => null;
 
   // ── Connectivity ──────────────────────────────────────────────────────────

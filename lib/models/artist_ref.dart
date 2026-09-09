@@ -1,11 +1,8 @@
-/// A lightweight artist reference parsed from Navidrome's `participants` field.
-/// Standard Subsonic servers do not provide this field, so it is always optional.
+/// A lightweight artist reference representing contributing or featured artists.
 class ArtistRef {
   final String id;
   final String name;
-  /// Explicit cover art ID from the API response. When absent, falls back to
-  /// [id] for servers (like Navidrome) that serve artist images via
-  /// `getCoverArt?id={artistId}`.
+  /// Explicit cover art ID or URL from the API response.
   final String? coverArt;
 
   const ArtistRef({required this.id, required this.name, this.coverArt});

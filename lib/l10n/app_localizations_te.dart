@@ -1067,10 +1067,10 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get noRadioStationsHint =>
-      'Add radio stations in your Navidrome server settings to see them here.';
+      'No radio stations are available at this time.';
 
   @override
-  String get connectToServerSubtitle => 'Connect to your Subsonic server';
+  String get connectToServerSubtitle => 'Connect to your Groovy account';
 
   @override
   String get pleaseEnterServerUrl => 'Please enter server URL';
@@ -1085,10 +1085,10 @@ class AppLocalizationsTe extends AppLocalizations {
   String get pleaseEnterPassword => 'Please enter password';
 
   @override
-  String get legacyAuthentication => 'Legacy Authentication';
+  String get legacyAuthentication => 'Standard Authentication';
 
   @override
-  String get legacyAuthSubtitle => 'Use for older Subsonic servers';
+  String get legacyAuthSubtitle => 'Use standard Groovy authentication';
 
   @override
   String get allowSelfSignedCerts => 'Allow Self-Signed Certificates';
@@ -1358,7 +1358,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get jukeboxNotSupported =>
-      'Jukebox mode is not supported by this server. Enable it in your server configuration (e.g. EnableJukebox = true in Navidrome).';
+      'Use Groovy Connect to control playback on your other devices.';
 
   @override
   String get musicFoldersDialogTitle => 'Select Music Folders';
@@ -1798,7 +1798,7 @@ class AppLocalizationsTe extends AppLocalizations {
 
   @override
   String get lrcLibFallbackSubtitle =>
-      'Automatically search LRCLIB for lyrics when your server does not provide them';
+      'Automatically search LRCLIB for lyrics when unavailable';
 
   @override
   String get themeSaved => 'Theme saved';
