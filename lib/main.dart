@@ -304,6 +304,7 @@ void main() async {
       playlist: queue,
       startIndex: queueIndex,
       initialPosition: positionMs > 0 ? Duration(milliseconds: positionMs) : null,
+      forcePlay: isPlaying,
     );
     if (!isPlaying) {
       await playerProvider.pause();

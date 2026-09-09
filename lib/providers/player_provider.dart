@@ -513,6 +513,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (song != null && song.id == _optimisticRemoteSongId) {
         _optimisticRemoteSongUntil = null;
         _optimisticRemoteSongId = null;
+        _isLoading = false;
+        _remoteAnchorPosition = position;
+        _remoteAnchorTime = isPlaying ? DateTime.now() : null;
+        _position = position;
+        _positionController.add(position);
       } else {
         // Remote device is still transitioning; ignore stale song to prevent flickering/reverting
         return;
@@ -1949,10 +1954,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     List<Song>? playlist,
     int? startIndex,
     Duration? initialPosition,
+    bool forcePlay = false,
   }) async {
     final currentGen = ++_playGeneration;
 
-    if (_currentSong?.id == song.id && !_isPlayingRadio && initialPosition == null) {
+    if (!forcePlay && _currentSong?.id == song.id && !_isPlayingRadio && initialPosition == null) {
       await togglePlayPause();
       return;
     }
@@ -2002,12 +2008,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _position = initialPosition ?? Duration.zero;
       _duration = song.duration != null ? Duration(seconds: song.duration!) : Duration.zero;
       _remoteAnchorPosition = _position;
-      _remoteAnchorTime = DateTime.now();
+      _remoteAnchorTime = null;
       _optimisticRemoteSongId = song.id;
       _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
       _isRenderingRemotely = true;
       _isPlaying = true;
-      _isLoading = false;
+      _isLoading = true;
       _audioHandler.setRemotePlayback(isRemote: true);
       if (_audioPlayer.playing) {
         await _audioPlayer.stop();
@@ -2682,7 +2688,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _lastRemoteSeekTime = DateTime.now();
       _position = Duration.zero;
       _remoteAnchorPosition = Duration.zero;
-      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+      _remoteAnchorTime = null;
+      _isLoading = true;
       _positionController.add(Duration.zero);
       if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
         _currentIndex++;
@@ -2694,7 +2701,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _manageRemotePositionTicker();
         notifyListeners();
         unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
-        unawaited(_groovyConnectService!.sendControl('skipNext'));
         return;
       } else if (_currentSong != null) {
         try {
@@ -2808,7 +2814,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _lastRemoteSeekTime = DateTime.now();
       _position = Duration.zero;
       _remoteAnchorPosition = Duration.zero;
-      _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
+      _remoteAnchorTime = null;
+      _isLoading = true;
       _positionController.add(Duration.zero);
       if (_queue.isNotEmpty && _currentIndex > 0) {
         _currentIndex--;
@@ -2820,7 +2827,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _manageRemotePositionTicker();
         notifyListeners();
         unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
-        unawaited(_groovyConnectService!.sendControl('skipPrevious'));
         return;
       }
       _manageRemotePositionTicker();

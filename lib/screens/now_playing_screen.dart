@@ -9,10 +9,8 @@ import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
 import '../widgets/now_playing/playback_controls.dart';
 import '../widgets/now_playing/playback_progress_slider.dart';
-import '../widgets/now_playing/volume_slider.dart';
 import '../widgets/now_playing/now_playing_bottom_actions.dart';
 import '../widgets/lyrics/lyrics_list_view.dart';
-import '../services/player_ui_settings_service.dart';
 import '../models/lyric_line.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
@@ -68,7 +66,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   bool _isLoadingLyrics = true;
   Song? _lastSong;
   ImageProvider? _currentImageProvider;
-  bool _showLyricsControls = true;
+  bool _showLyricsControls = false;
   bool _showLyricsInLandscape = true;
   Timer? _colorDebounceTimer;
   Timer? _lyricsDebounceTimer;
@@ -444,6 +442,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             onPageChanged: (index) {
               setState(() {
                 _currentPage = index;
+                if (index == 1) {
+                  _showLyricsControls = false;
+                }
               });
             },
             children: [
@@ -977,17 +978,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ),
               ),
 
-              SizedBox(height: isCompact ? 4 : 8),
-
-              // Apple Music Style Volume Slider
-              if (PlayerUiSettingsService().getShowVolumeSlider()) ...[
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                  child: const VolumeSlider(),
-                ),
-                SizedBox(height: isCompact ? 4 : 8),
-              ],
-
               // 3. Bottom Actions (Lyrics, Cast, Queue)
               NowPlayingBottomActions(
                 isLyricsActive: _currentPage == 1,
@@ -1460,12 +1450,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
 
     if (_fetchedLyrics.isNotEmpty) {
-      return LyricsListView(
-        lyrics: _fetchedLyrics,
-        positionStream: provider.positionStream,
-        initialPosition: provider.position,
-        isActive: true,
-        onSeek: (duration) => provider.seek(duration),
+      return ShaderMask(
+        shaderCallback: (Rect bounds) {
+          return const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Colors.transparent,
+              Colors.white,
+              Colors.white,
+              Colors.transparent,
+            ],
+            stops: [0.0, 0.08, 0.90, 1.0],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: LyricsListView(
+          lyrics: _fetchedLyrics,
+          positionStream: provider.positionStream,
+          initialPosition: provider.position,
+          isActive: true,
+          onSeek: (duration) => provider.seek(duration),
+        ),
       );
     }
 

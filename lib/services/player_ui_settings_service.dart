@@ -54,7 +54,7 @@ class PlayerUiSettingsService {
   }
 
   bool getShowVolumeSlider() {
-    return _prefs?.getBool(_keyShowVolumeSlider) ?? true;
+    return _prefs?.getBool(_keyShowVolumeSlider) ?? false;
   }
 
   Future<void> setShowStarRatings(bool show) async {

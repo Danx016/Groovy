@@ -39,13 +39,8 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
   static const List<Shadow> _currentLineShadow = [
     Shadow(
-      color: Color(0x99000000),
-      blurRadius: 20,
-      offset: Offset(0, 4),
-    ),
-    Shadow(
-      color: Color(0x40000000),
-      blurRadius: 8,
+      color: Color(0x33000000),
+      blurRadius: 6,
       offset: Offset(0, 2),
     ),
   ];
@@ -53,22 +48,17 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
   @override
   Widget build(BuildContext context) {
     final isCurrent = widget.state == LyricLineState.current;
-    final isPast = widget.state == LyricLineState.past;
 
-    // Authentic Apple Music Opacity Hierarchy
+    // Authentic Apple Music Opacity: Active is 100% pure white, inactive lines are 38% dimmed white
     final double targetOpacity = widget.isUnsynced
         ? 0.95
         : (isCurrent
             ? 1.0
             : (_isHovered
-                ? 0.80
+                ? 0.75
                 : (widget.distance == 1
-                    ? 0.42
-                    : (widget.distance == 2
-                        ? 0.26
-                        : (isPast ? 0.22 : 0.18)))));
-
-    final isHighlighted = isCurrent || widget.isUnsynced;
+                    ? 0.40
+                    : 0.36)));
 
     return RepaintBoundary(
       child: MouseRegion(
@@ -79,25 +69,25 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
           onTap: widget.onTap,
           behavior: HitTestBehavior.opaque,
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 14.0, horizontal: 28.0),
+            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
             child: AnimatedScale(
-              scale: isCurrent ? 1.03 : (_isHovered ? 0.98 : 0.96),
+              scale: isCurrent ? 1.025 : 1.0,
               alignment: Alignment.centerLeft,
-              duration: const Duration(milliseconds: 420),
-              curve: Curves.easeInOutCubic,
+              duration: const Duration(milliseconds: 350),
+              curve: Curves.easeOutCubic,
               child: AnimatedOpacity(
                 opacity: targetOpacity,
-                duration: const Duration(milliseconds: 420),
-                curve: Curves.easeInOutCubic,
+                duration: const Duration(milliseconds: 350),
+                curve: Curves.easeOutCubic,
                 child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 420),
-                  curve: Curves.easeInOutCubic,
+                  duration: const Duration(milliseconds: 350),
+                  curve: Curves.easeOutCubic,
                   style: TextStyle(
                     fontSize: 32,
-                    fontWeight: isHighlighted ? FontWeight.w800 : FontWeight.w700,
-                    letterSpacing: -0.6,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.5,
                     color: Colors.white,
-                    height: 1.22,
+                    height: 1.25,
                     fontFamilyFallback: _fontFallback,
                     shadows: isCurrent ? _currentLineShadow : null,
                   ),

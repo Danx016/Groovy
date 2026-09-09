@@ -116,5 +116,33 @@ void main() {
       expect(find.text('Intro verse'), findsOneWidget);
       expect(find.text('Verse after instrumental gap'), findsOneWidget);
     });
+
+    testWidgets('LyricsListView adapts padding and focal alignment in desktop landscape', (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
+      final lyrics = [
+        LyricLine(text: 'Casi todos sabemos querer', startTime: const Duration(seconds: 1)),
+        LyricLine(text: 'Pero pocos sabemos amar', startTime: const Duration(seconds: 5)),
+      ];
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: LyricsListView(
+              lyrics: lyrics,
+              currentTime: const Duration(seconds: 1),
+              onSeek: (_) {},
+            ),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      expect(find.text('Casi todos sabemos querer'), findsOneWidget);
+      expect(find.text('Pero pocos sabemos amar'), findsOneWidget);
+    });
   });
 }

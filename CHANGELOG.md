@@ -5,13 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.84] - 2026-09-09
+## [1.0.85] - 2026-09-09
 
 ### Fixed & Improved
+- **Letras Fluidas Estilo Apple Music (Móvil y Windows/Desktop)**:
+  - Optimización de rendimiento a 60/120 FPS sin lag de CPU ni text reflows pesados durante el desplazamiento.
+  - En Windows y pantallas panorámicas, las letras ahora se centran verticalmente con `ShaderMask` superior e inferior alineadas con la portada del álbum.
+  - La línea activa permanece encendida durante toda la frase hasta la siguiente y los puntos de interludio (`• • •`) pulsan suavemente en intros y pausas instrumentales reales.
+  - Eliminado el control deslizante visual de volumen de la pantalla de reproducción manteniendo el control de volumen por sistema y teclas de hardware.
 - **Estabilidad Multi-Dispositivo (Groovy Connect Nube & LAN)**:
-  - Registro inmediato de dispositivos en espera/pausados en `user_live_playback` para asegurar visibilidad constante de teléfonos y computadoras en red.
-  - Ampliada la ventana de estabilidad de dispositivos a 120 segundos para evitar que la música pausada o pantallas apagadas desconecten el enlace remoto.
-  - Borrado selectivo en `/leave` por identificador único de dispositivo (`device_key`), impidiendo la desconexión accidental de otros equipos en la misma cuenta o red.
+  - Eliminado el conflicto de doble comando (`sendPlaySong` + `skipNext`) que causaba bloqueos al saltar varias canciones seguidas en modo remoto.
+  - Sincronización en tiempo real del progreso de reproducción: el controlador espera a que el receptor cargue el audio antes de avanzar el reloj, evitando saltos hacia atrás.
+  - Forzado de reproducción seguro (`forcePlay: true`) en transferencias remotas para evitar pausas involuntarias.
 - **Control de Audífonos y Auriculares (Cable y Bluetooth)**:
   - Soporte completo para 1 toque (play/pause), 2 toques (siguiente) y 3 toques (anterior/retroceder).
   - Al presionar el botón de los audífonos con la app recién abierta, reanuda la reproducción automática de la cola guardada.
