@@ -17,10 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Frecuencia de sincronización de estado remoto acelerada a 250ms (anteriormente 750ms).
   - Heartbeat de telemetría dinámica a 350ms al estar conectado remotamente.
   - Reconciliación de posición precisa sin retrocesos bruscos en la barra de progreso.
-- **Letras Sincronizadas y Controles Fijos**:
+- **Controles Siempre Visibles en la Letra**:
+  - Los controles de reproducción (barra de progreso, tiempos, anterior, reproducir/pausar y siguiente) permanecen siempre fijos y visibles en la pantalla de letra sin ocultarse automáticamente.
+- **Letras Sincronizadas en Tiempo Real**:
   - Stream de posición de alta frecuencia (50ms en Windows/Linux y móvil) para sincronizar letras 20 veces por segundo.
   - Compensación de latencia de hardware de audio para resaltar cada verso exactamente al compás de la voz ("en vivo").
-  - Controles de reproducción, barra de progreso y acciones siempre visibles en la pantalla de letra (ya no se ocultan al tocar).
+
 - **Instalador Fácil para Linux (Doble Clic)**:
   - Nuevo instalador `Groovy-linux-install.sh` que permite instalar Groovy con un solo doble clic.
   - Otorga permisos de ejecución al AppImage automáticamente y crea el acceso directo en el menú de aplicaciones del sistema.

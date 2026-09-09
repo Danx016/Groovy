@@ -66,7 +66,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   bool _isLoadingLyrics = true;
   Song? _lastSong;
   ImageProvider? _currentImageProvider;
-  bool _showLyricsControls = true;
   bool _showLyricsInLandscape = true;
   Timer? _colorDebounceTimer;
   Timer? _lyricsDebounceTimer;
@@ -424,9 +423,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             onPageChanged: (index) {
               setState(() {
                 _currentPage = index;
-                if (index == 1) {
-                  _showLyricsControls = false;
-                }
               });
             },
             children: [
@@ -879,31 +875,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           child: _buildTrackMiniHeader(context),
         ),
         Expanded(
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            child: _fetchedLyrics.isNotEmpty
-                ? LyricsListView(
-                    lyrics: _fetchedLyrics,
-                    positionStream: provider.positionStream,
-                    initialPosition: provider.position,
-                    isActive: _currentPage == 1,
-                    onSeek: (duration) {
-                      provider.seek(duration);
-                    },
-                  )
-                : Center(
-                    child: _isLoadingLyrics
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                            "Letra no disponible",
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                            ),
+          child: _fetchedLyrics.isNotEmpty
+              ? LyricsListView(
+                  lyrics: _fetchedLyrics,
+                  positionStream: provider.positionStream,
+                  initialPosition: provider.position,
+                  isActive: _currentPage == 1,
+                  onSeek: (duration) {
+                    provider.seek(duration);
+                  },
+                )
+              : Center(
+                  child: _isLoadingLyrics
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Letra no disponible",
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
                           ),
-                  ),
-          ),
+                        ),
+                ),
         ),
       ],
     );
@@ -933,32 +926,30 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         final shuffleEnabled = data.$2;
         final repeatMode = data.$3;
         final duration = data.$4;
-        final hideControlsInLyrics = _currentPage == 1 && !_showLyricsControls;
 
         return RepaintBoundary(
-          child: AnimatedCrossFade(
-            firstChild: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // 1. Scrubber Progress Slider
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28.0),
-                  child: RepaintBoundary(
-                    child: PlaybackProgressSlider(
-                      position: provider.position,
-                      duration: duration,
-                      bufferedPosition: provider.bufferedPosition,
-                      isBuffering: provider.isBuffering,
-                      positionStream: provider.positionStream,
-                      bufferedPositionStream: provider.bufferedPositionStream,
-                      isBufferingStream: provider.isBufferingStream,
-                      accentColor: Colors.white,
-                      onChanged: (val) {
-                        provider.seek(val);
-                      },
-                    ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 1. Scrubber Progress Slider
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 28.0),
+                child: RepaintBoundary(
+                  child: PlaybackProgressSlider(
+                    position: provider.position,
+                    duration: duration,
+                    bufferedPosition: provider.bufferedPosition,
+                    isBuffering: provider.isBuffering,
+                    positionStream: provider.positionStream,
+                    bufferedPositionStream: provider.bufferedPositionStream,
+                    isBufferingStream: provider.isBufferingStream,
+                    accentColor: Colors.white,
+                    onChanged: (val) {
+                      provider.seek(val);
+                    },
                   ),
                 ),
+              ),
 
               SizedBox(height: isCompact ? 4 : 8),
 
@@ -1002,39 +993,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               SizedBox(height: isCompact ? 8 : 16),
             ],
           ),
-          secondChild: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              NowPlayingBottomActions(
-                isLyricsActive: _currentPage == 1,
-                isQueueActive: _currentPage == 2,
-                accentColor: accentColor,
-                onLyricsTap: () {
-                  if (_currentPage == 1) {
-                    _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                  } else {
-                    _pageController.animateToPage(1, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                  }
-                },
-                onQueueTap: () {
-                  if (_currentPage == 2) {
-                    _pageController.animateToPage(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                  } else {
-                    _pageController.animateToPage(2, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                  }
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
-          ),
-          crossFadeState: hideControlsInLyrics
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          duration: const Duration(milliseconds: 250),
-        ),
-      );
-    },
-  );
+        );
+      },
+    );
   }
 
   Widget _buildLandscapeLayout(BuildContext context, Color accentColor) {
