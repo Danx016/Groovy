@@ -49,5 +49,23 @@ void main() {
         contains('Espacio insuficiente'),
       );
     });
+
+    test('stripMarkdown removes markdown and cuts off download links boilerplate', () {
+      const raw = '''
+## 🎵 Groovy v1.0.87
+
+### ✨ Novedades y Mejoras:
+- **Reproducción Móvil**: Mejorada la conexión con cliente TV.
+- **Correcciones**: Se solucionaron errores de red.
+
+### 📦 Descargas Disponibles:
+- app-release.apk
+''';
+      final cleaned = UpdateService.stripMarkdown(raw);
+      expect(cleaned, contains('Reproducción Móvil: Mejorada la conexión con cliente TV.'));
+      expect(cleaned, contains('Correcciones: Se solucionaron errores de red.'));
+      expect(cleaned, isNot(contains('Descargas Disponibles')));
+      expect(cleaned, isNot(contains('app-release.apk')));
+    });
   });
 }

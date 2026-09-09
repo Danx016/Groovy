@@ -453,6 +453,16 @@ class UpdateService {
     cleaned = cleaned.replaceAll(RegExp(r'\* @[a-zA-Z0-9_-]+ in https:\/\/\S+'), '');
     cleaned = cleaned.replaceAll(RegExp(r'@\w+ in #\d+'), '');
 
+    // Filter out downloads and footer sections so in-app update banner only shows actual changelog
+    final downloadsIndex = cleaned.indexOf(RegExp(r'#{1,4}\s*📦?\s*Descargas Disponibles', caseSensitive: false));
+    if (downloadsIndex != -1) {
+      cleaned = cleaned.substring(0, downloadsIndex).trim();
+    }
+    final footerIndex = cleaned.indexOf(RegExp(r'#{1,4}\s*📝?\s*Registro.*Cambios', caseSensitive: false));
+    if (footerIndex != -1) {
+      cleaned = cleaned.substring(0, footerIndex).trim();
+    }
+
     // Format markdown
     cleaned = cleaned
         .replaceAll(RegExp(r'^#{1,6}\s+', multiLine: true), '')
@@ -466,7 +476,7 @@ class UpdateService {
         .trim();
 
     if (cleaned.isEmpty) {
-      return '• 🖥️ Soporte Oficial para Windows: Nuevo instalador y optimizaciones de escritorio.\n• ⚡ Streaming yt-dlp & YouTube: Mayor estabilidad y streaming directo de audio.\n• 🎨 Interfaz renovada: Mejoras en navegación, reproductor y sincronización multiplataforma.\n• 🚀 Rendimiento a 120 Hz: Animaciones fluidas, letras en tiempo real y correcciones generales.';
+      return '• Mejoras de estabilidad, rendimiento y correcciones de errores en esta versión.';
     }
     return cleaned;
   }

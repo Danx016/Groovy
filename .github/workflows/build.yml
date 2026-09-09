@@ -355,42 +355,69 @@ jobs:
           find artifacts/linux -not -name '*.AppImage' -exec cp -r {} linux_bundle/ \; 2>/dev/null || true
           cd artifacts/linux && tar -czf ../../groovy-linux-x64.tar.gz . && cd ../..  
 
+      - name: Generate Dynamic Release Notes from CHANGELOG
+        run: |
+          python3 -c "
+          import sys, re
+
+          ver = '${{ steps.get_version.outputs.VERSION }}'
+          tag = '${{ steps.get_version.outputs.TAG }}'
+          notes = ''
+          try:
+              with open('CHANGELOG.md', 'r', encoding='utf-8') as f:
+                  content = f.read()
+              # Match ## [VERSION] or ## [vVERSION] up to next ## [
+              pattern = rf'##\s*\[v?{re.escape(ver)}\][^\n]*\n(.*?)(?=\n##\s*\[|\Z)'
+              match = re.search(pattern, content, re.DOTALL)
+              if match and match.group(1).strip():
+                  notes = match.group(1).strip()
+                  print(f'✅ Extracted release notes for version {ver} from CHANGELOG.md')
+          except Exception as e:
+              print(f'⚠️ Error reading CHANGELOG.md: {e}')
+
+          if not notes:
+              print('ℹ️ No specific section in CHANGELOG.md; generating from git commit log')
+              import subprocess
+              try:
+                  cmd = ['git', 'log', '-n', '10', '--pretty=format:- %s']
+                  notes = subprocess.check_output(cmd, text=True)
+              except Exception:
+                  notes = '- Mejoras de estabilidad, rendimiento y correcciones generales.'
+
+          body = f'''## 🎵 Groovy {tag}
+
+          ### ✨ Novedades y Mejoras:
+          {notes}
+
+          ### 📦 Descargas Disponibles:
+
+          **📱 Android:**
+          - \`app-release.apk\` — APK universal para cualquier dispositivo Android
+
+          **🪟 Windows:**
+          - \`Groovy-Setup.exe\` — Instalador con asistente para Windows
+          - \`Groovy-Windows-Portable.zip\` — Versión portable, descomprimir y usar
+
+          **🐧 Linux:**
+          - \`Groovy-linux-x86_64.AppImage\` — **Recomendado.** Un solo archivo ejecutable
+          - \`groovy-linux-x64.tar.gz\` — Binario empaquetado para instalación manual
+
+          ### 📝 Registro Completo de Cambios
+          Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para el historial completo.
+          '''
+
+          with open('RELEASE_BODY.md', 'w', encoding='utf-8') as out:
+              out.write(body)
+          "
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.TAG }}
           name: Groovy ${{ steps.get_version.outputs.TAG }}
+          body_path: RELEASE_BODY.md
           make_latest: true
           fail_on_unmatched_files: false
-          body: |
-            ## 🎵 Groovy ${{ steps.get_version.outputs.TAG }}
-
-            ### ✨ Novedades y Mejoras:
-            - 🖥️ **Soporte Oficial para Windows, Linux y Android**: Instalador Windows (`Groovy-Setup.exe`), portable (`.zip`), AppImage para Linux y APK para Android.
-            - ⚡ **Motor de Streaming yt-dlp & YouTube**: Reproducción ultrarrápida, streaming de audio directo y caché inteligente.
-            - 🎨 **Interfaz Renovada Estilo Apple Music**: Barra lateral, reproductor de escritorio, panel de letras sincronizadas y navegación fluida a 120 Hz.
-            - 📱 **Sincronización Multiplataforma Groovy Connect**: Experiencia unificada entre móvil (Android) y escritorio (Windows / Linux).
-            - 🛡️ **Correcciones y Rendimiento**: Mejoras de estabilidad, gestión de colas y consumo de memoria.
-
-            ### 📦 Descargas Disponibles:
-
-            **📱 Android:**
-            - `app-release.apk` — APK universal para cualquier dispositivo Android
-
-            **🪟 Windows:**
-            - `Groovy-Setup.exe` — Instalador con asistente para Windows
-            - `Groovy-Windows-Portable.zip` — Versión portable, descomprimir y usar
-
-            **🐧 Linux:**
-            - `Groovy-linux-x86_64.AppImage` — **Recomendado.** Un solo archivo, sin instalación:
-              ```bash
-              chmod +x Groovy-linux-x86_64.AppImage
-              ./Groovy-linux-x86_64.AppImage
-              ```
-            - `groovy-linux-x64.tar.gz` — Binario empaquetado para instalación manual
-
-            ### 📝 Registro de Cambios
-            Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para más detalles.
           files: |
             artifacts/android/*.apk
             artifacts/windows/Groovy-Setup.exe

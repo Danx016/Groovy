@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.87] - 2026-09-09
+
+### Fixed & Improved
+- **Reproducción con Datos Móviles**:
+  - Soporte de streaming para redes móviles (4G/5G) con cliente TV sin restricciones de IP ni User-Agent.
+  - Mayor tolerancia a redes lentas con timeouts de 15s y drenado de conexiones huérfanas.
+  - Manejo de respuestas HTTP 410 (Gone) con renovación instantánea de URL.
+- **Diálogo y Descarga de Actualizaciones**:
+  - Corregido el problema donde la alerta de actualización desaparecía permanentemente tras perder conexión.
+  - Mensajes de error claros en español en lugar de códigos técnicos confusos.
+  - Opción de "Reintentar descarga" directamente en el banner y botón manual en Ajustes.
+  - Registro de cambios dinámico que muestra las novedades reales de cada versión.
+
 ## [1.0.86] - 2026-09-09
 
 ### Security & Connectivity
