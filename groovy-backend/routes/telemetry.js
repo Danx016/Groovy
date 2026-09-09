@@ -87,6 +87,41 @@ router.post('/command', async (req, res) => {
       VALUES (?, ?, ?, ?, ?, 'pending')
     `, [userId, senderDeviceId || 'unknown', targetDeviceId, action, payloadStr]);
 
+    // Optimistically update live device playback state in database immediately so subsequent reads are instant
+    if (action === 'play') {
+      pool.query(`
+        UPDATE user_live_playback 
+        SET is_playing = 1 
+        WHERE device_key = ? OR (user_id = ? AND user_id > 0)
+      `, [targetDeviceId, userId]).catch(() => {});
+    } else if (action === 'pause') {
+      pool.query(`
+        UPDATE user_live_playback 
+        SET is_playing = 0 
+        WHERE device_key = ? OR (user_id = ? AND user_id > 0)
+      `, [targetDeviceId, userId]).catch(() => {});
+    } else if (action === 'seek' && payload) {
+      const seekVal = typeof payload === 'object' ? payload.value : payload;
+      if (typeof seekVal === 'number') {
+        const seekSec = Math.max(0, Math.floor(seekVal > 10000 ? seekVal / 1000 : seekVal));
+        pool.query(`
+          UPDATE user_live_playback 
+          SET position = ? 
+          WHERE device_key = ? OR (user_id = ? AND user_id > 0)
+        `, [seekSec, targetDeviceId, userId]).catch(() => {});
+      }
+    } else if (action === 'volume' && payload) {
+      const volVal = typeof payload === 'object' ? payload.value : payload;
+      if (typeof volVal === 'number') {
+        const clampedVol = Math.max(0, Math.min(1, volVal));
+        pool.query(`
+          UPDATE user_live_playback 
+          SET volume = ? 
+          WHERE device_key = ? OR (user_id = ? AND user_id > 0)
+        `, [clampedVol, targetDeviceId, userId]).catch(() => {});
+      }
+    }
+
     return res.json({
       success: true,
       commandId: result.insertId,
@@ -268,8 +303,8 @@ router.post('/playback', async (req, res) => {
       deviceKey,
     ]);
 
-    // Cleanup stale live sessions older than 75 seconds
-    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 75 SECOND').catch(() => {});
+    // Cleanup stale live sessions older than 120 seconds
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 120 SECOND').catch(() => {});
 
     // Purge only stale ghost/fallback rows for the same user and platform that have not pinged in > 25 seconds
     if (deviceId && dbUserId && resolvedPlatform) {
@@ -394,6 +429,38 @@ router.post('/ping', async (req, res) => {
 
     const platform = req.body?.platform || client.os;
     const deviceSummary = client.deviceSummary;
+    const deviceId = req.body?.deviceId;
+    const deviceKey = deviceId || `${userId > 0 ? userId : client.ip}_${(platform || 'app').toLowerCase()}_${(client.deviceModel || deviceSummary || 'device').toLowerCase()}`;
+    const resolvedDevice = req.body?.deviceName || req.body?.deviceModel || client.deviceSummary;
+
+    // 1. Register or update live device presence in user_live_playback so idle/paused devices remain discoverable
+    await pool.query(`
+      INSERT INTO user_live_playback (
+        user_id, song_id, title, artist, album, cover_art, duration, position, 
+        is_playing, volume, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
+      )
+      VALUES (?, '', '', '', '', '', 0, 0, 0, 1.0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      ON DUPLICATE KEY UPDATE
+        user_id = COALESCE(VALUES(user_id), user_id),
+        platform = VALUES(platform),
+        device_name = VALUES(device_name),
+        ip_address = VALUES(ip_address),
+        device_model = VALUES(device_model),
+        os_version = VALUES(os_version),
+        country = COALESCE(VALUES(country), country),
+        city = COALESCE(VALUES(city), city),
+        last_ping_at = CURRENT_TIMESTAMP
+    `, [
+      dbUserId,
+      platform,
+      resolvedDevice,
+      client.ip,
+      client.deviceModel,
+      client.osVersion,
+      geo.country,
+      geo.city,
+      deviceKey,
+    ]);
 
     // Check if there is an active session in the last 10 minutes for THIS SPECIFIC DEVICE / PLATFORM
     const [recentSession] = await pool.query(`
@@ -478,8 +545,8 @@ router.post('/ping', async (req, res) => {
       ]);
     }
 
-    // Clean up stale playback rows older than 25 seconds
-    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 25 SECOND').catch(() => {});
+    // Clean up stale playback rows older than 120 seconds (never aggressively delete after only 25s!)
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 120 SECOND').catch(() => {});
 
     return res.json({
       success: true,
@@ -503,15 +570,18 @@ router.post('/leave', async (req, res) => {
     const userId = req.user?.id || 0;
     const platform = req.body?.platform || client.os;
     const deviceModel = req.body?.deviceModel || client.deviceModel;
+    const deviceId = req.body?.deviceId;
 
-    // 1. Remove live playback presence only for this device
-    if (userId > 0) {
+    // 1. Remove live playback presence only for this specific device
+    if (deviceId) {
+      await pool.query('DELETE FROM user_live_playback WHERE device_key = ?', [deviceId]);
+    } else if (userId > 0) {
       await pool.query(
-        'DELETE FROM user_live_playback WHERE user_id = ? AND (platform = ? OR device_model = ? OR ip_address = ?)',
-        [userId, platform, deviceModel, client.ip]
+        'DELETE FROM user_live_playback WHERE user_id = ? AND device_name = ? AND platform = ?',
+        [userId, deviceModel, platform]
       );
     } else {
-      await pool.query('DELETE FROM user_live_playback WHERE ip_address = ?', [client.ip]);
+      await pool.query('DELETE FROM user_live_playback WHERE ip_address = ? AND platform = ? AND device_name = ?', [client.ip, platform, deviceModel]);
     }
 
     // 2. Expire active sessions only for this client platform / device

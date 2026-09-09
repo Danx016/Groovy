@@ -171,6 +171,7 @@ class GroovyConnectService extends ChangeNotifier {
   String get localPlatform => _localPlatform;
   String get localModel => _localModel;
   int get httpPort => _actualHttpPort;
+  String? get cachedAuthToken => _cachedAuthToken;
 
   /// Initializes the service: local LAN P2P UDP + HTTP server, and cloud relay polling.
   Future<void> initialize() async {
@@ -395,7 +396,7 @@ class GroovyConnectService extends ChangeNotifier {
   /// Sends periodic presence heartbeat to cloud backend.
   void _startPresenceHeartbeat() {
     _presenceHeartbeatTimer?.cancel();
-    _presenceHeartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _presenceHeartbeatTimer = Timer.periodic(const Duration(seconds: 2), (_) {
       _sendPresencePing();
     });
     // Send immediate ping
@@ -413,13 +414,18 @@ class GroovyConnectService extends ChangeNotifier {
         } catch (_) {}
       }
 
+      final posMs = (status['positionMs'] as num?)?.toInt() ?? 0;
+      final vol = (status['volume'] as num?)?.toDouble();
+
       await GroovyApiService().reportPlaybackState(
         token: _cachedAuthToken ?? '',
         song: song ?? Song(id: '', title: ''),
         isPlaying: status['isPlaying'] == true,
-        position: ((status['positionMs'] as num?)?.toInt() ?? 0) ~/ 1000,
+        position: posMs ~/ 1000,
+        positionMs: posMs,
         listenDeltaSeconds: 0,
         deviceId: _localDeviceId,
+        volume: vol,
       );
     } catch (_) {}
   }
@@ -435,7 +441,7 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts the cloud command polling loop to receive actions from other devices.
   void _startCommandPollLoop() {
     _commandPollTimer?.cancel();
-    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 450), (_) {
+    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 300), (_) {
       _pollCloudCommands();
     });
   }
@@ -685,7 +691,19 @@ class GroovyConnectService extends ChangeNotifier {
       effectiveQueueIndex = (qIndex - startIndex).clamp(0, sub.length - 1);
     }
 
-    // Route playback transfer exclusively through the Groovy Cloud Relay Server
+    // Optimistically update connected device immediately for 0ms UI lag on controller
+    final now = DateTime.now();
+    final updated = device.copyWith(
+      currentSong: song,
+      isPlaying: isPlaying,
+      lastSeen: now,
+    );
+    _connectedDevice = updated;
+    _discoveredDevices[device.id] = updated;
+    _startStatusSyncTimer();
+    notifyListeners();
+
+    // Route playback transfer through Groovy Cloud Server
     try {
       debugPrint('[GroovyConnect] Sending transfer to server for device ${device.name} (${device.id})');
       final success = await GroovyApiService().sendDeviceCommand(
@@ -704,22 +722,12 @@ class GroovyConnectService extends ChangeNotifier {
       );
 
       if (success) {
-        final now = DateTime.now();
-        final updated = device.copyWith(
-          currentSong: song,
-          isPlaying: isPlaying,
-          lastSeen: now,
-        );
-        _connectedDevice = updated;
-        _discoveredDevices[device.id] = updated;
-        _startStatusSyncTimer();
-        notifyListeners();
         debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via cloud server');
         return true;
       }
       return false;
     } catch (e) {
-      debugPrint('[GroovyConnect] Server transfer failed: $e');
+      debugPrint('[GroovyConnect] Server transfer error: $e');
       return false;
     }
   }
@@ -734,7 +742,7 @@ class GroovyConnectService extends ChangeNotifier {
     return true;
   }
 
-  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume) via LAN or cloud.
+  /// Sends remote playback commands (play, pause, togglePlayPause, skipNext, skipPrevious, seek, volume) via Cloud Server.
   Future<bool> sendControl(String action, [dynamic value]) async {
     if (_connectedDevice == null) return false;
 
@@ -750,7 +758,7 @@ class GroovyConnectService extends ChangeNotifier {
       notifyListeners();
     }
 
-    // Route control command exclusively through the Groovy Cloud Relay Server
+    // Route control command through the Groovy Cloud Relay Server
     try {
       final success = await GroovyApiService().sendDeviceCommand(
         targetDeviceId: _connectedDevice!.id,
@@ -763,6 +771,11 @@ class GroovyConnectService extends ChangeNotifier {
         token: _cachedAuthToken,
       );
 
+      if (success) {
+        if (action != 'volume') {
+          _syncRemoteStatus();
+        }
+      }
       return success;
     } catch (e) {
       debugPrint('[GroovyConnect] Cloud sendControl error: $e');
@@ -791,12 +804,12 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts status synchronization timer to reflect remote playback progress in the UI.
   void _startStatusSyncTimer() {
     _statusSyncTimer?.cancel();
-    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 1000), (_) {
+    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 750), (_) {
       _syncRemoteStatus();
     });
   }
 
-  /// Synchronizes playback status with remote device via cloud telemetry.
+  /// Synchronizes playback status with remote device via cloud server telemetry in real-time.
   Future<void> _syncRemoteStatus() async {
     if (_connectedDevice == null) {
       _statusSyncTimer?.cancel();
@@ -806,7 +819,6 @@ class GroovyConnectService extends ChangeNotifier {
     _isSyncingStatus = true;
 
     try {
-      // Cloud status query from VPS server
       if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
         try {
           final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
@@ -826,6 +838,7 @@ class GroovyConnectService extends ChangeNotifier {
           if (targetDev.isNotEmpty) {
             final isPlaying = targetDev['is_playing'] == 1 || targetDev['is_playing'] == true;
             final positionSec = (targetDev['position'] as num?)?.toInt() ?? 0;
+            final positionMs = (targetDev['positionMs'] as num?)?.toInt() ?? (positionSec * 1000);
             final durationSec = (targetDev['duration'] as num?)?.toInt() ?? 0;
 
             Song? song;
@@ -855,7 +868,7 @@ class GroovyConnectService extends ChangeNotifier {
 
             onRemoteStatusUpdated?.call(
               song: song,
-              position: Duration(seconds: positionSec),
+              position: Duration(milliseconds: positionMs),
               duration: Duration(seconds: durationSec),
               isPlaying: isPlaying,
               volume: remoteVol,

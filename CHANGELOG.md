@@ -5,6 +5,21 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.84] - 2026-09-09
+
+### Fixed & Improved
+- **Estabilidad Multi-Dispositivo (Groovy Connect Nube & LAN)**:
+  - Registro inmediato de dispositivos en espera/pausados en `user_live_playback` para asegurar visibilidad constante de teléfonos y computadoras en red.
+  - Ampliada la ventana de estabilidad de dispositivos a 120 segundos para evitar que la música pausada o pantallas apagadas desconecten el enlace remoto.
+  - Borrado selectivo en `/leave` por identificador único de dispositivo (`device_key`), impidiendo la desconexión accidental de otros equipos en la misma cuenta o red.
+- **Control de Audífonos y Auriculares (Cable y Bluetooth)**:
+  - Soporte completo para 1 toque (play/pause), 2 toques (siguiente) y 3 toques (anterior/retroceder).
+  - Al presionar el botón de los audífonos con la app recién abierta, reanuda la reproducción automática de la cola guardada.
+  - Pausa inmediata al desconectar auriculares ("Becoming Noisy") para proteger la privacidad del usuario.
+- **Windows System Media & Teclado**:
+  - Desacoplado el control de teclas multimedia de Windows respecto a los permisos de notificaciones locales para garantizar funcionamiento continuo aún con notificaciones deshabilitadas.
+  - Precarga de `playbackState` y `systemActions` en el inicio para reconocimiento inmediato por parte del sistema operativo.
+
 ## [1.0.83] - 2026-09-08
 
 ### Verified & Released

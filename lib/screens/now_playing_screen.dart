@@ -9,8 +9,10 @@ import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
 import '../widgets/now_playing/playback_controls.dart';
 import '../widgets/now_playing/playback_progress_slider.dart';
+import '../widgets/now_playing/volume_slider.dart';
 import '../widgets/now_playing/now_playing_bottom_actions.dart';
 import '../widgets/lyrics/lyrics_list_view.dart';
+import '../services/player_ui_settings_service.dart';
 import '../models/lyric_line.dart';
 import 'package:provider/provider.dart';
 import '../providers/player_provider.dart';
@@ -976,6 +978,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ),
 
               SizedBox(height: isCompact ? 4 : 8),
+
+              // Apple Music Style Volume Slider
+              if (PlayerUiSettingsService().getShowVolumeSlider()) ...[
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32.0),
+                  child: const VolumeSlider(),
+                ),
+                SizedBox(height: isCompact ? 4 : 8),
+              ],
 
               // 3. Bottom Actions (Lyrics, Cast, Queue)
               NowPlayingBottomActions(

@@ -31,14 +31,15 @@ class _VolumeSliderState extends State<VolumeSlider> {
         }).catchError((_) {});
 
         VolumeController.instance.addListener((volume) {
-          if (!mounted) return;
-          if (!_isDragging) {
-            setState(() => _systemVolume = volume);
-          }
+          if (!mounted || _isDragging) return;
+          setState(() => _systemVolume = volume);
           // Forward hardware volume changes to remote device if connected via Groovy Connect
           final groovyConnect = context.read<GroovyConnectService>();
           if (groovyConnect.isConnected) {
-            context.read<PlayerProvider>().setVolume(volume);
+            final playerProvider = context.read<PlayerProvider>();
+            if ((playerProvider.volume - volume).abs() > 0.03) {
+              playerProvider.setVolume(volume);
+            }
           }
         });
         _hasListener = true;
@@ -76,59 +77,64 @@ class _VolumeSliderState extends State<VolumeSlider> {
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onHorizontalDragStart: (details) {
-                  setState(() {
-                    _isDragging = true;
-                    _dragValue = activeVolume;
-                  });
-                },
-                onHorizontalDragUpdate: (details) {
-                  final box = context.findRenderObject() as RenderBox;
-                  final dx = details.localPosition.dx.clamp(0.0, box.size.width);
-                  final val = (dx / box.size.width).clamp(0.0, 1.0);
-                  setState(() {
-                    _dragValue = val;
-                  });
-                  playerProvider.setVolume(val);
-                  if (!isRemote && !kIsWeb && Platform.isAndroid) {
-                    try {
-                      VolumeController.instance.setVolume(val);
-                    } catch (_) {}
-                  }
-                },
-                onHorizontalDragEnd: (details) {
-                  setState(() => _isDragging = false);
-                },
-                onTapDown: (details) {
-                  HapticFeedback.lightImpact();
-                  final box = context.findRenderObject() as RenderBox;
-                  final dx = details.localPosition.dx.clamp(0.0, box.size.width);
-                  final val = (dx / box.size.width).clamp(0.0, 1.0);
-                  setState(() {
-                    _dragValue = val;
-                  });
-                  playerProvider.setVolume(val);
-                  if (!isRemote && !kIsWeb && Platform.isAndroid) {
-                    try {
-                      VolumeController.instance.setVolume(val);
-                    } catch (_) {}
-                  }
-                },
-                child: Container(
-                  height: 28, // Tappable area
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  child: CustomPaint(
-                    size: const Size(double.infinity, 28),
-                    painter: _VolumeSliderPainter(
-                      volume: activeVolume,
-                      isDragging: _isDragging,
-                      activeColor: Colors.white,
-                      inactiveColor: Colors.white.withValues(alpha: 0.22),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final sliderWidth = constraints.maxWidth;
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onHorizontalDragStart: (details) {
+                      setState(() {
+                        _isDragging = true;
+                        _dragValue = activeVolume;
+                      });
+                    },
+                    onHorizontalDragUpdate: (details) {
+                      if (sliderWidth <= 0) return;
+                      final dx = details.localPosition.dx.clamp(0.0, sliderWidth);
+                      final val = (dx / sliderWidth).clamp(0.0, 1.0);
+                      setState(() {
+                        _dragValue = val;
+                      });
+                      playerProvider.setVolume(val);
+                      if (!isRemote && !kIsWeb && Platform.isAndroid) {
+                        try {
+                          VolumeController.instance.setVolume(val);
+                        } catch (_) {}
+                      }
+                    },
+                    onHorizontalDragEnd: (details) {
+                      setState(() => _isDragging = false);
+                    },
+                    onTapDown: (details) {
+                      if (sliderWidth <= 0) return;
+                      HapticFeedback.lightImpact();
+                      final dx = details.localPosition.dx.clamp(0.0, sliderWidth);
+                      final val = (dx / sliderWidth).clamp(0.0, 1.0);
+                      setState(() {
+                        _dragValue = val;
+                      });
+                      playerProvider.setVolume(val);
+                      if (!isRemote && !kIsWeb && Platform.isAndroid) {
+                        try {
+                          VolumeController.instance.setVolume(val);
+                        } catch (_) {}
+                      }
+                    },
+                    child: Container(
+                      height: 28, // Tappable area
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: CustomPaint(
+                        size: Size(sliderWidth, 28),
+                        painter: _VolumeSliderPainter(
+                          volume: activeVolume,
+                          isDragging: _isDragging,
+                          activeColor: Colors.white,
+                          inactiveColor: Colors.white.withValues(alpha: 0.22),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 10),

@@ -169,6 +169,10 @@ class _AlbumScreenState extends State<AlbumScreen> {
         if (songs.isEmpty) {
           try {
             if (!widget.albumId.startsWith('album_') && !widget.albumId.startsWith('local_album_')) {
+              final ytSongs = await youtubeService.getAlbumSongs(widget.albumId);
+              if (ytSongs.isNotEmpty) {
+                songs = ytSongs;
+              }
               final ytAlbum = await youtubeService.getAlbum(widget.albumId);
               if (ytAlbum != null) {
                 final keepName = (album != null &&
@@ -187,14 +191,16 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   artist: keepArtist,
                   artistId: album?.artistId ?? ytAlbum.artistId,
                   coverArt: album?.coverArt ?? ytAlbum.coverArt,
-                  songCount: ytAlbum.songCount,
+                  songCount: songs.isNotEmpty ? songs.length : ytAlbum.songCount,
                   duration: ytAlbum.duration,
                   year: album?.year ?? ytAlbum.year,
                 );
               }
             }
-            final localSongs = await libraryProvider.getAlbumSongs(widget.albumId);
-            if (localSongs.isNotEmpty) songs = localSongs;
+            if (songs.isEmpty) {
+              final localSongs = await libraryProvider.getAlbumSongs(widget.albumId);
+              if (localSongs.isNotEmpty) songs = localSongs;
+            }
           } catch (_) {}
         }
       }

@@ -116,6 +116,36 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   StreamSubscription<PlaybackState>? _playbackEventSubscription;
 
   GroovyAudioHandler() {
+    // Seed initial playbackState with full system actions and controls so OS / headphones recognize media controls immediately
+    playbackState.add(
+      PlaybackState(
+        controls: const [
+          MediaControl.skipToPrevious,
+          MediaControl.play,
+          MediaControl.skipToNext,
+        ],
+        systemActions: const {
+          MediaAction.play,
+          MediaAction.pause,
+          MediaAction.playPause,
+          MediaAction.stop,
+          MediaAction.skipToNext,
+          MediaAction.skipToPrevious,
+          MediaAction.fastForward,
+          MediaAction.rewind,
+          MediaAction.seek,
+          MediaAction.seekForward,
+          MediaAction.seekBackward,
+          MediaAction.playFromMediaId,
+          MediaAction.playFromSearch,
+        },
+        androidCompactActionIndices: const [0, 1, 2],
+        processingState: AudioProcessingState.idle,
+        playing: false,
+        updatePosition: Duration.zero,
+      ),
+    );
+
     // Forward just_audio playback events → audio_service playback state.
     // This drives the iOS Control Center / lock screen widget and the
     // Android media notification automatically.
@@ -163,16 +193,44 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   Future<void> seek(Duration position) =>
       onSeekTo?.call(position) ?? _player.seek(position);
 
+  Timer? _mediaClickTimer;
+  int _mediaClickCount = 0;
+
   @override
   Future<void> click([MediaButton button = MediaButton.media]) async {
     switch (button) {
       case MediaButton.next:
+        _mediaClickTimer?.cancel();
+        _mediaClickCount = 0;
         await skipToNext();
+        break;
       case MediaButton.previous:
+        _mediaClickTimer?.cancel();
+        _mediaClickCount = 0;
         await skipToPrevious();
+        break;
       case MediaButton.media:
-        await (onTogglePlayPause?.call() ??
-            (_player.playing ? _player.pause() : _player.play()));
+        // Handle single click (play/pause), double click (skip next), and triple click (skip previous)
+        _mediaClickCount++;
+        _mediaClickTimer?.cancel();
+        if (_mediaClickCount >= 3) {
+          _mediaClickCount = 0;
+          await skipToPrevious();
+        } else {
+          _mediaClickTimer = Timer(const Duration(milliseconds: 320), () async {
+            final count = _mediaClickCount;
+            _mediaClickCount = 0;
+            if (count == 1) {
+              await (onTogglePlayPause?.call() ??
+                  (_player.playing ? _player.pause() : _player.play()));
+            } else if (count == 2) {
+              await skipToNext();
+            } else if (count >= 3) {
+              await skipToPrevious();
+            }
+          });
+        }
+        break;
     }
   }
 
@@ -501,6 +559,14 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
           MediaControl.skipToNext,
         ],
         systemActions: const {
+          MediaAction.play,
+          MediaAction.pause,
+          MediaAction.playPause,
+          MediaAction.stop,
+          MediaAction.skipToNext,
+          MediaAction.skipToPrevious,
+          MediaAction.fastForward,
+          MediaAction.rewind,
           MediaAction.seek,
           MediaAction.seekForward,
           MediaAction.seekBackward,
@@ -527,6 +593,14 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
         MediaControl.skipToNext,
       ],
       systemActions: const {
+        MediaAction.play,
+        MediaAction.pause,
+        MediaAction.playPause,
+        MediaAction.stop,
+        MediaAction.skipToNext,
+        MediaAction.skipToPrevious,
+        MediaAction.fastForward,
+        MediaAction.rewind,
         MediaAction.seek,
         MediaAction.seekForward,
         MediaAction.seekBackward,
@@ -569,6 +643,7 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   @override
   Future<void> customAction(String name, [Map<String, dynamic>? extras]) async {
     if (name == 'dispose') {
+      _mediaClickTimer?.cancel();
       await _playbackEventSubscription?.cancel();
       await _player.dispose();
     }
@@ -590,6 +665,7 @@ Future<GroovyAudioHandler> initAudioService() async {
         androidNotificationIcon: 'mipmap/ic_launcher',
         notificationColor: Color(0xFFFA243C),
         preloadArtwork: true,
+        androidResumeOnClick: true,
         androidBrowsableRootExtras: {
           'android.media.browse.SEARCH_SUPPORTED': true,
         },

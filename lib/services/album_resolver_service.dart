@@ -72,7 +72,11 @@ class AlbumResolverService {
         ? albumId
         : (albumId.startsWith('VLOLAK')
             ? albumId
-            : (albumId.startsWith('OLAK') ? 'VL$albumId' : null));
+            : (albumId.startsWith('OLAK')
+                ? 'VL$albumId'
+                : (albumId.startsWith('VLPL')
+                    ? albumId
+                    : (albumId.startsWith('PL') ? 'VL$albumId' : null))));
     if (ytmBrowseId != null) {
       final direct = await _browseYtmAlbum(ytmBrowseId, title ?? albumId, artist ?? '');
       if (direct != null && direct.songs.isNotEmpty) {
@@ -344,9 +348,32 @@ class AlbumResolverService {
         }
       }
 
-      final secondary = twoCol?['secondaryContents']?['sectionListRenderer']?['contents']?[0]
-          ?['musicShelfRenderer'];
-      final contents = (secondary?['contents'] as List<dynamic>?) ?? [];
+      // Extract tracks from secondaryContents or tabs[0] (supports both albums and playlists)
+      List<dynamic> contents = [];
+      final secList = twoCol?['secondaryContents']?['sectionListRenderer']?['contents'] as List<dynamic>?;
+      if (secList != null) {
+        for (final s in secList) {
+          final shelf = s['musicShelfRenderer'] ?? s['musicPlaylistShelfRenderer'];
+          if (shelf != null && shelf['contents'] != null) {
+            contents = (shelf['contents'] as List<dynamic>?) ?? [];
+            break;
+          }
+        }
+      }
+
+      if (contents.isEmpty) {
+        final tabContents = twoCol?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List<dynamic>?;
+        if (tabContents != null) {
+          for (final s in tabContents) {
+            final shelf = s['musicShelfRenderer'] ?? s['musicPlaylistShelfRenderer'];
+            if (shelf != null && shelf['contents'] != null) {
+              contents = (shelf['contents'] as List<dynamic>?) ?? [];
+              break;
+            }
+          }
+        }
+      }
+
       final songs = <Song>[];
 
       for (int i = 0; i < contents.length; i++) {
@@ -356,10 +383,19 @@ class AlbumResolverService {
 
         final tTitle = r['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']
             ?['runs']?[0]?['text'] as String? ?? 'Unknown Title';
-        final videoId = r['overlay']?['musicItemThumbnailOverlayRenderer']?['content']
-            ?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId']
-            as String?;
-        if (videoId == null || videoId.isEmpty) continue;
+
+        // Robust videoId extraction across YTM response variations
+        String? videoId = r['playlistItemData']?['videoId'] as String?;
+        videoId ??= r['overlay']?['musicItemThumbnailOverlayRenderer']?['content']
+            ?['musicPlayButtonRenderer']?['playNavigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+        videoId ??= r['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']
+            ?['runs']?[0]?['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+        videoId ??= r['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+
+        if (videoId != null) {
+          videoId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+        }
+        if (videoId == null || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) continue;
 
         int durationSec = 0;
         final fixedCols = r['fixedColumns'] as List<dynamic>?;

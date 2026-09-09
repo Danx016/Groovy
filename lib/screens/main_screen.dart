@@ -46,6 +46,60 @@ class _PlayPauseAction extends Action<PlayPauseIntent> {
   }
 }
 
+class NextTrackIntent extends Intent {
+  const NextTrackIntent();
+}
+
+class _NextTrackAction extends Action<NextTrackIntent> {
+  final BuildContext context;
+  _NextTrackAction(this.context);
+
+  @override
+  bool isEnabled(NextTrackIntent intent, [BuildContext? targetContext]) {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus != null && focus.context != null) {
+      if (focus.context!.findAncestorWidgetOfExactType<EditableText>() != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @override
+  Object? invoke(NextTrackIntent intent, [BuildContext? targetContext]) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    playerProvider.skipNext();
+    return null;
+  }
+}
+
+class PreviousTrackIntent extends Intent {
+  const PreviousTrackIntent();
+}
+
+class _PreviousTrackAction extends Action<PreviousTrackIntent> {
+  final BuildContext context;
+  _PreviousTrackAction(this.context);
+
+  @override
+  bool isEnabled(PreviousTrackIntent intent, [BuildContext? targetContext]) {
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus != null && focus.context != null) {
+      if (focus.context!.findAncestorWidgetOfExactType<EditableText>() != null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @override
+  Object? invoke(PreviousTrackIntent intent, [BuildContext? targetContext]) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    playerProvider.skipPrevious();
+    return null;
+  }
+}
+
 class MainScreen extends StatefulWidget {
   final bool isOfflineMode;
 
@@ -585,10 +639,17 @@ class _MainScreenState extends State<MainScreen> {
       return Shortcuts(
         shortcuts: <ShortcutActivator, Intent>{
           const SingleActivator(LogicalKeyboardKey.space): const PlayPauseIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaPlayPause): const PlayPauseIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaPlay): const PlayPauseIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaPause): const PlayPauseIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const NextTrackIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const PreviousTrackIntent(),
         },
         child: Actions(
           actions: <Type, Action<Intent>>{
             PlayPauseIntent: _PlayPauseAction(context),
+            NextTrackIntent: _NextTrackAction(context),
+            PreviousTrackIntent: _PreviousTrackAction(context),
           },
           child: Focus(
             autofocus: true,

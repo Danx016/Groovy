@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/server_config.dart';
+import '../models/song.dart';
 
 class StorageService {
   static final StorageService _instance = StorageService._internal();
@@ -21,6 +22,7 @@ class StorageService {
   static const String _serverConfigKey = 'server_config';
   static const String _serverProfilesKey = 'server_profiles';
   static const String _lastPlayedKey = 'last_played';
+  static const String _playbackHistoryKey = 'local_playback_history';
   static const String _queueKey = 'queue';
   static const String _queueIndexKey = 'queue_index';
   static const String _shuffleModeKey = 'shuffle_mode';
@@ -211,6 +213,65 @@ class StorageService {
   Future<String?> getLastPlayed() async {
     final prefs = await _prefs;
     return prefs.getString(_lastPlayedKey);
+  }
+
+  Future<void> addSongToHistory(Song song) async {
+    try {
+      final prefs = await _prefs;
+      final historyJson = prefs.getString(_playbackHistoryKey);
+      List<dynamic> list = [];
+      if (historyJson != null && historyJson.isNotEmpty) {
+        try {
+          list = json.decode(historyJson) as List<dynamic>;
+        } catch (_) {
+          list = [];
+        }
+      }
+
+      list.removeWhere((item) {
+        if (item is Map<String, dynamic>) {
+          return item['id']?.toString() == song.id;
+        }
+        return false;
+      });
+
+      list.insert(0, song.toJson());
+
+      if (list.length > 200) {
+        list = list.sublist(0, 200);
+      }
+
+      await prefs.setString(_playbackHistoryKey, json.encode(list));
+    } catch (e) {
+      debugPrint('[StorageService] addSongToHistory error: $e');
+    }
+  }
+
+  Future<List<Song>> getPlaybackHistory() async {
+    try {
+      final prefs = await _prefs;
+      final historyJson = prefs.getString(_playbackHistoryKey);
+      if (historyJson == null || historyJson.isEmpty) return [];
+
+      final list = json.decode(historyJson) as List<dynamic>;
+      final songs = <Song>[];
+      for (final item in list) {
+        if (item is Map<String, dynamic>) {
+          try {
+            songs.add(Song.fromJson(item));
+          } catch (_) {}
+        }
+      }
+      return songs;
+    } catch (e) {
+      debugPrint('[StorageService] getPlaybackHistory error: $e');
+      return [];
+    }
+  }
+
+  Future<void> clearPlaybackHistory() async {
+    final prefs = await _prefs;
+    await prefs.remove(_playbackHistoryKey);
   }
 
   Future<void> saveQueue(List<Map<String, dynamic>> queue) async {

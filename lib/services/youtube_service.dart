@@ -310,20 +310,41 @@ class YoutubeService {
 
   Future<void> configure(dynamic config) async {}
 
+  static final Map<String, String> _resolvedVideoIdCache = {};
+
+  /// Public helper to resolve a valid 11-char YouTube video ID for any track (including Deezer dz_...)
+  Future<String> resolveVideoIdForSong(Song song) => _resolvePlayableVideoId(song);
+
   Future<String> _resolvePlayableVideoId(Song song) async {
     final cleanId = song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
     if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
       return cleanId;
     }
+
+    if (_resolvedVideoIdCache.containsKey(song.id)) {
+      return _resolvedVideoIdCache[song.id]!;
+    }
+
     try {
-      final q = (song.artist != null && song.artist!.isNotEmpty)
-          ? '${song.title} ${song.artist}'
-          : song.title;
+      // 1. Clean title and artist to strip suffixes like (Remastered...), [Official Audio], etc.
+      String cleanTitle = song.title
+          .replaceAll(RegExp(r'\s*[\(\[](?:remaster(?:ed)?|deluxe|version|explicit|radio edit|bonus track|official|audio|video|feat\.?|ft\.?).*?[\)\]]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      if (cleanTitle.isEmpty) cleanTitle = song.title;
+
+      String cleanArtist = (song.artist != null && song.artist!.isNotEmpty && song.artist != 'Unknown Artist')
+          ? song.artist!.replaceAll(RegExp(r'\s*[\(\[].*?[\)\]]'), '').trim()
+          : '';
+
+      final q = cleanArtist.isNotEmpty ? '$cleanTitle $cleanArtist' : cleanTitle;
+      if (q.trim().isEmpty) return '';
       final dual = await _ytdlp.searchDual(q, limit: 5);
       final musicList = dual['music'] ?? [];
       for (final item in musicList) {
         final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
         if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+          _resolvedVideoIdCache[song.id] = id;
           return id;
         }
       }
@@ -331,18 +352,38 @@ class YoutubeService {
       for (final item in ytList) {
         final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
         if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+          _resolvedVideoIdCache[song.id] = id;
           return id;
+        }
+      }
+
+      // If initial search with cleaned query didn't match, fallback to raw query
+      final rawQ = (song.artist != null && song.artist!.isNotEmpty)
+          ? '${song.title} ${song.artist}'
+          : song.title;
+      if (rawQ.trim().isNotEmpty && rawQ.trim() != q.trim()) {
+        final rawDual = await _ytdlp.searchDual(rawQ, limit: 5);
+        for (final list in [rawDual['music'] ?? [], rawDual['youtube'] ?? []]) {
+          for (final item in list) {
+            final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+            if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+              _resolvedVideoIdCache[song.id] = id;
+              return id;
+            }
+          }
         }
       }
     } catch (e) {
       debugPrint('[YouTube] _resolvePlayableVideoId error for "${song.title}": $e');
     }
-    return cleanId;
+
+    // Never return non-11-character cleanId (e.g. dz_12345), return empty string
+    return '';
   }
 
   Future<AudioSource?> getYoutubeAudioSource(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
-    if (videoId.isEmpty) return null;
+    if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       try {
         final streamInfo = await _ytdlp.resolveStreamInfo(videoId);
@@ -354,7 +395,8 @@ class YoutubeService {
           );
         }
       } catch (e) {
-        debugPrint('[YouTube] Direct AudioSource resolution error, using fallback: $e');
+        debugPrint('[YouTube] Direct AudioSource resolution error: $e');
+        return null;
       }
     }
     return buildAudioSource(videoId);
@@ -362,6 +404,9 @@ class YoutubeService {
 
   Future<String> resolveStreamUrlAsync(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
+    if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+      throw Exception('No playable YouTube video found for "${song.title}" (${song.id})');
+    }
     return _ytdlp.resolveStreamUrl(videoId);
   }
 
@@ -444,8 +489,13 @@ class YoutubeService {
   }
 
   /// Returns a lightweight valid stream URL synchronously.
-  String getStreamUrl(String videoId, {int? maxBitRate, String? format}) =>
-      'https://www.youtube.com/watch?v=${videoId.replaceFirst('ytmusic://', '')}';
+  String getStreamUrl(String videoId, {int? maxBitRate, String? format}) {
+    final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+    if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+      return 'https://www.youtube.com/watch?v=$cleanId';
+    }
+    return '';
+  }
 
   /// Resolves the actual direct audio stream URL via yt-dlp / Python process.
   Future<String> resolveStreamUrl(String videoId) async {

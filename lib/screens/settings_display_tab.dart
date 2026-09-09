@@ -5,6 +5,7 @@ import '../services/recommendation_service.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/theme_service.dart';
 import '../services/locale_service.dart';
+import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/settings/settings_section_card.dart';
@@ -339,6 +340,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
               TextButton(
                 onPressed: () {
                   Navigator.pop(context);
+                  StorageService().clearPlaybackHistory();
                   Provider.of<RecommendationService>(
                     context,
                     listen: false,

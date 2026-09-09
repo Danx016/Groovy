@@ -111,7 +111,7 @@ class _LyricsListViewState extends State<LyricsListView> {
       return;
     }
 
-    // Optional intro interlude if music starts after 4 seconds
+    // Optional intro interlude if vocals start after 4 seconds
     if (widget.lyrics[0].startTime > const Duration(seconds: 4)) {
       _items.add(LyricsItem(
         type: ItemType.interlude,
@@ -126,13 +126,27 @@ class _LyricsListViewState extends State<LyricsListView> {
           ? widget.lyrics[i + 1].startTime 
           : const Duration(hours: 24);
 
+      final estimatedLineEnd = line.endTime ?? (line.startTime + const Duration(milliseconds: 3200));
+
       _items.add(LyricsItem(
         type: ItemType.lyric,
         line: line,
         startTime: line.startTime,
-        endTime: nextTime,
+        endTime: nextTime > estimatedLineEnd ? estimatedLineEnd : nextTime,
         lyricIndex: i,
       ));
+
+      // Musical interlude dots for gaps >= 5.0 seconds between lines
+      if (i < widget.lyrics.length - 1) {
+        final gap = nextTime - estimatedLineEnd;
+        if (gap >= const Duration(seconds: 5)) {
+          _items.add(LyricsItem(
+            type: ItemType.interlude,
+            startTime: estimatedLineEnd,
+            endTime: nextTime,
+          ));
+        }
+      }
     }
 
     _keys = List.generate(_items.length, (_) => GlobalKey());
@@ -201,7 +215,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 750)}) {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 450)}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     try {
@@ -212,7 +226,7 @@ class _LyricsListViewState extends State<LyricsListView> {
         if (renderObject is RenderBox && _scrollController.hasClients && renderObject.attached) {
           final viewport = RenderAbstractViewport.maybeOf(renderObject);
           if (viewport == null) return;
-          final targetOffset = viewport.getOffsetToReveal(renderObject, 0.35).offset;
+          final targetOffset = viewport.getOffsetToReveal(renderObject, 0.34).offset;
           final clamped = targetOffset.clamp(
             _scrollController.position.minScrollExtent,
             _scrollController.position.maxScrollExtent,
@@ -283,8 +297,8 @@ class _LyricsListViewState extends State<LyricsListView> {
           controller: _scrollController,
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: EdgeInsets.only(
-            top: 20,
-            bottom: MediaQuery.of(context).size.height * 0.42,
+            top: 36,
+            bottom: MediaQuery.of(context).size.height * 0.48,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -340,7 +354,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                       _currentLyricIndex = lyricIndex;
                     });
                     _resumeAutoScrollTimer?.cancel();
-                    _scrollToCurrentLine(duration: const Duration(milliseconds: 650));
+                    _scrollToCurrentLine(duration: const Duration(milliseconds: 450));
                   },
                 ),
               );

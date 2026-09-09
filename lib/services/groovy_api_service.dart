@@ -109,7 +109,7 @@ class GroovyApiService {
       'X-Client-Platform': platform,
       'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
       'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
-      'X-App-Version': dev?.appVersion ?? '1.0.83',
+      'X-App-Version': dev?.appVersion ?? '1.0.84',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
@@ -130,6 +130,7 @@ class GroovyApiService {
     int listenDeltaSeconds = 15,
     String? deviceId,
     double? volume,
+    int? positionMs,
   }) async {
     try {
       String? effectiveDeviceId = deviceId;
@@ -154,6 +155,7 @@ class GroovyApiService {
           'coverArt': song.coverArt ?? '',
           'duration': song.duration ?? 0,
           'position': position,
+          if (positionMs != null) 'positionMs': positionMs,
           'isPlaying': isPlaying,
           if (volume != null) 'volume': volume,
           'platform': dev.platform,
@@ -162,7 +164,7 @@ class GroovyApiService {
           'osVersion': dev.osVersion,
           'listenDeltaSeconds': listenDeltaSeconds,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 3));
     } catch (e) {
       debugPrint('[GroovyApiService] reportPlaybackState note: $e');
     }
@@ -176,27 +178,29 @@ class GroovyApiService {
     dynamic payload,
     String? token,
   }) async {
-    try {
-      final uri = Uri.parse('$_baseUrl/telemetry/command');
-      final res = await http.post(
-        uri,
-        headers: _headers(token),
-        body: jsonEncode({
-          'targetDeviceId': targetDeviceId,
-          'senderDeviceId': senderDeviceId,
-          'action': action,
-          'payload': payload,
-        }),
-      ).timeout(const Duration(seconds: 5));
-      if (res.statusCode >= 200 && res.statusCode < 300) {
-        final data = jsonDecode(res.body);
-        return data['success'] == true;
+    for (int attempt = 0; attempt < 2; attempt++) {
+      try {
+        final uri = Uri.parse('$_baseUrl/telemetry/command');
+        final res = await http.post(
+          uri,
+          headers: _headers(token),
+          body: jsonEncode({
+            'targetDeviceId': targetDeviceId,
+            'senderDeviceId': senderDeviceId,
+            'action': action,
+            'payload': payload,
+          }),
+        ).timeout(const Duration(seconds: 3));
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          final data = jsonDecode(res.body);
+          if (data['success'] == true) return true;
+        }
+      } catch (e) {
+        debugPrint('[GroovyApiService] sendDeviceCommand attempt $attempt error: $e');
+        if (attempt == 0) await Future.delayed(const Duration(milliseconds: 80));
       }
-      return false;
-    } catch (e) {
-      debugPrint('[GroovyApiService] sendDeviceCommand error: $e');
-      return false;
     }
+    return false;
   }
 
   /// Polls pending commands sent to this device from other Groovy instances across the internet.
@@ -210,7 +214,7 @@ class GroovyApiService {
       final res = await http.get(
         uri,
         headers: _headers(token),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(milliseconds: 2200));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['commands'] is List) {
@@ -230,7 +234,7 @@ class GroovyApiService {
       final res = await http.get(
         uri,
         headers: _headers(token),
-      ).timeout(const Duration(seconds: 4));
+      ).timeout(const Duration(milliseconds: 2200));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['devices'] is List) {
@@ -246,12 +250,19 @@ class GroovyApiService {
 
   Future<void> pingSession(String token) async {
     try {
+      String? deviceId;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        deviceId = prefs.getString('groovy_cloud_device_id_v2');
+      } catch (_) {}
+
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/ping');
       await http.post(
         uri,
         headers: _headers(token),
         body: jsonEncode({
+          if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
           'platform': dev.platform,
           'deviceName': dev.deviceModel,
           'deviceModel': dev.deviceModel,
@@ -265,12 +276,19 @@ class GroovyApiService {
 
   Future<void> leaveSession(String token) async {
     try {
+      String? deviceId;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        deviceId = prefs.getString('groovy_cloud_device_id_v2');
+      } catch (_) {}
+
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/leave');
       await http.post(
         uri,
         headers: _headers(token),
         body: jsonEncode({
+          if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
           'platform': dev.platform,
           'deviceName': dev.deviceModel,
           'deviceModel': dev.deviceModel,

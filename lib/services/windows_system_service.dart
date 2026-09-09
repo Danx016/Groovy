@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:windows_taskbar/windows_taskbar.dart';
 import 'package:local_notifier/local_notifier.dart';
 import '../models/song.dart';
@@ -15,6 +16,7 @@ class WindowsSystemService {
   LocalNotification? _lyricsNotification;
   bool _lyricsEnabled = false;
   Song? _currentSong;
+  bool _isPlaying = false;
 
   VoidCallback? onPlay;
   VoidCallback? onPause;
@@ -23,24 +25,59 @@ class WindowsSystemService {
   VoidCallback? onSkipPrevious;
   Function(Duration position)? onSeekTo;
 
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is! KeyDownEvent) return false;
+
+    if (event.logicalKey == LogicalKeyboardKey.mediaPlayPause) {
+      if (_isPlaying) {
+        onPause?.call();
+      } else {
+        onPlay?.call();
+      }
+      return true;
+    } else if (event.logicalKey == LogicalKeyboardKey.mediaPlay) {
+      onPlay?.call();
+      return true;
+    } else if (event.logicalKey == LogicalKeyboardKey.mediaPause) {
+      onPause?.call();
+      return true;
+    } else if (event.logicalKey == LogicalKeyboardKey.mediaTrackNext) {
+      onSkipNext?.call();
+      return true;
+    } else if (event.logicalKey == LogicalKeyboardKey.mediaTrackPrevious) {
+      onSkipPrevious?.call();
+      return true;
+    } else if (event.logicalKey == LogicalKeyboardKey.mediaStop) {
+      onStop?.call();
+      return true;
+    }
+    return false;
+  }
+
   Future<void> initialize() async {
     if (!kIsWeb && Platform.isWindows) {
       if (_isInitialized) return;
 
+      // 1. Hardware keyboard / headphone media key listener on Windows
       try {
-        // Initialize local notifier for lyrics
+        HardwareKeyboard.instance.addHandler(_handleKeyEvent);
+      } catch (e) {
+        debugPrint('Error attaching hardware keyboard listener: $e');
+      }
+
+      // 2. Initialize local notifier for lyrics/notifications (optional, don't break media keys if it fails)
+      try {
         await localNotifier.setup(
           appName: 'Groovy',
           shortcutPolicy: ShortcutPolicy.requireNoCreate,
         );
-
-        _isInitialized = true;
-        debugPrint(
-            'WindowsSystemService initialized (Taskbar & Lyrics Notification)');
       } catch (e) {
-        _isInitialized = false;
-        debugPrint('Error initializing WindowsSystemService: $e');
+        debugPrint('LocalNotifier setup skipped/failed: $e');
       }
+
+      _isInitialized = true;
+      debugPrint(
+          'WindowsSystemService initialized (Taskbar, Media Keys & Lyrics Notification)');
     }
   }
 
@@ -51,6 +88,7 @@ class WindowsSystemService {
     required Duration duration,
     String? artworkUrl,
   }) async {
+    _isPlaying = isPlaying;
     if (!kIsWeb && Platform.isWindows && _isInitialized) {
       try {
         // Clear taskbar progress bar so it never looks like a file download (matches Spotify behavior)
@@ -126,6 +164,7 @@ class WindowsSystemService {
 
   Future<void> dispose() async {
     if (!kIsWeb && Platform.isWindows && _isInitialized) {
+      HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
       try {
         await clearLyrics();
         await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);

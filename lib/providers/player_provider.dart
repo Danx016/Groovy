@@ -80,6 +80,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _optimisticRemotePlayPauseUntil;
   bool? _optimisticRemotePlayPauseState;
   DateTime? _lastRemoteSeekTime;
+  DateTime? _lastRemoteVolumeChangeTime;
+  double? _optimisticRemoteVolume;
+  Timer? _remoteVolumeDebounceTimer;
 
   String? _resolvedArtworkUrl;
 
@@ -114,26 +117,45 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
-    _telemetryTimer = Timer.periodic(const Duration(seconds: 3), (_) {
-      _sendTelemetryHeartbeat();
+    _telemetryTimer = Timer.periodic(const Duration(milliseconds: 1500), (_) {
+      if (_isPlaying) {
+        _sendTelemetryHeartbeat();
+      }
     });
   }
+
+  String? _cachedUserToken;
 
   void _sendTelemetryHeartbeat({bool? overridePlaying}) {
     final song = _currentSong;
     if (song == null) return;
     final isPl = overridePlaying ?? _isPlaying;
-    StorageService().getUserToken().then((token) {
+    final posMs = _position.inMilliseconds;
+
+    void sendWithToken(String token) {
       GroovyApiService().reportPlaybackState(
-        token: token ?? '',
+        token: token,
         song: song,
         isPlaying: isPl,
         position: _position.inSeconds,
-        listenDeltaSeconds: isPl ? 8 : 0,
+        positionMs: posMs,
+        listenDeltaSeconds: isPl ? 2 : 0,
         deviceId: _groovyConnectService?.localDeviceId,
         volume: _volume,
       );
-    }).catchError((_) {});
+    }
+
+    final token = _cachedUserToken ?? _groovyConnectService?.cachedAuthToken;
+    if (token != null && token.isNotEmpty) {
+      sendWithToken(token);
+    } else {
+      StorageService().getUserToken().then((tok) {
+        if (tok != null && tok.isNotEmpty) {
+          _cachedUserToken = tok;
+          sendWithToken(tok);
+        }
+      }).catchError((_) {});
+    }
   }
 
   void sendTelemetryHeartbeatNow({bool? overridePlaying}) {
@@ -459,6 +481,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   void disableGroovyConnectRemote() {
     _isRenderingRemotely = false;
     _lastRemoteSeekTime = null;
+    _lastRemoteVolumeChangeTime = null;
+    _optimisticRemoteVolume = null;
+    _remoteVolumeDebounceTimer?.cancel();
+    _remoteVolumeDebounceTimer = null;
     _optimisticRemoteSongId = null;
     _optimisticRemoteSongUntil = null;
     _optimisticRemotePlayPauseState = null;
@@ -578,10 +604,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    if ((_volume - volume).abs() > 0.05) {
-      _volume = volume;
-      _audioHandler.updateRemoteVolume((_volume * 100).round());
-      changed = true;
+    final bool isRecentVolumeChange = _lastRemoteVolumeChangeTime != null &&
+        DateTime.now().difference(_lastRemoteVolumeChangeTime!) < const Duration(seconds: 4);
+
+    if (isRecentVolumeChange) {
+      if (_optimisticRemoteVolume != null && (volume - _optimisticRemoteVolume!).abs() <= 0.05) {
+        _lastRemoteVolumeChangeTime = null;
+        _optimisticRemoteVolume = null;
+      }
+    } else {
+      if ((_volume - volume).abs() > 0.05) {
+        _volume = volume;
+        _audioHandler.updateRemoteVolume((_volume * 100).round());
+        changed = true;
+      }
     }
 
     _manageRemotePositionTicker();
@@ -1551,6 +1587,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     });
 
     _cleanOldStreamCache().catchError((_) {});
+    _startTelemetryHeartbeat();
 
 
     _storageService.getRepeatMode().then((saved) {
@@ -1692,19 +1729,72 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     );
   }
 
-  /// Configures the Android AudioAttributes used by the underlying
-  /// AudioTrack/ExoPlayer (music content type/usage). This does NOT drive
-  /// audio focus — `AndroidSystemService`/`AndroidSystemPlugin.kt` is the sole
-  /// owner of focus acquisition/release on Android (see [_ensureAudioFocus],
-  /// [onAudioFocusGain] wiring below, and `audio_handler.dart`, which disables
-  /// just_audio's own automatic session-activation/interruption handling on
-  /// Android to avoid two systems fighting over the same responsibility).
+  StreamSubscription<void>? _becomingNoisySubscription;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSubscription;
+  StreamSubscription<AudioDevicesChangedEvent>? _devicesChangedSubscription;
+  bool _wasPlayingBeforeInterruption = false;
+
+  /// Configures AudioSession for mobile and desktop, enabling automatic pause
+  /// on headphone disconnect (becoming noisy), resume on headphone reconnect,
+  /// audio interruption handling (calls/alarms), and headset media controls.
   Future<void> _configureAudioSession() async {
-    if (kIsWeb || !Platform.isAndroid) return;
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS)) return;
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
       debugPrint('[Player] AudioSession configured for music playback');
+
+      // 1. Headphone disconnection ("Becoming Noisy"):
+      // Automatically pause when wired/bluetooth headphones are unplugged or turned off
+      await _becomingNoisySubscription?.cancel();
+      _becomingNoisySubscription = session.becomingNoisyEventStream.listen((_) {
+        debugPrint('[AudioSession] Headset disconnected (becoming noisy) -> pausing');
+        if (_isPlaying) {
+          pause();
+        }
+      });
+
+      // 2. Audio Interruption (calls, navigation ducking):
+      await _interruptionSubscription?.cancel();
+      _interruptionSubscription = session.interruptionEventStream.listen((event) {
+        debugPrint('[AudioSession] Interruption event: begin=${event.begin}, type=${event.type}');
+        if (event.begin) {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(_effectiveVolume * 0.3);
+              break;
+            case AudioInterruptionType.pause:
+            case AudioInterruptionType.unknown:
+              if (_isPlaying) {
+                _wasPlayingBeforeInterruption = true;
+                pause();
+              }
+              break;
+          }
+        } else {
+          switch (event.type) {
+            case AudioInterruptionType.duck:
+              _audioPlayer.setVolume(_effectiveVolume);
+              break;
+            case AudioInterruptionType.pause:
+              if (_wasPlayingBeforeInterruption) {
+                _wasPlayingBeforeInterruption = false;
+                play();
+              }
+              break;
+            case AudioInterruptionType.unknown:
+              break;
+          }
+        }
+      });
+
+      // 3. Audio devices changed (headphones connected):
+      // When headphones are plugged in or Bluetooth audio connects, prime session
+      await _devicesChangedSubscription?.cancel();
+      _devicesChangedSubscription = session.devicesChangedEventStream.listen((event) {
+        debugPrint('[AudioSession] Audio devices changed. Added: ${event.devicesAdded.map((d) => d.name).toList()}');
+        session.setActive(true).catchError((_) => false);
+      });
     } catch (e) {
       debugPrint('[Player] AudioSession configuration failed: $e');
     }
@@ -1716,6 +1806,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   VoidCallback? onAudioFocusDenied;
 
   Future<void> _ensureAudioFocus(Future<void> Function() onGranted) async {
+    try {
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS)) {
+        final session = await AudioSession.instance;
+        await session.setActive(true);
+      }
+    } catch (_) {}
     await onGranted();
   }
 
@@ -1819,6 +1915,35 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void _recordSongPlayback(Song song) {
+    if (_recommendationService != null) {
+      _recommendationService!.trackSongPlay(
+        song,
+        durationPlayed: 0,
+        completed: false,
+      );
+    }
+
+    _storageService.addSongToHistory(song).catchError((e) {
+      debugPrint('[Player] Error adding song to history: $e');
+    });
+
+    _storageService.getUserToken().then((token) {
+      if (token != null && token.isNotEmpty) {
+        GroovyApiService().recordHistory(token, song);
+      }
+      GroovyApiService().reportPlaybackState(
+        token: token ?? '',
+        song: song,
+        isPlaying: true,
+        position: _position.inSeconds,
+        listenDeltaSeconds: 0,
+        deviceId: _groovyConnectService?.localDeviceId,
+      );
+      _startTelemetryHeartbeat();
+    }).catchError((_) {});
+  }
+
   Future<void> playSong(
     Song song, {
     List<Song>? playlist,
@@ -1904,10 +2029,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     debugPrint(
         '[Player] ▶ playSong: "${song.title}" by ${song.artist ?? 'unknown'} (id=${song.id} local=${song.isLocal})');
     
-    // Stop currently playing audio immediately so the previous song does not bleed into the next
-    if (_audioPlayer.playing) {
+    // Ensure any previously active audio or faulted stream is completely stopped and detached
+    try {
       await _audioPlayer.stop();
-    }
+    } catch (_) {}
 
     _isLoading = true;
     notifyListeners();
@@ -1926,6 +2051,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         _currentIndex = startIndex ?? _queue.indexWhere((s) => s.id == song.id);
       }
+
+      // If song has a non-YouTube ID (e.g. from Deezer dz_...), resolve real YouTube ID early
+      if (song.isLocal != true && (song.id.startsWith('dz_') || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '')))) {
+        try {
+          final resolvedYtId = await _youtubeService.resolveVideoIdForSong(song);
+          if (resolvedYtId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(resolvedYtId)) {
+            final updatedSong = song.copyWith(
+              id: resolvedYtId,
+              coverArt: (song.coverArt == null || song.coverArt!.isEmpty) ? resolvedYtId : song.coverArt,
+            );
+            final qIdx = _queue.indexWhere((s) => s.id == song.id);
+            if (qIdx != -1) {
+              _queue[qIdx] = updatedSong;
+            }
+            song = updatedSong;
+          }
+        } catch (_) {}
+      }
+
       _currentSong = song;
       _lastPreloadedSongId = null;
       _resolvedArtworkUrl = null;
@@ -2143,28 +2287,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
       }
 
-      if (_recommendationService != null) {
-        _recommendationService!.trackSongPlay(
-          song,
-          durationPlayed: 0,
-          completed: false,
-        );
-      }
-
-      StorageService().getUserToken().then((token) {
-        if (token != null && token.isNotEmpty) {
-          GroovyApiService().recordHistory(token, song);
-        }
-        GroovyApiService().reportPlaybackState(
-          token: token ?? '',
-          song: song,
-          isPlaying: true,
-          position: _position.inSeconds,
-          listenDeltaSeconds: 0,
-          deviceId: _groovyConnectService?.localDeviceId,
-        );
-        _startTelemetryHeartbeat();
-      }).catchError((_) {});
+      _recordSongPlayback(song);
 
       _hasRetriedCurrentPlay = false;
       _updateAndroidAuto();
@@ -2181,6 +2304,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _hasRetriedCurrentPlay = false;
       _isPlaying = false;
       _position = Duration.zero;
+      try {
+        await _audioPlayer.stop();
+      } catch (_) {}
       _updateAndroidAuto();
     } finally {
       _isLoading = false;
@@ -2293,6 +2419,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAndroidAuto();
     } else {
+      // If no song is selected yet but queue has songs (e.g. headphone play button pressed on app start), start first/saved queue song
+      if (_currentSong == null && _queue.isNotEmpty) {
+        final targetIndex = (_currentIndex >= 0 && _currentIndex < _queue.length) ? _currentIndex : 0;
+        await playSong(_queue[targetIndex], playlist: _queue, startIndex: targetIndex);
+        return;
+      }
+
       // After app restart, or if playback stalled/disconnected while paused,
       // prepare the audio source if missing, idle, or completed.
       final state = _audioPlayer.playerState.processingState;
@@ -2319,15 +2452,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> pause() async {
-    _telemetryTimer?.cancel();
-    _sendTelemetryHeartbeat(overridePlaying: false);
-    if (_jukeboxService.enabled) {
-      await _jukeboxService.pause(_youtubeService);
-      _isPlaying = false;
-      notifyListeners();
-      _updateAndroidAuto();
-      return;
-    }
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       _isPlaying = false;
@@ -2339,6 +2463,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAndroidAuto();
       unawaited(_groovyConnectService!.sendControl('pause'));
+      return;
+    }
+    _telemetryTimer?.cancel();
+    _sendTelemetryHeartbeat(overridePlaying: false);
+    if (_jukeboxService.enabled) {
+      await _jukeboxService.pause(_youtubeService);
+      _isPlaying = false;
+      notifyListeners();
+      _updateAndroidAuto();
       return;
     }
     if (_castService.isConnected) {
@@ -2365,16 +2498,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> stop() async {
-    _telemetryTimer?.cancel();
-    _sendTelemetryHeartbeat(overridePlaying: false);
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
-      await _groovyConnectService!.sendControl('pause');
       _isPlaying = false;
       notifyListeners();
       _updateAndroidAuto();
+      unawaited(_groovyConnectService!.sendControl('pause'));
       return;
     }
+    _telemetryTimer?.cancel();
+    _sendTelemetryHeartbeat(overridePlaying: false);
     if (_castService.isConnected) {
       await _castService.stop();
     } else if (_upnpService.isConnected) {
@@ -2901,14 +3034,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     moveQueueItem(oldIndex, newIndex);
   }
 
+  void _debounceRemoteVolumeSend(double targetVolume) {
+    _remoteVolumeDebounceTimer?.cancel();
+    _remoteVolumeDebounceTimer = Timer(const Duration(milliseconds: 75), () {
+      if (_groovyConnectService?.isConnected == true) {
+        unawaited(_groovyConnectService!.sendControl('volume', targetVolume));
+      }
+    });
+  }
+
   Future<void> setVolume(double volume) async {
     _volume = volume.clamp(0.0, 1.0);
     notifyListeners();
     unawaited(_storageService.saveVolume(_volume));
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
+      _lastRemoteVolumeChangeTime = DateTime.now();
+      _optimisticRemoteVolume = _volume;
       _audioHandler.updateRemoteVolume((_volume * 100).round());
-      unawaited(_groovyConnectService!.sendControl('volume', _volume));
+      _debounceRemoteVolumeSend(_volume);
     } else if (_castService.isConnected) {
       await _castService.setVolume(_volume);
     } else if (_upnpService.isConnected) {
@@ -2969,28 +3113,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final ytSource = await _youtubeService.getYoutubeAudioSource(song);
     if (ytSource != null) return ytSource;
 
-    // Apply transcoding settings if enabled
-    final maxBitRate =
-        _transcodingService.enabled ? _transcodingService.currentBitRate : null;
-    final format =
-        _transcodingService.enabled ? _transcodingService.format : null;
-    final url = _youtubeService.getStreamUrl(song.id,
-        maxBitRate: maxBitRate, format: format);
+    // Try resolving actual direct stream URL asynchronously
+    try {
+      final playUrl = await _youtubeService.resolveStreamUrlAsync(song);
+      if (playUrl.isNotEmpty && !playUrl.contains('youtube.com/watch')) {
+        return AudioSource.uri(Uri.parse(playUrl), tag: song.id);
+      }
+    } catch (_) {}
 
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      return AudioSource.uri(Uri.parse(url), tag: song.id);
-    }
-    // Cache all remote songs on local disk for instant seek and bufferless playback
-    final cacheDir = await getTemporaryDirectory();
-    final cacheFile = File(
-      '${cacheDir.path}/groovy_stream_${song.id.hashCode}.tmp',
-    );
-    // ignore: experimental_member_use
-    return LockCachingAudioSource(
-      Uri.parse(url),
-      cacheFile: cacheFile,
-      tag: song.id,
-    );
+    throw Exception('Could not resolve audio stream for "${song.title}"');
   }
 
   Future<void> _buildAndSetConcatenatingSource(
@@ -3035,6 +3166,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             playUrl =
                 await _youtubeService.resolveStreamUrlAsync(_currentSong!);
           }
+        }
+        if (playUrl.isEmpty || playUrl.contains('youtube.com/watch')) {
+          throw Exception('No valid audio stream URL for "${_currentSong!.title}"');
         }
         if (_currentSong!.isLocal == true ||
             _offlineService.getLocalPath(_currentSong!.id) != null ||
@@ -3110,6 +3244,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _resolvedArtworkUrl = null;
     notifyListeners();
     _saveQueueState();
+
+    if (_currentSong != null) {
+      _recordSongPlayback(_currentSong!);
+    }
 
     // Immediately publish song info to lockscreen / notification widget
     _updateAndroidAuto();
@@ -3252,6 +3390,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _telemetryTimer?.cancel();
+    _remoteVolumeDebounceTimer?.cancel();
     _sleepTimer?.cancel();
     _sleepTimerFadeTimer?.cancel();
     _sleepTimerFadePeriodicTimer?.cancel();
@@ -3275,6 +3415,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _audioHandler.customAction('dispose').catchError((e) {
       debugPrint('Error disposing audio handler: $e');
     });
+
+    _becomingNoisySubscription?.cancel();
+    _interruptionSubscription?.cancel();
+    _devicesChangedSubscription?.cancel();
 
     try {
       _windowsService.dispose();
