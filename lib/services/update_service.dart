@@ -50,6 +50,16 @@ class ReleaseInfo {
     return exeAsset?.browserDownloadUrl;
   }
 
+  String? get appImageDownloadUrl {
+    final imgAsset = assets.cast<ReleaseAsset?>().firstWhere(
+          (a) =>
+              a?.name.toLowerCase().contains('linux') == true &&
+              a?.name.toLowerCase().endsWith('.appimage') == true,
+          orElse: () => null,
+        );
+    return imgAsset?.browserDownloadUrl;
+  }
+
   factory ReleaseInfo.fromJson(Map<String, dynamic> json) {
     final tag = json['tag_name'] as String? ?? '';
     return ReleaseInfo(
@@ -169,6 +179,11 @@ class UpdateService {
     if (!kIsWeb && Platform.isWindows) {
       downloadUrl = release.windowsSetupDownloadUrl ?? release.htmlUrl;
       filename = 'Groovy-Update-Setup.exe';
+    } else if (!kIsWeb && Platform.isLinux) {
+      // For Linux we handle download inside the platform block below;
+      // set a placeholder here so the null check passes.
+      downloadUrl = release.appImageDownloadUrl ?? release.htmlUrl;
+      filename = 'groovy-update.AppImage';
     } else {
       downloadUrl = release.apkDownloadUrl;
       filename = 'app-update.apk';
@@ -245,7 +260,44 @@ class UpdateService {
           }
         }
       } else if (!kIsWeb && Platform.isLinux) {
-        await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
+        // Linux: If running as AppImage, replace self and relaunch.
+        // Otherwise open the downloads page so the user can grab the new AppImage.
+        final appImageEnv = Platform.environment['APPIMAGE'];
+        final appImageUrl = release.appImageDownloadUrl;
+
+        if (appImageEnv != null && appImageEnv.isNotEmpty && appImageUrl != null) {
+          // Download the new AppImage over a temp file, then swap atomically.
+          final tmpPath = '$appImageEnv.new';
+          try {
+            await _dio.download(
+              appImageUrl,
+              tmpPath,
+              onReceiveProgress: (received, total) {
+                if (total > 0) {
+                  downloadProgressNotifier.value = (received / total).clamp(0.0, 1.0);
+                }
+              },
+            );
+            // Make it executable and atomically replace the current AppImage
+            await Process.run('chmod', ['+x', tmpPath]);
+            await File(tmpPath).rename(appImageEnv);
+            // Relaunch the new AppImage
+            await Process.start(
+              appImageEnv,
+              [],
+              mode: ProcessStartMode.detached,
+            );
+            await Future.delayed(const Duration(milliseconds: 500));
+            exit(0);
+          } catch (e) {
+            debugPrint('Linux AppImage self-update failed: $e');
+            // Fallback: open GitHub releases page
+            await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+          }
+        } else {
+          // Not running as AppImage (e.g. tar.gz install) — open releases page
+          await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+        }
       }
     } catch (e) {
       isDownloadingNotifier.value = false;
