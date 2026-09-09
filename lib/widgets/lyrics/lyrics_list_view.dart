@@ -111,8 +111,8 @@ class _LyricsListViewState extends State<LyricsListView> {
       return;
     }
 
-    // Intro interlude if vocals start after 4 seconds
-    if (widget.lyrics[0].startTime >= const Duration(seconds: 4)) {
+    // Principal Intro: only if vocals start after 5 seconds
+    if (widget.lyrics[0].startTime >= const Duration(seconds: 5)) {
       _items.add(LyricsItem(
         type: ItemType.interlude,
         startTime: Duration.zero,
@@ -126,21 +126,21 @@ class _LyricsListViewState extends State<LyricsListView> {
           ? widget.lyrics[i + 1].startTime 
           : const Duration(hours: 24);
 
-      // In Apple Music, a lyric line stays active until the next line starts.
-      // Only insert an interlude item if there is a real, extended instrumental gap (>= 5.0 seconds).
-      final bool hasLongGap = i < widget.lyrics.length - 1 && (nextTime - line.startTime) >= const Duration(seconds: 5);
-      final estimatedLineEnd = line.endTime ?? (hasLongGap ? (line.startTime + const Duration(milliseconds: 3500)) : nextTime);
+      // Only insert an interlude item if there is a true major instrumental break (>= 28.0 seconds).
+      // Standard pauses of 5 seconds between lines do NOT show dots so lyrics remain clean and fluid.
+      final bool hasMajorInstrumentalSolo = i < widget.lyrics.length - 1 && (nextTime - line.startTime) >= const Duration(seconds: 28);
+      final estimatedLineEnd = line.endTime ?? (hasMajorInstrumentalSolo ? (line.startTime + const Duration(milliseconds: 4000)) : nextTime);
 
       _items.add(LyricsItem(
         type: ItemType.lyric,
         line: line,
         startTime: line.startTime,
-        endTime: hasLongGap ? estimatedLineEnd : nextTime,
+        endTime: hasMajorInstrumentalSolo ? estimatedLineEnd : nextTime,
         lyricIndex: i,
       ));
 
-      // Musical interlude dots for genuine instrumental gaps
-      if (hasLongGap) {
+      // Major instrumental solo dots for genuine long musical breaks
+      if (hasMajorInstrumentalSolo) {
         _items.add(LyricsItem(
           type: ItemType.interlude,
           startTime: estimatedLineEnd,
@@ -214,7 +214,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 500)}) {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 360)}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     try {
@@ -234,29 +234,24 @@ class _LyricsListViewState extends State<LyricsListView> {
             _scrollController.position.minScrollExtent,
             _scrollController.position.maxScrollExtent,
           );
-          _scrollController.animateTo(
-            clamped,
-            duration: duration,
-            curve: Curves.easeOutCubic,
-          );
+          if ((_scrollController.offset - clamped).abs() > 2.0) {
+            _scrollController.animateTo(
+              clamped,
+              duration: duration,
+              curve: Curves.easeOutCubic,
+            );
+          }
         }
       }
     } catch (_) {}
   }
 
   void _onUserScroll() {
-    if (!_isManualScrolling) {
-      setState(() {
-        _isManualScrolling = true;
-      });
-    }
-
+    _isManualScrolling = true;
     _resumeAutoScrollTimer?.cancel();
-    _resumeAutoScrollTimer = Timer(const Duration(seconds: 4), () {
+    _resumeAutoScrollTimer = Timer(const Duration(milliseconds: 2500), () {
       if (mounted) {
-        setState(() {
-          _isManualScrolling = false;
-        });
+        _isManualScrolling = false;
         _scrollToCurrentLine();
       }
     });
@@ -317,10 +312,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                 return Container(
                   key: _keys[index],
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                  child: InterludeDotsWidget(
-                    currentTime: _currentPosition,
-                    targetTime: item.endTime,
-                  ),
+                  child: const InterludeDotsWidget(),
                 );
               }
 

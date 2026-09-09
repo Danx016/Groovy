@@ -5,6 +5,20 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.88] - 2026-09-09
+
+### Fixed & Improved
+- **Letras Sincronizadas y Limpieza Visual**:
+  - Eliminados los puntos suspensivos que aparecían cada 5 segundos entre versos normales. Ahora la letra se mantiene limpia y fluida, conservando únicamente la cuenta regresiva del intro principal y solos extendidos.
+  - Auto-scroll optimizado sin saltos bruscos ni bloqueos por gestos táctiles.
+- **Carátula y Transiciones Ultrarrápidas**:
+  - Eliminada la reconstrucción pesada cuadro a cuadro de la imagen en `AlbumArtView`.
+  - Altura fija y transición suave entre páginas de Carátula, Letra y A continuación sin redimensionamiento de pantalla ni tirones (120 FPS).
+- **Cola de Reproducción (A continuación)**:
+  - Soporte completo y optimizado para carátulas de archivos locales sin errores de red.
+  - Arrastre de canciones mejorado con tirador táctil independiente para no interferir con el toque de reproducción.
+  - Selector de estado memoizado para evitar recalcular la cola completa en cada milisegundo de reproducción.
+
 ## [1.0.87] - 2026-09-09
 
 ### Fixed & Improved

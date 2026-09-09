@@ -410,31 +410,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     // On mobile devices, status bar is typically between 30px and 48px.
     // If rawStatus was not detected (e.g. inside a modal bottom sheet), default to a safe 38px.
     final statusBarHeight = isMobile ? math.max(rawStatus, 38.0) : rawStatus;
-    final effectiveTopPadding = statusBarHeight + (isCompact ? 10.0 : 16.0);
+    final effectiveTopPadding = statusBarHeight + (isCompact ? 8.0 : 12.0);
+    final coverTopPadding = statusBarHeight + (isCompact ? 2.0 : 6.0);
 
     return Column(
       children: [
-        // 1. Smooth Universal Header: Mini header for lyrics/queue, clean zero-gap top space for cover page
-        Padding(
-          padding: EdgeInsets.only(
-            top: _currentPage == 0 ? statusBarHeight + (isCompact ? 2.0 : 6.0) : effectiveTopPadding,
-            left: 20.0,
-            right: 20.0,
-            bottom: _currentPage == 0 ? 0.0 : 4.0,
-          ),
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeInOutCubic,
-            child: SizedBox(
-              height: _currentPage == 0 ? 0 : 52,
-              child: _currentPage == 0
-                  ? const SizedBox.shrink()
-                  : _buildTrackMiniHeader(context),
-            ),
-          ),
-        ),
-
-        // 2. Swipable Main Content Area (Cover <-> Lyrics <-> Queue)
+        // Swipable Main Content Area (Cover <-> Lyrics <-> Queue)
+        // Maintained at constant stable height so page swiping is 120 FPS fluid without layout shifts
         Expanded(
           child: PageView(
             controller: _pageController,
@@ -448,14 +430,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               });
             },
             children: [
-              _KeepAlivePage(child: _buildCoverPage(context, isCompact)),
-              _KeepAlivePage(child: _buildLyricsPage()),
-              _KeepAlivePage(child: _buildQueuePage()),
+              _KeepAlivePage(child: _buildCoverPage(context, isCompact, coverTopPadding)),
+              _KeepAlivePage(child: _buildLyricsPage(effectiveTopPadding)),
+              _KeepAlivePage(child: _buildQueuePage(effectiveTopPadding)),
             ],
           ),
         ),
 
-        // 3. Unified Fixed Bottom Controls (Scrubber + Playback Controls + Bottom Actions)
+        // Fixed Bottom Controls (Scrubber + Playback Controls + Bottom Actions)
         _buildBottomSection(accentColor, isCompact),
       ],
     );
@@ -695,7 +677,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   );
 }
 
-  Widget _buildCoverPage(BuildContext context, bool isCompact) {
+  Widget _buildCoverPage(BuildContext context, bool isCompact, [double topPadding = 0]) {
     return Selector<PlayerProvider, (Song?, bool, bool)>(
       selector: (_, p) => (p.currentSong, p.currentSong?.starred ?? false, p.isPlaying),
       builder: (context, data, child) {
@@ -708,6 +690,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
         return Column(
           children: [
+            if (topPadding > 0) SizedBox(height: topPadding),
             // Big Album Artwork
             Expanded(
               child: Center(
@@ -886,42 +869,64 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     );
   }
 
-  Widget _buildLyricsPage() {
+  Widget _buildLyricsPage([double topPadding = 0]) {
     final provider = context.read<PlayerProvider>();
-    return GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTap: () {
-        setState(() {
-          _showLyricsControls = !_showLyricsControls;
-        });
-      },
-      child: _fetchedLyrics.isNotEmpty
-          ? LyricsListView(
-              lyrics: _fetchedLyrics,
-              positionStream: provider.positionStream,
-              initialPosition: provider.position,
-              isActive: _currentPage == 1,
-              onSeek: (duration) {
-                provider.seek(duration);
-              },
-            )
-          : Center(
-              child: _isLoadingLyrics
-                  ? const CircularProgressIndicator(color: Colors.white)
-                  : const Text(
-                      "Letra no disponible",
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-            ),
+    return Column(
+      children: [
+        if (topPadding > 0) SizedBox(height: topPadding),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 2.0),
+          child: _buildTrackMiniHeader(context),
+        ),
+        Expanded(
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              setState(() {
+                _showLyricsControls = !_showLyricsControls;
+              });
+            },
+            child: _fetchedLyrics.isNotEmpty
+                ? LyricsListView(
+                    lyrics: _fetchedLyrics,
+                    positionStream: provider.positionStream,
+                    initialPosition: provider.position,
+                    isActive: _currentPage == 1,
+                    onSeek: (duration) {
+                      provider.seek(duration);
+                    },
+                  )
+                : Center(
+                    child: _isLoadingLyrics
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                            "Letra no disponible",
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                  ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildQueuePage() {
-    return const QueueView();
+  Widget _buildQueuePage([double topPadding = 0]) {
+    return Column(
+      children: [
+        if (topPadding > 0) SizedBox(height: topPadding),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 2.0),
+          child: _buildTrackMiniHeader(context),
+        ),
+        const Expanded(
+          child: QueueView(),
+        ),
+      ],
+    );
   }
 
   Widget _buildBottomSection(Color accentColor, bool isCompact) {

@@ -1,5 +1,5 @@
+import 'dart:io';
 import 'package:flutter/cupertino.dart' hide RepeatMode;
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,18 +7,21 @@ import '../../providers/player_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/youtube_service.dart';
 import '../../models/song.dart';
+import '../album_artwork.dart';
 
 @immutable
 class _QueueViewState {
-  final List<Song> upcomingSongs;
+  final int queueLength;
   final int currentIndex;
+  final String? currentSongId;
   final bool shuffleEnabled;
   final RepeatMode repeatMode;
   final bool isEmpty;
 
   const _QueueViewState({
-    required this.upcomingSongs,
+    required this.queueLength,
     required this.currentIndex,
+    required this.currentSongId,
     required this.shuffleEnabled,
     required this.repeatMode,
     required this.isEmpty,
@@ -28,20 +31,21 @@ class _QueueViewState {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is _QueueViewState &&
+          queueLength == other.queueLength &&
           currentIndex == other.currentIndex &&
+          currentSongId == other.currentSongId &&
           shuffleEnabled == other.shuffleEnabled &&
           repeatMode == other.repeatMode &&
-          isEmpty == other.isEmpty &&
-          upcomingSongs.length == other.upcomingSongs.length &&
-          listEquals(upcomingSongs, other.upcomingSongs);
+          isEmpty == other.isEmpty;
 
   @override
   int get hashCode => Object.hash(
+        queueLength,
         currentIndex,
+        currentSongId,
         shuffleEnabled,
         repeatMode,
         isEmpty,
-        Object.hashAll(upcomingSongs),
       );
 }
 
@@ -53,13 +57,10 @@ class QueueView extends StatelessWidget {
     return Selector<PlayerProvider, _QueueViewState>(
       selector: (_, provider) {
         final queue = provider.queue;
-        final currentIndex = provider.currentIndex;
-        final upcomingSongs = (currentIndex >= 0 && currentIndex < queue.length - 1)
-            ? queue.sublist(currentIndex + 1)
-            : const <Song>[];
         return _QueueViewState(
-          upcomingSongs: upcomingSongs,
-          currentIndex: currentIndex,
+          queueLength: queue.length,
+          currentIndex: provider.currentIndex,
+          currentSongId: provider.currentSong?.id,
           shuffleEnabled: provider.shuffleEnabled,
           repeatMode: provider.repeatMode,
           isEmpty: queue.isEmpty,
@@ -76,8 +77,11 @@ class QueueView extends StatelessWidget {
         }
 
         final provider = Provider.of<PlayerProvider>(context, listen: false);
-        final upcomingSongs = data.upcomingSongs;
+        final queue = provider.queue;
         final currentIndex = data.currentIndex;
+        final upcomingSongs = (currentIndex >= 0 && currentIndex < queue.length - 1)
+            ? queue.sublist(currentIndex + 1)
+            : const <Song>[];
 
         return CustomScrollView(
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
@@ -207,16 +211,14 @@ class QueueView extends StatelessWidget {
                     final song = upcomingSongs[index];
                     final queueIndex = currentIndex + 1 + index;
 
-                    return ReorderableDelayedDragStartListener(
+                    return _QueueSongTile(
                       key: ValueKey('queue_${song.id}_$queueIndex'),
+                      song: song,
                       index: index,
-                      child: _QueueSongTile(
-                        song: song,
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          provider.skipToIndex(queueIndex);
-                        },
-                      ),
+                      onTap: () {
+                        HapticFeedback.selectionClick();
+                        provider.skipToIndex(queueIndex);
+                      },
                     );
                   },
                 ),
@@ -230,12 +232,64 @@ class QueueView extends StatelessWidget {
 
 class _QueueSongTile extends StatelessWidget {
   final Song song;
+  final int index;
   final VoidCallback onTap;
 
   const _QueueSongTile({
+    super.key,
     required this.song,
+    required this.index,
     required this.onTap,
   });
+
+  Widget _buildCover(YoutubeService youtubeService) {
+    final coverArt = song.coverArt;
+    if (coverArt == null || coverArt.isEmpty) {
+      return Container(
+        width: 46,
+        height: 46,
+        color: Colors.white.withValues(alpha: 0.12),
+        child: const Icon(Icons.music_note, color: Colors.white70),
+      );
+    }
+
+    if (song.isLocal || isLocalFilePath(coverArt)) {
+      return Image.file(
+        File(coverArt),
+        width: 46,
+        height: 46,
+        fit: BoxFit.cover,
+        cacheWidth: 140,
+        cacheHeight: 140,
+        errorBuilder: (_, __, ___) => Container(
+          width: 46,
+          height: 46,
+          color: Colors.white.withValues(alpha: 0.12),
+          child: const Icon(Icons.music_note, color: Colors.white70),
+        ),
+      );
+    }
+
+    return CachedNetworkImage(
+      imageUrl: youtubeService.getCoverArtUrl(coverArt, size: 120),
+      memCacheWidth: 140,
+      memCacheHeight: 140,
+      width: 46,
+      height: 46,
+      fit: BoxFit.cover,
+      placeholder: (context, url) => Container(
+        width: 46,
+        height: 46,
+        color: Colors.white.withValues(alpha: 0.12),
+      ),
+      errorWidget: (context, url, error) => Container(
+        width: 46,
+        height: 46,
+        color: Colors.white.withValues(alpha: 0.12),
+        child: const Icon(Icons.music_note, color: Colors.white70),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -257,39 +311,11 @@ class _QueueSongTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 6.0),
               child: Row(
                 children: [
-                  // Album Artwork Thumbnail
                   ClipRRect(
                     borderRadius: BorderRadius.circular(6),
-                    child: song.coverArt != null
-                        ? CachedNetworkImage(
-                            imageUrl: youtubeService.getCoverArtUrl(song.coverArt, size: 120),
-                            memCacheWidth: 120,
-                            memCacheHeight: 120,
-                            width: 46,
-                            height: 46,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Container(
-                              width: 46,
-                              height: 46,
-                              color: Colors.white.withValues(alpha: 0.12),
-                            ),
-                            errorWidget: (context, url, error) => Container(
-                              width: 46,
-                              height: 46,
-                              color: Colors.white.withValues(alpha: 0.12),
-                              child: const Icon(Icons.music_note, color: Colors.white70),
-                            ),
-                          )
-                        : Container(
-                            width: 46,
-                            height: 46,
-                            color: Colors.white.withValues(alpha: 0.12),
-                            child: const Icon(Icons.music_note, color: Colors.white70),
-                          ),
+                    child: _buildCover(youtubeService),
                   ),
                   const SizedBox(width: 14),
-
-                  // Song Title & Artist
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,14 +345,15 @@ class _QueueSongTile extends StatelessWidget {
                       ],
                     ),
                   ),
-
-                  // 3 Horizontal drag handle lines
-                  Padding(
-                    padding: const EdgeInsets.only(left: 10.0, right: 4.0),
-                    child: Icon(
-                      Icons.menu_rounded,
-                      color: Colors.white.withValues(alpha: 0.38),
-                      size: 22,
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: Padding(
+                      padding: const EdgeInsets.only(left: 10.0, right: 4.0),
+                      child: Icon(
+                        Icons.menu_rounded,
+                        color: Colors.white.withValues(alpha: 0.38),
+                        size: 22,
+                      ),
                     ),
                   ),
                 ],
