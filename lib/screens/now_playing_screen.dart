@@ -66,7 +66,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   bool _isLoadingLyrics = true;
   Song? _lastSong;
   ImageProvider? _currentImageProvider;
-  bool _showLyricsControls = false;
+  bool _showLyricsControls = true;
   bool _showLyricsInLandscape = true;
   Timer? _colorDebounceTimer;
   Timer? _lyricsDebounceTimer;
@@ -881,11 +881,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         Expanded(
           child: GestureDetector(
             behavior: HitTestBehavior.translucent,
-            onTap: () {
-              setState(() {
-                _showLyricsControls = !_showLyricsControls;
-              });
-            },
             child: _fetchedLyrics.isNotEmpty
                 ? LyricsListView(
                     lyrics: _fetchedLyrics,

@@ -278,6 +278,10 @@ jobs:
           ARCH=x86_64 ./appimagetool.AppImage --no-appstream "${APPDIR}" "Groovy-${VERSION}-linux-x86_64.AppImage"
           echo "✅ AppImage created: Groovy-${VERSION}-linux-x86_64.AppImage"
 
+          # Bundle the easy-install script alongside the AppImage
+          cp install-linux.sh "Groovy-linux-install.sh"
+          chmod +x "Groovy-linux-install.sh"
+
       - name: Upload Linux Build
         uses: actions/upload-artifact@v4
         with:
@@ -285,6 +289,7 @@ jobs:
           path: |
             build/linux/x64/release/bundle/
             Groovy-*-linux-x86_64.AppImage
+            Groovy-linux-install.sh
 
 
   # Create Release with Android, Windows, and Linux artifacts
@@ -350,6 +355,11 @@ jobs:
             cp "$APPIMAGE" ./Groovy-linux-x86_64.AppImage
             echo "✅ AppImage packaged: Groovy-linux-x86_64.AppImage"
           fi
+          # Bundle easy-install script
+          if [ -f artifacts/linux/Groovy-linux-install.sh ]; then
+            cp artifacts/linux/Groovy-linux-install.sh ./Groovy-linux-install.sh
+            chmod +x ./Groovy-linux-install.sh
+          fi
           # Also create tar.gz from bundle
           mkdir -p linux_bundle
           find artifacts/linux -not -name '*.AppImage' -exec cp -r {} linux_bundle/ \; 2>/dev/null || true
@@ -399,7 +409,8 @@ jobs:
           - \`Groovy-Windows-Portable.zip\` — Versión portable, descomprimir y usar
 
           **🐧 Linux:**
-          - \`Groovy-linux-x86_64.AppImage\` — **Recomendado.** Un solo archivo ejecutable
+          - \`Groovy-linux-x86_64.AppImage\` — **Recomendado.** Un solo archivo ejecutable. Para ejecutar por primera vez: clic derecho → Propiedades → Permitir ejecutar, o usa el instalador de abajo.
+          - \`Groovy-linux-install.sh\` — **Instalador fácil (doble clic).** Marca el AppImage como ejecutable y lo integra en el menú de aplicaciones.
           - \`groovy-linux-x64.tar.gz\` — Binario empaquetado para instalación manual
 
           ### 📝 Registro Completo de Cambios
@@ -424,6 +435,7 @@ jobs:
             artifacts/windows/Groovy-Windows-Portable.zip
             Groovy-Windows-Portable.zip
             Groovy-linux-x86_64.AppImage
+            Groovy-linux-install.sh
             groovy-linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
