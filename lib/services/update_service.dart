@@ -50,6 +50,14 @@ class ReleaseInfo {
     return exeAsset?.browserDownloadUrl;
   }
 
+  String? get debDownloadUrl {
+    final debAsset = assets.cast<ReleaseAsset?>().firstWhere(
+          (a) => a?.name.toLowerCase().endsWith('.deb') ?? false,
+          orElse: () => null,
+        );
+    return debAsset?.browserDownloadUrl;
+  }
+
   String? get appImageDownloadUrl {
     final imgAsset = assets.cast<ReleaseAsset?>().firstWhere(
           (a) =>
@@ -76,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.90';
+  static String currentVersion = '1.0.91';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -235,10 +243,13 @@ class UpdateService {
       downloadUrl = release.windowsSetupDownloadUrl ?? release.htmlUrl;
       filename = 'Groovy-Update-Setup.exe';
     } else if (!kIsWeb && Platform.isLinux) {
-      // For Linux we handle download inside the platform block below;
-      // set a placeholder here so the null check passes.
-      downloadUrl = release.appImageDownloadUrl ?? release.htmlUrl;
-      filename = 'groovy-update.AppImage';
+      if (release.debDownloadUrl != null) {
+        downloadUrl = release.debDownloadUrl;
+        filename = 'Groovy-Update.deb';
+      } else {
+        downloadUrl = release.appImageDownloadUrl ?? release.htmlUrl;
+        filename = 'groovy-update.AppImage';
+      }
     } else {
       downloadUrl = release.apkDownloadUrl;
       filename = 'app-update.apk';
@@ -315,6 +326,19 @@ class UpdateService {
           }
         }
       } else if (!kIsWeb && Platform.isLinux) {
+        if (filePath.endsWith('.deb')) {
+          try {
+            // Launches Ubuntu Software / App Center / GDebi with the package ready to install in 2 clicks
+            await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
+            await Future.delayed(const Duration(milliseconds: 1500));
+            exit(0);
+          } catch (err) {
+            debugPrint('Failed to open deb installer with xdg-open: $err');
+            await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+          }
+          return;
+        }
+
         // Linux: If running as AppImage, replace self and relaunch.
         // Otherwise open the downloads page so the user can grab the new AppImage.
         final appImageEnv = Platform.environment['APPIMAGE'];

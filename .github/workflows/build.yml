@@ -282,6 +282,90 @@ jobs:
           cp install-linux.sh "Groovy-linux-install.sh"
           chmod +x "Groovy-linux-install.sh"
 
+      - name: Build Debian Package (.deb)
+        run: |
+          BUNDLE=build/linux/x64/release/bundle
+          DEBDIR=build/linux/deb_package
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+
+          mkdir -p "${DEBDIR}/opt/groovy"
+          mkdir -p "${DEBDIR}/usr/bin"
+          mkdir -p "${DEBDIR}/usr/share/applications"
+          mkdir -p "${DEBDIR}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${DEBDIR}/usr/share/icons/hicolor/512x512/apps"
+          mkdir -p "${DEBDIR}/DEBIAN"
+
+          cp -r "${BUNDLE}/." "${DEBDIR}/opt/groovy/"
+          chmod +x "${DEBDIR}/opt/groovy/groovy"
+          [ -f "${DEBDIR}/opt/groovy/yt-dlp" ] && chmod +x "${DEBDIR}/opt/groovy/yt-dlp"
+
+          cat > "${DEBDIR}/usr/bin/groovy" << 'LAUNCHER'
+          #!/usr/bin/env bash
+          exec /opt/groovy/groovy "$@"
+          LAUNCHER
+          chmod +x "${DEBDIR}/usr/bin/groovy"
+
+          cat > "${DEBDIR}/usr/share/applications/groovy.desktop" << 'DESK'
+          [Desktop Entry]
+          Name=Groovy
+          Comment=Stream music from YouTube Music
+          Exec=/usr/bin/groovy %U
+          Icon=groovy
+          Terminal=false
+          Type=Application
+          Categories=Audio;Music;Player;AudioVideo;
+          Keywords=music;streaming;youtube;
+          StartupWMClass=groovy
+          MimeType=x-scheme-handler/groovy;
+          DESK
+          chmod 644 "${DEBDIR}/usr/share/applications/groovy.desktop"
+
+          cp assets/app_icon.png "${DEBDIR}/usr/share/icons/hicolor/256x256/apps/groovy.png"
+          cp assets/app_icon_1024.png "${DEBDIR}/usr/share/icons/hicolor/512x512/apps/groovy.png"
+
+          cat > "${DEBDIR}/DEBIAN/control" << CONTROL
+          Package: groovy
+          Version: ${VERSION}
+          Section: sound
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Danx016 <danx016@github.com>
+          Depends: libgtk-3-0, libglib2.0-0, libmpv2 | libmpv1, libpulse0, libsecret-1-0
+          Description: Groovy Music Player
+           Stream music from YouTube Music with high quality audio, synced lyrics, and modern UI.
+          CONTROL
+          chmod 644 "${DEBDIR}/DEBIAN/control"
+
+          cat > "${DEBDIR}/DEBIAN/postinst" << 'POSTINST'
+          #!/bin/sh
+          set -e
+          if command -v update-desktop-database >/dev/null 2>&1; then
+              update-desktop-database -q /usr/share/applications || true
+          fi
+          if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+              gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor || true
+          fi
+          exit 0
+          POSTINST
+          chmod 755 "${DEBDIR}/DEBIAN/postinst"
+
+          cat > "${DEBDIR}/DEBIAN/postrm" << 'POSTRM'
+          #!/bin/sh
+          set -e
+          if command -v update-desktop-database >/dev/null 2>&1; then
+              update-desktop-database -q /usr/share/applications || true
+          fi
+          if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+              gtk-update-icon-cache -q -f -t /usr/share/icons/hicolor || true
+          fi
+          exit 0
+          POSTRM
+          chmod 755 "${DEBDIR}/DEBIAN/postrm"
+
+          dpkg-deb --build --root-owner-group "${DEBDIR}" "Groovy-${VERSION}-linux-amd64.deb"
+          cp "Groovy-${VERSION}-linux-amd64.deb" "Groovy-Linux.deb"
+          echo "✅ DEB package created: Groovy-Linux.deb"
+
       - name: Upload Linux Build
         uses: actions/upload-artifact@v4
         with:
@@ -290,6 +374,7 @@ jobs:
             build/linux/x64/release/bundle/
             Groovy-*-linux-x86_64.AppImage
             Groovy-linux-install.sh
+            *.deb
 
 
   # Create Release with Android, Windows, and Linux artifacts
@@ -349,6 +434,8 @@ jobs:
 
       - name: Package Linux
         run: |
+          # Copy DEB packages
+          find artifacts/linux -name '*.deb' -exec cp {} ./ \;
           # Find the AppImage
           APPIMAGE=$(find artifacts/linux -name '*.AppImage' 2>/dev/null | head -1)
           if [ -n "$APPIMAGE" ]; then
@@ -362,7 +449,7 @@ jobs:
           fi
           # Also create tar.gz from bundle
           mkdir -p linux_bundle
-          find artifacts/linux -not -name '*.AppImage' -exec cp -r {} linux_bundle/ \; 2>/dev/null || true
+          find artifacts/linux -not -name '*.AppImage' -not -name '*.deb' -exec cp -r {} linux_bundle/ \; 2>/dev/null || true
           cd artifacts/linux && tar -czf ../../groovy-linux-x64.tar.gz . && cd ../..  
 
       - name: Generate Dynamic Release Notes from CHANGELOG
@@ -409,9 +496,10 @@ jobs:
           - \`Groovy-Windows-Portable.zip\` — Versión portable, descomprimir y usar
 
           **🐧 Linux:**
-          - \`Groovy-linux-x86_64.AppImage\` — **Recomendado.** Un solo archivo ejecutable. Para ejecutar por primera vez: clic derecho → Propiedades → Permitir ejecutar, o usa el instalador de abajo.
-          - \`Groovy-linux-install.sh\` — **Instalador fácil (doble clic).** Marca el AppImage como ejecutable y lo integra en el menú de aplicaciones.
-          - \`groovy-linux-x64.tar.gz\` — Binario empaquetado para instalación manual
+          - \`Groovy-Linux.deb\` — ⭐ **Instalador Recomendado (Ubuntu, Debian, Linux Mint, Pop!_OS, Zorin).** Doble clic y presiona \"Instalar\" (2 toques).
+          - \`Groovy-linux-x86_64.AppImage\` — Binario portable ejecutable sin instalar (para Fedora, Arch, etc.).
+          - \`Groovy-linux-install.sh\` — Asistente de instalación automática para AppImage.
+          - \`groovy-linux-x64.tar.gz\` — Paquete comprimido para instalación manual
 
           ### 📝 Registro Completo de Cambios
           Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para el historial completo.
@@ -434,6 +522,8 @@ jobs:
             artifacts/windows/Groovy-Setup.exe
             artifacts/windows/Groovy-Windows-Portable.zip
             Groovy-Windows-Portable.zip
+            Groovy-Linux.deb
+            Groovy-*-linux-amd64.deb
             Groovy-linux-x86_64.AppImage
             Groovy-linux-install.sh
             groovy-linux-x64.tar.gz

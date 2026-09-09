@@ -6,6 +6,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEB_FILE=$(find "$SCRIPT_DIR" -maxdepth 1 -name "*.deb" | head -1)
 APPIMAGE=$(find "$SCRIPT_DIR" -maxdepth 1 -name "*.AppImage" | head -1)
 
 # ── Helpers ────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ show_msg() {
   elif command -v kdialog &>/dev/null; then
     kdialog --title "Groovy Installer" --msgbox "$1" 2>/dev/null || true
   else
-    echo "$1"
+    echo -e "$1"
   fi
 }
 
@@ -25,13 +26,27 @@ show_error() {
   elif command -v kdialog &>/dev/null; then
     kdialog --title "Groovy Installer" --error "$1" 2>/dev/null || true
   else
-    echo "ERROR: $1" >&2
+    echo -e "ERROR: $1" >&2
   fi
 }
 
+# ── If .deb exists, install it natively ─────────────────────────
+if [ -n "$DEB_FILE" ]; then
+  echo "Encontrado paquete Debian: $DEB_FILE"
+  if command -v xdg-open &>/dev/null; then
+    xdg-open "$DEB_FILE" &
+    show_msg "Abriendo el Instalador de Paquetes del sistema...\n\nPresiona 'Instalar' en la ventana que aparecerá."
+    exit 0
+  elif command -v pkexec &>/dev/null && command -v apt-get &>/dev/null; then
+    pkexec apt-get install -y "$DEB_FILE"
+    show_msg "✅ ¡Groovy se ha instalado correctamente!"
+    exit 0
+  fi
+fi
+
 # ── Check AppImage exists ──────────────────────────────────────
 if [ -z "$APPIMAGE" ]; then
-  show_error "No AppImage file found in the same folder as this script.\n\nMake sure Groovy-*-linux-x86_64.AppImage is in the same directory."
+  show_error "No se encontró ningún instalador (.deb o .AppImage) en esta carpeta.\n\nDescarga Groovy-Linux.deb o Groovy-*-linux-x86_64.AppImage en la misma carpeta."
   exit 1
 fi
 

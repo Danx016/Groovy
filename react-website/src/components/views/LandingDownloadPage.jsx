@@ -144,7 +144,19 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
     size: 32400000,
   };
 
-  const linuxTar = getAsset('linux') || getAsset('.tar.gz') || {
+  const linuxDeb = getAsset('.deb') || getAsset('groovy-linux.deb') || {
+    name: 'Groovy-Linux.deb',
+    browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy-Linux.deb`,
+    size: 44000000,
+  };
+
+  const linuxAppImage = getAsset('.appimage') || {
+    name: 'Groovy-linux-x86_64.AppImage',
+    browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy-linux-x86_64.AppImage`,
+    size: 48000000,
+  };
+
+  const linuxTar = getAsset('linux-x64') || getAsset('.tar.gz') || {
     name: 'groovy-linux-x64.tar.gz',
     browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/groovy-linux-x64.tar.gz`,
     size: 42000000,
@@ -346,6 +358,25 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
             >
               <Smartphone size={18} />
               <span>Descargar APK para Android ({formatSize(androidApk.size) || '32.4 MB'})</span>
+            </a>
+          )}
+
+          {userOS === 'linux' && (
+            <a
+              href={linuxDeb.browser_download_url}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: '10px',
+                padding: '14px 28px', borderRadius: '12px',
+                background: '#fa2d48', color: '#ffffff',
+                fontSize: '15px', fontWeight: 600, textDecoration: 'none',
+                boxShadow: '0 4px 20px rgba(250, 45, 72, 0.35)',
+                transition: 'transform 0.15s, background 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.background = '#e0243d'; }}
+              onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.background = '#fa2d48'; }}
+            >
+              <Laptop size={18} />
+              <span>Descargar para Linux (.deb) — 2 Toques ({formatSize(linuxDeb.size) || '44 MB'})</span>
             </a>
           )}
 
@@ -680,20 +711,57 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
               </a>
             </div>
 
-            {/* Linux Package Card */}
-            <div style={{ background: '#141417', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', padding: '22px', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
-                <Layers size={22} style={{ color: '#a78bfa' }} />
-                <span style={{ fontSize: '16px', fontWeight: 600 }}>Linux x64</span>
+            {/* Linux DEB Card (Recommended - 2 toques) */}
+            <div style={{ background: '#141417', borderRadius: '14px', border: userOS === 'linux' ? '1px solid rgba(168, 85, 247, 0.5)' : '1px solid rgba(255,255,255,0.06)', padding: '22px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Layers size={22} style={{ color: '#a78bfa' }} />
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>Linux (.deb)</span>
+                </div>
+                {userOS === 'linux' ? (
+                  <span style={{ fontSize: '10px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                    Tu sistema • Recomendado
+                  </span>
+                ) : (
+                  <span style={{ fontSize: '10px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                    Recomendado
+                  </span>
+                )}
               </div>
               <p style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.5, marginBottom: '16px', flex: 1 }}>
-                Paquete binario para distribuciones Linux x64 con integración nativa MPRIS.
+                Instalador nativo en 2 toques para Ubuntu, Debian, Linux Mint, Pop!_OS y Zorin. Doble clic y presiona "Instalar".
               </p>
               <div style={{ fontSize: '11px', color: '#52525b', marginBottom: '14px' }}>
-                <code>groovy-linux-x64.tar.gz</code> • {formatSize(linuxTar.size) || '42.0 MB'}
+                <code>Groovy-Linux.deb</code> • {formatSize(linuxDeb.size) || '44.0 MB'}
               </div>
               <a
-                href={linuxTar.browser_download_url}
+                href={linuxDeb.browser_download_url}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                  padding: '11px', borderRadius: '8px',
+                  background: '#a855f7', color: '#ffffff',
+                  fontSize: '13px', fontWeight: 700, textDecoration: 'none',
+                }}
+              >
+                <Download size={15} />
+                <span>Descargar .deb (2 Clics)</span>
+              </a>
+            </div>
+
+            {/* Linux AppImage Card */}
+            <div style={{ background: '#141417', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', padding: '22px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+                <Layers size={22} style={{ color: '#818cf8' }} />
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>Linux AppImage</span>
+              </div>
+              <p style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.5, marginBottom: '16px', flex: 1 }}>
+                Ejecutable universal portable sin instalación para cualquier distribución Linux (Fedora, Arch, openSUSE).
+              </p>
+              <div style={{ fontSize: '11px', color: '#52525b', marginBottom: '14px' }}>
+                <code>Groovy-linux-x86_64.AppImage</code> • {formatSize(linuxAppImage.size) || '48.0 MB'}
+              </div>
+              <a
+                href={linuxAppImage.browser_download_url}
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                   padding: '11px', borderRadius: '8px',
@@ -702,7 +770,7 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
                 }}
               >
                 <Download size={15} />
-                <span>Descargar tar.gz</span>
+                <span>Descargar AppImage</span>
               </a>
             </div>
 

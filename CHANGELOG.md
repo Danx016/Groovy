@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.91] - 2026-09-09
+
+### Added & Fixed
+- **Instalador Nativo para Linux en 2 Toques (`Groovy-Linux.deb`)**:
+  - Solucionado el problema donde al abrir el instalador en Linux redirigía a la tienda de aplicaciones de Ubuntu o a un editor de texto.
+  - Ahora se genera automáticamente un paquete Debian nativo (`Groovy-Linux.deb`) compatible con Ubuntu, Linux Mint, Debian, Pop!_OS y Zorin OS.
+  - Instalación ultra-sencilla en solo 2 toques: doble clic en `Groovy-Linux.deb` y presionar el botón "Instalar" del instalador del sistema.
+  - Auto-actualización dentro de la aplicación para Linux: descarga el paquete `.deb` e inicia automáticamente el asistente de instalación del sistema.
+  - Detección nativa e integración en la página web oficial para descarga directa en 2 toques.
+
 ## [1.0.90] - 2026-09-09
 
 ### Fixed & Improved
