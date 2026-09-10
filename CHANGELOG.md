@@ -5,6 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-10
+
+### Fixed — Reproducción Definitiva en Windows, Linux y Android
+- **Corrección crítica del proxy de audio en Desktop (Windows y Linux)**:
+  - Se descubrió la causa raíz real: `just_audio_media_kit` crea su propio proxy interno y le pasa la URL directa de Google Video a MPV *sin* los headers de autenticación requeridos → error `Failed to open http://127.0.0.1:PORT/videoplayback?...`.
+  - Solución: el servidor proxy local `_DesktopAudioProxyServer` ahora **siempre** intercepta la petición, añade correctamente el `User-Agent`, `Accept` y demás headers, y reenvía el stream a MPV con soporte completo de `Range` / HTTP 206.
+  - Alineados los headers del proxy Desktop con los del `StreamAudioSource` de Android (mismo comportamiento en todas las plataformas).
+- **Pruebas automatizadas multiplataforma agregadas** (`test/services/multiplatform_playback_test.dart`):
+  - `[Windows & Linux]`: verifica proxy local → HTTP 206 → 128 KB recibidos ✅
+  - `[Android]`: verifica ExoPlayer chunks HTTP 206 en dos segmentos ✅
+  - `[Todas las plataformas]`: verifica cambio de canción sin retención de pista previa ✅
+
 ## [1.0.99] - 2026-09-10
 
 ### Fixed — Reproducción Real en Windows, Linux y Android

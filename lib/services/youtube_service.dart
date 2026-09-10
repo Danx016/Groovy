@@ -214,22 +214,26 @@ class _DesktopAudioProxyServer {
       final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
 
       Future<HttpClientResponse> fetchUpstream(String url, Map<String, String> headers) async {
-        // GoogleVideo rejects HEAD with 403, always open with getUrl
         final req = await _client.getUrl(Uri.parse(url));
+        bool hasUserAgent = false;
         headers.forEach((key, value) {
           final lower = key.toLowerCase();
+          if (lower == 'user-agent') hasUserAgent = true;
           if (lower != 'host' &&
               lower != 'content-length' &&
               lower != 'range' &&
-              lower != 'user-agent') {
+              lower != 'accept-encoding' &&
+              lower != 'connection') {
             req.headers.set(key, value);
           }
         });
-        req.headers.set(
-          HttpHeaders.userAgentHeader,
-          headers['User-Agent'] ?? headers['user-agent'] ??
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        );
+        if (!hasUserAgent) {
+          req.headers.set(
+            HttpHeaders.userAgentHeader,
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          );
+        }
+        req.headers.set(HttpHeaders.acceptHeader, '*/*');
         if (request.method == 'HEAD') {
           req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
         } else if (rangeHeader != null) {
@@ -422,17 +426,14 @@ class YoutubeService {
     // ────────────────────────────────────────────────────────────────────────
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      // Desktop (Windows & Linux with libmpv) natively plays direct GoogleVideo HTTPS URLs
-      // with zero local proxy overhead, zero port conflicts and instant startup.
-      if (streamInfo != null && streamInfo.url.isNotEmpty) {
-        return AudioSource.uri(
-          Uri.parse(streamInfo.url),
-          headers: streamInfo.headers,
-          tag: song.id,
-        );
-      }
+      // Desktop: always route through our local proxy so that the correct
+      // authentication headers (User-Agent, etc.) are forwarded to GoogleVideo.
+      // Passing the direct URL to just_audio_media_kit causes MPV to receive
+      // it through its own internal proxy which strips the headers → 403/fail.
+      await _DesktopAudioProxyServer.instance.ensureStarted();
       final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
       if (proxyUrl.isNotEmpty) {
+        debugPrint('[YouTube] Desktop: routing $videoId through local proxy → $proxyUrl');
         return AudioSource.uri(
           Uri.parse(proxyUrl),
           tag: song.id,
