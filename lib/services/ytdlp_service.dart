@@ -650,9 +650,45 @@ class YtDlpService {
       }
     }
 
-    // 1. Pure-Dart Innertube via TV + Android clients.
-    //    TV client bypasses JS signature decryption and is rarely rate-limited.
-    //    Web client (the old default) is frequently bot-detected → avoid it here.
+    // ── DESKTOP (Windows / macOS / Linux): yt-dlp subprocess FIRST ──────────
+    // Diagnosis confirmed: yt-dlp subprocess gives HTTP 206 for all songs.
+    // youtube_explode_dart FastDart sometimes generates URLs that give 403
+    // in the live app, so we prefer the subprocess which is always reliable.
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
+      try {
+        final result = await _runYtDlp([
+          '-j',
+          '-f',
+          'ba/b[acodec!=none]/best',
+          '--extractor-args',
+          'youtube:player_client=tv_embedded,ios,android,mweb',
+          '--no-warnings',
+          '--no-check-certificates',
+          targetUrl,
+        ], timeout: const Duration(seconds: 15));
+
+        if (result != null && result.exitCode == 0) {
+          final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
+          final url = json['url'] as String?;
+          if (url != null && url.isNotEmpty) {
+            final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
+            // yt-dlp already sets the correct User-Agent in http_headers
+            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+            final ext = json['ext'] as String? ?? 'mp4';
+            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
+            _streamInfoCache[cleanId] = info;
+            _streamCacheTime[cleanId] = DateTime.now();
+            debugPrint('[yt-dlp/Desktop] ✅ Resolved $cleanId via subprocess (reliable path)');
+            return info;
+          }
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Desktop] Subprocess error, falling back to Dart: $e');
+      }
+    }
+
+    // 1. Pure-Dart Innertube via TV + Android clients (fallback when yt-dlp unavailable)
     try {
       final manifest = await _fallbackClient.videos.streamsClient
           .getManifest(cleanId, ytClients: [
@@ -685,12 +721,12 @@ class YtDlpService {
           );
           _streamInfoCache[cleanId] = info;
           _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/FastDart] Resolved $cleanId (${isAndroid ? "Android" : isTv ? "TV" : "Web"} client UA)');
+          debugPrint('[yt-dlp/FastDart] Resolved $cleanId (${isAndroid ? "Android" : isTv ? "TV" : "Web"} client UA) [fallback]');
           return info;
         }
       }
     } catch (e) {
-      debugPrint('[yt-dlp/FastDart] TV/Android client fallback for $cleanId: $e');
+      debugPrint('[yt-dlp/FastDart] Dart client fallback for $cleanId: $e');
     }
 
     // 2. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
@@ -719,40 +755,6 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop (Windows / macOS / Linux) with bundled/detected yt-dlp subprocess
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
-      try {
-        final result = await _runYtDlp([
-          '-j',
-          '-f',
-          'ba/b[acodec!=none]/best',
-          '--extractor-args',
-          'youtube:player_client=tv_embedded,ios,android,mweb',
-          '--no-warnings',
-          '--no-check-certificates',
-          targetUrl,
-        ], timeout: const Duration(seconds: 15));
-
-        if (result != null && result.exitCode == 0) {
-          final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
-          final url = json['url'] as String?;
-          if (url != null && url.isNotEmpty) {
-            final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
-            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
-            final ext = json['ext'] as String? ?? 'mp4';
-
-            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
-            _streamInfoCache[cleanId] = info;
-            _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Desktop] Resolved direct stream info for $cleanId');
-            return info;
-          }
-        }
-      } catch (e) {
-        debugPrint('[yt-dlp/Desktop] Subprocess stream resolution error: $e');
-      }
-    }
 
     // 3. Fallback: Pure-Dart Innertube manifest resolution (TV client first — no IP/UA restrictions)
     final clientSets = [
