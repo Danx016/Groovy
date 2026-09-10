@@ -405,6 +405,24 @@ class YoutubeService {
   Future<AudioSource?> getYoutubeAudioSource(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
+
+    // ─── PRE-RESOLVE STREAM INFO ────────────────────────────────────────────
+    // CRITICAL FIX: just_audio calls StreamAudioSource.request() and libmpv
+    // (Desktop proxy) make their first HTTP request immediately after
+    // setAudioSource().  If resolveStreamInfo() hasn't completed yet (it can
+    // take 1–9 s on a cold start), just_audio's internal timeout fires first
+    // and the track silently fails to load.
+    //
+    // By awaiting resolveStreamInfo() here the result is cached (~5.5 h TTL),
+    // so when just_audio / libmpv ask for the first byte the cache hit is 0 ms.
+    try {
+      await _ytdlp.resolveStreamInfo(videoId);
+    } catch (e) {
+      // Non-fatal – the StreamAudioSource / proxy will re-attempt on first request.
+      debugPrint('[YouTube] Pre-resolve warning for $videoId: $e');
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
       if (proxyUrl.isNotEmpty) {

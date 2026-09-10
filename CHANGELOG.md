@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.98] - 2026-09-10
+
+### Fixed — Causa Raíz de Música que No Carga
+- **Pre-resolución del stream antes de configurar la fuente de audio**:
+  - Solucionado el problema definitivo donde la música no cargaba en Android, Windows y Linux.
+  - `just_audio` y `libmpv` (Desktop) hacen su primera petición HTTP inmediatamente después de `setAudioSource()`. Si `resolveStreamInfo()` no ha terminado (puede tardar 1–9 s en frío), el timeout interno de just_audio se dispara antes y la pista falla silenciosamente.
+  - Fix: `getYoutubeAudioSource()` ahora espera (`await`) a que `resolveStreamInfo()` complete **antes** de retornar la fuente de audio, garantizando que el caché esté caliente cuando just_audio/libmpv pidan el primer byte (0 ms de latencia de caché).
+- **Cliente TV/Android para resolución Dart pura** (más confiable):
+  - Cambiado de cliente Web (bloqueado frecuentemente por detección de bots de YouTube) a `[tv, android]` para la resolución rápida en Dart puro.
+  - El cliente TV no requiere descifrado de firma JS y rara vez es limitado por YouTube.
+
 ## [1.0.97] - 2026-09-10
 
 ### Enhanced & Optimized
@@ -649,7 +660,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Localization** - Updated l10n keys for empty states and scan actions
 
 ### Changed
-- **Android Build** - Bumped version to 1.0.12+1 for update support ([#148](https://github.com/Danx016/Groovy/issues/148))
+- **Android Build** - Bumped version: 1.0.98+891 for update support ([#148](https://github.com/Danx016/Groovy/issues/148))
 - **MusicService** - Cleaned up comments and streamlined code
 - **Artwork Loading** - Optimized loading and metadata updates in MusicService
 - **Recommendation Service** - Enhanced with improved data handling and caching

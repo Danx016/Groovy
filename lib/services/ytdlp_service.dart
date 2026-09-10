@@ -650,11 +650,16 @@ class YtDlpService {
       }
     }
 
-    // 1. Ultra-fast Pure-Dart Innertube attempt (~350ms - 800ms vs 3500ms subprocess)
+    // 1. Pure-Dart Innertube via TV + Android clients.
+    //    TV client bypasses JS signature decryption and is rarely rate-limited.
+    //    Web client (the old default) is frequently bot-detected → avoid it here.
     try {
       final manifest = await _fallbackClient.videos.streamsClient
-          .getManifest(cleanId)
-          .timeout(const Duration(milliseconds: 2500));
+          .getManifest(cleanId, ytClients: [
+            yt.YoutubeApiClient.tv,
+            yt.YoutubeApiClient.android,
+          ])
+          .timeout(const Duration(seconds: 6));
       final audioOnly = manifest.audioOnly;
       if (audioOnly.isNotEmpty) {
         final best = _selectBestAudioStream(audioOnly);
@@ -669,11 +674,11 @@ class YtDlpService {
         );
         _streamInfoCache[cleanId] = info;
         _streamCacheTime[cleanId] = DateTime.now();
-        debugPrint('[yt-dlp/FastDart] Fast stream info resolved for $cleanId in pure Dart');
+        debugPrint('[yt-dlp/FastDart] Resolved $cleanId via TV/Android client');
         return info;
       }
     } catch (e) {
-      debugPrint('[yt-dlp/FastDart] Fast Dart resolution fallback for $cleanId: $e');
+      debugPrint('[yt-dlp/FastDart] TV/Android client fallback for $cleanId: $e');
     }
 
     // 2. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
