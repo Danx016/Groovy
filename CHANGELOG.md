@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.96] - 2026-09-10
+
+### Fixed & Restored
+- **Corrección Definitiva de Reproducción y Carga de Música**:
+  - Solucionado el problema donde la música se quedaba esperando o cargando indefinidamente sin sonar.
+  - Restaurado el servidor proxy local de audio (`_DesktopAudioProxyServer`) en Windows y Linux para evitar rechazos HTTP 403 de Windows Media Foundation y asegurar reproducción inmediata de cualquier pista.
+  - Limpieza de cabeceras en `_YoutubeStreamAudioSource` para compatibilidad total con los servidores CDN de YouTube / GoogleVideo sin bloqueos por políticas CORS o cabeceras no estándar.
+  - Restaurada la resolución prioritaria nativa con `yt-dlp` (`tv_embedded`) en Android (Chaquopy) y Desktop, con respaldo multi-cliente Innertube.
+
 ## [1.0.95] - 2026-09-10
 
 ### Fixed & Enhanced
