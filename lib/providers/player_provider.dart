@@ -2117,6 +2117,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _isPlaying = true;
           _isLoading = false;
           notifyListeners();
+
+          // Eagerly pre-buffer next song in queue immediately for instant zero-delay transitions
+          final nextToPreload = _getNextSongToPreload();
+          if (nextToPreload != null && nextToPreload.id != song.id) {
+            _lastPreloadedSongId = nextToPreload.id;
+            _preloadSong(nextToPreload);
+          }
         } else if (_youtubeService.isYoutube) {
           _concatenatingSource = null;
           final String playUrl;
