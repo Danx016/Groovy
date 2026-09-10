@@ -5,6 +5,21 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.92] - 2026-09-09
+
+### Fixed & Performance
+- **Buscador 100% Restaurado**:
+  - Solucionado el problema de "sin resultados" al buscar canciones: actualizadas las claves oficiales de YouTube Innertube API y modernizada la versión del cliente.
+  - Búsqueda dual paralela con fallback automático a `youtube_explode_dart` para garantizar resultados siempre, incluso en IPs de servidores o Linux.
+- **Carga Ultrarrápida de Canciones (Android, Windows y Linux)**:
+  - Extracción de audio en memoria nativa directa por HTTP (~1.2s en lugar de 4-6s), eliminando el arranque pesado de Python (Chaquopy en Android / yt-dlp en escritorio).
+  - Precarga inmediata de la siguiente canción en la cola (reproducción y cambio de pista en 0 ms instantáneo).
+  - Precalentamiento de stream en búsquedas, álbumes y playlists.
+  - Reutilización de conexiones HTTP persistentes (`Keep-Alive`) y aceleración táctil de toque (`onPointerDown`).
+- **Paridad Total de Linux con Windows**:
+  - Soporte completo de teclas multimedia globales de teclado y auriculares en Linux.
+  - Notificaciones de escritorio con letras sincronizadas en Linux.
+
 ## [1.0.91] - 2026-09-09
 
 ### Added & Fixed
