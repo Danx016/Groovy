@@ -69,17 +69,22 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         if (lower == 'user-agent') hasUserAgent = true;
         if (lower != 'host' &&
             lower != 'content-length' &&
-            lower != 'accept-encoding') {
+            lower != 'accept-encoding' &&
+            lower != 'connection') {
           req.headers.set(key, value);
         }
       });
       if (!hasUserAgent) {
         req.headers.set(
           HttpHeaders.userAgentHeader,
-          'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
+          'Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36',
         );
       }
+      req.headers.set(HttpHeaders.acceptHeader, '*/*');
       req.headers.set(HttpHeaders.acceptEncodingHeader, 'identity');
+      req.headers.set('Sec-Fetch-Mode', 'no-cors');
+      req.headers.set('Referer', 'https://www.youtube.com/');
+      req.headers.set('Origin', 'https://www.youtube.com');
     }
 
     try {
@@ -94,8 +99,8 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
       final resp = await req.close();
 
-      if (resp.statusCode == 403 || resp.statusCode == 410 || resp.statusCode == 429) {
-        debugPrint('[YouTube] Stream rejected (${resp.statusCode}) for $cleanId, refreshing with forceRefresh...');
+      if (resp.statusCode == 403 || resp.statusCode == 410 || resp.statusCode == 429 || resp.statusCode == 400) {
+        debugPrint('[YouTube/Mobile] Stream rejected (${resp.statusCode}) for $cleanId on cellular/WiFi, refreshing URL...');
         await resp.drain<void>().catchError((_) {});
         _ytdlp.invalidateCache(cleanId);
         final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
@@ -121,8 +126,30 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
       return _buildResponse(resp, s, streamInfo.ext);
     } catch (e) {
-      debugPrint('[YouTube] StreamAudioSource request error for $cleanId: $e');
-      rethrow;
+      debugPrint('[YouTube/Mobile] Stream request failed on initial attempt for $cleanId: $e, retrying with fresh connection...');
+      try {
+        _ytdlp.invalidateCache(cleanId);
+        final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
+        final retryClient = HttpClient()
+          ..connectionTimeout = const Duration(seconds: 20)
+          ..idleTimeout = const Duration(seconds: 20);
+        final retryReq = await retryClient.getUrl(Uri.parse(freshInfo.url));
+        applyHeaders(retryReq, freshInfo.headers);
+        if (end != null) {
+          retryReq.headers.set('Range', 'bytes=$s-$end');
+        } else if (s > 0) {
+          retryReq.headers.set('Range', 'bytes=$s-');
+        }
+        final retryResp = await retryReq.close();
+        if (retryResp.statusCode >= 400) {
+          await retryResp.drain<void>().catchError((_) {});
+          throw Exception('GoogleVideo stream rejected on retry: HTTP ${retryResp.statusCode}');
+        }
+        return _buildResponse(retryResp, s, freshInfo.ext);
+      } catch (retryError) {
+        debugPrint('[YouTube/Mobile] StreamAudioSource retry error for $cleanId: $retryError');
+        rethrow;
+      }
     }
   }
 

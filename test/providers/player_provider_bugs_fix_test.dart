@@ -110,5 +110,32 @@ void main() {
 
       playerProvider.dispose();
     });
+
+    test('skipNext and skipPrevious advance the active track and update queue index', () {
+      final song1 = Song(id: 's1', title: 'Song 1');
+      final song2 = Song(id: 's2', title: 'Song 2');
+      final song3 = Song(id: 's3', title: 'Song 3');
+      playerProvider.addToQueue(song1);
+      playerProvider.addToQueue(song2);
+      playerProvider.addToQueue(song3);
+
+      playerProvider.playSong(song1, playlist: [song1, song2, song3], startIndex: 0);
+      expect(playerProvider.currentSong?.id, 's1');
+      expect(playerProvider.currentIndex, 0);
+
+      playerProvider.skipNext();
+      expect(playerProvider.currentSong?.id, 's2');
+      expect(playerProvider.currentIndex, 1);
+
+      playerProvider.skipNext();
+      expect(playerProvider.currentSong?.id, 's3');
+      expect(playerProvider.currentIndex, 2);
+
+      playerProvider.skipPrevious();
+      expect(playerProvider.currentSong?.id, 's2');
+      expect(playerProvider.currentIndex, 1);
+
+      playerProvider.dispose();
+    });
   });
 }

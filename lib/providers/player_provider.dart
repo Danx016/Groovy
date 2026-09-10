@@ -63,6 +63,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
   Song? _currentSong;
+  String? _activeAudioSongId;
   double _volume = 1.0;
 
   /// True only while audio is actually being rendered on a remote device.
@@ -1946,7 +1947,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     final currentGen = ++_playGeneration;
 
-    if (!forcePlay && _currentSong?.id == song.id && !_isPlayingRadio && initialPosition == null) {
+    if (!forcePlay && _activeAudioSongId == song.id && !_isPlayingRadio && initialPosition == null) {
       await togglePlayPause();
       return;
     }
@@ -1980,6 +1981,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _optimisticRemoteSongId = song.id;
       _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
       _isRenderingRemotely = true;
+      _activeAudioSongId = song.id;
       _isPlaying = true;
       _isLoading = true;
       _audioHandler.setRemotePlayback(isRemote: true);
@@ -2095,6 +2097,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         );
         if (currentGen != _playGeneration) return;
         _isRenderingRemotely = true;
+        _activeAudioSongId = song.id;
         _isPlaying = true;
       } else if (_upnpService.isConnected) {
         _upnpWasPlaying = false;
@@ -2135,6 +2138,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
         if (currentGen != _playGeneration) return;
         _isRenderingRemotely = true;
+        _activeAudioSongId = song.id;
         _isPlaying = true;
       } else {
         _isRenderingRemotely = false;
@@ -2265,6 +2269,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       _recordSongPlayback(song);
+      _activeAudioSongId = song.id;
 
       _hasRetriedCurrentPlay = false;
       _updateAndroidAuto();
@@ -2299,6 +2304,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       _hasRetriedCurrentPlay = false;
       _isPlaying = false;
+      _activeAudioSongId = null;
       _position = Duration.zero;
       // Expose the error to the UI so a SnackBar / toast can be shown.
       _lastPlaybackError = 'No se pudo reproducir "${song.title}". Verifica tu conexión a internet.';
@@ -2381,6 +2387,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _audioPlayer.stop();
       _isPlayingRadio = false;
       _currentRadioStation = null;
+      _activeAudioSongId = null;
       _isPlaying = false;
 
       notifyListeners();
@@ -2857,11 +2864,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  Future<void> skipToIndex(int index, {int? skipGen}) async {
+  Future<void> skipToIndex(int index, {int? skipGen, bool forcePlay = true}) async {
     // If a skipGen was passed, abort if another skip superseded this one
     if (skipGen != null && skipGen != _skipGeneration) return;
     if (index >= 0 && index < _queue.length) {
-      await playSong(_queue[index], startIndex: index);
+      await playSong(_queue[index], startIndex: index, forcePlay: forcePlay);
     }
   }
 
@@ -2987,6 +2994,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _queue.clear();
     _currentIndex = -1;
     _currentSong = null;
+    _activeAudioSongId = null;
     _concatenatingSource = null;
 
     _clearPersistedQueue();
@@ -3147,6 +3155,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (ytSource != null) {
         _concatenatingSource = null;
         await _audioPlayer.setAudioSource(ytSource);
+        _activeAudioSongId = _currentSong?.id;
         if (_position.inMilliseconds > 0) {
           await _audioPlayer.seek(_position);
         }
@@ -3239,6 +3248,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _currentIndex = newIndex;
     _currentSong = _queue[_currentIndex];
+    _activeAudioSongId = _currentSong?.id;
     _lastPreloadedSongId = null;
     _position = Duration.zero;
     _resolvedArtworkUrl = null;

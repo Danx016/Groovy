@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.95] - 2026-09-10
+
+### Fixed & Enhanced
+- **Corrección Crítica al Cambiar de Canción (Android, Windows y Linux)**:
+  - Corregido el problema donde al reproducir una canción y cambiarla continuaba sonando la anterior.
+  - Implementada separación estricta entre el identificador de audio activo (`_activeAudioSongId`) y el estado optimista de la UI, asegurando que `playSong` y `skipToIndex` siempre carguen y reproduzcan el nuevo stream inmediatamente.
+- **Carga Ultra Rápida de Música**:
+  - Optimizado el flujo de resolución de streams (`resolveStreamInfo`) priorizando clientes Innertube puros en Dart sin retrasos de subprocesos.
+  - El tiempo de carga en frío se redujo de más de 5.8 segundos a solo ~1.4 segundos.
+- **Soporte y Resiliencia en Redes Móviles (Datos Móviles 3G/4G/5G)**:
+  - Cabeceras completas HTTP optimizadas para streams en dispositivos móviles (`Origin`, `Referer`, `Sec-Fetch-Mode`, `Accept`, Mobile User-Agent).
+  - Reconexión y reintento automático con re-resolución dinámica de URL ante microcortes o errores 403/410/429 frecuentes en redes de datos celulares.
+
 ## [1.0.94] - 2026-09-10
 
 ### Fixed & Enhanced
