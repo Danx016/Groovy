@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/youtube_service.dart';
+import '../services/ytdlp_service.dart';
 import '../services/offline_service.dart';
 import '../services/favorite_playlists_service.dart';
 import '../theme/app_theme.dart';
@@ -77,6 +78,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           _isLoading = false;
         });
         _updateDownloadState();
+        if (playlist.songs != null && playlist.songs!.isNotEmpty) {
+          YtDlpService().warmUpStreamCache(playlist.songs!.first.id);
+        }
       }
     } catch (e) {
       if (mounted) {
