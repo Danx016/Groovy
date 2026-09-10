@@ -688,7 +688,35 @@ class YtDlpService {
       }
     }
 
-    // 1. Pure-Dart Innertube via TV + Android clients (fallback when yt-dlp unavailable)
+    // ── ANDROID: Chaquopy Python yt-dlp FIRST (same logic as Desktop) ─────────
+    // yt-dlp (via Chaquopy) generates reliable URLs with correct headers.
+    // FastDart Innertube sometimes gives 403 in the live app on Android too.
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final jsonStr = await _androidChannel
+            .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
+            .timeout(const Duration(seconds: 15));
+        if (jsonStr != null && jsonStr.isNotEmpty) {
+          final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+          final url = data['url'] as String? ?? '';
+          if (url.isNotEmpty && url.startsWith('http')) {
+            final rawHeaders = (data['headers'] ?? data['http_headers']) as Map<String, dynamic>? ?? {};
+            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+            final ext = data['ext'] as String? ?? 'mp4';
+            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
+            _streamInfoCache[cleanId] = info;
+            _streamCacheTime[cleanId] = DateTime.now();
+            debugPrint('[yt-dlp/Android Python] ✅ Resolved $cleanId via Chaquopy (reliable path)');
+            return info;
+          }
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Android Python] Chaquopy error, falling back to Dart: $e');
+      }
+    }
+
+    // Fallback: Pure-Dart Innertube via TV + Android clients
+    // (used when yt-dlp subprocess / Chaquopy not available)
     try {
       final manifest = await _fallbackClient.videos.streamsClient
           .getManifest(cleanId, ytClients: [
@@ -729,34 +757,8 @@ class YtDlpService {
       debugPrint('[yt-dlp/FastDart] Dart client fallback for $cleanId: $e');
     }
 
-    // 2. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
-    if (Platform.isAndroid) {
-      try {
-        final jsonStr = await _androidChannel
-            .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
-            .timeout(const Duration(seconds: 15));
-        if (jsonStr != null && jsonStr.isNotEmpty) {
-          final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-          final url = data['url'] as String? ?? '';
-          if (url.isNotEmpty && url.startsWith('http')) {
-            final rawHeaders = (data['headers'] ?? data['http_headers']) as Map<String, dynamic>? ?? {};
-            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
-            final ext = data['ext'] as String? ?? 'mp4';
 
-            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
-            _streamInfoCache[cleanId] = info;
-            _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Android Python] Resolved stream info via Chaquopy for $cleanId');
-            return info;
-          }
-        }
-      } catch (e) {
-        debugPrint('[yt-dlp/Android Python] MethodChannel getStreamUrl error: $e');
-      }
-    }
-
-
-    // 3. Fallback: Pure-Dart Innertube manifest resolution (TV client first — no IP/UA restrictions)
+    // 3. Final Dart Innertube fallback chains (TV, iOS, Android, Web clients)
     final clientSets = [
       [yt.YoutubeApiClient.tv, yt.YoutubeApiClient.mediaConnect],
       [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],

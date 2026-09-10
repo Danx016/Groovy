@@ -5,6 +5,22 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-09-10
+
+### Fixed — Android: Chaquopy (Python yt-dlp) ahora va primero
+- Aplicado el mismo fix de prioridad que se hizo para Windows/Linux también en **Android**:
+  - **Antes**: `youtube_explode_dart` FastDart → 403 → Chaquopy (tardío)
+  - **Ahora**: Chaquopy Python yt-dlp **primero** → FastDart solo como fallback
+- Chaquopy (yt-dlp vía Python embebido) genera URLs con todos los headers correctos igual que el subprocess en Desktop → sin 403.
+- El duplicado del bloque Chaquopy fue eliminado del código.
+
+### Resumen del estado de reproducción por plataforma:
+| Plataforma | Método principal | Estado |
+|---|---|---|
+| 🪟 Windows | `yt-dlp.exe` subprocess | ✅ Verificado HTTP 206 en vivo |
+| 🐧 Linux | `yt-dlp` subprocess | ✅ Mismo código que Windows |
+| 📱 Android | Chaquopy Python yt-dlp | ✅ Ahora como método primario |
+
 ## [1.1.2] - 2026-09-10
 
 ### Fixed — Reproducción Definitivamente Corregida en Windows y Linux
