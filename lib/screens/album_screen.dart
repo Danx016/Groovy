@@ -283,9 +283,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
           _isLoading = false;
         });
         _updateDownloadState();
-        if (songs.isNotEmpty) {
-          YtDlpService().warmUpStreamCache(songs.first.id);
-        }
       }
     } catch (e) {
       if (mounted) {

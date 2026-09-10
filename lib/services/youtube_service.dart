@@ -50,13 +50,6 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   final String _videoId;
   final YtDlpService _ytdlp;
 
-  // Shared persistent HttpClient with connection pooling & HTTP keep-alive.
-  // Prevents repeating TLS 1.3 handshake on every audio byte range chunk.
-  static final HttpClient _sharedStreamClient = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 12)
-    ..idleTimeout = const Duration(seconds: 30)
-    ..maxConnectionsPerHost = 6;
-
   _YoutubeStreamAudioSource(this._videoId, this._ytdlp) : super(tag: _videoId);
 
   @override
@@ -65,7 +58,9 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     final streamInfo = await _ytdlp.resolveStreamInfo(cleanId);
 
     final s = start ?? 0;
-    final client = _sharedStreamClient;
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15)
+      ..idleTimeout = const Duration(seconds: 15);
 
     void applyHeaders(HttpClientRequest req, Map<String, String> headers) {
       bool hasUserAgent = false;

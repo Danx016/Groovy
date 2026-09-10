@@ -11,7 +11,6 @@ import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/player_ui_settings_service.dart';
 import '../services/youtube_service.dart';
-import '../services/ytdlp_service.dart';
 import '../services/offline_service.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
@@ -60,13 +59,7 @@ class SongTile extends StatelessWidget {
         builder: (context, currentSongId, _) {
           final isCurrentSong = currentSongId == song.id;
 
-          return Listener(
-            onPointerDown: (_) {
-              if (song.isLocal != true) {
-                YtDlpService().warmUpStreamCache(song.id);
-              }
-            },
-            child: ListTile(
+          return ListTile(
             contentPadding: const EdgeInsets.symmetric(
               horizontal: 16,
               vertical: 4,
@@ -87,7 +80,6 @@ class SongTile extends StatelessWidget {
             trailing: _buildTrailing(context),
             onTap: onTap ?? () => _playSong(context),
             onLongPress: onLongPress ?? () => _showOptions(context),
-          ),
           );
         },
       ),

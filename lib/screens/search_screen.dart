@@ -6,7 +6,6 @@ import 'dart:async';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/youtube_service.dart';
-import '../services/ytdlp_service.dart';
 import '../services/recent_searches_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
@@ -161,9 +160,6 @@ class _SearchScreenState extends State<SearchScreen> {
           _searchResult = result;
           _isSearching = false;
         });
-        if (result.songs.isNotEmpty) {
-          YtDlpService().warmUpStreamCache(result.songs.first.id);
-        }
       }
     } catch (e) {
       if (mounted) {

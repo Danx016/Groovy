@@ -102,15 +102,6 @@ class YtDlpService {
     _streamCacheTime.remove(videoId);
   }
 
-  /// Warms up the stream cache in the background without blocking the UI.
-  /// Used by search and screens to make song playback instantaneous when clicked.
-  void warmUpStreamCache(String songId) {
-    final cleanId = songId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
-    if (!RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) return;
-    if (_streamInfoCache.containsKey(cleanId)) return;
-    unawaited(resolveStreamInfo(cleanId).catchError((_) => YtStreamInfo(url: '', headers: {})));
-  }
-
   // ── Native Dart Innertube Helpers (Windows / Desktop / Fallback) ────────────
 
   static final HttpClient _innertubeHttpClient = HttpClient()
@@ -650,46 +641,12 @@ class YtDlpService {
       }
     }
 
-    // 1. FAST PATH (Android, Windows, Linux, macOS): Pure-Dart manifest resolution.
-    // Extremely fast (~1.2s HTTP directly in memory) without starting Python or heavy processes.
-    final fastClients = [
-      [yt.YoutubeApiClient.android],
-      null,
-    ];
-
-    for (final clientList in fastClients) {
-      try {
-        final manifest = await _fallbackClient.videos.streamsClient
-            .getManifest(cleanId, ytClients: clientList)
-            .timeout(const Duration(seconds: 4));
-        final audioOnly = manifest.audioOnly;
-        if (audioOnly.isNotEmpty) {
-          final best = _selectBestAudioStream(audioOnly);
-          final url = best.url.toString();
-          final info = YtStreamInfo(
-            url: url,
-            headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            },
-            ext: best.container.name,
-          );
-          _streamInfoCache[cleanId] = info;
-          _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/FastDart] Resolved stream info for $cleanId in pure Dart (${clientList != null ? 'android' : 'web'})');
-          return info;
-        }
-      } catch (e) {
-        debugPrint('[yt-dlp/FastDart] Pure-Dart attempt (${clientList != null ? 'android' : 'web'}) failed for $cleanId: $e');
-      }
-    }
-
-    // 2. Android Fallback: Execute embedded Python interpreter with yt-dlp (Chaquopy)
+    // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
     if (Platform.isAndroid) {
       try {
         final jsonStr = await _androidChannel
             .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 15));
         if (jsonStr != null && jsonStr.isNotEmpty) {
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final url = data['url'] as String? ?? '';
@@ -710,34 +667,75 @@ class YtDlpService {
       }
     }
 
-    // 3. Desktop Fallback (Windows / macOS / Linux) with bundled/detected yt-dlp
+    // 2. Desktop (Windows / macOS / Linux) with bundled/detected yt-dlp
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
       try {
         final result = await _runYtDlp([
-          '-g',
+          '-j',
           '-f',
-          '140/ba/b[acodec!=none]/best',
-          '--no-playlist',
+          'ba/b[acodec!=none]/best',
+          '--extractor-args',
+          // tv_embedded generates URLs without IP/UA restrictions — required for
+          // mobile data where requesting IP may differ from extraction IP.
+          'youtube:player_client=tv_embedded,ios,android,mweb',
           '--no-warnings',
           '--no-check-certificates',
           targetUrl,
-        ], timeout: const Duration(seconds: 10));
+        ], timeout: const Duration(seconds: 15));
 
         if (result != null && result.exitCode == 0) {
-          final url = result.stdout.toString().trim().split('\n').first.trim();
-          if (url.isNotEmpty && url.startsWith('http')) {
-            final info = YtStreamInfo(url: url, headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            }, ext: 'mp4');
+          final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
+          final url = json['url'] as String?;
+          if (url != null && url.isNotEmpty) {
+            final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
+            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+            final ext = json['ext'] as String? ?? 'mp4';
+
+            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
             _streamInfoCache[cleanId] = info;
             _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Desktop] Resolved direct stream URL for $cleanId');
+            debugPrint('[yt-dlp/Desktop] Resolved direct stream info for $cleanId');
             return info;
           }
         }
       } catch (e) {
         debugPrint('[yt-dlp/Desktop] Subprocess stream resolution error: $e');
+      }
+    }
+
+    // 3. Fallback: Pure-Dart Innertube manifest resolution
+    // Try TV clients first — they generate URLs without IP/UA restrictions, best for mobile data.
+    final clientSets = [
+      [yt.YoutubeApiClient.tv, yt.YoutubeApiClient.mediaConnect],
+      [yt.YoutubeApiClient.ios, yt.YoutubeApiClient.android],
+      null,
+    ];
+
+    for (final clientList in clientSets) {
+      try {
+        final manifest = await _fallbackClient.videos.streamsClient
+            .getManifest(cleanId, ytClients: clientList)
+            .timeout(const Duration(seconds: 10)); // longer for mobile data
+        final audioOnly = manifest.audioOnly;
+        if (audioOnly.isNotEmpty) {
+          final best = _selectBestAudioStream(audioOnly);
+          final url = best.url.toString();
+          final info = YtStreamInfo(
+            url: url,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            ext: best.container.name,
+          );
+          _streamInfoCache[cleanId] = info;
+          _streamCacheTime[cleanId] = DateTime.now();
+          debugPrint('[yt-dlp/Innertube] Fallback resolved stream info for $cleanId in pure Dart');
+          return info;
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Innertube] Pure-Dart fallback failed for $cleanId: $e');
       }
     }
 

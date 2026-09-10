@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.93] - 2026-09-09
+
+### Fixed
+- **Reproducción de Música 100% Restaurada**:
+  - Restaurada la extracción robusta y confiable de audio mediante `tv_embedded` con `yt-dlp` en Windows/Linux y Chaquopy en Android.
+  - Corregido el problema donde la música no cargaba al reproducir canciones.
+  - Conservado el buscador con la API actualizada de Innertube y búsqueda dual en paralelo.
+
 ## [1.0.92] - 2026-09-09
 
 ### Fixed & Performance
