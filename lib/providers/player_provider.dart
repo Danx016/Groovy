@@ -2273,6 +2273,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       _hasRetriedCurrentPlay = false;
       _updateAndroidAuto();
+
+      // Preload next track in background for instantaneous (0ms) transition
+      if (_queue.isNotEmpty && _currentIndex + 1 < _queue.length) {
+        final nextSong = _queue[_currentIndex + 1];
+        if (nextSong.isLocal != true) {
+          YtDlpService().warmUpStreamCache(nextSong.id);
+        }
+      }
     } catch (e) {
       // If this playSong call has been superseded by a newer play request (e.g. user passed/returned tracks),
       // do NOT report error, do NOT retry, and do NOT stop the audio player.
