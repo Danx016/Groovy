@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-09-10
+
+### Fixed — Reproducción Definitivamente Corregida en Windows y Linux
+- **Diagnóstico definitivo con 14 canciones** (Rick Astley, Justin Bieber, PSY, Ed Sheeran, Adele, Daddy Yankee, Carlos Vives, Bad Bunny, J Balvin, Maluma y más):
+  - `yt-dlp` subprocess → **14/14 canciones HTTP 206** ✅
+  - `youtube_explode_dart` FastDart → URLs a veces dan 403 en la app real ❌
+- **Causa raíz**: `youtube_explode_dart` genera URLs que a veces están ligadas a la sesión/IP de resolución y fallan cuando el proxy las usa en un contexto diferente. `yt-dlp` genera URLs con todos los headers correctos ya embebidos que siempre funcionan.
+- **Fix**: En Desktop (Windows/Linux), `yt-dlp` subprocess ahora va **primero** (antes era el último). `youtube_explode_dart` queda como fallback solo si `yt-dlp` no está disponible.
+- **Verificado en vivo**: La canción `LEHYryXUxbI` que daba 403 constantemente ahora responde HTTP 206 correctamente.
+
 ## [1.1.1] - 2026-09-10
 
 ### Fixed — Corrección de User-Agent para Reproducción en Windows, Linux y Android
