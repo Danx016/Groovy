@@ -440,7 +440,7 @@ class SongCreditsService {
     // 2. Query YouTube Music search API for official audio tracks
     try {
       final searchRes = await _dio.post<Map<String, dynamic>>(
-        'https://music.youtube.com/youtubei/v1/search?prettyPrint=false',
+        'https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU',
         options: Options(
           headers: {
             'User-Agent':
@@ -454,7 +454,7 @@ class SongCreditsService {
           'context': {
             'client': {
               'clientName': 'WEB_REMIX',
-              'clientVersion': '1.20240101.01.00',
+              'clientVersion': '1.20240918.01.00',
               'hl': 'es',
               'gl': 'CO',
             }
@@ -481,7 +481,7 @@ class SongCreditsService {
     for (final vid in candidateVids) {
       try {
         final browseRes = await _dio.post<Map<String, dynamic>>(
-          'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false',
+          'https://music.youtube.com/youtubei/v1/browse?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU',
           options: Options(
             headers: {
               'User-Agent':
@@ -495,7 +495,7 @@ class SongCreditsService {
             'context': {
               'client': {
                 'clientName': 'WEB_REMIX',
-                'clientVersion': '1.20240101.01.00',
+                'clientVersion': '1.20240918.01.00',
                 'hl': 'es',
                 'gl': 'CO',
               }

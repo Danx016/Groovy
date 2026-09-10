@@ -177,7 +177,7 @@ class AlbumResolverService {
   ) async {
     try {
       final req = await _client.postUrl(
-        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
       );
       _headers.forEach((k, v) => req.headers.set(k, v));
 
@@ -188,7 +188,7 @@ class AlbumResolverService {
         'context': {
           'client': {
             'clientName': 'WEB_REMIX',
-            'clientVersion': '1.20240101.01.00',
+            'clientVersion': '1.20240918.01.00',
             'hl': 'es',
             'gl': 'CO',
           }
@@ -289,7 +289,7 @@ class AlbumResolverService {
   ) async {
     try {
       final req = await _client.postUrl(
-        Uri.parse('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false'),
+        Uri.parse('https://music.youtube.com/youtubei/v1/browse?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
       );
       _headers.forEach((k, v) => req.headers.set(k, v));
 
@@ -297,7 +297,7 @@ class AlbumResolverService {
         'context': {
           'client': {
             'clientName': 'WEB_REMIX',
-            'clientVersion': '1.20240101.01.00',
+            'clientVersion': '1.20240918.01.00',
             'hl': 'es',
             'gl': 'CO',
           }

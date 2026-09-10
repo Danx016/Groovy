@@ -227,9 +227,9 @@ void main() async {
   if (!kIsWeb && Platform.isAndroid) {
     Permission.notification.request().catchError((_) => PermissionStatus.denied);
   }
-  if (!kIsWeb && Platform.isWindows) {
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     WindowsSystemService().initialize().catchError((e) {
-      debugPrint('Failed to initialize Windows system service: $e');
+      debugPrint('Failed to initialize desktop system service: $e');
     });
   }
 

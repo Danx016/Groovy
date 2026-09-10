@@ -55,7 +55,7 @@ class WindowsSystemService {
   }
 
   Future<void> initialize() async {
-    if (!kIsWeb && Platform.isWindows) {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
       if (_isInitialized) return;
 
       // 1. Hardware keyboard / headphone media key listener on Windows
@@ -92,7 +92,7 @@ class WindowsSystemService {
     if (!kIsWeb && Platform.isWindows && _isInitialized) {
       try {
         // Clear taskbar progress bar so it never looks like a file download (matches Spotify behavior)
-        await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);
+        if (Platform.isWindows) { await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress); }
       } catch (e) {
         debugPrint('Error updating Windows playback state: $e');
       }
@@ -101,7 +101,7 @@ class WindowsSystemService {
 
   /// Update current song info for lyrics display
   Future<void> updateSongInfo(Song? song) async {
-    if (!kIsWeb && Platform.isWindows) {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
       if (_currentSong?.id == song?.id) return;
       _currentSong = song;
       // Clear lyrics when song changes
@@ -111,7 +111,7 @@ class WindowsSystemService {
 
   /// Update lyrics line - shows as Windows notification
   Future<void> updateLyrics(String? lyricsLine) async {
-    if (!kIsWeb && Platform.isWindows && _lyricsEnabled) {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux) && _lyricsEnabled) {
       if (lyricsLine == null || lyricsLine.isEmpty) {
         await clearLyrics();
         return;
@@ -139,7 +139,7 @@ class WindowsSystemService {
 
   /// Clear lyrics notification
   Future<void> clearLyrics() async {
-    if (!kIsWeb && Platform.isWindows) {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
       try {
         await _lyricsNotification?.close();
         _lyricsNotification = null;
@@ -163,11 +163,11 @@ class WindowsSystemService {
   bool get lyricsEnabled => _lyricsEnabled;
 
   Future<void> dispose() async {
-    if (!kIsWeb && Platform.isWindows && _isInitialized) {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux) && _isInitialized) {
       HardwareKeyboard.instance.removeHandler(_handleKeyEvent);
       try {
         await clearLyrics();
-        await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress);
+        if (Platform.isWindows) { await WindowsTaskbar.setProgressMode(TaskbarProgressMode.noProgress); }
       } catch (e) {
         debugPrint('WindowsSystemService dispose failed: $e');
       }

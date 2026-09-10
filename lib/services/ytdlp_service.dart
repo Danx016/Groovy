@@ -83,7 +83,7 @@ class YtDlpService {
   }
 
   yt.AudioStreamInfo _selectBestAudioStream(Iterable<yt.AudioStreamInfo> audioStreams) {
-    if (!kIsWeb && Platform.isWindows) {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
       final mp4Streams = audioStreams.where((s) =>
           s.container.name.toLowerCase() == 'mp4' ||
           s.container.name.toLowerCase() == 'm4a');
@@ -142,14 +142,14 @@ class YtDlpService {
   Future<List<Map<String, dynamic>>> searchYtMusicInnertube(String query, {int limit = 25}) async {
     try {
       final req = await _innertubeHttpClient.postUrl(
-        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
       );
       _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
       req.write(jsonEncode({
         'context': {
           'client': {
             'clientName': 'WEB_REMIX',
-            'clientVersion': '1.20240101.01.00',
+            'clientVersion': '1.20240918.01.00',
             'hl': 'es',
             'gl': 'US',
           }
@@ -269,7 +269,7 @@ class YtDlpService {
   Future<List<Map<String, dynamic>>> searchYoutubeVideoInnertube(String query, {int limit = 25}) async {
     try {
       final req = await _innertubeHttpClient.postUrl(
-        Uri.parse('https://www.youtube.com/youtubei/v1/search?prettyPrint=false'),
+        Uri.parse('https://www.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8'),
       );
       req.headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
       req.headers.set('Content-Type', 'application/json');
@@ -279,7 +279,7 @@ class YtDlpService {
         'context': {
           'client': {
             'clientName': 'WEB',
-            'clientVersion': '2.20240101.01.00',
+            'clientVersion': '2.20240918.01.00',
             'hl': 'es',
             'gl': 'US',
           }
@@ -353,14 +353,14 @@ class YtDlpService {
   Future<List<Map<String, dynamic>>> searchYtAlbumsInnertube(String query, {int limit = 20}) async {
     try {
       final req = await _innertubeHttpClient.postUrl(
-        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
       );
       _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
       req.write(jsonEncode({
         'context': {
           'client': {
             'clientName': 'WEB_REMIX',
-            'clientVersion': '1.20240101.01.00',
+            'clientVersion': '1.20240918.01.00',
             'hl': 'es',
             'gl': 'US',
           }
@@ -457,14 +457,14 @@ class YtDlpService {
   Future<List<Map<String, dynamic>>> searchYtArtistsInnertube(String query, {int limit = 20}) async {
     try {
       final req = await _innertubeHttpClient.postUrl(
-        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false'),
+        Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
       );
       _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
       req.write(jsonEncode({
         'context': {
           'client': {
             'clientName': 'WEB_REMIX',
-            'clientVersion': '1.20240101.01.00',
+            'clientVersion': '1.20240918.01.00',
             'hl': 'es',
             'gl': 'US',
           }
@@ -750,6 +750,31 @@ class YtDlpService {
 
   // ── Search & Discovery ──────────────────────────────────────────────────────
 
+  /// Internal helper: search via youtube_explode_dart, works even when
+  /// Innertube is blocked on server/VPS IPs (common on Linux deployments).
+  Future<List<Map<String, dynamic>>> _searchYoutubeExplodeFallback(String query, {int limit = 20}) async {
+    try {
+      final searchResults = await _fallbackClient.search
+          .search(query, filter: yt.TypeFilters.video)
+          .timeout(const Duration(seconds: 10));
+      return searchResults.take(limit).map((v) {
+        final music = v.musicData.isNotEmpty ? v.musicData.first : null;
+        return <String, dynamic>{
+          'id': v.id.value,
+          'title': music?.song ?? v.title,
+          'artist': music?.artist ?? v.author,
+          'album': music?.album,
+          'duration': v.duration?.inSeconds,
+          'coverArt': v.id.value,
+          'thumbnailUrl': v.thumbnails.highResUrl,
+        };
+      }).toList();
+    } catch (e) {
+      debugPrint('[yt-dlp/ExplodeFallback] error: $e');
+      return [];
+    }
+  }
+
   /// Dual search: returns a map with 'music' and 'youtube' lists of tracks.
   Future<Map<String, List<Map<String, dynamic>>>> searchDual(String query, {int limit = 20}) async {
     final cleanQuery = query.trim().toLowerCase();
@@ -777,29 +802,35 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop or Android fallback: Direct native Innertube queries
+    // 2. Desktop or Android fallback: Innertube + youtube_explode_dart in parallel
     try {
       final results = await Future.wait([
         searchYtMusicInnertube(query, limit: limit),
         searchYoutubeVideoInnertube(query, limit: limit),
-      ]).timeout(const Duration(seconds: 8));
+        _searchYoutubeExplodeFallback(query, limit: limit),
+      ]).timeout(const Duration(seconds: 12));
       final musicTracks = results[0];
       final ytTracks = results[1];
+      final explodeTracks = results[2];
 
-      if (musicTracks.isNotEmpty || ytTracks.isNotEmpty) {
-        final res = {
-          'music': musicTracks,
-          'youtube': ytTracks,
+      // Prefer Innertube results; fall back to youtube_explode_dart if blocked
+      final finalMusic = musicTracks.isNotEmpty ? musicTracks : explodeTracks;
+      final finalYt = ytTracks.isNotEmpty ? ytTracks : explodeTracks;
+
+      if (finalMusic.isNotEmpty || finalYt.isNotEmpty) {
+        final res = <String, List<Map<String, dynamic>>>{
+          'music': finalMusic,
+          'youtube': finalYt,
         };
-        debugPrint('[yt-dlp/Innertube] Fast dual search "$query": ${musicTracks.length} music, ${ytTracks.length} youtube');
+        debugPrint('[yt-dlp/Dual] search "$query": ${finalMusic.length} music, ${finalYt.length} youtube');
         if (cleanQuery.isNotEmpty) _dualSearchCache[cleanQuery] = res;
         return res;
       }
     } catch (e) {
-      debugPrint('[yt-dlp/Innertube] Fast dual search error: $e');
+      debugPrint('[yt-dlp/Dual] search error: $e');
     }
 
-    // 3. Fallback: Process execution or youtube_explode_dart
+    // 3. Fallback: Process execution or youtube_explode_dart only
     try {
       final results = await Future.wait([
         search('$query audio', limit: limit),
@@ -849,15 +880,21 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Direct native Innertube query
+    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Innertube + youtube_explode_dart in parallel
     try {
-      final musicItems = await searchYtMusicInnertube(query, limit: limit).timeout(const Duration(seconds: 6));
-      if (musicItems.isNotEmpty) {
-        debugPrint('[yt-dlp/Innertube] Fast search "$query" returned ${musicItems.length} items');
-        _searchCache[cleanQuery] = musicItems;
-        return musicItems;
+      final parallel = await Future.wait([
+        searchYtMusicInnertube(query, limit: limit),
+        _searchYoutubeExplodeFallback(query, limit: limit),
+      ]).timeout(const Duration(seconds: 10));
+      final musicItems = parallel[0];
+      final explodeItems = parallel[1];
+      final bestItems = musicItems.isNotEmpty ? musicItems : explodeItems;
+      if (bestItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Search] "$query" returned ${bestItems.length} items (innertube=${musicItems.length}, explode=${explodeItems.length})');
+        _searchCache[cleanQuery] = bestItems;
+        return bestItems;
       }
-      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 6));
+      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 8));
       if (ytItems.isNotEmpty) {
         debugPrint('[yt-dlp/Innertube] Fast video search "$query" returned ${ytItems.length} items');
         _searchCache[cleanQuery] = ytItems;
