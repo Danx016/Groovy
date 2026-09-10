@@ -54,7 +54,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
-    final cleanId = _videoId.replaceFirst('ytmusic://', '');
+    final cleanId = _videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
     final streamInfo = await _ytdlp.resolveStreamInfo(cleanId);
 
     final s = start ?? 0;
@@ -89,7 +89,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
       if (end != null) {
         req.headers.set('Range', 'bytes=$s-$end');
-      } else if (s > 0) {
+      } else {
         req.headers.set('Range', 'bytes=$s-');
       }
 
@@ -104,7 +104,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         applyHeaders(retryReq, freshInfo.headers);
         if (end != null) {
           retryReq.headers.set('Range', 'bytes=$s-$end');
-        } else if (s > 0) {
+        } else {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
         final retryResp = await retryReq.close();
@@ -214,7 +214,8 @@ class _DesktopAudioProxyServer {
       final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
 
       Future<HttpClientResponse> fetchUpstream(String url, Map<String, String> headers) async {
-        final req = await _client.openUrl(request.method, Uri.parse(url));
+        // GoogleVideo rejects HEAD with 403, always open with getUrl
+        final req = await _client.getUrl(Uri.parse(url));
         headers.forEach((key, value) {
           final lower = key.toLowerCase();
           if (lower != 'host' &&
@@ -226,9 +227,12 @@ class _DesktopAudioProxyServer {
         });
         req.headers.set(
           HttpHeaders.userAgentHeader,
+          headers['User-Agent'] ?? headers['user-agent'] ??
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         );
-        if (rangeHeader != null) {
+        if (request.method == 'HEAD') {
+          req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
+        } else if (rangeHeader != null) {
           req.headers.set(HttpHeaders.rangeHeader, rangeHeader);
         } else {
           req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-');
@@ -249,7 +253,9 @@ class _DesktopAudioProxyServer {
         upstreamResp = await fetchUpstream(streamInfo.url, streamInfo.headers);
       }
 
-      request.response.statusCode = upstreamResp.statusCode;
+      request.response.statusCode = (rangeHeader != null)
+          ? upstreamResp.statusCode
+          : (upstreamResp.statusCode == 206 ? HttpStatus.ok : upstreamResp.statusCode);
       request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
 
       final isWebm = (streamInfo.ext == 'webm' ||
@@ -407,23 +413,24 @@ class YoutubeService {
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
 
     // ─── PRE-RESOLVE STREAM INFO ────────────────────────────────────────────
-    // CRITICAL FIX: just_audio calls StreamAudioSource.request() and libmpv
-    // (Desktop proxy) make their first HTTP request immediately after
-    // setAudioSource().  If resolveStreamInfo() hasn't completed yet (it can
-    // take 1–9 s on a cold start), just_audio's internal timeout fires first
-    // and the track silently fails to load.
-    //
-    // By awaiting resolveStreamInfo() here the result is cached (~5.5 h TTL),
-    // so when just_audio / libmpv ask for the first byte the cache hit is 0 ms.
+    YtStreamInfo? streamInfo;
     try {
-      await _ytdlp.resolveStreamInfo(videoId);
+      streamInfo = await _ytdlp.resolveStreamInfo(videoId);
     } catch (e) {
-      // Non-fatal – the StreamAudioSource / proxy will re-attempt on first request.
       debugPrint('[YouTube] Pre-resolve warning for $videoId: $e');
     }
     // ────────────────────────────────────────────────────────────────────────
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      // Desktop (Windows & Linux with libmpv) natively plays direct GoogleVideo HTTPS URLs
+      // with zero local proxy overhead, zero port conflicts and instant startup.
+      if (streamInfo != null && streamInfo.url.isNotEmpty) {
+        return AudioSource.uri(
+          Uri.parse(streamInfo.url),
+          headers: streamInfo.headers,
+          tag: song.id,
+        );
+      }
       final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
       if (proxyUrl.isNotEmpty) {
         return AudioSource.uri(
@@ -521,7 +528,8 @@ class YoutubeService {
   /// Builds a [StreamAudioSource] that proxies audio through Dart's HttpClient
   /// with standard browser headers to prevent HTTP 403 on ExoPlayer / Media3.
   Future<StreamAudioSource> buildAudioSource(String videoId) async {
-    return _YoutubeStreamAudioSource(videoId, _ytdlp);
+    final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+    return _YoutubeStreamAudioSource(cleanId, _ytdlp);
   }
 
   // ── Model mappers ─────────────────────────────────────────────────────────

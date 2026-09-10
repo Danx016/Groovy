@@ -5,6 +5,20 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.99] - 2026-09-10
+
+### Fixed — Reproducción Real en Windows, Linux y Android
+- **Streaming directo GoogleVideo en Windows y Linux (Desktop)**:
+  - Se eliminó el error HTTP 403 y la falla de proxy en Desktop al usar streaming directo HTTPS con `AudioSource.uri()` y headers completos.
+  - `libmpv` (vía `just_audio_media_kit`) reproduce directamente las URLs de GoogleVideo sin intermediarios ni demoras de puertos locales.
+- **Soporte HEAD en Proxy Local**:
+  - GoogleVideo CDN rechaza con HTTP 403 las peticiones `HEAD`. Se configuró el servidor proxy para traducir automáticamente cualquier petición `HEAD` a `GET` con rango de 1 byte (`bytes=0-0`), retornando respuesta HTTP 200 con encabezados válidos para clientes que lo soliciten.
+- **ExoPlayer en Android sin bloqueos (Stall)**:
+  - En `_YoutubeStreamAudioSource`, se garantizó que la primera petición envíe siempre el header `Range: bytes=0-` a YouTube CDN, asegurando la respuesta HTTP 206 y permitiendo que ExoPlayer detecte el `Content-Range` y reproduzca de inmediato sin congelarse en buffering infinito.
+- **Compatibilidad Chaquopy / yt-dlp en Android**:
+  - Corregido el mapeo de `http_headers` en el retorno de Python para que coincida con los encabezados requeridos en Dart.
+  - Limpieza de prefijos `yt_` y `ytmusic://` en `cleanId` para evitar fallas de `VideoUnplayableException`.
+
 ## [1.0.98] - 2026-09-10
 
 ### Fixed — Causa Raíz de Música que No Carga

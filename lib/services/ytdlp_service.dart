@@ -638,11 +638,11 @@ class YtDlpService {
 
   /// Resolves the stream info (URL and matching HTTP headers) for [videoId].
   Future<YtStreamInfo> resolveStreamInfo(String videoId, {bool forceRefresh = false}) async {
-    final cleanId = videoId.replaceFirst('ytmusic://', '');
+    final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
 
     if (!forceRefresh) {
       final cached = _streamInfoCache[cleanId];
-      if (cached != null) {
+      if (cached != null && cached.url.isNotEmpty) {
         final age = DateTime.now().difference(_streamCacheTime[cleanId] ?? DateTime.now());
         if (age < _cacheTtl) {
           return cached;
@@ -664,18 +664,20 @@ class YtDlpService {
       if (audioOnly.isNotEmpty) {
         final best = _selectBestAudioStream(audioOnly);
         final url = best.url.toString();
-        final info = YtStreamInfo(
-          url: url,
-          headers: {
-            'User-Agent':
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-          ext: best.container.name,
-        );
-        _streamInfoCache[cleanId] = info;
-        _streamCacheTime[cleanId] = DateTime.now();
-        debugPrint('[yt-dlp/FastDart] Resolved $cleanId via TV/Android client');
-        return info;
+        if (url.isNotEmpty) {
+          final info = YtStreamInfo(
+            url: url,
+            headers: {
+              'User-Agent':
+                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            },
+            ext: best.container.name,
+          );
+          _streamInfoCache[cleanId] = info;
+          _streamCacheTime[cleanId] = DateTime.now();
+          debugPrint('[yt-dlp/FastDart] Resolved $cleanId via TV/Android client');
+          return info;
+        }
       }
     } catch (e) {
       debugPrint('[yt-dlp/FastDart] TV/Android client fallback for $cleanId: $e');
@@ -691,7 +693,7 @@ class YtDlpService {
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final url = data['url'] as String? ?? '';
           if (url.isNotEmpty && url.startsWith('http')) {
-            final rawHeaders = data['http_headers'] as Map<String, dynamic>? ?? {};
+            final rawHeaders = (data['headers'] ?? data['http_headers']) as Map<String, dynamic>? ?? {};
             final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
             final ext = data['ext'] as String? ?? 'mp4';
 

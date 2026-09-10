@@ -49,6 +49,7 @@ def _extract_stream(video_id_or_url):
         return {
             'url': url or '',
             'headers': headers,
+            'http_headers': headers,
             'ext': ext,
         }
 

@@ -48,20 +48,21 @@ void main() {
       expect(audioSource is UriAudioSource, isTrue);
 
       final uriSource = audioSource as UriAudioSource;
-      final proxyUri = uriSource.uri;
-      print('  ✓ URI del proxy para el reproductor de Windows/Linux: $proxyUri');
-      expect(proxyUri.host, equals('127.0.0.1'));
-      expect(proxyUri.path, equals('/stream'));
-      expect(proxyUri.queryParameters['id'], equals(testVideoId));
+      final playUri = uriSource.uri;
+      print('  ✓ URI para el reproductor de Windows/Linux: $playUri');
+      expect(playUri.scheme.startsWith('http'), isTrue);
 
-      // Simular petición nativa de Windows Media Foundation (sin headers de navegador)
-      print('  📡 Simulando conexión de Windows Media Foundation al proxy local...');
+      // Simular petición nativa de Windows (libmpv / Media Foundation)
+      print('  📡 Simulando conexión de Windows/Linux al stream de audio...');
       final client = HttpClient();
-      final req = await client.getUrl(proxyUri);
+      final req = await client.getUrl(playUri);
+      if (uriSource.headers != null) {
+        uriSource.headers!.forEach((k, v) => req.headers.set(k, v));
+      }
       req.headers.set('Range', 'bytes=0-131071'); // 128 KB chunk inicial
       
       final resp = await req.close();
-      print('  🌐 Código de respuesta del Proxy Local: ${resp.statusCode}');
+      print('  🌐 Código de respuesta del Stream: ${resp.statusCode}');
       expect(resp.statusCode, anyOf([HttpStatus.ok, HttpStatus.partialContent]));
       
       final contentType = resp.headers.contentType?.mimeType ?? '';
