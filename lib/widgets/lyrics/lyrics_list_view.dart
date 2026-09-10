@@ -153,6 +153,7 @@ class _LyricsListViewState extends State<LyricsListView> {
   }
 
   void _updateIndexForPosition(Duration pos) {
+    if (!mounted) return; // guard: stream may fire after dispose
     if (_items.isEmpty) return;
 
     final isUnsynced = _items.length > 1 && 

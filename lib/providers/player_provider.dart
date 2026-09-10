@@ -91,6 +91,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   SharedPreferences? _prefs;
   Timer? _persistDebounceTimer;
+  Timer? _skipDebounceTimer;
   static const String _keyQueue = 'persistent_queue';
   static const String _keyQueueIndex = 'persistent_queue_index';
   static const String _keyQueueSongId = 'persistent_queue_song_id';
@@ -106,6 +107,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// Optional callback invoked (in addition to notifyListeners) when playback
   /// fails definitively — useful for showing a SnackBar from a widget.
   void Function(String message)? onPlaybackError;
+
+  bool _isDisposed = false;
+  bool get isDisposed => _isDisposed;
+
+  @override
+  void notifyListeners() {
+    if (_isDisposed) return;
+    super.notifyListeners();
+  }
 
   Timer? _sleepTimer;
   DateTime? _sleepTimerEnd;
@@ -176,6 +186,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _pitchCorrection = true;
   bool _hasRetriedCurrentPlay = false;
   int _playGeneration = 0;
+  int _skipGeneration = 0; // incremented on every skip to cancel in-flight skips when user skips rapidly
   bool _isTransitioningSong = false;
 
   PlayerProvider(
@@ -386,7 +397,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           ? Duration(seconds: transferredSong.duration!)
           : Duration.zero;
       _optimisticRemoteSongId = transferredSong.id;
-      _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+      _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
       _optimisticRemotePlayPauseState = _isPlaying;
       _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
       _refreshArtworkUrl().catchError((_) {});
@@ -444,13 +455,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // If we recently initiated an optimistic song change, ignore stale reports of the old song
     if (_optimisticRemoteSongUntil != null && DateTime.now().isBefore(_optimisticRemoteSongUntil!)) {
       if (song != null && song.id == _optimisticRemoteSongId) {
-        _optimisticRemoteSongUntil = null;
-        _optimisticRemoteSongId = null;
-        _isLoading = false;
-        _remoteAnchorPosition = position;
-        _remoteAnchorTime = isPlaying ? DateTime.now() : null;
-        _position = position;
-        _positionController.add(position);
+        // The remote device acknowledged the new song — but only clear the optimistic window
+        // once it's actually playing (not still buffering at position 0).
+        // If isPlaying=false and position=0, the remote is still loading; keep ignoring.
+        final remoteActuallyPlaying = isPlaying && position.inMilliseconds > 0;
+        final remoteLoadedButPaused = !isPlaying && position.inMilliseconds >= 0 &&
+            DateTime.now().isAfter(_optimisticRemoteSongUntil!.subtract(const Duration(seconds: 4)));
+        if (remoteActuallyPlaying || remoteLoadedButPaused) {
+          _optimisticRemoteSongUntil = null;
+          _optimisticRemoteSongId = null;
+          _isLoading = false;
+          _remoteAnchorPosition = position;
+          _remoteAnchorTime = isPlaying ? DateTime.now() : null;
+          _position = position;
+          _positionController.add(position);
+        } else {
+          // Remote is still buffering; ignore this update entirely to prevent 0-position bounce
+          return;
+        }
       } else {
         // Remote device is still transitioning; ignore stale song to prevent flickering/reverting
         return;
@@ -474,10 +496,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         artworkUrl: _resolveArtworkUrl(),
         duration: duration,
       );
-      _remoteAnchorPosition = position;
-      _remoteAnchorTime = DateTime.now();
-      _position = position;
-      _positionController.add(position);
+      // Only accept the remote position as the anchor if the device is actually playing.
+      // If it just changed songs and reports position=0 while still loading, keep our
+      // local dead-reckoning estimate rather than resetting back to 0:00.
+      if (isPlaying || position.inMilliseconds > 0) {
+        _remoteAnchorPosition = position;
+        _remoteAnchorTime = isPlaying ? DateTime.now() : null;
+        _position = position;
+        _positionController.add(position);
+      }
       changed = true;
     }
 
@@ -526,13 +553,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         changed = true;
       } else {
         final diffMs = position.inMilliseconds - currentExtrapolated.inMilliseconds;
-        if (diffMs < -4000) {
-          // Significant backward seek on the remote device
+        // Use a larger threshold (-8000ms instead of -4000ms) to avoid treating
+        // transient loading resets (positionMs=0 while buffering) as intentional seeks.
+        if (diffMs < -8000) {
+          // Significant backward seek on the remote device (>8s)
           _remoteAnchorPosition = position;
           _remoteAnchorTime = isPlaying ? DateTime.now() : null;
           _position = position;
           _positionController.add(position);
           changed = true;
+        } else if (diffMs < -1500 && position.inMilliseconds <= 1500 && currentExtrapolated.inMilliseconds > 3000) {
+          // Remote is reporting near-zero while we extrapolated past 3s: device is loading.
+          // Do NOT reset — let dead-reckoning continue.
+          // (no-op: skip the anchor update)
         } else if (diffMs > 150) {
           // Remote report is ahead; catch up immediately so playback & lyrics stay tightly 'en vivo'
           _remoteAnchorPosition = position;
@@ -541,7 +574,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _positionController.add(position);
           changed = true;
         }
-        // Small lag (diffMs between -4000 and 0) is ignored so dead reckoning extrapolation continues smoothly without jumping backward
+        // Small lag (diffMs between -8000 and 0) is ignored so dead reckoning extrapolation continues smoothly without jumping backward
       }
     }
 
@@ -662,6 +695,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _windowsService.onSkipNext = skipNext;
     _windowsService.onSkipPrevious = skipPrevious;
     _windowsService.onSeekTo = seek;
+    _windowsService.onTogglePlayPause = togglePlayPause;
   }
 
   void _initializeAndroidAuto() {
@@ -1512,32 +1546,36 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _configureAudioSession();
 
     _storageService.getVolume().then((savedVolume) {
+      if (_isDisposed) return;
       _volume = savedVolume;
       _audioPlayer.setVolume(_volume);
       notifyListeners();
     });
 
     _storageService.getShuffleMode().then((saved) {
+      if (_isDisposed) return;
       _shuffleEnabled = saved;
       notifyListeners();
     });
 
     // Resume any playlists that were queued for download but interrupted
     _offlineService.initialize().then((_) {
+      if (_isDisposed) return;
       _offlineService.resumeIncompleteDownloads(_youtubeService);
     });
 
     _cleanOldStreamCache().catchError((_) {});
     _startTelemetryHeartbeat();
 
-
     _storageService.getRepeatMode().then((saved) {
+      if (_isDisposed) return;
       _repeatMode =
           RepeatMode.values[saved.clamp(0, RepeatMode.values.length - 1)];
       notifyListeners();
     });
 
     _storageService.getGaplessPlayback().then((saved) {
+      if (_isDisposed) return;
       _gaplessEnabled = saved;
       notifyListeners();
     });
@@ -1940,7 +1978,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _remoteAnchorPosition = _position;
       _remoteAnchorTime = null;
       _optimisticRemoteSongId = song.id;
-      _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+      _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
       _isRenderingRemotely = true;
       _isPlaying = true;
       _isLoading = true;
@@ -1964,31 +2002,52 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     debugPrint(
         '[Player] ▶ playSong: "${song.title}" by ${song.artist ?? 'unknown'} (id=${song.id} local=${song.isLocal})');
-    
+
+    // Instantly update queue, currentIndex, currentSong and UI synchronously before any async operations
+    if (playlist != null) {
+      _queue = List.from(playlist);
+      _currentIndex =
+          startIndex ?? playlist.indexWhere((s) => s.id == song.id);
+      if (_currentIndex == -1) _currentIndex = 0;
+      _shuffleHistory.clear();
+    } else if (_queue.isEmpty || !_queue.any((s) => s.id == song.id)) {
+      _queue = [song];
+      _currentIndex = 0;
+      _shuffleHistory.clear();
+    } else {
+      _currentIndex = startIndex ?? _queue.indexWhere((s) => s.id == song.id);
+    }
+
+    _currentSong = song;
+    _lastPreloadedSongId = null;
+    _resolvedArtworkUrl = null;
+    _position = initialPosition ?? Duration.zero;
+    if (song.duration != null && song.duration! > 0) {
+      _duration = Duration(seconds: song.duration!);
+    } else {
+      _duration = Duration.zero;
+    }
+    _isPlaying = true;
+    _isLoading = true;
+    _lastPlaybackError = null; // clear previous error on new play attempt
+    notifyListeners();
+    _saveQueueState();
+
+    // Immediately report live playback presence to backend
+    _startTelemetryHeartbeat();
+    _sendTelemetryHeartbeat(overridePlaying: true);
+
+    // Immediately publish song info to lockscreen / notification widget
+    _updateAndroidAuto();
+    _refreshArtworkUrl().catchError((_) {});
+
     // Ensure any previously active audio or faulted stream is completely stopped and detached
     try {
       await _audioPlayer.stop();
     } catch (_) {}
-
-    _isLoading = true;
-    _lastPlaybackError = null; // clear previous error on new play attempt
-    notifyListeners();
+    if (currentGen != _playGeneration) return;
 
     try {
-      if (playlist != null) {
-        _queue = List.from(playlist);
-        _currentIndex =
-            startIndex ?? playlist.indexWhere((s) => s.id == song.id);
-        if (_currentIndex == -1) _currentIndex = 0;
-        _shuffleHistory.clear();
-      } else if (_queue.isEmpty || !_queue.any((s) => s.id == song.id)) {
-        _queue = [song];
-        _currentIndex = 0;
-        _shuffleHistory.clear();
-      } else {
-        _currentIndex = startIndex ?? _queue.indexWhere((s) => s.id == song.id);
-      }
-
       // If song has a non-YouTube ID (e.g. from Deezer dz_...), resolve real YouTube ID early
       if (song.isLocal != true && (song.id.startsWith('dz_') || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '')))) {
         try {
@@ -2003,32 +2062,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               _queue[qIdx] = updatedSong;
             }
             song = updatedSong;
+            if (_currentSong?.id == song.id) {
+              _currentSong = updatedSong;
+            }
           }
         } catch (_) {}
       }
-
-      _currentSong = song;
-      _lastPreloadedSongId = null;
-      _resolvedArtworkUrl = null;
-      _position = initialPosition ?? Duration.zero;
-      if (song.duration != null && song.duration! > 0) {
-        _duration = Duration(seconds: song.duration!);
-      } else {
-        _duration = Duration.zero;
-      }
-      _isPlaying = true;
-      _isLoading = true;
-      notifyListeners();
-      _saveQueueState();
-
-      // Immediately report live playback presence to backend
-      _startTelemetryHeartbeat();
-      _sendTelemetryHeartbeat(overridePlaying: true);
-
-      // Immediately publish song info to lockscreen / notification widget
-      _updateAndroidAuto();
-
-      _refreshArtworkUrl().catchError((_) {});
+      if (currentGen != _playGeneration) return;
 
       if (_castService.isConnected) {
         if (_audioPlayer.playing) await _audioPlayer.stop();
@@ -2229,12 +2269,31 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _hasRetriedCurrentPlay = false;
       _updateAndroidAuto();
     } catch (e) {
+      // If this playSong call has been superseded by a newer play request (e.g. user passed/returned tracks),
+      // do NOT report error, do NOT retry, and do NOT stop the audio player.
+      if (currentGen != _playGeneration) {
+        debugPrint('[Player] Ignoring error for superseded play request "${song.title}": $e');
+        return;
+      }
+
+      // Ignore normal audio cancellation/abort exceptions caused by user skipping tracks or stopping
+      final errorStr = e.toString().toLowerCase();
+      if (errorStr.contains('abort') ||
+          errorStr.contains('interrupted') ||
+          errorStr.contains('cancelled') ||
+          errorStr.contains('canceled') ||
+          errorStr.contains('superseded')) {
+        debugPrint('[Player] Ignoring audio abort/cancellation error for "${song.title}": $e');
+        return;
+      }
+
       debugPrint('[Player] ✗ Error playing song "${song.title}": $e');
       if (song.isLocal != true && !_hasRetriedCurrentPlay) {
         _hasRetriedCurrentPlay = true;
         YtDlpService().invalidateCache(song.id);
         debugPrint('[Player] Retrying playSong for "${song.title}" once with fresh cache...');
         await Future.delayed(const Duration(milliseconds: 500));
+        if (currentGen != _playGeneration) return;
         await playSong(song, playlist: playlist, startIndex: startIndex);
         return;
       }
@@ -2248,9 +2307,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _audioPlayer.stop();
       } catch (_) {}
       _updateAndroidAuto();
+
+      // Graceful queue auto-recovery: if there are subsequent tracks in the queue,
+      // advance automatically instead of getting stuck on an unplayable track.
+      if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
+        debugPrint('[Player] Song "${song.title}" unplayable. Auto-skipping to next track...');
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (currentGen == _playGeneration && !_isPlaying) {
+            skipNext();
+          }
+        });
+      }
     } finally {
-      _isLoading = false;
-      notifyListeners();
+      if (currentGen == _playGeneration) {
+        _isLoading = false;
+        notifyListeners();
+      }
     }
   }
 
@@ -2482,6 +2554,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipNext() async {
     _hasRetriedCurrentPlay = false;
+    _isTransitioningSong = false; // Bug 5 fix: manual skip wins over concurrent auto-transition
+    final skipGen = ++_skipGeneration; // capture before any await
+
     if (_currentSong != null && _recommendationService != null) {
       final played = _position.inSeconds;
       final total = _duration.inSeconds;
@@ -2509,7 +2584,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentSong = _queue[_currentIndex];
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
         _optimisticRemoteSongId = _currentSong?.id;
-        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
         _refreshArtworkUrl().catchError((_) {});
         _manageRemotePositionTicker();
         notifyListeners();
@@ -2518,6 +2593,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else if (_currentSong != null) {
         try {
           final moreSimilar = await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
+          if (skipGen != _skipGeneration) return; // another skip came in
           final existingIds = _queue.map((s) => s.id).toSet();
           final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
           if (toAdd.isNotEmpty) {
@@ -2526,7 +2602,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _currentSong = _queue[_currentIndex];
             _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
             _optimisticRemoteSongId = _currentSong?.id;
-            _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+            _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
             _refreshArtworkUrl().catchError((_) {});
             _manageRemotePositionTicker();
             notifyListeners();
@@ -2541,7 +2617,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentSong = _queue[0];
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
         _optimisticRemoteSongId = _currentSong?.id;
-        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
         _refreshArtworkUrl().catchError((_) {});
         _manageRemotePositionTicker();
         notifyListeners();
@@ -2556,6 +2632,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_autoDjService.shouldAddSongs(_currentIndex, _queue.length)) {
       await _addAutoDjSongs();
+      if (skipGen != _skipGeneration) return; // another skip came in while fetching
     }
 
     if (_shuffleEnabled && _queue.length > 1) {
@@ -2565,28 +2642,86 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       do {
         next = Random().nextInt(_queue.length);
       } while (next == _currentIndex);
-      await skipToIndex(next);
+      _currentIndex = next;
+      _currentSong = _queue[next];
+      _position = Duration.zero;
+      _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+      _isLoading = true;
+      _lastPlaybackError = null;
+      notifyListeners();
+      _refreshArtworkUrl().catchError((_) {});
+      _updateAndroidAuto();
+
+      _skipDebounceTimer?.cancel();
+      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        if (skipGen != _skipGeneration) return;
+        skipToIndex(next, skipGen: skipGen);
+      });
     } else if (_currentIndex < _queue.length - 1) {
-      if (_youtubeService.isYoutube && _currentIndex >= _queue.length - 2 && _currentSong != null) {
+      final nextIndex = _currentIndex + 1;
+      _currentIndex = nextIndex;
+      _currentSong = _queue[nextIndex];
+      _position = Duration.zero;
+      _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+      _isLoading = true;
+      _lastPlaybackError = null;
+      notifyListeners();
+      _refreshArtworkUrl().catchError((_) {});
+      _updateAndroidAuto();
+
+      if (_youtubeService.isYoutube && nextIndex >= _queue.length - 2 && _currentSong != null) {
         _fetchAndQueueRadioTracks(_currentSong!).catchError((_) {});
       }
-      await skipToIndex(_currentIndex + 1);
+      _skipDebounceTimer?.cancel();
+      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        if (skipGen != _skipGeneration) return;
+        skipToIndex(nextIndex, skipGen: skipGen);
+      });
     } else if (_youtubeService.isYoutube && _currentSong != null) {
       final moreSimilar = await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
+      if (skipGen != _skipGeneration) return;
       final existingIds = _queue.map((s) => s.id).toSet();
       final toAdd = moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
       if (toAdd.isNotEmpty) {
         _queue.addAll(toAdd);
+        final nextIndex = _currentIndex + 1;
+        _currentIndex = nextIndex;
+        _currentSong = _queue[nextIndex];
+        _position = Duration.zero;
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _isLoading = true;
+        _lastPlaybackError = null;
         notifyListeners();
         _saveQueueState();
-        await skipToIndex(_currentIndex + 1);
+        _refreshArtworkUrl().catchError((_) {});
+        _updateAndroidAuto();
+
+        _skipDebounceTimer?.cancel();
+        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+          if (skipGen != _skipGeneration) return;
+          skipToIndex(nextIndex, skipGen: skipGen);
+        });
       }
-    } else if (_repeatMode == RepeatMode.all) {
+    } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
       if (_queue.length == 1) {
         await seek(Duration.zero);
         await play();
       } else {
-        await skipToIndex(0);
+        _currentIndex = 0;
+        _currentSong = _queue[0];
+        _position = Duration.zero;
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _isLoading = true;
+        _lastPlaybackError = null;
+        notifyListeners();
+        _refreshArtworkUrl().catchError((_) {});
+        _updateAndroidAuto();
+
+        _skipDebounceTimer?.cancel();
+        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+          if (skipGen != _skipGeneration) return;
+          skipToIndex(0, skipGen: skipGen);
+        });
       }
     }
   }
@@ -2614,6 +2749,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipPrevious() async {
     _hasRetriedCurrentPlay = false;
+    _isTransitioningSong = false; // Bug 5 fix: manual skip wins over concurrent auto-transition
+    final skipGen = ++_skipGeneration; // capture before any await
+
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
       if (_position.inSeconds > 3) {
@@ -2631,11 +2769,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentSong = _queue[_currentIndex];
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
         _optimisticRemoteSongId = _currentSong?.id;
-        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 6000));
+        _optimisticRemoteSongUntil = DateTime.now().add(const Duration(milliseconds: 12000));
         _refreshArtworkUrl().catchError((_) {});
         _manageRemotePositionTicker();
         notifyListeners();
-        unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
+        _skipDebounceTimer?.cancel();
+        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+          unawaited(_groovyConnectService!.sendPlaySong(_currentSong!, queue: _queue, queueIndex: _currentIndex));
+        });
         return;
       }
       _manageRemotePositionTicker();
@@ -2654,27 +2795,73 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final prevId = _shuffleHistory.removeLast();
       final prev = _queue.indexWhere((s) => s.id == prevId);
       if (prev != -1) {
-        await skipToIndex(prev);
+        _currentIndex = prev;
+        _currentSong = _queue[prev];
+        _position = Duration.zero;
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _isLoading = true;
+        _lastPlaybackError = null;
+        notifyListeners();
+        _refreshArtworkUrl().catchError((_) {});
+        _updateAndroidAuto();
+
+        _skipDebounceTimer?.cancel();
+        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+          if (skipGen != _skipGeneration) return;
+          skipToIndex(prev, skipGen: skipGen);
+        });
         return;
       }
     }
     if (_currentIndex > 0) {
-      await skipToIndex(_currentIndex - 1);
+      final prevIndex = _currentIndex - 1;
+      _currentIndex = prevIndex;
+      _currentSong = _queue[prevIndex];
+      _position = Duration.zero;
+      _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+      _isLoading = true;
+      _lastPlaybackError = null;
+      notifyListeners();
+      _refreshArtworkUrl().catchError((_) {});
+      _updateAndroidAuto();
+
+      _skipDebounceTimer?.cancel();
+      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        if (skipGen != _skipGeneration) return;
+        skipToIndex(prevIndex, skipGen: skipGen);
+      });
     } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
       if (_queue.length == 1) {
         await seek(Duration.zero);
         await play();
       } else {
-        await skipToIndex(_queue.length - 1);
+        final lastIndex = _queue.length - 1;
+        _currentIndex = lastIndex;
+        _currentSong = _queue[lastIndex];
+        _position = Duration.zero;
+        _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
+        _isLoading = true;
+        _lastPlaybackError = null;
+        notifyListeners();
+        _refreshArtworkUrl().catchError((_) {});
+        _updateAndroidAuto();
+
+        _skipDebounceTimer?.cancel();
+        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+          if (skipGen != _skipGeneration) return;
+          skipToIndex(lastIndex, skipGen: skipGen);
+        });
       }
     } else {
       await seek(Duration.zero);
     }
   }
 
-  Future<void> skipToIndex(int index) async {
+  Future<void> skipToIndex(int index, {int? skipGen}) async {
+    // If a skipGen was passed, abort if another skip superseded this one
+    if (skipGen != null && skipGen != _skipGeneration) return;
     if (index >= 0 && index < _queue.length) {
-      await playSong(_queue[index], playlist: _queue, startIndex: index);
+      await playSong(_queue[index], startIndex: index);
     }
   }
 
@@ -3202,7 +3389,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
+    _isDisposed = true;
+    WidgetsBinding.instance.removeObserver(this); // single removal — was duplicated before
     _telemetryTimer?.cancel();
     _remoteVolumeDebounceTimer?.cancel();
     _sleepTimer?.cancel();
@@ -3211,11 +3399,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Save queue state immediately before cancelling the debounce timer
     _saveQueueStateImmediate();
     _persistDebounceTimer?.cancel();
+    _skipDebounceTimer?.cancel();
     _windowsPositionTimer?.cancel();
     _remotePositionTickerTimer?.cancel();
     _castService.removeListener(_onCastStateChanged);
     _upnpService.removeListener(_onUpnpStateChanged);
     _groovyConnectService?.removeListener(_onGroovyConnectChanged);
+    _libraryProvider?.removeListener(_onLibraryChanged); // Bug 4 fix: was missing, caused listener leak
     if (_upnpService.onRendererLost == _onUpnpRendererLost) {
       _upnpService.onRendererLost = null;
     }
@@ -3235,14 +3425,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _windowsService.dispose();
     } catch (_) {}
 
-
     _playerStateSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
     _currentIndexSub?.cancel();
     _positionController.close();
-    // Remove app lifecycle observer
-    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -3257,9 +3444,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         volume: (_castService.mediaState.volume * 100).round().clamp(0, 100),
       );
       if (_currentSong != null) {
+        // Bug 7 fix: do NOT null _currentSong before calling playSong — it caused playSong
+        // to always think it's a new song and restart from 0. Use forcePlay:true instead.
         final song = _currentSong!;
-        _currentSong = null;
-        playSong(song);
+        playSong(song, forcePlay: true);
       }
     } else {
       if (!_upnpService.isConnected && _groovyConnectService?.isConnected != true) {

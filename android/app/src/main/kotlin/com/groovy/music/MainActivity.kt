@@ -1,7 +1,10 @@
 package com.groovy.music
 
+import android.content.ComponentName
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
@@ -30,6 +33,51 @@ class MainActivity : AudioServiceFragmentActivity() {
         if (hasFocus) {
             setHighRefreshRate()
         }
+    }
+
+    /**
+     * Intercepts KEYCODE_HEADSETHOOK sent by single-button wired headsets (cable inline button).
+     * Android delivers headset button presses as HEADSETHOOK (keyCode 79), NOT as
+     * KEYCODE_MEDIA_PLAY_PAUSE (85). audio_service's MediaSession only registers
+     * MEDIA_PLAY_PAUSE, so HEADSETHOOK events are silently dropped and the button
+     * appears to do nothing.
+     *
+     * Fix: Translate HEADSETHOOK → broadcast ACTION_MEDIA_BUTTON with
+     * KEYCODE_MEDIA_PLAY_PAUSE so audio_service's MediaButtonReceiver processes it
+     * through the same click() path (1 tap=play/pause, 2=skip, 3=previous).
+     */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_HEADSETHOOK) {
+            try {
+                val mediaEvent = KeyEvent(
+                    event?.downTime ?: System.currentTimeMillis(),
+                    event?.eventTime ?: System.currentTimeMillis(),
+                    KeyEvent.ACTION_DOWN,
+                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                    0
+                )
+                val intent = Intent(Intent.ACTION_MEDIA_BUTTON).apply {
+                    putExtra(Intent.EXTRA_KEY_EVENT, mediaEvent)
+                    component = ComponentName(
+                        packageName,
+                        "com.ryanheise.audioservice.MediaButtonReceiver"
+                    )
+                }
+                sendBroadcast(intent)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
+    override fun onKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_HEADSETHOOK) {
+            // Consumed — we forwarded ACTION_DOWN above; nothing to do on up
+            return true
+        }
+        return super.onKeyUp(keyCode, event)
     }
 
     private fun setHighRefreshRate() {

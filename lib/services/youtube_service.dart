@@ -385,6 +385,18 @@ class YoutubeService {
           }
         }
       }
+
+      // If dual search did not match, try standard search fallback
+      try {
+        final directList = await _ytdlp.search(q, limit: 5);
+        for (final item in directList) {
+          final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+            _resolvedVideoIdCache[song.id] = id;
+            return id;
+          }
+        }
+      } catch (_) {}
     } catch (e) {
       debugPrint('[YouTube] _resolvePlayableVideoId error for "${song.title}": $e');
     }

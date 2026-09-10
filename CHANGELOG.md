@@ -5,6 +5,24 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.94] - 2026-09-10
+
+### Fixed & Enhanced
+- **Pase Rápido de Canciones sin Congelamiento ni Errores**:
+  - Actualización optimista inmediata (0ms) de carátula, título, artista e índice al pulsar "Siguiente" o "Anterior".
+  - Corregido el bug donde pasar canciones rápidamente devolvía el reproductor a la carátula o canción inicial.
+  - Implementado debounce inteligente de 220ms para la carga del stream de audio, evitando saturación del motor de audio y colisiones.
+  - Recuperación automática elegante en la cola: si una pista está caída, el reproductor avanza automáticamente a la siguiente sin congelarse.
+- **Soporte Total para Auriculares de Cable con Botón Único**:
+  - En Windows y Linux, implementado un contador de generación atómico para detectar de forma 100% confiable: 1 toque = Play/Pausa, 2 toques = Siguiente, 3 toques = Anterior.
+  - En Android, interceptado `KEYCODE_HEADSETHOOK` y enrutado al receptor de eventos multimedia.
+- **Estabilidad del Ciclo de Vida y Corrección de Fugas de Memoria**:
+  - Corregido crash por `setState()` en la vista de letras cuando se cerraba la pantalla durante la reproducción.
+  - Añadida protección `_isDisposed` en el reproductor para evitar excepciones por llamadas asíncronas tardías a `notifyListeners()`.
+  - Eliminado observador de ciclo de vida duplicado y añadida desuscripción limpia de listeners en `dispose()`.
+- **Búsqueda de Letras Sincronizadas Mejorada**:
+  - Corregida la coincidencia exacta de letras en LRCLIB para canciones subidas a YouTube por canales y agregadores (e.g. Topic, Music Zone).
+
 ## [1.0.93] - 2026-09-09
 
 ### Fixed

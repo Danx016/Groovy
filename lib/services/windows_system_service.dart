@@ -23,17 +23,57 @@ class WindowsSystemService {
   VoidCallback? onStop;
   VoidCallback? onSkipNext;
   VoidCallback? onSkipPrevious;
+  VoidCallback? onTogglePlayPause;
   Function(Duration position)? onSeekTo;
+
+  // Multi-click state for single-button headset (same semantics as audio_handler.dart click())
+  // 1 tap = play/pause, 2 taps = skip next, 3 taps = skip previous
+  int _mediaClickCount = 0;
+  int _clickGeneration = 0; // incremented on each click; used by the delayed closure to detect if a new click superseded it
+  static const _multiClickWindow = Duration(milliseconds: 320);
+
+  void _handleMediaClick() {
+    _mediaClickCount++;
+    final gen = ++_clickGeneration; // capture generation before the delay
+
+    // Schedule the action after the multi-click window expires.
+    // The closure checks if the generation is still current to detect whether
+    // another click arrived during the wait and should supersede this one.
+    Future.delayed(_multiClickWindow, () {
+      if (gen != _clickGeneration) return; // another click arrived — let it fire instead
+      final count = _mediaClickCount;
+      _mediaClickCount = 0;
+      if (count == 1) {
+        if (onTogglePlayPause != null) {
+          onTogglePlayPause!.call();
+        } else if (_isPlaying) {
+          onPause?.call();
+        } else {
+          onPlay?.call();
+        }
+      } else if (count == 2) {
+        onSkipNext?.call();
+      } else if (count >= 3) {
+        onSkipPrevious?.call();
+      }
+    });
+  }
+
+  @visibleForTesting
+  void handleMediaClickForTesting() => _handleMediaClick();
+
+  @visibleForTesting
+  bool handleKeyEventForTesting(KeyEvent event) => _handleKeyEvent(event);
 
   bool _handleKeyEvent(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
 
-    if (event.logicalKey == LogicalKeyboardKey.mediaPlayPause) {
-      if (_isPlaying) {
-        onPause?.call();
-      } else {
-        onPlay?.call();
-      }
+    if (event.logicalKey == LogicalKeyboardKey.mediaPlayPause ||
+        event.logicalKey == LogicalKeyboardKey.mediaPlay && !_isPlaying ||
+        event.logicalKey == LogicalKeyboardKey.mediaPause && _isPlaying) {
+      // Single-button headset and keyboard media keys: use the multi-click handler
+      // so 1 tap=play/pause, 2 taps=skip next, 3 taps=skip previous
+      _handleMediaClick();
       return true;
     } else if (event.logicalKey == LogicalKeyboardKey.mediaPlay) {
       onPlay?.call();

@@ -230,7 +230,12 @@ class LrcLibService {
                 final rArtist = item['artistName'] as String? ?? '';
                 final rDur = (item['duration'] as num?)?.toInt();
 
-                if (!_isCandidateValid(rTrack, rArtist, cleanedTitle, cleanedArtist, rDur, durationSeconds)) {
+                final isValidCleaned = _isCandidateValid(rTrack, rArtist, cleanedTitle, cleanedArtist, rDur, durationSeconds);
+                final isValidExtracted = (extractedTrack != null && extractedTrack.isNotEmpty)
+                    ? _isCandidateValid(rTrack, rArtist, extractedTrack, extractedArtist, rDur, durationSeconds)
+                    : false;
+
+                if (!isValidCleaned && !isValidExtracted) {
                   continue;
                 }
 
@@ -293,7 +298,12 @@ class LrcLibService {
               final rArtists = (song['artists'] as List?)?.map((art) => art['name'] as String? ?? '').join(', ') ?? '';
               final rDur = ((song['duration'] as num?)?.toInt() ?? 0) ~/ 1000;
 
-              if (!_isCandidateValid(rTrack, rArtists, cleanedTitle, cleanedArtist, rDur > 0 ? rDur : null, durationSeconds)) {
+              final isValidCleaned = _isCandidateValid(rTrack, rArtists, cleanedTitle, cleanedArtist, rDur > 0 ? rDur : null, durationSeconds);
+              final isValidExtracted = (extractedTrack != null && extractedTrack.isNotEmpty)
+                  ? _isCandidateValid(rTrack, rArtists, extractedTrack, extractedArtist, rDur > 0 ? rDur : null, durationSeconds)
+                  : false;
+
+              if (!isValidCleaned && !isValidExtracted) {
                 continue;
               }
 

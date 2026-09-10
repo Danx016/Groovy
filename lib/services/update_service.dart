@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.0.91';
+  static String currentVersion = '1.0.94';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
