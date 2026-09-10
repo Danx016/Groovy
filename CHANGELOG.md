@@ -5,6 +5,22 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-09-10
+
+### Fixed — Corrección de User-Agent para Reproducción en Windows, Linux y Android
+- **Causa raíz del HTTP 403 en streaming encontrada y corregida**:
+  - YouTube CDN valida que el `User-Agent` de la petición coincida con el cliente que firmó la URL del stream (parámetro `&c=` en la URL).
+  - Al usar el cliente Android (`&c=ANDROID`) de `youtube_explode_dart`, se estaba enviando un UA de Chrome Desktop al proxy → 403 inmediato.
+  - Ahora el proxy detecta el tipo de cliente de la URL y usa el UA correcto:
+    - `&c=ANDROID` → `com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip`
+    - `&c=TVHTML5` → UA de Smart TV Tizen
+    - `&c=IOS` → UA de app YouTube iOS
+    - Web/otro → Chrome Desktop
+- **Manejo de 403 mejorado en `_DesktopAudioProxyServer`**:
+  - Se añadieron logs detallados del código de respuesta upstream en cada intento.
+  - Si el refresh también falla con 403, se responde 503 + `Retry-After: 1` para que MPV reintente automáticamente con la URL ya refrescada en caché.
+- **Headers adicionales añadidos**: `Origin` y `Referer` de `youtube.com` en todas las resoluciones Dart para mayor compatibilidad con el CDN.
+
 ## [1.1.0] - 2026-09-10
 
 ### Fixed — Reproducción Definitiva en Windows, Linux y Android

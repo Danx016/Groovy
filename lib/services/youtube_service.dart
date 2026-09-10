@@ -245,16 +245,36 @@ class _DesktopAudioProxyServer {
       }
 
       var upstreamResp = await fetchUpstream(streamInfo.url, streamInfo.headers);
+      debugPrint('[AudioProxy] Upstream status for $cleanId: ${upstreamResp.statusCode}');
 
       if (upstreamResp.statusCode == 403 ||
           upstreamResp.statusCode == 410 ||
           upstreamResp.statusCode == 429) {
-        debugPrint(
-            '[AudioProxy] Stream rejected (${upstreamResp.statusCode}) for $cleanId, refreshing stream URL...');
+        debugPrint('[AudioProxy] Stream rejected (${upstreamResp.statusCode}) for $cleanId, refreshing...');
         await upstreamResp.drain().catchError((_) {});
+
+        // Refresh cache in background immediately so next request is instant
         _ytdlp.invalidateCache(cleanId);
-        streamInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
-        upstreamResp = await fetchUpstream(streamInfo.url, streamInfo.headers);
+        final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
+        debugPrint('[AudioProxy] Refreshed URL for $cleanId, retrying upstream...');
+        final retryResp = await fetchUpstream(freshInfo.url, freshInfo.headers);
+        debugPrint('[AudioProxy] Retry upstream status for $cleanId: ${retryResp.statusCode}');
+
+        if (retryResp.statusCode == 403 ||
+            retryResp.statusCode == 410 ||
+            retryResp.statusCode == 429) {
+          // Still failing — tell MPV to retry in 1s while we already have the new URL cached
+          await retryResp.drain().catchError((_) {});
+          debugPrint('[AudioProxy] Still ${ retryResp.statusCode} after refresh for $cleanId — returning 503 Retry-After');
+          request.response.statusCode = 503;
+          request.response.headers.set('Retry-After', '1');
+          request.response.headers.set(HttpHeaders.contentTypeHeader, 'text/plain');
+          await request.response.close();
+          return;
+        }
+
+        streamInfo = freshInfo;
+        upstreamResp = retryResp;
       }
 
       request.response.statusCode = (rangeHeader != null)

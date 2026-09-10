@@ -665,17 +665,27 @@ class YtDlpService {
         final best = _selectBestAudioStream(audioOnly);
         final url = best.url.toString();
         if (url.isNotEmpty) {
+          // Match User-Agent to the client that signed the URL.
+          // YouTube CDN validates UA against the &c= param in the signed URL.
+          final isAndroid = url.contains('&c=ANDROID') || url.contains('c=ANDROID');
+          final isTv = url.contains('&c=TVHTML5') || url.contains('c=TVHTML5');
+          final userAgent = isAndroid
+              ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+              : isTv
+                  ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
+                  : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
           final info = YtStreamInfo(
             url: url,
             headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'User-Agent': userAgent,
+              'Origin': 'https://www.youtube.com',
+              'Referer': 'https://www.youtube.com/',
             },
             ext: best.container.name,
           );
           _streamInfoCache[cleanId] = info;
           _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/FastDart] Resolved $cleanId via TV/Android client');
+          debugPrint('[yt-dlp/FastDart] Resolved $cleanId (${isAndroid ? "Android" : isTv ? "TV" : "Web"} client UA)');
           return info;
         }
       }
@@ -760,17 +770,28 @@ class YtDlpService {
         if (audioOnly.isNotEmpty) {
           final best = _selectBestAudioStream(audioOnly);
           final url = best.url.toString();
+          final isAndroid = url.contains('&c=ANDROID') || url.contains('c=ANDROID');
+          final isTv = url.contains('&c=TVHTML5') || url.contains('c=TVHTML5');
+          final isIos = url.contains('&c=IOS') || url.contains('c=IOS');
+          final userAgent = isAndroid
+              ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+              : isIos
+                  ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                  : isTv
+                      ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
+                      : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
           final info = YtStreamInfo(
             url: url,
             headers: {
-              'User-Agent':
-                  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'User-Agent': userAgent,
+              'Origin': 'https://www.youtube.com',
+              'Referer': 'https://www.youtube.com/',
             },
             ext: best.container.name,
           );
           _streamInfoCache[cleanId] = info;
           _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/Innertube] Fallback resolved stream info for $cleanId in pure Dart');
+          debugPrint('[yt-dlp/Innertube] Fallback resolved $cleanId (${isAndroid ? "Android" : isIos ? "iOS" : isTv ? "TV" : "Web"} UA)');
           return info;
         }
       } catch (e) {
