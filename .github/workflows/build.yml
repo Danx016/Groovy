@@ -221,6 +221,7 @@ jobs:
 
   # Linux Build
   build-linux:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: check-secrets
@@ -428,10 +429,10 @@ jobs:
             *.deb
 
 
-  # Create Release with Android, Windows, and Linux artifacts
+  # Create Release with Android and Windows artifacts
   release:
     runs-on: ubuntu-latest
-    needs: [build-android, build-windows, build-linux]
+    needs: [build-android, build-windows]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -469,12 +470,6 @@ jobs:
           name: windows-build
           path: artifacts/windows/
 
-      - name: Download Linux Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-build
-          path: artifacts/linux/
-
       - name: Package Windows
         run: |
           if [ ! -f artifacts/windows/Groovy-Windows-Portable.zip ]; then
@@ -482,26 +477,6 @@ jobs:
           else
             cp artifacts/windows/Groovy-Windows-Portable.zip ./Groovy-Windows-Portable.zip
           fi
-
-      - name: Package Linux
-        run: |
-          # Copy DEB packages
-          find artifacts/linux -name '*.deb' -exec cp {} ./ \;
-          # Find the AppImage
-          APPIMAGE=$(find artifacts/linux -name '*.AppImage' 2>/dev/null | head -1)
-          if [ -n "$APPIMAGE" ]; then
-            cp "$APPIMAGE" ./Groovy-linux-x86_64.AppImage
-            echo "✅ AppImage packaged: Groovy-linux-x86_64.AppImage"
-          fi
-          # Bundle easy-install script
-          if [ -f artifacts/linux/Groovy-linux-install.sh ]; then
-            cp artifacts/linux/Groovy-linux-install.sh ./Groovy-linux-install.sh
-            chmod +x ./Groovy-linux-install.sh
-          fi
-          # Also create tar.gz from bundle
-          mkdir -p linux_bundle
-          find artifacts/linux -not -name '*.AppImage' -not -name '*.deb' -exec cp -r {} linux_bundle/ \; 2>/dev/null || true
-          cd artifacts/linux && tar -czf ../../groovy-linux-x64.tar.gz . && cd ../..  
 
       - name: Generate Dynamic Release Notes from CHANGELOG
         run: |
@@ -546,12 +521,6 @@ jobs:
           - \`Groovy-Setup.exe\` — Instalador con asistente para Windows
           - \`Groovy-Windows-Portable.zip\` — Versión portable, descomprimir y usar
 
-          **🐧 Linux:**
-          - \`Groovy-Linux.deb\` — ⭐ **Instalador Recomendado (Ubuntu, Debian, Linux Mint, Pop!_OS, Zorin).** Doble clic y presiona \"Instalar\" (2 toques).
-          - \`Groovy-linux-x86_64.AppImage\` — Binario portable ejecutable sin instalar (para Fedora, Arch, etc.).
-          - \`Groovy-linux-install.sh\` — Asistente de instalación automática para AppImage.
-          - \`groovy-linux-x64.tar.gz\` — Paquete comprimido para instalación manual
-
           ### 📝 Registro Completo de Cambios
           Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para el historial completo.
           '''
@@ -573,10 +542,5 @@ jobs:
             artifacts/windows/Groovy-Setup.exe
             artifacts/windows/Groovy-Windows-Portable.zip
             Groovy-Windows-Portable.zip
-            Groovy-Linux.deb
-            Groovy-*-linux-amd64.deb
-            Groovy-linux-x86_64.AppImage
-            Groovy-linux-install.sh
-            groovy-linux-x64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
