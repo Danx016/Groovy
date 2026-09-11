@@ -145,24 +145,31 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     final isWebm = (ext == 'webm' || ext == 'opus');
     final type = isWebm ? 'audio/webm' : 'audio/mp4';
 
-    final stream = resp.transform(
-      StreamTransformer<List<int>, List<int>>.fromHandlers(
-        handleError: (Object error, StackTrace stackTrace, EventSink<List<int>> sink) {
-          client.close(force: true);
-          sink.addError(error, stackTrace);
-        },
-        handleDone: (EventSink<List<int>> sink) {
-          client.close(force: false);
-          sink.close();
-        },
-      ),
+    late StreamSubscription<List<int>> responseSubscription;
+    late StreamController<List<int>> responseController;
+    responseController = StreamController<List<int>>(
+      sync: true,
+      onListen: () {
+        responseSubscription = resp.listen(
+          responseController.add,
+          onError: responseController.addError,
+          onDone: () {
+            client.close(force: false);
+            responseController.close();
+          },
+        );
+      },
+      onCancel: () async {
+        await responseSubscription.cancel();
+        client.close(force: true);
+      },
     );
 
     return StreamAudioResponse(
       sourceLength: sourceLength,
       contentLength: resp.contentLength >= 0 ? resp.contentLength : null,
       offset: start,
-      stream: stream,
+      stream: responseController.stream,
       contentType: type,
     );
   }
