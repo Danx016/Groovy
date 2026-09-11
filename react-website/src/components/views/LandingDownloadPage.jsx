@@ -73,8 +73,8 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
       } catch {
         if (isMounted) {
           setReleaseInfo({
-            tag_name: 'v1.0.83',
-            name: 'Groovy v1.0.83',
+            tag_name: 'v1.1.4',
+            name: 'Groovy v1.1.4',
             published_at: new Date().toISOString(),
             html_url: GITHUB_RELEASES_PAGE,
             assets: [
@@ -160,7 +160,7 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
     }
   };
 
-  const versionTag = releaseInfo?.tag_name || 'v1.0.83';
+  const versionTag = releaseInfo?.tag_name || 'v1.1.4';
 
   const faqs = [
     {

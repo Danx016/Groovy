@@ -5,6 +5,13 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2026-09-11
+
+### Changed
+- Centralizada la versión de producción en `1.1.4`.
+- Actualizado el número de compilación Android a `95`.
+- Alineadas las versiones mostradas por Flutter, web, backend, instalador y cliente API.
+
 ## [1.1.3] - 2026-09-10
 
 ### Fixed — Android: Chaquopy (Python yt-dlp) ahora va primero
