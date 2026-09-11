@@ -222,13 +222,15 @@ jobs:
   # Linux Build
   build-linux:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: check-secrets
     steps:
       - uses: actions/checkout@v4
       
       - name: Install Linux dependencies
+        timeout-minutes: 15
         run: |
-          sudo apt-get update
+          sudo apt-get update -o Acquire::Retries=3
           sudo apt-get install -y clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev libasound2-dev libnotify-dev libsecret-1-dev libjsoncpp-dev libmpv-dev mpv
       
       - name: Setup Flutter
@@ -258,8 +260,9 @@ jobs:
           fi
       
       - name: Download bundled yt-dlp for Linux
+        timeout-minutes: 5
         run: |
-          curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+          curl --fail --retry 3 --connect-timeout 20 --max-time 180 -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
             -o build/linux/x64/release/bundle/yt-dlp
           chmod a+rx build/linux/x64/release/bundle/yt-dlp
 
@@ -318,7 +321,7 @@ jobs:
           chmod +x "${APPDIR}/AppRun"
 
           # Download appimagetool
-          curl -L \
+          curl --fail --retry 3 --connect-timeout 20 --max-time 180 -L \
             "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage" \
             -o appimagetool.AppImage
           chmod +x appimagetool.AppImage
