@@ -168,17 +168,12 @@ jobs:
         run: |
           $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
-          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
-            $certPath,
-            $env:WINDOWS_CERTIFICATE_PASSWORD,
-            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
-          )
-          $result = Set-AuthenticodeSignature `
-            -FilePath "build\windows\x64\runner\Release\groovy.exe" `
-            -Certificate $cert `
-            -TimestampServer "https://timestamp.digicert.com" `
-            -HashAlgorithm SHA256
-          if ($result.Status -ne "Valid") { throw "Windows executable signing failed: $($result.Status)" }
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "Windows SDK signtool.exe was not found" }
+          & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "https://timestamp.digicert.com" /td SHA256 "build\windows\x64\runner\Release\groovy.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Windows executable signing failed with exit code $LASTEXITCODE" }
 
       - name: Build Inno Setup Installer
         run: |
@@ -192,17 +187,12 @@ jobs:
         run: |
           $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
-          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
-            $certPath,
-            $env:WINDOWS_CERTIFICATE_PASSWORD,
-            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
-          )
-          $result = Set-AuthenticodeSignature `
-            -FilePath "Groovy-Setup.exe" `
-            -Certificate $cert `
-            -TimestampServer "https://timestamp.digicert.com" `
-            -HashAlgorithm SHA256
-          if ($result.Status -ne "Valid") { throw "Windows installer signing failed: $($result.Status)" }
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signtool) { throw "Windows SDK signtool.exe was not found" }
+          & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "https://timestamp.digicert.com" /td SHA256 "Groovy-Setup.exe"
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer signing failed with exit code $LASTEXITCODE" }
 
       - name: Create Portable Zip
         run: |
