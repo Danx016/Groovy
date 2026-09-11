@@ -16,7 +16,15 @@ if %ERRORLEVEL% NEQ 0 (
 
 :: 2. Firmar ejecutable principal con certificado Authenticode
 echo [2/4] Firmando groovy.exe con certificado digital Authenticode...
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2('windows\groovy_codesign.pfx', 'Groovy2026!'); Set-AuthenticodeSignature -FilePath 'build\windows\x64\runner\Release\groovy.exe' -Certificate $cert -TimestampServer 'http://timestamp.digicert.com' -HashAlgorithm SHA256"
+if "%WINDOWS_CERTIFICATE_PASSWORD%"=="" (
+    echo [ERROR] WINDOWS_CERTIFICATE_PASSWORD no esta configurado.
+    exit /b 1
+)
+if not exist "%WINDOWS_CERTIFICATE_PATH%" (
+    echo [ERROR] WINDOWS_CERTIFICATE_PATH no apunta a un certificado valido.
+    exit /b 1
+)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($env:WINDOWS_CERTIFICATE_PATH, $env:WINDOWS_CERTIFICATE_PASSWORD); if ($cert.HasPrivateKey -eq $false) { throw 'El certificado no contiene una clave privada' }; $result = Set-AuthenticodeSignature -FilePath 'build\windows\x64\runner\Release\groovy.exe' -Certificate $cert -TimestampServer 'https://timestamp.digicert.com' -HashAlgorithm SHA256; if ($result.Status -ne 'Valid') { throw ('Firma invalida: ' + $result.Status) }"
 
 :: 3. Compilar instalador con Inno Setup
 echo [3/4] Generando instalador Groovy-Setup.exe...
@@ -27,7 +35,7 @@ if not exist %ISCC% set ISCC="%LOCALAPPDATA%\Programs\Antigravity IDE\resources\
 if exist %ISCC% (
     %ISCC% installer.iss
     echo [4/4] Firmando instalador Groovy-Setup.exe...
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2('windows\groovy_codesign.pfx', 'Groovy2026!'); Set-AuthenticodeSignature -FilePath 'Groovy-Setup.exe' -Certificate $cert -TimestampServer 'http://timestamp.digicert.com' -HashAlgorithm SHA256"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2($env:WINDOWS_CERTIFICATE_PATH, $env:WINDOWS_CERTIFICATE_PASSWORD); $result = Set-AuthenticodeSignature -FilePath 'Groovy-Setup.exe' -Certificate $cert -TimestampServer 'https://timestamp.digicert.com' -HashAlgorithm SHA256; if ($result.Status -ne 'Valid') { throw ('Firma invalida: ' + $result.Status) }"
 ) else (
     echo [ADVERTENCIA] Inno Setup no encontrado en rutas por defecto. Solo se genero la version portable.
 )

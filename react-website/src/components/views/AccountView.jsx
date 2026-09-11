@@ -3,6 +3,23 @@ import { User, Database, Server, ShieldCheck, LogOut, Mail, Calendar, RefreshCw,
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 
+const StatCard = ({ label, value, icon }) => (
+  <div style={{ background: '#181818', borderRadius: '12px', padding: '16px', border: '0.5px solid #282828', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div>
+      <p style={{ fontSize: '13px', color: '#B3B3B3', marginBottom: '4px' }}>{label}</p>
+      <p style={{ fontSize: '26px', fontWeight: 700, color: '#fff' }}>{value}</p>
+    </div>
+    {icon}
+  </div>
+);
+
+const InfoRow = ({ label, value, accent }) => (
+  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#181818', borderRadius: '8px', border: '0.5px solid #282828' }}>
+    <span style={{ fontSize: '14px', color: '#B3B3B3' }}>{label}</span>
+    <span style={{ fontSize: '14px', fontWeight: 600, color: accent || '#fff', fontFamily: accent ? 'monospace' : 'inherit' }}>{value}</span>
+  </div>
+);
+
 export const AccountView = ({ setActiveTab }) => {
   const { user, logout, openAuthModal, isAuthenticated, isAdmin } = useAuth();
   const { favorites, playlists, refreshLibrary, isLoading } = useLibrary();
@@ -23,23 +40,6 @@ export const AccountView = ({ setActiveTab }) => {
       </div>
     );
   }
-
-  const StatCard = ({ label, value, icon }) => (
-    <div style={{ background: '#181818', borderRadius: '12px', padding: '16px', border: '0.5px solid #282828', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-      <div>
-        <p style={{ fontSize: '13px', color: '#B3B3B3', marginBottom: '4px' }}>{label}</p>
-        <p style={{ fontSize: '26px', fontWeight: 700, color: '#fff' }}>{value}</p>
-      </div>
-      {icon}
-    </div>
-  );
-
-  const InfoRow = ({ label, value, accent }) => (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: '#181818', borderRadius: '8px', border: '0.5px solid #282828' }}>
-      <span style={{ fontSize: '14px', color: '#B3B3B3' }}>{label}</span>
-      <span style={{ fontSize: '14px', fontWeight: 600, color: accent || '#fff', fontFamily: accent ? 'monospace' : 'inherit' }}>{value}</span>
-    </div>
-  );
 
   return (
     <div style={{ maxWidth: '640px', paddingBottom: '148px' }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Radio,
@@ -70,7 +70,6 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
   // Modals / Inspector
   const [selectedUser, setSelectedUser] = useState(null);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'user', password: '' });
   const [userToDelete, setUserToDelete] = useState(null);
@@ -384,22 +383,6 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       return true;
     }
     return false;
-  };
-
-  const isNativeApp = (platform = '', device = '', browser = '') => {
-    if (isWebClient(platform, device, browser)) return false;
-    const str = `${platform || ''} ${device || ''} ${browser || ''}`.toLowerCase();
-    return (
-      str.includes('android') ||
-      str.includes('windows') ||
-      str.includes('ios') ||
-      str.includes('iphone') ||
-      str.includes('mac') ||
-      str.includes('linux') ||
-      str.includes('groovy') ||
-      str.includes('flutter') ||
-      (!str.includes('web') && !str.includes('browser'))
-    );
   };
 
   const formatListeningTime = (totalSeconds = 0) => {

@@ -143,15 +143,17 @@ export const LibraryProvider = ({ children }) => {
       const updated = [song, ...filtered].slice(0, 50);
       try {
         localStorage.setItem('groovy_local_history', JSON.stringify(updated));
-      } catch (_) {}
+      } catch (error) {
+        console.warn('Unable to persist local history:', error);
+      }
       return updated;
     });
 
     if (isAuthenticated) {
       try {
         await libraryApi.addToHistory(song);
-      } catch (e) {
-        // Quiet fail
+      } catch (error) {
+        console.warn('Unable to sync play history:', error);
       }
     }
   };
@@ -160,7 +162,9 @@ export const LibraryProvider = ({ children }) => {
     setHistory([]);
     try {
       localStorage.removeItem('groovy_local_history');
-    } catch (_) {}
+    } catch (error) {
+      console.warn('Unable to clear local history:', error);
+    }
   };
 
   return (

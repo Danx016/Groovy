@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Play, Pause, ChevronRight, MoreVertical, Sparkles, Flame, Zap, Stars, Disc3, CheckCircle2, User } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 import { useLibrary } from '../../context/LibraryContext';
-import { useAuth } from '../../context/AuthContext';
 import { musicService, GENRES_LIST } from '../../services/musicService';
 
 const DEFAULT_TOP_ARTISTS = [
@@ -295,7 +294,6 @@ export const HomeView = ({ setActiveTab, onSelectArtist, onSelectAlbum }) => {
   const { openArtist, openAlbum } = usePlayer();
   const [feeds, setFeeds] = useState(null);
   const [featuredArtists, setFeaturedArtists] = useState(DEFAULT_TOP_ARTISTS);
-  const [isLoading, setIsLoading] = useState(true);
 
   const handleOpenArtist = (name) => {
     if (onSelectArtist) onSelectArtist(name);
@@ -324,7 +322,6 @@ export const HomeView = ({ setActiveTab, onSelectArtist, onSelectAlbum }) => {
       } catch (err) {
         console.warn('Feeds load failed:', err);
       } finally {
-        if (isMounted) setIsLoading(false);
       }
     };
     loadFeeds();

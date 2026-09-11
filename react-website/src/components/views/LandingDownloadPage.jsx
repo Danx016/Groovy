@@ -31,9 +31,8 @@ const GITHUB_REPO = 'Danx016/Groovy';
 const GITHUB_API_RELEASE = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
 const GITHUB_RELEASES_PAGE = `https://github.com/${GITHUB_REPO}/releases`;
 
-export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
+export const LandingDownloadPage = ({ onOpenPlayer }) => {
   const [releaseInfo, setReleaseInfo] = useState(null);
-  const [isLoadingRelease, setIsLoadingRelease] = useState(true);
   const [userOS, setUserOS] = useState('windows');
   const [activePlatformTab, setActivePlatformTab] = useState('desktop');
   const [openFaq, setOpenFaq] = useState(null);
@@ -64,7 +63,6 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
   useEffect(() => {
     let isMounted = true;
     async function fetchRelease() {
-      setIsLoadingRelease(true);
       try {
         const res = await fetch(GITHUB_API_RELEASE, {
           headers: { Accept: 'application/vnd.github.v3+json' },
@@ -72,7 +70,7 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         if (isMounted) setReleaseInfo(data);
-      } catch (err) {
+      } catch {
         if (isMounted) {
           setReleaseInfo({
             tag_name: 'v1.0.83',
@@ -103,8 +101,6 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
             ],
           });
         }
-      } finally {
-        if (isMounted) setIsLoadingRelease(false);
       }
     }
 
@@ -154,12 +150,6 @@ export const LandingDownloadPage = ({ onOpenPlayer, onOpenAdmin }) => {
     name: 'Groovy-linux-x86_64.AppImage',
     browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy-linux-x86_64.AppImage`,
     size: 48000000,
-  };
-
-  const linuxTar = getAsset('linux-x64') || getAsset('.tar.gz') || {
-    name: 'groovy-linux-x64.tar.gz',
-    browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/groovy-linux-x64.tar.gz`,
-    size: 42000000,
   };
 
   const scrollToSection = (e, sectionId) => {

@@ -10,7 +10,7 @@ import { usePlayer } from '../../context/PlayerContext';
 
 export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
   const { user, isAuthenticated, openAuthModal } = useAuth();
-  const { playlists, favorites } = useLibrary();
+  const { playlists } = useLibrary();
   const { isPlaying } = usePlayer();
 
   const [isLibraryOpen, setIsLibraryOpen] = useState(true);

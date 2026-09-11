@@ -1,11 +1,9 @@
 import React from 'react';
 import { Search, Library, User, Settings, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { useLibrary } from '../../context/LibraryContext';
 
 export const Header = ({ onSearchClick, activeTab, setActiveTab }) => {
   const { user, isAuthenticated, openAuthModal } = useAuth();
-  const { favorites } = useLibrary();
 
   return (
     <header style={{

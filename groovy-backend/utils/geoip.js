@@ -47,7 +47,7 @@ async function resolveIpLocation(ip) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch('http://ip-api.com/json/?fields=status,country,countryCode,regionName,city,isp,org,as,query', { signal: controller.signal });
+      const res = await fetch('https://ip-api.com/json/?fields=status,country,countryCode,regionName,city,isp,org,as,query', { signal: controller.signal });
       clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
@@ -114,7 +114,7 @@ async function resolveIpLocation(ip) {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`http://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org,as`, {
+    const res = await fetch(`https://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org,as`, {
       signal: controller.signal,
     });
     clearTimeout(timeout);

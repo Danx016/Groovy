@@ -28,7 +28,9 @@ export function useGithubRelease() {
                     return
                 }
             }
-        } catch (_) { /* ignore parse errors */ }
+        } catch (error) {
+            console.warn('Unable to read cached GitHub release:', error)
+        }
 
         let cancelled = false
 
@@ -55,7 +57,9 @@ export function useGithubRelease() {
                 // Cache result
                 try {
                     sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }))
-                } catch (_) {}
+                } catch (error) {
+                    console.warn('Unable to cache GitHub release:', error)
+                }
 
                 setState({ ...data, loading: false, error: null })
             })

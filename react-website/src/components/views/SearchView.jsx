@@ -13,8 +13,8 @@ const fmtDuration = (secs) => {
 };
 
 export const SearchView = ({ onSelectArtist, onSelectAlbum }) => {
-  const { currentSong, isPlaying, playSong, togglePlay, addToQueue, playNextInQueue, openArtist, openAlbum } = usePlayer();
-  const { isFavorite, toggleFavorite, playlists = [], addSongToPlaylist } = useLibrary();
+  const { currentSong, isPlaying, playSong, togglePlay, addToQueue, openArtist, openAlbum } = usePlayer();
+  const { isFavorite, toggleFavorite } = useLibrary();
   const { isAuthenticated, openAuthModal } = useAuth();
 
   const handleOpenArtist = (name) => {
@@ -39,7 +39,6 @@ export const SearchView = ({ onSelectArtist, onSelectAlbum }) => {
       return ['Bad Bunny', 'The Weeknd', 'Feid'];
     }
   });
-  const [selectedSongForPlaylist, setSelectedSongForPlaylist] = useState(null);
   const searchInputRef = useRef(null);
 
   // Debounced search

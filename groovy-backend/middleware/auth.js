@@ -1,25 +1,21 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRETS = [
-  process.env.JWT_SECRET,
-  'groovy_jwt_secret_key_super_secure_2026',
-  'groovy_secret_key_2026_super_secure',
-].filter(Boolean);
+const PRIMARY_SECRET = process.env.JWT_SECRET;
 
-const PRIMARY_SECRET = process.env.JWT_SECRET || 'groovy_jwt_secret_key_super_secure_2026';
+if (!PRIMARY_SECRET) {
+  throw new Error('JWT_SECRET must be configured before starting the backend');
+}
 
 function verifyTokenWithFallback(token) {
   if (!token) return null;
-  for (const secret of JWT_SECRETS) {
-    try {
-      const decoded = jwt.verify(token, secret);
-      if (decoded && decoded.id) return decoded;
-    } catch (_) {}
-  }
   try {
-    const decoded = jwt.decode(token);
+    const decoded = jwt.verify(token, PRIMARY_SECRET, {
+      algorithms: ['HS256'],
+    });
     if (decoded && decoded.id) return decoded;
-  } catch (_) {}
+  } catch (err) {
+    return null;
+  }
   return null;
 }
 
@@ -32,7 +28,7 @@ function generateToken(user) {
       role: user.role || 'user',
     },
     PRIMARY_SECRET,
-    { expiresIn: '90d' }
+    { expiresIn: '90d', algorithm: 'HS256' }
   );
 }
 

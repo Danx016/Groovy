@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Radio, Play, Pause, Volume2, Globe, Sparkles, Heart, Activity } from 'lucide-react';
 import { usePlayer } from '../../context/PlayerContext';
 
@@ -73,7 +73,6 @@ const RADIO_STATIONS = [
 
 export const RadioView = () => {
   const { currentSong, isPlaying, playSong, togglePlay } = usePlayer();
-  const [activeFilter, setActiveFilter] = useState('all');
 
   const handlePlayStation = (station) => {
     const isCurrent = currentSong?.id === station.id;

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Home, Compass, Library, Radio, User } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
 
 const tabs = [
   { id: 'home', label: 'Inicio', icon: Home },
@@ -20,7 +19,7 @@ export const BottomNav = ({ activeTab, setActiveTab }) => {
       borderTop: '0.5px solid #282828',
       paddingBottom: 'env(safe-area-inset-bottom)',
     }} className="bottom-nav">
-      {tabs.map(({ id, label, icon: Icon }) => {
+      {tabs.map(({ id, label, icon: IconComponent }) => {
         const isActive = activeTab === id;
         return (
           <button
@@ -29,12 +28,12 @@ export const BottomNav = ({ activeTab, setActiveTab }) => {
             style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px',
               padding: '6px 12px', flex: 1,
-              color: isActive ? '#FA243C' : (id === 'admin' ? '#FF9500' : '#B3B3B3'),
+              color: isActive ? '#FA243C' : '#B3B3B3',
               transition: 'color 0.15s',
               background: 'none', border: 'none', cursor: 'pointer',
             }}
           >
-            <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
+            <IconComponent size={22} strokeWidth={isActive ? 2.5 : 1.8} />
             <span style={{ fontSize: '10px', fontWeight: isActive ? 700 : 500 }}>{label}</span>
           </button>
         );

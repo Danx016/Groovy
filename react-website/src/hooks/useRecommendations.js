@@ -3,7 +3,6 @@
  * Builds Para Ti, Quick Picks and genre Mixes from history + favorites.
  */
 import { useMemo } from 'react';
-import { usePlayer } from '../context/PlayerContext';
 import { useLibrary } from '../context/LibraryContext';
 
 /* Shuffle helper */
@@ -25,7 +24,6 @@ const cleanSong = (song) =>
   (!song.duration || song.duration >= 15);
 
 export function useRecommendations() {
-  const { queue } = usePlayer();
   const { favorites = [], history = [] } = useLibrary();
 
   return useMemo(() => {
@@ -74,7 +72,6 @@ export function useRecommendations() {
       if (artistIdx >= 0) score += (5 - artistIdx) * 3;
       if (genreIdx >= 0) score += (4 - genreIdx) * 2;
       if (favorites.find((f) => f.id === s.id)) score += 5;
-      score += Math.random() * 2; // slight jitter
       return { s, score };
     });
     scored.sort((a, b) => b.score - a.score);

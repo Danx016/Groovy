@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { X, Mail, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -22,7 +22,7 @@ export const AuthModal = () => {
       } else {
         await login(email, password);
       }
-    } catch (err) {
+    } catch {
       // handled in context
     } finally {
       setLoading(false);

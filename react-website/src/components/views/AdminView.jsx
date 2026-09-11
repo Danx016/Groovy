@@ -37,10 +37,26 @@ import { adminApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 
 export const AdminView = () => {
-  const { user: currentUser, isAdmin, isAuthenticated, login, openAuthModal } = useAuth();
+  const { user: currentUser, isAdmin, isAuthenticated, login } = useAuth();
   const [adminLoginForm, setAdminLoginForm] = useState({ email: '', password: '' });
   const [adminLoginError, setAdminLoginError] = useState(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [activeTab, setActiveTab] = useState('users');
+  const [metrics, setMetrics] = useState(null);
+  const [users, setUsers] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
+  const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'user', password: '' });
+  const [userToDelete, setUserToDelete] = useState(null);
+  const [userToToggleBan, setUserToToggleBan] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionMessage, setActionMessage] = useState(null);
+  const [copiedIp, setCopiedIp] = useState(null);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
@@ -54,6 +70,33 @@ export const AdminView = () => {
       setIsLoggingIn(false);
     }
   };
+
+  const fetchData = useCallback(async () => {
+    if (!isAuthenticated || !isAdmin) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    setActionMessage(null);
+    try {
+      const [metricsRes, usersRes, sessionsRes] = await Promise.all([
+        adminApi.getMetrics().catch(() => ({ metrics: null })),
+        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
+        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
+      ]);
+      if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
+      if (usersRes?.users) setUsers(usersRes.users);
+      if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
+    } catch (err) {
+      console.error('Error fetching admin data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated, isAdmin, searchQuery, roleFilter, statusFilter]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   if (!isAuthenticated) {
     return (
@@ -145,58 +188,12 @@ export const AdminView = () => {
     );
   }
 
-  // State
-  const [activeTab, setActiveTab] = useState('users'); // 'users' | 'sessions' | 'metrics'
-  const [metrics, setMetrics] = useState(null);
-  const [users, setUsers] = useState([]);
-  const [sessions, setSessions] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-
-  // Modals
-  const [selectedUserDetail, setSelectedUserDetail] = useState(null);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
-  const [editingUser, setEditingUser] = useState(null);
-  const [editFormData, setEditFormData] = useState({ name: '', email: '', role: 'user', password: '' });
-  const [userToDelete, setUserToDelete] = useState(null);
-  const [userToToggleBan, setUserToToggleBan] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [actionMessage, setActionMessage] = useState(null);
-  const [copiedIp, setCopiedIp] = useState(null);
-
   // Copy IP Helper
   const copyToClipboard = (text) => {
     navigator.clipboard?.writeText(text);
     setCopiedIp(text);
     setTimeout(() => setCopiedIp(null), 2000);
   };
-
-  // Fetch metrics & users
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    setActionMessage(null);
-    try {
-      const [metricsRes, usersRes, sessionsRes] = await Promise.all([
-        adminApi.getMetrics().catch(() => ({ metrics: null })),
-        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
-        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
-      ]);
-
-      if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
-      if (usersRes?.users) setUsers(usersRes.users);
-      if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
-    } catch (err) {
-      console.error('Error fetching admin data:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [searchQuery, roleFilter, statusFilter]);
-
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
 
   // Load deep user detail
   const handleOpenUserDetail = async (userId) => {

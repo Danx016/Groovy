@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useEffect, useRef } from 'react';
+import { AnimatePresence } from 'framer-motion';
 import {
   ChevronDown, Play, Pause, SkipForward, SkipBack, Heart, Shuffle,
   Repeat, Repeat1, Volume2, VolumeX, ListMusic, FileText, Sparkles,
@@ -22,7 +22,7 @@ export const FullPlayerModal = () => {
     isShuffle, repeatMode, lyrics, isLyricsLoading, isFullPlayerOpen,
     activePlayerTab, setActivePlayerTab, closeFullPlayer,
     togglePlay, nextTrack, prevTrack, seekTo, changeVolume, toggleMute,
-    toggleShuffle, toggleRepeat, queue, queueIndex, playSong, removeFromQueue, clearQueue,
+    toggleShuffle, toggleRepeat, queue, playSong, removeFromQueue, clearQueue,
     upNext = [], addToQueue, openArtist, openAlbum,
   } = usePlayer();
   const { isFavorite, toggleFavorite } = useLibrary();

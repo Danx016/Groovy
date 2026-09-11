@@ -70,17 +70,52 @@ router.get('/playback', async (req, res) => {
  * POST /api/telemetry/command
  * Send playback command to a target remote device via Groovy Cloud Relay
  */
-router.post('/command', async (req, res) => {
+router.post('/command', authenticateToken, async (req, res) => {
   try {
     const { targetDeviceId, senderDeviceId, action, payload } = req.body;
-    const userId = req.user?.id || null;
+    const userId = req.user.id;
+    const allowedActions = new Set([
+      'control',
+      'play',
+      'pause',
+      'skipNext',
+      'skipPrevious',
+      'seek',
+      'volume',
+      'togglePlayPause',
+      'transfer',
+    ]);
 
     if (!targetDeviceId || !action) {
       return res.status(400).json({ success: false, error: 'targetDeviceId y action son requeridos' });
     }
-
+    if (!allowedActions.has(action)) {
+      return res.status(400).json({ success: false, error: 'Acción de reproducción no permitida' });
+    }
     const pool = getPool();
     const payloadStr = payload ? (typeof payload === 'string' ? payload : JSON.stringify(payload)) : null;
+    if (payloadStr && payloadStr.length > 100000) {
+      return res.status(413).json({ success: false, error: 'El payload del comando es demasiado grande' });
+    }
+
+    const [targetDevices] = await pool.query(`
+      SELECT device_key
+      FROM user_live_playback
+      WHERE user_id = ?
+        AND (
+          device_key = ?
+          OR CONCAT(platform, '_', device_name) = ?
+          OR CONCAT(platform, '_', device_model) = ?
+        )
+      LIMIT 1
+    `, [userId, targetDeviceId, targetDeviceId, targetDeviceId]);
+
+    if (targetDevices.length === 0) {
+      return res.status(403).json({
+        success: false,
+        error: 'El dispositivo destino no pertenece al usuario autenticado o ya no está conectado.',
+      });
+    }
 
     const [result] = await pool.query(`
       INSERT INTO device_commands (user_id, sender_device_id, target_device_id, action, payload, status)

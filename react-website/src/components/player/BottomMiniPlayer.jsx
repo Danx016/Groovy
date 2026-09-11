@@ -19,7 +19,7 @@ export const BottomMiniPlayer = () => {
     currentSong, isPlaying, currentTime, duration, volume, isMuted,
     isShuffle, repeatMode,
     togglePlay, nextTrack, prevTrack, seekTo, changeVolume, toggleMute,
-    toggleShuffle, toggleRepeat, openFullPlayer, openArtist, openAlbum,
+    toggleShuffle, toggleRepeat, openFullPlayer, openArtist,
   } = usePlayer();
   const { isFavorite, toggleFavorite } = useLibrary();
   const { isAuthenticated, openAuthModal } = useAuth();

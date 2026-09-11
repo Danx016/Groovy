@@ -12,9 +12,22 @@ const musicRoutes = require('./routes/music');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
+const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 // Middleware
-app.use(cors({ origin: '*' }));
+app.use(cors({
+  origin: allowedOrigins.length === 0
+    ? '*'
+    : (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error('CORS origin not allowed'));
+    },
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('combined'));
 

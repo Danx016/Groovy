@@ -18,27 +18,35 @@ jobs:
   # Validate secrets exist
   check-secrets:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
       - name: Check required secrets
         run: |
-          if [ -z "${{ secrets.COUNTLY_SERVER_URL }}" ]; then
-            echo "⚠️ Warning: COUNTLY_SERVER_URL secret not set. Analytics will be disabled."
-          else
-            echo "✅ COUNTLY_SERVER_URL secret is configured"
+          required_secrets=(
+            ANDROID_KEYSTORE_BASE64
+            ANDROID_KEYSTORE_PASSWORD
+            ANDROID_KEY_PASSWORD
+            ANDROID_KEY_ALIAS
+            WINDOWS_CERTIFICATE_BASE64
+            WINDOWS_CERTIFICATE_PASSWORD
+          )
+          missing=()
+          for secret_name in "${required_secrets[@]}"; do
+            if [ -z "${!secret_name}" ]; then
+              missing+=("$secret_name")
+            fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Missing required signing secrets: ${missing[*]}"
+            exit 1
           fi
-          
-          if [ -z "${{ secrets.COUNTLY_APP_KEY }}" ]; then
-            echo "⚠️ Warning: COUNTLY_APP_KEY secret not set. Analytics will be disabled."
-          else
-            echo "✅ COUNTLY_APP_KEY secret is configured (masked)"
-          fi
-
-          if [ -z "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
-            echo "⚠️ Warning: ANDROID_KEYSTORE_BASE64 secret not set. Will use debug keystore (builds may fail signature checks)."
-          else
-            echo "✅ ANDROID_KEYSTORE_BASE64 secret is configured"
-          fi
-        continue-on-error: true
+          echo "✅ All signing secrets are configured"
 
   # Android Build
   build-android:
@@ -108,6 +116,8 @@ jobs:
   build-windows:
     runs-on: windows-latest
     needs: check-secrets
+    env:
+      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       
@@ -150,9 +160,49 @@ jobs:
         run: |
           curl.exe -L -o build\windows\x64\runner\Release\yt-dlp.exe https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
 
+      - name: Sign Windows executable
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+            $certPath,
+            $env:WINDOWS_CERTIFICATE_PASSWORD,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+          )
+          $result = Set-AuthenticodeSignature `
+            -FilePath "build\windows\x64\runner\Release\groovy.exe" `
+            -Certificate $cert `
+            -TimestampServer "https://timestamp.digicert.com" `
+            -HashAlgorithm SHA256
+          if ($result.Status -ne "Valid") { throw "Windows executable signing failed: $($result.Status)" }
+
       - name: Build Inno Setup Installer
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss
+
+      - name: Sign Windows installer
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+          $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(
+            $certPath,
+            $env:WINDOWS_CERTIFICATE_PASSWORD,
+            [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::Exportable
+          )
+          $result = Set-AuthenticodeSignature `
+            -FilePath "Groovy-Setup.exe" `
+            -Certificate $cert `
+            -TimestampServer "https://timestamp.digicert.com" `
+            -HashAlgorithm SHA256
+          if ($result.Status -ne "Valid") { throw "Windows installer signing failed: $($result.Status)" }
 
       - name: Create Portable Zip
         run: |
@@ -170,6 +220,11 @@ jobs:
         with:
           name: windows-build
           path: windows_package/
+
+      - name: Remove signing material
+        if: always()
+        run: |
+          Remove-Item -Force -ErrorAction SilentlyContinue "$env:RUNNER_TEMP\groovy-signing.pfx"
 
   # Linux Build
   build-linux:

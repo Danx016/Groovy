@@ -30,7 +30,7 @@ const getClientHeaders = () => {
   let osVersion = 'Windows 11 / 10';
   if (/android/i.test(ua)) {
     os = 'Android';
-    const m = ua.match(/android\s+([\d\.]+)/i);
+    const m = ua.match(/android\s+([\d.]+)/i);
     osVersion = m ? `Android ${m[1]}` : 'Android';
   } else if (/iphone|ipad|ipod/i.test(ua)) {
     os = 'iOS';

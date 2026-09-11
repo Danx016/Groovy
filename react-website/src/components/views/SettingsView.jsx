@@ -77,7 +77,7 @@ export const SettingsView = () => {
           { id: 'storage', label: 'Almacenamiento', icon: HardDrive },
           { id: 'server', label: 'Servidor', icon: Database },
           { id: 'about', label: 'Acerca de', icon: Info },
-        ].map(({ id, label, icon: Icon }) => {
+        ].map(({ id, label, icon }) => {
           const isSel = activeTab === id;
           return (
             <button
@@ -92,7 +92,7 @@ export const SettingsView = () => {
                 cursor: 'pointer', transition: 'all 0.15s',
               }}
             >
-              <Icon size={15} />
+              {React.createElement(icon, { size: 15 })}
               <span>{label}</span>
             </button>
           );
