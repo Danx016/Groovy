@@ -2157,7 +2157,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
+          await _ensureAudioFocus(() => _audioPlayer.play());
           _isPlaying = true;
           _isLoading = false;
           notifyListeners();
@@ -2178,12 +2178,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _audioPlayer.setUrl(playUrl, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
+          await _ensureAudioFocus(() => _audioPlayer.play());
         } else if (_gaplessEnabled) {
           try {
             await _buildAndSetConcatenatingSource(
               initialIndex: _currentIndex,
               initialPosition: initialPosition ?? Duration.zero,
+              playGeneration: currentGen,
             );
           } catch (e) {
             if (!_hasPlayedOnce) {
@@ -2194,6 +2195,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               await _buildAndSetConcatenatingSource(
                 initialIndex: _currentIndex,
                 initialPosition: initialPosition ?? Duration.zero,
+                playGeneration: currentGen,
               );
               _hasPlayedOnce = true;
             } else {
@@ -2203,7 +2205,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (currentGen != _playGeneration) return;
           await _audioPlayer.seek(initialPosition ?? Duration.zero);
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
+          await _ensureAudioFocus(() => _audioPlayer.play());
         } else {
           final String playUrl;
           if (song.isLocal == true && song.path != null) {
@@ -2246,7 +2248,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() async { unawaited(_audioPlayer.play()); });
+          await _ensureAudioFocus(() => _audioPlayer.play());
         }
       }
 
@@ -2458,7 +2460,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _ensureAudioFocus(() async {
         // Ensure volume is properly restored to effective volume before playing
         await _audioPlayer.setVolume(_effectiveVolume);
-        unawaited(_audioPlayer.play());
+        await _audioPlayer.play();
       });
     }
   }
@@ -3142,13 +3144,73 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     throw Exception('Could not resolve audio stream for "${song.title}"');
   }
 
-  Future<void> _buildAndSetConcatenatingSource(
-      {required int initialIndex, Duration? initialPosition}) async {
-    final children = await Future.wait(_queue.map(_buildAudioSourceForSong));
+  Future<void> _buildAndSetConcatenatingSource({
+    required int initialIndex,
+    Duration? initialPosition,
+    int? playGeneration,
+  }) async {
+    final originalQueue = List<Song>.from(_queue);
+    final selectedSongId = _currentSong?.id ??
+        (initialIndex >= 0 && initialIndex < originalQueue.length
+            ? originalQueue[initialIndex].id
+            : null);
+    final playableSongs = <Song>[];
+    final children = <AudioSource>[];
+
+    // One unavailable track must not prevent an album or playlist from
+    // loading. Keep the selected track mandatory, but omit other tracks that
+    // cannot resolve so the remaining queue can still play.
+    final resolvedSources = await Future.wait(
+      originalQueue.map((queuedSong) async {
+        try {
+          return await _buildAudioSourceForSong(queuedSong);
+        } catch (error) {
+          debugPrint(
+            '[Player] Skipping unavailable queued track "${queuedSong.title}": $error',
+          );
+          if (queuedSong.id == selectedSongId) rethrow;
+          return null;
+        }
+      }),
+    );
+
+    if (playGeneration != null && playGeneration != _playGeneration) return;
+
+    for (var i = 0; i < resolvedSources.length; i++) {
+      final source = resolvedSources[i];
+      if (source != null) {
+        playableSongs.add(originalQueue[i]);
+        children.add(source);
+      }
+    }
+
+    if (children.isEmpty) {
+      throw StateError('No playable tracks remain in the queue');
+    }
+
+    if (playableSongs.length != originalQueue.length) {
+      _queue = playableSongs;
+      _currentIndex = selectedSongId == null
+          ? (initialIndex < 0
+              ? 0
+              : (initialIndex >= _queue.length
+                  ? _queue.length - 1
+                  : initialIndex))
+          : _queue.indexWhere((song) => song.id == selectedSongId);
+      if (_currentIndex < 0) {
+        throw StateError('Selected track was removed from the queue');
+      }
+      _currentSong = _queue[_currentIndex];
+      _saveQueueState();
+      notifyListeners();
+    }
+
+    if (playGeneration != null && playGeneration != _playGeneration) return;
+
     _concatenatingSource = ConcatenatingAudioSource(children: children);
     await _audioPlayer.setAudioSource(
       _concatenatingSource!,
-      initialIndex: initialIndex,
+      initialIndex: _currentIndex,
       initialPosition: initialPosition ?? Duration.zero,
       preload: true,
     );

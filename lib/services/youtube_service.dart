@@ -1,4 +1,5 @@
 // ignore_for_file: experimental_member_use
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
@@ -108,7 +109,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
         final retryResp = await retryReq.close();
-        return _buildResponse(retryResp, s, freshInfo.ext);
+        return _buildResponse(retryResp, s, freshInfo.ext, client);
       }
 
       if (resp.statusCode >= 400) {
@@ -116,14 +117,20 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         throw Exception('GoogleVideo stream error: HTTP ${resp.statusCode}');
       }
 
-      return _buildResponse(resp, s, streamInfo.ext);
+      return _buildResponse(resp, s, streamInfo.ext, client);
     } catch (e) {
+      client.close(force: true);
       debugPrint('[YouTube] StreamAudioSource request error for $cleanId: $e');
       rethrow;
     }
   }
 
-  StreamAudioResponse _buildResponse(HttpClientResponse resp, int start, String ext) {
+  StreamAudioResponse _buildResponse(
+    HttpClientResponse resp,
+    int start,
+    String ext,
+    HttpClient client,
+  ) {
     int? sourceLength;
     final contentRange = resp.headers.value('content-range');
     if (contentRange != null) {
@@ -138,11 +145,24 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     final isWebm = (ext == 'webm' || ext == 'opus');
     final type = isWebm ? 'audio/webm' : 'audio/mp4';
 
+    final stream = resp.transform(
+      StreamTransformer<List<int>, List<int>>.fromHandlers(
+        handleError: (Object error, StackTrace stackTrace, EventSink<List<int>> sink) {
+          client.close(force: true);
+          sink.addError(error, stackTrace);
+        },
+        handleDone: (EventSink<List<int>> sink) {
+          client.close(force: false);
+          sink.close();
+        },
+      ),
+    );
+
     return StreamAudioResponse(
       sourceLength: sourceLength,
       contentLength: resp.contentLength >= 0 ? resp.contentLength : null,
       offset: start,
-      stream: resp,
+      stream: stream,
       contentType: type,
     );
   }
@@ -277,9 +297,14 @@ class _DesktopAudioProxyServer {
         upstreamResp = retryResp;
       }
 
+      // The proxy adds an internal `bytes=0-` request for clients that did
+      // not send a Range header. Present that initial response as a complete
+      // stream; preserve 206 only for real client range requests.
       request.response.statusCode = (rangeHeader != null)
           ? upstreamResp.statusCode
-          : (upstreamResp.statusCode == 206 ? HttpStatus.ok : upstreamResp.statusCode);
+          : (upstreamResp.statusCode == 206
+              ? HttpStatus.ok
+              : upstreamResp.statusCode);
       request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
 
       final isWebm = (streamInfo.ext == 'webm' ||
@@ -435,15 +460,6 @@ class YoutubeService {
   Future<AudioSource?> getYoutubeAudioSource(Song song) async {
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
-
-    // ─── PRE-RESOLVE STREAM INFO ────────────────────────────────────────────
-    YtStreamInfo? streamInfo;
-    try {
-      streamInfo = await _ytdlp.resolveStreamInfo(videoId);
-    } catch (e) {
-      debugPrint('[YouTube] Pre-resolve warning for $videoId: $e');
-    }
-    // ────────────────────────────────────────────────────────────────────────
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Desktop: always route through our local proxy so that the correct
