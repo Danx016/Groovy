@@ -444,6 +444,7 @@ jobs:
             VER="${{ github.event.inputs.version }}"
           elif [ "${{ github.ref_type }}" = "tag" ]; then
             VER="${GITHUB_REF_NAME#v}"
+            VER="${VER%-windows}"
           else
             VER="1.0.59"
           fi
