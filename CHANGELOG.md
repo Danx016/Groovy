@@ -12,6 +12,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualizado el número de compilación Android a `95`.
 - Alineadas las versiones mostradas por Flutter, web, backend, instalador y cliente API.
 
+## [1.1.5] - 2026-09-11
+
+### Changed
+- Rotadas las credenciales de firma usadas por las compilaciones de distribución.
+- Incrementado el número de compilación Android a `96`.
+
 ## [1.1.3] - 2026-09-10
 
 ### Fixed — Android: Chaquopy (Python yt-dlp) ahora va primero
