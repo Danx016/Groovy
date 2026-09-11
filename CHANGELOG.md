@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2026-09-11
+
+### Fixed
+- Estabilizada la reproducción en Android y Windows al cambiar de canción o hacer seek.
+- Corregido el reinicio de canciones causado por respuestas HTTP parciales.
+- Mejorada la reproducción de álbumes cuando una pista no está disponible.
+- Liberadas las conexiones de audio canceladas para evitar bloqueos después de varias canciones.
+
 ## [1.1.4] - 2026-09-11
 
 ### Changed
