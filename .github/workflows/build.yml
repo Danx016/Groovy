@@ -172,7 +172,7 @@ jobs:
             Sort-Object FullName -Descending |
             Select-Object -First 1
           if (-not $signtool) { throw "Windows SDK signtool.exe was not found" }
-          & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "https://timestamp.digicert.com" /td SHA256 "build\windows\x64\runner\Release\groovy.exe"
+          & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "http://timestamp.digicert.com" /td SHA256 "build\windows\x64\runner\Release\groovy.exe"
           if ($LASTEXITCODE -ne 0) { throw "Windows executable signing failed with exit code $LASTEXITCODE" }
 
       - name: Build Inno Setup Installer
@@ -191,7 +191,7 @@ jobs:
             Sort-Object FullName -Descending |
             Select-Object -First 1
           if (-not $signtool) { throw "Windows SDK signtool.exe was not found" }
-          & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "https://timestamp.digicert.com" /td SHA256 "Groovy-Setup.exe"
+          & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "http://timestamp.digicert.com" /td SHA256 "Groovy-Setup.exe"
           if ($LASTEXITCODE -ne 0) { throw "Windows installer signing failed with exit code $LASTEXITCODE" }
 
       - name: Create Portable Zip
