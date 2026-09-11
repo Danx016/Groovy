@@ -55,9 +55,20 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Signing credentials and certificates
-android/key.properties
-android/**/*.keystore
-android/**/*.jks
-windows/**/*.pfx
-windows/**/*.p12
+# Signing credentials and certificates (global protection)
+**/key.properties
+key.properties
+*.keystore
+**/*.keystore
+*.jks
+**/*.jks
+*.pfx
+**/*.pfx
+*.p12
+**/*.p12
+*PASSWORD*
+*_PASSWORD*
+*BASE64*
+*_BASE64*
+*codesign*
+

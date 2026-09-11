@@ -134,7 +134,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _telemetryTimer?.cancel();
     final interval = (_groovyConnectService?.isConnected == true)
         ? const Duration(milliseconds: 350)
-        : const Duration(milliseconds: 1500);
+        : const Duration(milliseconds: 600);
     _telemetryTimer = Timer.periodic(interval, (_) {
       if (_isPlaying) {
         _sendTelemetryHeartbeat();
@@ -144,8 +144,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   String? _cachedUserToken;
 
-  void _sendTelemetryHeartbeat({bool? overridePlaying}) {
-    final song = _currentSong;
+  void _sendTelemetryHeartbeat({bool? overridePlaying, Song? overrideSong}) {
+    final song = overrideSong ?? _currentSong;
     if (song == null) return;
     final isPl = overridePlaying ?? _isPlaying;
     final posMs = _position.inMilliseconds;
@@ -160,6 +160,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         listenDeltaSeconds: isPl ? 2 : 0,
         deviceId: _groovyConnectService?.localDeviceId,
         volume: _volume,
+        localIp: _groovyConnectService?.localIp,
+        localPort: _groovyConnectService?.httpPort,
       );
     }
 
@@ -176,8 +178,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
-  void sendTelemetryHeartbeatNow({bool? overridePlaying}) {
-    _sendTelemetryHeartbeat(overridePlaying: overridePlaying);
+  void sendTelemetryHeartbeatNow({bool? overridePlaying, Song? overrideSong}) {
+    _sendTelemetryHeartbeat(overridePlaying: overridePlaying, overrideSong: overrideSong);
   }
 
   final TranscodingService _transcodingService;
@@ -456,22 +458,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // If we recently initiated an optimistic song change, ignore stale reports of the old song
     if (_optimisticRemoteSongUntil != null && DateTime.now().isBefore(_optimisticRemoteSongUntil!)) {
       if (song != null && song.id == _optimisticRemoteSongId) {
-        // The remote device acknowledged the new song — but only clear the optimistic window
-        // once it's actually playing (not still buffering at position 0).
-        // If isPlaying=false and position=0, the remote is still loading; keep ignoring.
-        final remoteActuallyPlaying = isPlaying && position.inMilliseconds > 0;
-        final remoteLoadedButPaused = !isPlaying && position.inMilliseconds >= 0 &&
+        // The remote device acknowledged the new song — clear optimistic window
+        // whenever the remote confirms it is playing, or once position has moved, or loaded paused.
+        final remoteActuallyPlaying = isPlaying;
+        final remoteLoadedButPaused = !isPlaying &&
             DateTime.now().isAfter(_optimisticRemoteSongUntil!.subtract(const Duration(seconds: 4)));
         if (remoteActuallyPlaying || remoteLoadedButPaused) {
           _optimisticRemoteSongUntil = null;
           _optimisticRemoteSongId = null;
           _isLoading = false;
+          _isPlaying = isPlaying;
           _remoteAnchorPosition = position;
           _remoteAnchorTime = isPlaying ? DateTime.now() : null;
           _position = position;
           _positionController.add(position);
         } else {
-          // Remote is still buffering; ignore this update entirely to prevent 0-position bounce
+          // Remote is still buffering before starting playback; keep current optimistic state
           return;
         }
       } else {
@@ -1607,6 +1609,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (wasPlaying != _isPlaying && !_reactivatingSession) {
           debugPrint(
               '[Player] ${_isPlaying ? '▶ Playing' : '⏸ Paused'} — "${_currentSong?.title ?? 'unknown'}" (${state.processingState.name})');
+          _sendTelemetryHeartbeat(overridePlaying: _isPlaying);
 
           // Start/stop desktop position polling timer (Windows and Linux both use just_audio_media_kit)
           if (_isPlaying && (Platform.isWindows || Platform.isLinux) && !_isRenderingRemotely) {
@@ -1993,12 +1996,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
       _updateAllServices();
       _refreshArtworkUrl().catchError((_) {});
-      await _groovyConnectService!.sendPlaySong(
+      unawaited(_groovyConnectService!.sendPlaySong(
         song,
         positionMs: initialPosition?.inMilliseconds ?? 0,
         queue: _queue,
         queueIndex: _currentIndex,
-      );
+      ));
       return;
     }
 

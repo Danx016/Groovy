@@ -319,10 +319,13 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                         final isFav = lib.isSongStarred(currentSong.id) || currentSong.starred == true;
                         return Stack(
                           children: [
-                            AlbumArtwork(
-                              coverArt: currentSong.coverArt,
-                              size: 56,
-                              borderRadius: 4,
+                            Hero(
+                              tag: 'desktop_bar_fs_${currentSong.id}',
+                              child: AlbumArtwork(
+                                coverArt: currentSong.coverArt,
+                                size: 56,
+                                borderRadius: 4,
+                              ),
                             ),
                             if (isFav)
                               Positioned(

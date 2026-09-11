@@ -128,6 +128,7 @@ class GroovyConnectService extends ChangeNotifier {
   String _localDeviceName = '';
   String _localPlatform = '';
   String _localModel = '';
+  String _localIp = '';
   String? _cachedAuthToken;
 
   final Map<String, GroovyRemoteDevice> _discoveredDevices = {};
@@ -170,8 +171,67 @@ class GroovyConnectService extends ChangeNotifier {
   String get localDeviceName => _localDeviceName;
   String get localPlatform => _localPlatform;
   String get localModel => _localModel;
+  String get localIp => _localIp;
   int get httpPort => _actualHttpPort;
   String? get cachedAuthToken => _cachedAuthToken;
+
+  Future<void> _detectLocalIp() async {
+    if (kIsWeb) return;
+    try {
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
+      );
+      for (final iface in interfaces) {
+        final name = iface.name.toLowerCase();
+        if (name.contains('wlan') || name.contains('wi-fi') || name.contains('eth') || name.contains('ethernet') || name.contains('en')) {
+          for (final addr in iface.addresses) {
+            if (!addr.isLoopback && !addr.address.startsWith('127.')) {
+              _localIp = addr.address;
+              return;
+            }
+          }
+        }
+      }
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback && !addr.address.startsWith('127.')) {
+            _localIp = addr.address;
+            return;
+          }
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _probeAndUpgradeLanDevice(String remoteDeviceId, String host, int port) async {
+    if (kIsWeb || host.isEmpty || host == '127.0.0.1' || host == _localIp) return;
+    HttpClient? client;
+    try {
+      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 350);
+      final uri = Uri.parse('http://$host:$port/groovy/info');
+      final request = await client.getUrl(uri).timeout(const Duration(milliseconds: 350));
+      final response = await request.close().timeout(const Duration(milliseconds: 350));
+      if (response.statusCode == HttpStatus.ok) {
+        final existing = _discoveredDevices[remoteDeviceId];
+        if (existing != null) {
+          final upgraded = existing.copyWith(
+            host: host,
+            port: port,
+            isLocalLan: true,
+          );
+          _discoveredDevices[remoteDeviceId] = upgraded;
+          if (_connectedDevice?.id == remoteDeviceId) {
+            _connectedDevice = upgraded;
+          }
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+    } finally {
+      client?.close(force: true);
+    }
+  }
 
   /// Initializes the service: local LAN P2P UDP + HTTP server, and cloud relay polling.
   Future<void> initialize() async {
@@ -194,23 +254,25 @@ class GroovyConnectService extends ChangeNotifier {
         _cachedAuthToken = storedToken;
       }
 
+      await _detectLocalIp();
+
       // 1. Start local network P2P services (Wi-Fi discovery without internet dependency)
       if (!kIsWeb) {
         await _startHttpServer();
         await _startUdpListener();
       }
 
-      // 2. Start background cloud command polling loop (every 1.2 seconds)
+      // 2. Start background cloud command polling loop
       _startCommandPollLoop();
 
-      // 3. Start cloud presence heartbeat (every 15s)
+      // 3. Start cloud presence heartbeat (every 2s)
       _startPresenceHeartbeat();
 
       // 4. Prune devices not seen in > 45 seconds
       _pruneTimer?.cancel();
       _pruneTimer = Timer.periodic(const Duration(seconds: 12), (_) => _pruneStaleDevices());
 
-      debugPrint('[GroovyConnect] Hybrid P2P LAN + Cloud initialized for device: $_localDeviceId ($_localDeviceName) on HTTP: $_actualHttpPort');
+      debugPrint('[GroovyConnect] Hybrid P2P LAN + Cloud initialized for device: $_localDeviceId ($_localDeviceName) IP: $_localIp on HTTP: $_actualHttpPort');
     } catch (e) {
       debugPrint('[GroovyConnect] Init error: $e');
     }
@@ -426,6 +488,8 @@ class GroovyConnectService extends ChangeNotifier {
         listenDeltaSeconds: 0,
         deviceId: _localDeviceId,
         volume: vol,
+        localIp: _localIp,
+        localPort: _actualHttpPort,
       );
     } catch (_) {}
   }
@@ -438,12 +502,23 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
-  /// Starts the cloud command polling loop to receive actions from other devices.
+  bool _isListeningCloudCommands = false;
+
+  /// Starts the cloud command long-poll loop to receive actions from other devices in real-time over the server.
   void _startCommandPollLoop() {
     _commandPollTimer?.cancel();
-    _commandPollTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
-      _pollCloudCommands();
-    });
+    _isListeningCloudCommands = true;
+    unawaited(_runCloudCommandLoop());
+  }
+
+  Future<void> _runCloudCommandLoop() async {
+    while (_isListeningCloudCommands) {
+      if (_localDeviceId.isNotEmpty) {
+        await _pollCloudCommands();
+      }
+      if (!_isListeningCloudCommands) break;
+      await Future.delayed(const Duration(milliseconds: 60));
+    }
   }
 
   /// Polls pending cloud commands targeting this device.
@@ -619,6 +694,9 @@ class GroovyConnectService extends ChangeNotifier {
           );
         }
 
+        final localIpCandidate = item['local_ip']?.toString() ?? item['localIp']?.toString() ?? item['ip_address']?.toString() ?? '';
+        final localPortCandidate = (item['local_port'] as num?)?.toInt() ?? (item['localPort'] as num?)?.toInt() ?? (item['port'] as num?)?.toInt() ?? 42425;
+
         final existing = _discoveredDevices[remoteDeviceId];
         if (existing == null) {
           _discoveredDevices[remoteDeviceId] = GroovyRemoteDevice(
@@ -626,8 +704,8 @@ class GroovyConnectService extends ChangeNotifier {
             name: remoteDeviceName,
             platform: remoteDevicePlatform,
             model: item['device_model']?.toString() ?? '',
-            host: '',
-            port: 42425,
+            host: localIpCandidate,
+            port: localPortCandidate,
             isLocalLan: false,
             isPlaying: isPlaying,
             currentSong: song,
@@ -641,6 +719,10 @@ class GroovyConnectService extends ChangeNotifier {
             currentSong: song,
             lastSeen: DateTime.now(),
           );
+        }
+
+        if (localIpCandidate.isNotEmpty && !kIsWeb) {
+          _probeAndUpgradeLanDevice(remoteDeviceId, localIpCandidate, localPortCandidate);
         }
       }
       notifyListeners();
@@ -890,7 +972,10 @@ class GroovyConnectService extends ChangeNotifier {
   /// Starts status synchronization timer to reflect remote playback progress in the UI.
   void _startStatusSyncTimer() {
     _statusSyncTimer?.cancel();
-    _statusSyncTimer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+    final interval = (_connectedDevice?.isLocalLan == true)
+        ? const Duration(milliseconds: 250)
+        : const Duration(milliseconds: 450);
+    _statusSyncTimer = Timer.periodic(interval, (_) {
       _syncRemoteStatus();
     });
   }
@@ -1018,6 +1103,7 @@ class GroovyConnectService extends ChangeNotifier {
 
   @override
   void dispose() {
+    _isListeningCloudCommands = false;
     _statusSyncTimer?.cancel();
     _commandPollTimer?.cancel();
     _presenceHeartbeatTimer?.cancel();

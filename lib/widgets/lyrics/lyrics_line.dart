@@ -40,8 +40,8 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
   static const List<Shadow> _currentLineShadow = [
     Shadow(
       color: Color(0x33000000),
-      blurRadius: 6,
-      offset: Offset(0, 2),
+      blurRadius: 2,
+      offset: Offset(0, 1.5),
     ),
   ];
 
@@ -60,39 +60,37 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
                     ? 0.40
                     : 0.36)));
 
-    return RepaintBoundary(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-            child: AnimatedScale(
-              scale: isCurrent ? 1.025 : 1.0,
-              alignment: Alignment.centerLeft,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+          child: AnimatedScale(
+            scale: isCurrent ? 1.025 : 1.0,
+            alignment: Alignment.centerLeft,
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            child: AnimatedOpacity(
+              opacity: targetOpacity,
               duration: const Duration(milliseconds: 350),
               curve: Curves.easeOutCubic,
-              child: AnimatedOpacity(
-                opacity: targetOpacity,
+              child: AnimatedDefaultTextStyle(
                 duration: const Duration(milliseconds: 350),
                 curve: Curves.easeOutCubic,
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 350),
-                  curve: Curves.easeOutCubic,
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                    color: Colors.white,
-                    height: 1.25,
-                    fontFamilyFallback: _fontFallback,
-                    shadows: isCurrent ? _currentLineShadow : null,
-                  ),
-                  child: Text(widget.line.text),
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
+                  color: Colors.white,
+                  height: 1.25,
+                  fontFamilyFallback: _fontFallback,
+                  shadows: isCurrent ? _currentLineShadow : null,
                 ),
+                child: Text(widget.line.text),
               ),
             ),
           ),

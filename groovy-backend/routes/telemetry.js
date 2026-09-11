@@ -1,7 +1,11 @@
 const express = require('express');
+const EventEmitter = require('events');
 const { getPool } = require('../database');
 const { authenticateToken, optionalAuth } = require('../middleware/auth');
 const { resolveIpLocation, parseFullClientInfo } = require('../utils/geoip');
+
+const commandBus = new EventEmitter();
+commandBus.setMaxListeners(5000);
 
 const router = express.Router();
 
@@ -38,7 +42,7 @@ router.get('/playback', async (req, res) => {
 
     const [rows] = await pool.query(`
       SELECT 
-        user_id, platform, device_name, device_model, os_version, ip_address,
+        user_id, platform, device_name, device_model, os_version, ip_address, local_ip, local_port,
         song_id, title, artist, album, cover_art, duration, position, is_playing, volume, last_ping_at,
         device_key, COALESCE(device_key, CONCAT(platform, '_', device_name)) as device_id
       FROM user_live_playback
@@ -122,6 +126,27 @@ router.post('/command', authenticateToken, async (req, res) => {
       VALUES (?, ?, ?, ?, ?, 'pending')
     `, [userId, senderDeviceId || 'unknown', targetDeviceId, action, payloadStr]);
 
+    let parsedPayload = payload;
+    if (typeof payload === 'string') {
+      try { parsedPayload = JSON.parse(payload); } catch (_) {}
+    }
+
+    const newCommand = {
+      id: result.insertId,
+      senderDeviceId: senderDeviceId || 'unknown',
+      action: action,
+      payload: parsedPayload,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Notify any waiting target device in real time (0ms latency!)
+    commandBus.emit('command_dispatch', {
+      targetDeviceId,
+      senderDeviceId: senderDeviceId || 'unknown',
+      userId,
+      command: newCommand,
+    });
+
     // Optimistically update live device playback state in database immediately so subsequent reads are instant
     if (action === 'play') {
       pool.query(`
@@ -170,7 +195,7 @@ router.post('/command', authenticateToken, async (req, res) => {
 
 /**
  * GET /api/telemetry/command
- * Polls pending commands for the calling device and marks them delivered
+ * Long-polls pending commands for the calling device and delivers in real time
  */
 router.get('/command', async (req, res) => {
   try {
@@ -218,30 +243,76 @@ router.get('/command', async (req, res) => {
         SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP
         WHERE id IN (?)
       `, [ids]);
+
+      const parsedCommands = commands.map(c => {
+        let parsedPayload = null;
+        if (c.payload) {
+          try {
+            parsedPayload = JSON.parse(c.payload);
+          } catch (_) {
+            parsedPayload = c.payload;
+          }
+        }
+        return {
+          id: c.id,
+          senderDeviceId: c.sender_device_id,
+          action: c.action,
+          payload: parsedPayload,
+          createdAt: c.created_at,
+        };
+      });
+
+      return res.json({
+        success: true,
+        commands: parsedCommands,
+      });
     }
 
-    const parsedCommands = commands.map(c => {
-      let parsedPayload = null;
-      if (c.payload) {
-        try {
-          parsedPayload = JSON.parse(c.payload);
-        } catch (_) {
-          parsedPayload = c.payload;
-        }
-      }
-      return {
-        id: c.id,
-        senderDeviceId: c.sender_device_id,
-        action: c.action,
-        payload: parsedPayload,
-        createdAt: c.created_at,
-      };
-    });
+    // Long-poll: If no commands in database, wait up to 10 seconds for real-time dispatch from the server
+    let resolved = false;
+    let timer = null;
 
-    return res.json({
-      success: true,
-      commands: parsedCommands,
-    });
+    const cleanup = () => {
+      if (timer) clearTimeout(timer);
+      commandBus.removeListener('command_dispatch', onCommand);
+      req.removeListener('close', onReqClose);
+    };
+
+    const onCommand = async (event) => {
+      if (resolved) return;
+      const isTarget = event.targetDeviceId === deviceId ||
+        (platformModel && event.targetDeviceId === platformModel) ||
+        (platform && event.targetDeviceId.startsWith(platform)) ||
+        (userId > 0 && event.userId === userId && (event.targetDeviceId.startsWith(platform) || event.targetDeviceId === deviceId));
+
+      if (isTarget && event.senderDeviceId !== deviceId) {
+        resolved = true;
+        cleanup();
+        try {
+          await pool.query("UPDATE device_commands SET status = 'delivered', delivered_at = CURRENT_TIMESTAMP WHERE id = ?", [event.command.id]);
+        } catch (_) {}
+        return res.json({
+          success: true,
+          commands: [event.command],
+        });
+      }
+    };
+
+    const onReqClose = () => {
+      resolved = true;
+      cleanup();
+    };
+
+    commandBus.on('command_dispatch', onCommand);
+    req.on('close', onReqClose);
+
+    timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        cleanup();
+        return res.json({ success: true, commands: [] });
+      }
+    }, 10000);
   } catch (err) {
     console.error('[Telemetry Poll Command Error]:', err);
     return res.status(500).json({ success: false, error: err.message });
@@ -268,6 +339,8 @@ router.post('/playback', async (req, res) => {
       platform,
       deviceName,
       listenDeltaSeconds = 15, // seconds listened since last ping
+      localIp,
+      localPort,
     } = req.body;
 
     const hasSong = Boolean(songId && title);
@@ -294,9 +367,9 @@ router.post('/playback', async (req, res) => {
     await pool.query(`
       INSERT INTO user_live_playback (
         user_id, song_id, title, artist, album, cover_art, duration, position, 
-        is_playing, volume, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
+        is_playing, volume, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key, local_ip, local_port
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         user_id = COALESCE(VALUES(user_id), user_id),
         song_id = CASE WHEN VALUES(song_id) != '' THEN VALUES(song_id) ELSE song_id END,
@@ -316,7 +389,9 @@ router.post('/playback', async (req, res) => {
         country = VALUES(country),
         city = VALUES(city),
         last_ping_at = CURRENT_TIMESTAMP,
-        device_key = VALUES(device_key)
+        device_key = VALUES(device_key),
+        local_ip = COALESCE(VALUES(local_ip), local_ip),
+        local_port = COALESCE(VALUES(local_port), local_port)
     `, [
       dbUserId,
       hasSong ? String(songId) : '',
@@ -336,6 +411,8 @@ router.post('/playback', async (req, res) => {
       geo.country,
       geo.city,
       deviceKey,
+      localIp || null,
+      localPort || 42425,
     ]);
 
     // Cleanup stale live sessions older than 120 seconds
@@ -467,14 +544,16 @@ router.post('/ping', async (req, res) => {
     const deviceId = req.body?.deviceId;
     const deviceKey = deviceId || `${userId > 0 ? userId : client.ip}_${(platform || 'app').toLowerCase()}_${(client.deviceModel || deviceSummary || 'device').toLowerCase()}`;
     const resolvedDevice = req.body?.deviceName || req.body?.deviceModel || client.deviceSummary;
+    const localIp = req.body?.localIp;
+    const localPort = req.body?.localPort;
 
     // 1. Register or update live device presence in user_live_playback so idle/paused devices remain discoverable
     await pool.query(`
       INSERT INTO user_live_playback (
         user_id, song_id, title, artist, album, cover_art, duration, position, 
-        is_playing, volume, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key
+        is_playing, volume, platform, device_name, ip_address, device_model, os_version, country, city, last_ping_at, device_key, local_ip, local_port
       )
-      VALUES (?, '', '', '', '', '', 0, 0, 0, 1.0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?)
+      VALUES (?, '', '', '', '', '', 0, 0, 0, 1.0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         user_id = COALESCE(VALUES(user_id), user_id),
         platform = VALUES(platform),
@@ -484,7 +563,9 @@ router.post('/ping', async (req, res) => {
         os_version = VALUES(os_version),
         country = COALESCE(VALUES(country), country),
         city = COALESCE(VALUES(city), city),
-        last_ping_at = CURRENT_TIMESTAMP
+        last_ping_at = CURRENT_TIMESTAMP,
+        local_ip = COALESCE(VALUES(local_ip), local_ip),
+        local_port = COALESCE(VALUES(local_port), local_port)
     `, [
       dbUserId,
       platform,
@@ -495,6 +576,8 @@ router.post('/ping', async (req, res) => {
       geo.country,
       geo.city,
       deviceKey,
+      localIp || null,
+      localPort || 42425,
     ]);
 
     // Check if there is an active session in the last 10 minutes for THIS SPECIFIC DEVICE / PLATFORM

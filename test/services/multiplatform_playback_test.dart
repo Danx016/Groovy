@@ -1,3 +1,4 @@
+// ignore_for_file: avoid_print, unused_import, unnecessary_overrides, unused_local_variable
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/models/models.dart';

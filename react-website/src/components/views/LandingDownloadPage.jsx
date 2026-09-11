@@ -73,8 +73,8 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
       } catch {
         if (isMounted) {
           setReleaseInfo({
-            tag_name: 'v1.1.6',
-            name: 'Groovy v1.1.6',
+            tag_name: 'v1.1.7',
+            name: 'Groovy v1.1.7',
             published_at: new Date().toISOString(),
             html_url: GITHUB_RELEASES_PAGE,
             assets: [

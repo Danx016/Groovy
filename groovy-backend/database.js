@@ -278,6 +278,8 @@ async function runMigrations(conn) {
   await addColToTable('user_live_playback', 'country', 'VARCHAR(100) NULL');
   await addColToTable('user_live_playback', 'city', 'VARCHAR(100) NULL');
   await addColToTable('user_live_playback', 'device_key', 'VARCHAR(255) NULL');
+  await addColToTable('user_live_playback', 'local_ip', 'VARCHAR(100) NULL');
+  await addColToTable('user_live_playback', 'local_port', 'INT DEFAULT 42425');
 
   // Allow guest sessions (user_id NULL) without foreign key constraints
   try {

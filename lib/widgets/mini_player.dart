@@ -109,6 +109,7 @@ class MiniPlayer extends StatelessWidget {
           subtitle: subtitle,
           coverArt: coverArt,
           isPlayingRadio: isPlayingRadio,
+          songId: currentSong?.id,
         );
 
         if (isGlass) {
@@ -180,12 +181,14 @@ class _MiniPlayerRow extends StatelessWidget {
   final String? subtitle;
   final String? coverArt;
   final bool isPlayingRadio;
+  final String? songId;
 
   const _MiniPlayerRow({
     required this.title,
     required this.subtitle,
     required this.coverArt,
     required this.isPlayingRadio,
+    this.songId,
   });
 
   @override
@@ -210,6 +213,11 @@ class _MiniPlayerRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(Icons.radio, color: Colors.white, size: 24),
+            )
+          else if (songId != null)
+            Hero(
+              tag: 'cover_$songId',
+              child: AlbumArtwork(coverArt: coverArt, size: 44, borderRadius: 8),
             )
           else
             AlbumArtwork(coverArt: coverArt, size: 44, borderRadius: 8),

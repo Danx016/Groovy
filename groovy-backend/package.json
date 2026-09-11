@@ -1,6 +1,6 @@
 {
   "name": "groovy-backend",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "description": "Groovy Cloud Music - Authentication & User Library API (MySQL)",
   "main": "server.js",
   "scripts": {
@@ -12,7 +12,9 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.7.0",
     "geoip-lite": "^2.0.3",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
     "mysql2": "^3.9.7"

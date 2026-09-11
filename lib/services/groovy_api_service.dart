@@ -63,6 +63,7 @@ class GroovyApiService {
 
   static const String defaultBaseUrl = 'https://groovyapi.duckdns.org/api';
   String _baseUrl = defaultBaseUrl;
+  final http.Client _client = http.Client();
 
   String get baseUrl => _baseUrl;
 
@@ -106,10 +107,11 @@ class GroovyApiService {
     final map = <String, String>{
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Connection': 'keep-alive',
       'X-Client-Platform': platform,
       'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
       'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
-      'X-App-Version': dev?.appVersion ?? '1.1.6',
+      'X-App-Version': dev?.appVersion ?? '1.1.7',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
@@ -131,6 +133,8 @@ class GroovyApiService {
     String? deviceId,
     double? volume,
     int? positionMs,
+    String? localIp,
+    int? localPort,
   }) async {
     try {
       String? effectiveDeviceId = deviceId;
@@ -143,7 +147,7 @@ class GroovyApiService {
 
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/playback');
-      await http.post(
+      await _client.post(
         uri,
         headers: _headers(token),
         body: jsonEncode({
@@ -163,6 +167,8 @@ class GroovyApiService {
           'deviceModel': dev.deviceModel,
           'osVersion': dev.osVersion,
           'listenDeltaSeconds': listenDeltaSeconds,
+          if (localIp != null && localIp.isNotEmpty) 'localIp': localIp,
+          if (localPort != null && localPort > 0) 'localPort': localPort,
         }),
       ).timeout(const Duration(seconds: 3));
     } catch (e) {
@@ -181,7 +187,7 @@ class GroovyApiService {
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
         final uri = Uri.parse('$_baseUrl/telemetry/command');
-        final res = await http.post(
+        final res = await _client.post(
           uri,
           headers: _headers(token),
           body: jsonEncode({
@@ -197,7 +203,7 @@ class GroovyApiService {
         }
       } catch (e) {
         debugPrint('[GroovyApiService] sendDeviceCommand attempt $attempt error: $e');
-        if (attempt == 0) await Future.delayed(const Duration(milliseconds: 80));
+        if (attempt == 0) await Future.delayed(const Duration(milliseconds: 60));
       }
     }
     return false;
@@ -211,10 +217,10 @@ class GroovyApiService {
     try {
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/command?deviceId=${Uri.encodeComponent(deviceId)}&platform=${Uri.encodeComponent(dev.platform)}&model=${Uri.encodeComponent(dev.deviceModel)}');
-      final res = await http.get(
+      final res = await _client.get(
         uri,
         headers: _headers(token),
-      ).timeout(const Duration(milliseconds: 2200));
+      ).timeout(const Duration(milliseconds: 12000));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['commands'] is List) {
@@ -231,10 +237,10 @@ class GroovyApiService {
   Future<List<Map<String, dynamic>>> fetchUserDevices({String? token}) async {
     try {
       final uri = Uri.parse('$_baseUrl/telemetry/playback');
-      final res = await http.get(
+      final res = await _client.get(
         uri,
         headers: _headers(token),
-      ).timeout(const Duration(milliseconds: 2200));
+      ).timeout(const Duration(milliseconds: 1800));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['devices'] is List) {
@@ -248,7 +254,7 @@ class GroovyApiService {
     }
   }
 
-  Future<void> pingSession(String token) async {
+  Future<void> pingSession(String token, {String? localIp, int? localPort}) async {
     try {
       String? deviceId;
       try {
@@ -258,7 +264,7 @@ class GroovyApiService {
 
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/ping');
-      await http.post(
+      await _client.post(
         uri,
         headers: _headers(token),
         body: jsonEncode({
@@ -267,8 +273,10 @@ class GroovyApiService {
           'deviceName': dev.deviceModel,
           'deviceModel': dev.deviceModel,
           'osVersion': dev.osVersion,
+          if (localIp != null && localIp.isNotEmpty) 'localIp': localIp,
+          if (localPort != null && localPort > 0) 'localPort': localPort,
         }),
-      ).timeout(const Duration(seconds: 5));
+      ).timeout(const Duration(seconds: 4));
     } catch (e) {
       debugPrint('[GroovyApiService] pingSession note: $e');
     }

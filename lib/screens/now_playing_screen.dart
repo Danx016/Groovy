@@ -1134,7 +1134,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
                     child: Hero(
-                      tag: 'now_playing_cover_${currentSong?.id ?? widget.song?.id ?? widget.title}',
+                      tag: widget.heroTag,
                       child: Image(
                         image: _currentImageProvider ?? widget.image,
                         fit: BoxFit.cover,
@@ -1305,7 +1305,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
                   child: Hero(
-                    tag: 'now_playing_cover_${currentSong?.id ?? widget.song?.id ?? widget.title}',
+                    tag: widget.heroTag,
                     child: Image(
                       image: _currentImageProvider ?? widget.image,
                       fit: BoxFit.cover,
@@ -1411,28 +1411,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
 
     if (_fetchedLyrics.isNotEmpty) {
-      return ShaderMask(
-        shaderCallback: (Rect bounds) {
-          return const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.white,
-              Colors.white,
-              Colors.transparent,
-            ],
-            stops: [0.0, 0.08, 0.90, 1.0],
-          ).createShader(bounds);
-        },
-        blendMode: BlendMode.dstIn,
-        child: LyricsListView(
-          lyrics: _fetchedLyrics,
-          positionStream: provider.positionStream,
-          initialPosition: provider.position,
-          isActive: true,
-          onSeek: (duration) => provider.seek(duration),
-        ),
+      return LyricsListView(
+        lyrics: _fetchedLyrics,
+        positionStream: provider.positionStream,
+        initialPosition: provider.position,
+        isActive: true,
+        onSeek: (duration) => provider.seek(duration),
       );
     }
 

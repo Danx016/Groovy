@@ -54,6 +54,7 @@ class _LyricsListViewState extends State<LyricsListView> {
   int _currentIndex = -1;
   int _currentLyricIndex = -1;
   bool _isManualScrolling = false;
+  bool _isUnsynced = false;
   Timer? _resumeAutoScrollTimer;
   StreamSubscription<Duration>? _posSub;
   Duration _currentPosition = Duration.zero;
@@ -108,6 +109,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     _items = [];
     if (widget.lyrics.isEmpty) {
       _keys = [];
+      _isUnsynced = false;
       return;
     }
 
@@ -150,16 +152,15 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
 
     _keys = List.generate(_items.length, (_) => GlobalKey());
+    _isUnsynced = _items.length > 1 &&
+        _items.every((item) => item.startTime == Duration.zero);
   }
 
   void _updateIndexForPosition(Duration pos) {
     if (!mounted) return; // guard: stream may fire after dispose
     if (_items.isEmpty) return;
 
-    final isUnsynced = _items.length > 1 && 
-        _items.every((item) => item.startTime == Duration.zero);
-
-    if (isUnsynced) {
+    if (_isUnsynced) {
       if (_currentIndex != -1) {
         if (widget.isActive) {
           setState(() {
@@ -284,8 +285,7 @@ class _LyricsListViewState extends State<LyricsListView> {
       );
     }
 
-    final isUnsynced = _items.length > 1 && 
-        _items.every((item) => item.startTime == Duration.zero);
+    final isUnsynced = _isUnsynced;
 
     final size = MediaQuery.of(context).size;
     final isLandscape = size.width > size.height;
@@ -313,10 +313,13 @@ class _LyricsListViewState extends State<LyricsListView> {
               final item = _items[index];
               
               if (item.type == ItemType.interlude) {
+                final isCurrentInterlude = _currentIndex == index && widget.isActive;
                 return Container(
                   key: _keys[index],
                   padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                  child: const InterludeDotsWidget(),
+                  child: InterludeDotsWidget(
+                    isAnimating: isCurrentInterlude,
+                  ),
                 );
               }
 

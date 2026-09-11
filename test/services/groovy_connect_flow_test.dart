@@ -254,5 +254,38 @@ void main() {
 
       expect(playerProvider.volume, 0.40);
     });
+
+    test('onGroovyConnectRemoteStatusUpdated unblocks isLoading immediately when remote starts playing at position 0:00', () async {
+      final remoteDevice = GroovyRemoteDevice(
+        id: 'dev_remote_456',
+        name: 'Living Room PC',
+        platform: 'Windows',
+        model: 'Desktop',
+        lastSeen: DateTime.now(),
+      );
+      await groovyConnectService.connectToDevice(remoteDevice);
+      playerProvider.enableGroovyConnectRemote(remoteDevice);
+
+      final newSong = Song(id: 'song_instant_zero', title: 'Zero Pos Track', duration: 200);
+      await playerProvider.playSong(newSong);
+
+      // Initially in optimistic loading state
+      expect(playerProvider.isLoading, isTrue);
+      expect(playerProvider.currentSong?.id, 'song_instant_zero');
+
+      // Remote reports it started playing, but is still at position 0 (first milliseconds)
+      playerProvider.onGroovyConnectRemoteStatusUpdated(
+        song: newSong,
+        position: Duration.zero,
+        duration: const Duration(seconds: 200),
+        isPlaying: true,
+        volume: 1.0,
+      );
+
+      // Must immediately unblock loading and confirm playing!
+      expect(playerProvider.isLoading, isFalse, reason: 'Must clear loading state when remote confirms playing');
+      expect(playerProvider.isPlaying, isTrue, reason: 'Must confirm playing state');
+      expect(playerProvider.position, Duration.zero);
+    });
   });
 }

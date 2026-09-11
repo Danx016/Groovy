@@ -57,7 +57,7 @@ const getClientHeaders = () => {
     'X-Client-Platform': 'Web',
     'X-Device-Model': device,
     'X-OS-Version': osVersion,
-    'X-App-Version': '1.1.6',
+    'X-App-Version': '1.1.7',
   };
 };
 
@@ -104,6 +104,12 @@ export const authApi = {
     }),
 
   getProfile: () => authFetch('/auth/me'),
+  updateProfile: (data) =>
+    authFetch('/auth/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
 };
 
 // Library API Endpoints (MySQL)

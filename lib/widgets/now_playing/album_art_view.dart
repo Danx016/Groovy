@@ -21,15 +21,18 @@ class AlbumArtView extends StatelessWidget {
     final imageWidget = RepaintBoundary(
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22.0),
-        child: Image(
-          image: image,
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-          errorBuilder: (context, error, stackTrace) => Container(
-            color: Colors.white.withValues(alpha: 0.12),
-            child: const Center(
-              child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
+        child: Hero(
+          tag: tag,
+          child: Image(
+            image: image,
+            fit: BoxFit.cover,
+            gaplessPlayback: true,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (context, error, stackTrace) => Container(
+              color: Colors.white.withValues(alpha: 0.12),
+              child: const Center(
+                child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
+              ),
             ),
           ),
         ),

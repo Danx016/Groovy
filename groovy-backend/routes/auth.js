@@ -451,6 +451,20 @@ router.put('/profile', authenticateToken, async (req, res) => {
     const { name, avatarUrl } = req.body;
     const pool = getPool();
 
+    if (name !== undefined && (typeof name !== 'string' || name.trim().length < 2)) {
+      return res.status(400).json({
+        success: false,
+        error: 'El nombre debe tener al menos 2 caracteres.',
+      });
+    }
+
+    if (avatarUrl !== undefined && avatarUrl !== null && typeof avatarUrl !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'La URL del avatar no es válida.',
+      });
+    }
+
     await pool.query(
       'UPDATE users SET name = COALESCE(?, name), avatar_url = COALESCE(?, avatar_url) WHERE id = ?',
       [name ? name.trim() : null, avatarUrl || null, req.user.id]
@@ -460,6 +474,13 @@ router.put('/profile', authenticateToken, async (req, res) => {
       'SELECT id, name, email, avatar_url, role, is_banned, created_at, last_login_ip, last_device FROM users WHERE id = ? LIMIT 1',
       [req.user.id]
     );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Usuario no encontrado.',
+      });
+    }
 
     const updatedUser = rows[0];
 

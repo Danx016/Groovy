@@ -293,7 +293,7 @@ void main() async {
     groovyConnectService.disconnect();
     playerProvider.disableGroovyConnectRemote();
     // Immediately report heartbeat with new song to backend so controller sees it instantly
-    playerProvider.sendTelemetryHeartbeatNow(overridePlaying: isPlaying);
+    playerProvider.sendTelemetryHeartbeatNow(overridePlaying: isPlaying, overrideSong: song);
     await playerProvider.playSong(
       song,
       playlist: queue,
@@ -304,7 +304,7 @@ void main() async {
     if (!isPlaying) {
       await playerProvider.pause();
     }
-    playerProvider.sendTelemetryHeartbeatNow();
+    playerProvider.sendTelemetryHeartbeatNow(overridePlaying: isPlaying, overrideSong: song);
   };
 
   groovyConnectService.onCommandReceived = (String action, dynamic value) {
