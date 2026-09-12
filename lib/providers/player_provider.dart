@@ -101,6 +101,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   static const String _keyQueuePosition = 'persistent_queue_position_ms';
 
   final bool _reactivatingSession = false;
+  DateTime? _lastUserPauseTime;
+  String? _lastCompletedSongId;
 
   /// Last playback error message, set when a song fails to load after all retries.
   /// Cleared automatically when a new song starts successfully.
@@ -1621,6 +1623,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   _position = pos;
                   _positionController.add(pos);
                   _checkAndPreloadNextSong(pos);
+                  final effDur = _duration.inMilliseconds > 0
+                      ? _duration
+                      : (_currentSong?.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero);
+                  if (!_isRenderingRemotely &&
+                      _isPlaying &&
+                      !_isTransitioningSong &&
+                      effDur > const Duration(seconds: 5) &&
+                      pos >= effDur - const Duration(milliseconds: 250)) {
+                    if (_currentSong != null && _lastCompletedSongId != _currentSong!.id) {
+                      _lastCompletedSongId = _currentSong!.id;
+                      debugPrint('[Player Desktop] ✓ Position reached end of track: "${_currentSong?.title}" — advancing automatically');
+                      _onSongComplete().catchError(
+                          (e) => debugPrint('[Player] _onSongComplete error: $e'));
+                    }
+                  }
                   if (lastSystemUpdate == null ||
                       (pos.inMilliseconds - lastSystemUpdate!.inMilliseconds).abs() > 1000) {
                     lastSystemUpdate = pos;
@@ -1636,11 +1653,26 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
 
-        if (state.processingState == ProcessingState.completed) {
-          debugPrint(
-              '[Player] ✓ Song completed: "${_currentSong?.title ?? 'unknown'}"');
-          _onSongComplete().catchError(
-              (e) => debugPrint('[Player] _onSongComplete error: $e'));
+        final bool userExplicitlyPaused = _lastUserPauseTime != null &&
+            DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 3);
+
+        final effDur = _duration.inMilliseconds > 0
+            ? _duration
+            : (_currentSong?.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero);
+
+        final bool isNearTrackEnd = effDur > const Duration(seconds: 5) &&
+            _position >= effDur - const Duration(milliseconds: 900);
+
+        final bool naturalTrackEnd = (wasPlaying && !state.playing && isNearTrackEnd && !userExplicitlyPaused);
+
+        if (state.processingState == ProcessingState.completed || naturalTrackEnd) {
+          if (_currentSong != null && _lastCompletedSongId != _currentSong!.id) {
+            _lastCompletedSongId = _currentSong!.id;
+            debugPrint(
+                '[Player] ✓ Song completed (${naturalTrackEnd ? 'natural end of stream' : 'state.completed'}): "${_currentSong?.title ?? 'unknown'}"');
+            _onSongComplete().catchError(
+                (e) => debugPrint('[Player] _onSongComplete error: $e'));
+          }
         }
 
         if (state.processingState == ProcessingState.buffering && !wasPlaying) {
@@ -1671,6 +1703,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _position = position;
         _positionController.add(position);
         _checkAndPreloadNextSong(position);
+
+        final effDur = _duration.inMilliseconds > 0
+            ? _duration
+            : (_currentSong?.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero);
+        if (!_isRenderingRemotely &&
+            _isPlaying &&
+            !_isTransitioningSong &&
+            effDur > const Duration(seconds: 5) &&
+            position >= effDur - const Duration(milliseconds: 250)) {
+          if (_currentSong != null && _lastCompletedSongId != _currentSong!.id) {
+            _lastCompletedSongId = _currentSong!.id;
+            debugPrint('[Player Mobile] ✓ Position stream reached end of track: "${_currentSong?.title}" — advancing automatically');
+            _onSongComplete().catchError(
+                (e) => debugPrint('[Player] _onSongComplete error: $e'));
+          }
+        }
 
         if (lastSystemUpdate == null ||
             (position.inMilliseconds - lastSystemUpdate!.inMilliseconds).abs() > 1000) {
@@ -2072,6 +2120,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _currentSong = song;
+    _lastCompletedSongId = null;
     _lastPreloadedSongId = null;
     _resolvedArtworkUrl = null;
     _position = initialPosition ?? Duration.zero;
@@ -2520,6 +2569,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> pause() async {
     // 1. Instant optimistic UI toggle (0ms latency)
     _isPlaying = false;
+    _lastUserPauseTime = DateTime.now();
     _optimisticLocalPlayPauseState = false;
     _optimisticLocalPlayPauseTime = DateTime.now();
     notifyListeners();
