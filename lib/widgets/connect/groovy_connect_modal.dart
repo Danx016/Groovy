@@ -58,6 +58,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
   ClientDeviceInfo? _deviceInfo;
   List<UpnpDevice> _upnpDevices = [];
   Timer? _pollTimer;
+  Timer? _discoveryPeriodicTimer;
   bool _isSearching = false;
   String? _connectingDeviceId;
 
@@ -117,6 +118,14 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
       }
     }
 
+    _discoveryPeriodicTimer?.cancel();
+    _discoveryPeriodicTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) {
+        final currentAuth = Provider.of<AuthProvider>(context, listen: false);
+        groovyConnect.discover(authToken: currentAuth.token);
+      }
+    });
+
     Future.delayed(const Duration(seconds: 4), () {
       if (mounted) setState(() => _isSearching = false);
     });
@@ -125,6 +134,7 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _discoveryPeriodicTimer?.cancel();
     if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       try {
         GoogleCastDiscoveryManager.instance.stopDiscovery();
@@ -406,21 +416,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
     final isGroovyConnected = groovyConnect.isConnected;
     final isRemoteConnected = isCastConnected || isUpnpConnected || isGroovyConnected;
 
-    // Filter and deduplicate devices by physical identity (name + platform)
+    // Filter out local self-device and deduplicate by unique device ID
     final Map<String, GroovyRemoteDevice> uniqueDevices = {};
     for (final dev in groovyConnect.discoveredDevices) {
-      final isThisDeviceConnected = isGroovyConnected &&
-          (groovyConnect.connectedDevice?.id == dev.id ||
-           (groovyConnect.connectedDevice?.name.trim().toLowerCase() == dev.name.trim().toLowerCase() &&
-            groovyConnect.connectedDevice?.platform.trim().toLowerCase() == dev.platform.trim().toLowerCase()));
-
-      final key = '${dev.platform.trim().toLowerCase()}_${dev.name.trim().toLowerCase()}';
-
-      if (!uniqueDevices.containsKey(key)) {
-        uniqueDevices[key] = dev;
-      } else if (isThisDeviceConnected) {
-        uniqueDevices[key] = dev;
-      }
+      if (dev.id == groovyConnect.localDeviceId) continue;
+      uniqueDevices[dev.id] = dev;
     }
     final groovyDevices = uniqueDevices.values.toList();
 
@@ -608,7 +608,9 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
                     return _buildDeviceTile(
                       icon: isLaptop ? Icons.laptop_windows_rounded : Icons.smartphone_rounded,
                       title: dev.name,
-                      subtitle: '${dev.platform} • En la nube',
+                      subtitle: dev.isLocalLan
+                          ? '${dev.platform} • Red local (Wi-Fi)'
+                          : '${dev.platform} • En la nube',
                       badge: isThisConnected
                           ? (player.isPlaying ? 'Reproduciendo' : 'En remoto')
                           : (dev.isPlaying ? 'En uso' : 'En línea'),

@@ -51,13 +51,11 @@ router.get('/playback', async (req, res) => {
       ORDER BY last_ping_at DESC
     `, [userId, userId, client.ip]);
 
-    // Deduplicate by physical device (same platform and device name/model)
+    // Deduplicate by unique device_key rather than generic platform+name
     const seen = new Set();
     const uniqueDevices = [];
     for (const row of rows) {
-      const p = (row.platform || '').trim().toLowerCase();
-      const d = (row.device_name || row.device_model || '').trim().toLowerCase();
-      const key = `${p}_${d}`;
+      const key = row.device_key || row.device_id || `${(row.platform || '').trim().toLowerCase()}_${(row.device_name || row.device_model || '').trim().toLowerCase()}`;
       if (!seen.has(key)) {
         seen.add(key);
         uniqueDevices.push(row);

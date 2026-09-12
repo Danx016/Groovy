@@ -182,20 +182,67 @@ class GroovyConnectService extends ChangeNotifier {
         type: InternetAddressType.IPv4,
         includeLinkLocal: false,
       );
+
+      bool isVirtualAdapter(String name) {
+        final lower = name.toLowerCase();
+        return lower.contains('vethernet') ||
+            lower.contains('wsl') ||
+            lower.contains('virtual') ||
+            lower.contains('vbox') ||
+            lower.contains('vmware') ||
+            lower.contains('docker') ||
+            lower.contains('hyper-v') ||
+            lower.contains('tailscale') ||
+            lower.contains('zerotier') ||
+            lower.contains('tap') ||
+            lower.contains('tun');
+      }
+
+      // Priority 1: Physical Wi-Fi / WLAN interfaces
       for (final iface in interfaces) {
+        if (isVirtualAdapter(iface.name)) continue;
         final name = iface.name.toLowerCase();
-        if (name.contains('wlan') || name.contains('wi-fi') || name.contains('eth') || name.contains('ethernet') || name.contains('en')) {
+        if (name.contains('wlan') || name.contains('wi-fi') || name.contains('wl')) {
           for (final addr in iface.addresses) {
-            if (!addr.isLoopback && !addr.address.startsWith('127.')) {
+            if (!addr.isLoopback && !addr.address.startsWith('127.') && !addr.address.startsWith('169.254.')) {
               _localIp = addr.address;
               return;
             }
           }
         }
       }
+
+      // Priority 2: Physical Ethernet / LAN interfaces
+      for (final iface in interfaces) {
+        if (isVirtualAdapter(iface.name)) continue;
+        final name = iface.name.toLowerCase();
+        if (name.contains('eth') || name.contains('ethernet') || name.contains('en')) {
+          for (final addr in iface.addresses) {
+            if (!addr.isLoopback && !addr.address.startsWith('127.') && !addr.address.startsWith('169.254.')) {
+              _localIp = addr.address;
+              return;
+            }
+          }
+        }
+      }
+
+      // Priority 3: Non-virtual adapter with standard private IP (192.168.x.x, 10.x.x.x)
+      for (final iface in interfaces) {
+        if (isVirtualAdapter(iface.name)) continue;
+        for (final addr in iface.addresses) {
+          if (!addr.isLoopback &&
+              !addr.address.startsWith('127.') &&
+              (addr.address.startsWith('192.168.') || addr.address.startsWith('10.'))) {
+            _localIp = addr.address;
+            return;
+          }
+        }
+      }
+
+      // Fallback: Any non-loopback IPv4
       for (final iface in interfaces) {
         for (final addr in iface.addresses) {
-          if (!addr.isLoopback && !addr.address.startsWith('127.')) {
+          if (!addr.isLoopback && !addr.address.startsWith('127.') && !addr.address.startsWith('169.254.')) {
             _localIp = addr.address;
             return;
           }
@@ -208,10 +255,10 @@ class GroovyConnectService extends ChangeNotifier {
     if (kIsWeb || host.isEmpty || host == '127.0.0.1' || host == _localIp) return;
     HttpClient? client;
     try {
-      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 350);
+      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1800);
       final uri = Uri.parse('http://$host:$port/groovy/info');
-      final request = await client.getUrl(uri).timeout(const Duration(milliseconds: 350));
-      final response = await request.close().timeout(const Duration(milliseconds: 350));
+      final request = await client.getUrl(uri).timeout(const Duration(milliseconds: 1800));
+      final response = await request.close().timeout(const Duration(milliseconds: 1800));
       if (response.statusCode == HttpStatus.ok) {
         final existing = _discoveredDevices[remoteDeviceId];
         if (existing != null) {
@@ -615,9 +662,31 @@ class GroovyConnectService extends ChangeNotifier {
         });
         final bytes = utf8.encode(discoverPacket);
 
-        // Broadcast to 255.255.255.255
-        _udpSocket?.send(bytes, InternetAddress('255.255.255.255'), _defaultUdpPort);
+        // 1a. Send to subnet-directed broadcast on all non-loopback interfaces (crucial for Wi-Fi routers)
+        try {
+          final interfaces = await NetworkInterface.list(
+            type: InternetAddressType.IPv4,
+            includeLinkLocal: false,
+          );
+          for (final iface in interfaces) {
+            for (final addr in iface.addresses) {
+              if (!addr.isLoopback && !addr.address.startsWith('127.')) {
+                final parts = addr.address.split('.');
+                if (parts.length == 4) {
+                  final subnetBroadcast = '${parts[0]}.${parts[1]}.${parts[2]}.255';
+                  try {
+                    _udpSocket?.send(bytes, InternetAddress(subnetBroadcast), _defaultUdpPort);
+                  } catch (_) {}
+                }
+              }
+            }
+          }
+        } catch (_) {}
 
+        // 1b. Send global and SSDP multicast
+        try {
+          _udpSocket?.send(bytes, InternetAddress('255.255.255.255'), _defaultUdpPort);
+        } catch (_) {}
         try {
           _udpSocket?.send(bytes, InternetAddress('239.255.255.250'), _defaultUdpPort);
         } catch (_) {}
@@ -655,29 +724,6 @@ class GroovyConnectService extends ChangeNotifier {
 
         final remoteDeviceName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
         final remoteDevicePlatform = item['platform']?.toString() ?? 'Dispositivo';
-
-        // Do not discover self by matching name & platform
-        if (remoteDeviceName.trim().toLowerCase() == _localDeviceName.trim().toLowerCase() &&
-            remoteDevicePlatform.trim().toLowerCase() == _localPlatform.trim().toLowerCase()) {
-          continue;
-        }
-
-        // If we are currently connected to a device with the same name and platform,
-        // ignore duplicate ghost entries that have a different deviceId
-        if (_connectedDevice != null &&
-            _connectedDevice!.id != remoteDeviceId &&
-            _connectedDevice!.name.trim().toLowerCase() == remoteDeviceName.trim().toLowerCase() &&
-            _connectedDevice!.platform.trim().toLowerCase() == remoteDevicePlatform.trim().toLowerCase()) {
-          continue;
-        }
-
-        // Clean up any stale duplicate device entry with the same physical name and platform
-        _discoveredDevices.removeWhere((id, dev) {
-          if (id == remoteDeviceId) return false;
-          if (_connectedDevice?.id == id) return false;
-          return dev.name.trim().toLowerCase() == remoteDeviceName.trim().toLowerCase() &&
-              dev.platform.trim().toLowerCase() == remoteDevicePlatform.trim().toLowerCase();
-        });
 
         final isPlaying = item['is_playing'] == 1 || item['is_playing'] == true;
 
