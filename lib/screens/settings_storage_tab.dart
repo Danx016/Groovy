@@ -9,6 +9,7 @@ import '../services/bpm_analyzer_service.dart';
 import '../services/cache_settings_service.dart';
 import '../services/local_music_service.dart';
 import '../services/offline_service.dart';
+import '../services/audio_cache_service.dart';
 import '../theme/app_theme.dart';
 import 'download_playlist_status_screen.dart';
 import '../widgets/settings/settings_section_card.dart';
@@ -26,6 +27,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   final _bpmAnalyzer = BpmAnalyzerService();
   final _cacheSettings = CacheSettingsService();
   final _offlineService = OfflineService();
+  final _audioCache = AudioCacheService();
 
   bool _imageCacheEnabled = true;
   bool _musicCacheEnabled = true;
@@ -35,6 +37,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   final int _totalSongs = 0;
   int _downloadedCount = 0;
   String _downloadedSize = '0 B';
+  String _musicCacheSize = '0 B';
   int _parallelDownloads = 3;
   bool _keepScreenOn = true;
 
@@ -80,10 +83,12 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   Future<void> _loadOfflineInfo() async {
     final count = _offlineService.getDownloadedCount();
     final size = await _offlineService.getDownloadedSize();
+    final musicCacheBytes = await _audioCache.getCacheSizeBytes();
     if (mounted) {
       setState(() {
         _downloadedCount = count;
         _downloadedSize = _offlineService.formatSize(size);
+        _musicCacheSize = _audioCache.formatSize(musicCacheBytes);
       });
     }
   }
@@ -109,7 +114,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
               icon: CupertinoIcons.music_note,
               iconGradient: const [Color(0xFF34C759), Color(0xFF30D158)],
               title: AppLocalizations.of(context)!.musicCacheTitle,
-              subtitle: AppLocalizations.of(context)!.musicCacheSubtitle,
+              subtitle: '${AppLocalizations.of(context)!.musicCacheSubtitle} ($_musicCacheSize)',
               value: _musicCacheEnabled,
               onChanged: _toggleMusicCache,
             ),
@@ -211,6 +216,10 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   void _toggleMusicCache(bool value) async {
     setState(() => _musicCacheEnabled = value);
     await _cacheSettings.setMusicCacheEnabled(value);
+    if (!value) {
+      await _audioCache.clearCache();
+      await _loadOfflineInfo();
+    }
   }
 
   void _toggleBpmCache(bool value) async {
@@ -578,6 +587,8 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   void _clearAllCache() async {
     await DefaultCacheManager().emptyCache();
     await _bpmAnalyzer.clearCache();
+    await _audioCache.clearCache();
+    await _loadOfflineInfo();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.allCacheCleared)),

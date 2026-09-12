@@ -5,6 +5,22 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-09-11
+
+### Added
+- **Caché de Música en disco local (`AudioCacheService`)**: Almacenamiento persistente de canciones en disco temporal (`groovy_music_cache/`), permitiendo reproducción instantánea en 0 ms sin consumir datos al repetir canciones.
+- Visualización en tiempo real del tamaño ocupado por la caché de música en Ajustes de Almacenamiento y limpieza completa integrada.
+- **Precarga anticipada de audio (Prebuffering)**: Descarga automática en segundo plano de la siguiente canción mientras suena la actual, eliminando tiempos de espera entre pistas.
+
+### Fixed
+- **Reproducción continua sin interrupciones (`_playNextSongAutomatic`)**: Solucionado el bloqueo de cola que detenía la música al terminar una canción completa, eliminando el debounce inadecuado y garantizando transiciones directas y seguras.
+- Paridad absoluta de caché y precarga en Windows y Android.
+
+## [1.1.7] - 2026-09-11
+
+### Added
+- Sincronización de servidor para Groovy Connect, optimización GPU para renderizado de letras y endurecimiento de seguridad.
+
 ## [1.1.6] - 2026-09-11
 
 ### Fixed

@@ -9,6 +9,7 @@ import 'library_database_service.dart';
 import 'recommendation_service.dart';
 import 'ytdlp_service.dart';
 import 'album_resolver_service.dart';
+import 'audio_cache_service.dart';
 
 class PingResult {
   final bool success;
@@ -465,8 +466,31 @@ class YoutubeService {
   }
 
   Future<AudioSource?> getYoutubeAudioSource(Song song) async {
+    // 1. Check local audio cache first (instant 0ms playback on Windows & Android)
+    final cached = await AudioCacheService().getCachedSongFile(song.id);
+    if (cached != null) {
+      debugPrint('[YouTube] ⚡ Playing "${song.title}" (${song.id}) directly from local disk cache: ${cached.path}');
+      return AudioSource.file(
+        cached.path,
+        tag: song.id,
+      );
+    }
+
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
+
+    // Check again with resolved videoId if song.id was a custom ID
+    final cachedByVideoId = await AudioCacheService().getCachedSongFile(videoId);
+    if (cachedByVideoId != null) {
+      debugPrint('[YouTube] ⚡ Playing "${song.title}" ($videoId) directly from local disk cache: ${cachedByVideoId.path}');
+      return AudioSource.file(
+        cachedByVideoId.path,
+        tag: song.id,
+      );
+    }
+
+    // Trigger background caching so subsequent plays of this song will be cached
+    unawaited(AudioCacheService().preloadSong(song, this));
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Desktop: always route through our local proxy so that the correct

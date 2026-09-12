@@ -21,6 +21,7 @@ import '../services/auto_dj_service.dart';
 import '../services/ytdlp_service.dart';
 import '../services/lrclib_service.dart';
 import '../services/palette_service.dart';
+import '../services/audio_cache_service.dart';
 
 import '../services/storage_service.dart';
 import '../services/groovy_api_service.dart';
@@ -45,6 +46,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final WindowsSystemService _windowsService = WindowsSystemService();
   final ReplayGainService _replayGainService = ReplayGainService();
   final AutoDjService _autoDjService = AutoDjService();
+  final AudioCacheService _audioCacheService = AudioCacheService();
 
   final CastService _castService;
   late final UpnpService _upnpService;
@@ -1328,25 +1330,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       '[Player Preload] ⚡ Pre-buffering next song: "${nextSong.title}" (${nextSong.id})',
     );
 
-    // 1. Preload stream URL / YouTube Direct Stream Info
+    // 1. Preload audio stream into local disk cache for instant 0ms startup
     if (nextSong.isLocal != true) {
-      final cleanId = nextSong.id.replaceFirst('ytmusic://', '');
-      if (_youtubeService.isYoutube ||
-          nextSong.id.startsWith('ytmusic://') ||
-          nextSong.id.length == 11) {
-        unawaited(
-          YtDlpService().resolveStreamInfo(cleanId).catchError((e) {
-            debugPrint('[Player Preload] YtDlp pre-resolve error (harmless): $e');
-            return YtStreamInfo(url: '', headers: {});
-          }),
-        );
-      } else {
-        unawaited(
-          _youtubeService.resolveStreamUrlAsync(nextSong).catchError((e) {
-            debugPrint('[Player Preload] Pre-resolve error (harmless): $e');
-            return '';
-          }),
-        );
+      unawaited(
+        _audioCacheService.preloadSong(nextSong, _youtubeService).catchError((e) {
+          debugPrint('[Player Preload] AudioCache preload error (harmless): $e');
+          return null;
+        }),
+      );
+      final cleanId = nextSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
+      if (cleanId.length == 11) {
+        YtDlpService().warmUpStreamCache(cleanId);
       }
     }
 
@@ -1542,6 +1536,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           } catch (_) {}
         }
       }
+      await _audioCacheService.cleanOldCacheFiles();
     } catch (_) {}
   }
 
@@ -1853,7 +1848,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (_youtubeService.isYoutube && _currentIndex >= _queue.length - 2 && completedSong != null) {
           _fetchAndQueueRadioTracks(completedSong).catchError((_) {});
         }
-        await skipNext();
+        await _playNextSongAutomatic();
       } else if (_youtubeService.isYoutube && completedSong != null) {
         final moreSimilar = await _youtubeService.getSimilarSongs(completedSong.id, count: 20);
         final existingIds = _queue.map((s) => s.id).toSet();
@@ -1862,7 +1857,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _queue.addAll(toAdd);
           notifyListeners();
           _saveQueueState();
-          await skipNext();
+          await _playNextSongAutomatic();
         } else {
           await _handleEndOfQueue();
         }
@@ -1874,14 +1869,67 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _playNextSongAutomatic() async {
+    if (_queue.isEmpty) {
+      await _handleEndOfQueue();
+      return;
+    }
+
+    int nextIndex = -1;
+
+    if (_shuffleEnabled && _queue.length > 1) {
+      _shuffleHistory.add(_currentSong?.id ?? '');
+      if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
+      int next;
+      do {
+        next = Random().nextInt(_queue.length);
+      } while (next == _currentIndex);
+      nextIndex = next;
+    } else if (_currentIndex < _queue.length - 1) {
+      nextIndex = _currentIndex + 1;
+    } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
+      nextIndex = 0;
+    }
+
+    if (nextIndex >= 0 && nextIndex < _queue.length) {
+      final nextSong = _queue[nextIndex];
+      _currentIndex = nextIndex;
+      _currentSong = nextSong;
+      _position = Duration.zero;
+      _duration = nextSong.duration != null ? Duration(seconds: nextSong.duration!) : Duration.zero;
+      _isLoading = true;
+      _lastPlaybackError = null;
+      notifyListeners();
+      _refreshArtworkUrl().catchError((_) {});
+      _updateAndroidAuto();
+
+      if (_youtubeService.isYoutube && nextIndex >= _queue.length - 2) {
+        _fetchAndQueueRadioTracks(nextSong).catchError((_) {});
+      }
+
+      // Reset previous playback away from completed to prevent duplicate completion events
+      try {
+        await _audioPlayer.stop();
+      } catch (_) {}
+
+      await playSong(nextSong, startIndex: nextIndex, forcePlay: true);
+    } else {
+      await _handleEndOfQueue();
+    }
+  }
+
   Future<void> _handleEndOfQueue() async {
     if (_autoDjService.isEnabled) {
       await _addAutoDjSongs();
 
       if (_currentIndex < _queue.length - 1) {
-        await skipToIndex(_currentIndex + 1);
+        await _playNextSongAutomatic();
+        return;
       }
     }
+    _isPlaying = false;
+    _isLoading = false;
+    notifyListeners();
   }
 
   /// Plays a single song immediately and automatically populates the queue with similar / radio songs in the background.
@@ -2284,6 +2332,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         final nextSong = _queue[_currentIndex + 1];
         if (nextSong.isLocal != true) {
           YtDlpService().warmUpStreamCache(nextSong.id);
+          unawaited(_audioCacheService.preloadSong(nextSong, _youtubeService));
         }
       }
     } catch (e) {
