@@ -5,6 +5,22 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-09-12
+
+### Added
+- **Auto-actualizador y auto-recuperación de `yt-dlp` (`YtDlpService`)**: Detección de versiones y actualización automática en segundo plano tras fallos de streaming, con botón de actualización manual en Ajustes.
+- **Detección robusta en Groovy Connect (`GroovyConnectService`)**: Subnet-directed broadcast (`x.y.z.255`), exclusión de adaptadores virtuales y escaneo continuo cada 3 segundos.
+- **Caché LRU con límite de memoria en `PaletteService`**: Memoria RAM acotada (máx. 150 portadas) con desalojo automático del elemento más antiguo.
+
+### Fixed
+- **Salto automático fluido al finalizar canciones (`PlayerProvider`)**: Implementado fallback EOT (End-Of-Track) que detecta el fin de stream y posición 100%, eliminando la pausa involuntaria al terminar canciones de YouTube.
+- **Seguridad en Backend (`routes/auth.js`)**: Validación criptográfica de Google OAuth `idToken` con servidores oficiales de Google para prevenir suplantación de identidad.
+- **Blindaje en servidor local de Groovy Connect**: Bloqueo de peticiones CSRF cruzadas desde sitios web externos no autorizados y validación de `X-Groovy-Sender`.
+- **Manejo de sesión expirada (JWT 401)**: Cierre de sesión limpio con aviso al usuario, evitando bibliotecas en blanco.
+- **Eliminación de bloqueo de emulador**: Se desactivó el cierre forzado de la app (`exit(0)`) para evitar falsos positivos en ROMs personalizadas (MIUI, OxygenOS, LineageOS).
+- **Optimización de E/S en disco**: Eliminadas llamadas síncronas `statSync()` y `lengthSync()` en `AudioCacheService`.
+- **Salvaguardas de plataforma en `CastService`**: Evita excepciones de canal en Windows y Linux de escritorio.
+
 ## [1.1.8] - 2026-09-11
 
 ### Added

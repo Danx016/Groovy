@@ -35,7 +35,7 @@ Documento técnico detallado que describe la arquitectura completa, el funcionam
 ## 1. Resumen Ejecutivo y Ficha Técnica
 
 * **Nombre del Proyecto:** Groovy
-* **Versión:** 1.0.14
+* **Versión:** 1.1.9
 * **Propósito:** Reproductor y plataforma de streaming de música moderno, multiplataforma y sin anuncios, con una interfaz inspirada en la elegancia de *Apple Music*.
 * **Plataformas Soportadas:** Android (APK + Android Auto), Windows, macOS, Linux, iOS y Web.
 * **Stack Tecnológico:**

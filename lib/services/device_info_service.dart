@@ -51,7 +51,7 @@ class DeviceInfoService {
     String platform = 'Unknown';
     String deviceModel = 'Groovy Device';
     String osVersion = 'Unknown OS';
-    String appVersion = '1.1.8';
+    String appVersion = '1.1.9';
 
     try {
       final packageInfo = await PackageInfo.fromPlatform();
