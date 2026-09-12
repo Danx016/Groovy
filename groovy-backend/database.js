@@ -8,7 +8,7 @@ const dbConfig = {
   password: process.env.DB_PASSWORD || 'groovy_pass_2026',
   database: process.env.DB_NAME || 'groovy_db',
   waitForConnections: true,
-  connectionLimit: 15,
+  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '40', 10),
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,

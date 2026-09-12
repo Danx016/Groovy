@@ -248,45 +248,39 @@ class AudioCacheService {
       if (!await dir.exists()) return;
 
       final now = DateTime.now();
-      final files = <File>[];
+      final filesWithStat = <({File file, FileStat stat})>[];
       int totalBytes = 0;
 
       await for (final entity in dir.list(recursive: false, followLinks: false)) {
         if (entity is File) {
+          final stat = await entity.stat();
           // Remove stray .part files from interrupted downloads older than 1 hour
           if (entity.path.endsWith('.part')) {
-            final stat = await entity.stat();
             if (now.difference(stat.modified).inHours > 1) {
               await entity.delete().catchError((_) => entity);
             }
             continue;
           }
 
-          final stat = await entity.stat();
           if (now.difference(stat.modified) > maxAge) {
             await entity.delete().catchError((_) => entity);
             continue;
           }
 
-          files.add(entity);
+          filesWithStat.add((file: entity, stat: stat));
           totalBytes += stat.size;
         }
       }
 
       // If over quota, delete oldest modified files until under 75% quota
       if (totalBytes > maxBytes) {
-        files.sort((a, b) {
-          final statA = a.statSync();
-          final statB = b.statSync();
-          return statA.modified.compareTo(statB.modified);
-        });
+        filesWithStat.sort((a, b) => a.stat.modified.compareTo(b.stat.modified));
 
         final target = (maxBytes * 0.75).round();
-        for (final f in files) {
+        for (final item in filesWithStat) {
           if (totalBytes <= target) break;
-          final sz = f.lengthSync();
-          await f.delete().catchError((_) => f);
-          totalBytes -= sz;
+          await item.file.delete().catchError((_) => item.file);
+          totalBytes -= item.stat.size;
         }
       }
     } catch (e) {

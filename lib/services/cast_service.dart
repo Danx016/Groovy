@@ -69,8 +69,9 @@ class CastService extends ChangeNotifier {
   }
 
   Future<void> _initialize() async {
-    
-    if (Platform.isIOS) return;
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS)) {
+      return;
+    }
     _sessionSubscription = _sessionManager.currentSessionStream.listen((
       session,
     ) {

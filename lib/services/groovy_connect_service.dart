@@ -346,9 +346,22 @@ class GroovyConnectService extends ChangeNotifier {
   }
 
   Future<void> _handleHttpRequest(HttpRequest req) async {
-    req.response.headers.add('Access-Control-Allow-Origin', '*');
+    final origin = req.headers.value('origin');
+    if (origin != null &&
+        !origin.startsWith('http://localhost') &&
+        !origin.startsWith('http://127.0.0.1') &&
+        !origin.startsWith('http://192.168.') &&
+        !origin.startsWith('http://10.') &&
+        !origin.startsWith('http://172.')) {
+      req.response.statusCode = HttpStatus.forbidden;
+      req.response.write('Forbidden origin');
+      await req.response.close();
+      return;
+    }
+
+    req.response.headers.add('Access-Control-Allow-Origin', origin ?? '*');
     req.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    req.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
+    req.response.headers.add('Access-Control-Allow-Headers', 'Content-Type, X-Groovy-Sender, X-Groovy-Auth');
 
     if (req.method == 'OPTIONS') {
       req.response.statusCode = HttpStatus.ok;
@@ -888,6 +901,7 @@ class GroovyConnectService extends ChangeNotifier {
       final uri = Uri.parse('http://$host:$port/groovy/transfer');
       final request = await client.postUrl(uri).timeout(const Duration(milliseconds: 1000));
       request.headers.contentType = ContentType.json;
+      request.headers.set('X-Groovy-Sender', _localDeviceId);
       request.write(jsonEncode({
         'song': song.copyWith(isLocal: false).toJson(),
         'positionMs': positionMs,
@@ -922,6 +936,7 @@ class GroovyConnectService extends ChangeNotifier {
       final uri = Uri.parse('http://$host:$port/groovy/control');
       final request = await client.postUrl(uri).timeout(const Duration(milliseconds: 600));
       request.headers.contentType = ContentType.json;
+      request.headers.set('X-Groovy-Sender', _localDeviceId);
       request.write(jsonEncode({'action': action, 'value': value}));
       final response = await request.close().timeout(const Duration(milliseconds: 600));
       return response.statusCode == HttpStatus.ok;

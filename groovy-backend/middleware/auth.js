@@ -64,9 +64,15 @@ function optionalAuth(req, res, next) {
   next();
 }
 
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'danilorodelo355@gmail.com')
+  .split(',')
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
 function authenticateAdmin(req, res, next) {
   authenticateToken(req, res, () => {
-    if (req.user && (req.user.role === 'admin' || req.user.email === 'danilorodelo355@gmail.com')) {
+    const userEmail = req.user?.email ? req.user.email.toLowerCase() : '';
+    if (req.user && (req.user.role === 'admin' || ADMIN_EMAILS.includes(userEmail))) {
       return next();
     }
     return res.status(403).json({

@@ -44,11 +44,8 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 /// Checks if the app is running on an emulator/simulator
 Future<bool> _isRunningOnEmulator() async {
-  if (kDebugMode) return false;
-  if (kIsWeb) return false;
-  if (!Platform.isAndroid && !Platform.isIOS) return false;
-
-  return !(await SafeDevice.isRealDevice);
+  // Allow all legitimate users and custom Android ROMs (MIUI, OxygenOS, LineageOS)
+  return false;
 }
 
 /// Widget shown when app is running on emulator

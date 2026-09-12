@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:palette_generator/palette_generator.dart';
 
 class PaletteService {
+  static const int _maxCacheSize = 150;
   static final Map<String, List<Color>> _colorCache = {};
   static final Map<String, Future<List<Color>>> _inFlightRequests = {};
 
@@ -38,6 +39,10 @@ class PaletteService {
     _inFlightRequests[imageId] = future;
     try {
       final result = await future;
+      if (_colorCache.length >= _maxCacheSize) {
+        // Evict oldest entry to keep memory bounded (LRU)
+        _colorCache.remove(_colorCache.keys.first);
+      }
       _colorCache[imageId] = result;
       return result;
     } finally {
