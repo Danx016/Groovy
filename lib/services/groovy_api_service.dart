@@ -65,6 +65,15 @@ class GroovyApiService {
   String _baseUrl = defaultBaseUrl;
   final http.Client _client = http.Client();
 
+  /// Callback triggered when an authenticated endpoint returns 401 Unauthorized or 403 Forbidden.
+  void Function()? onUnauthorized;
+
+  void checkUnauthorized(int statusCode) {
+    if (statusCode == 401 || statusCode == 403) {
+      onUnauthorized?.call();
+    }
+  }
+
   String get baseUrl => _baseUrl;
 
   void setBaseUrl(String url) {
@@ -566,6 +575,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/auth/me');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 8));
+      checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         if (data['user'] != null) {
@@ -595,6 +605,7 @@ class GroovyApiService {
       ).timeout(const Duration(seconds: 12));
 
       final data = jsonDecode(res.body) as Map<String, dynamic>;
+      checkUnauthorized(res.statusCode);
       if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
         return AuthResponse(
           success: true,
@@ -623,6 +634,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/library/favorites');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
+      checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (data['favorites'] as List<dynamic>?) ?? [];
@@ -686,6 +698,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/library/playlists');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
+      checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['playlists'] ?? []);
@@ -770,6 +783,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/library/history?limit=$limit');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
+      checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final list = (data['history'] as List<dynamic>?) ?? [];

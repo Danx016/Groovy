@@ -245,17 +245,62 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/google
 router.post('/google', async (req, res) => {
   try {
-    const { email, name, googleId, avatarUrl } = req.body;
+    const { email, name, googleId, avatarUrl, idToken } = req.body;
 
-    if (!email || !googleId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Email y Google ID son requeridos.',
-      });
+    let verifiedEmail = email ? email.trim().toLowerCase() : '';
+    let verifiedName = (name || (verifiedEmail ? verifiedEmail.split('@')[0] : '')).trim();
+    let verifiedGoogleId = googleId;
+    let verifiedAvatar = avatarUrl;
+
+    // Cryptographic validation against Google OAuth2
+    if (idToken) {
+      try {
+        const tokenRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+        if (tokenRes.ok) {
+          const payload = await tokenRes.json();
+          if (payload.email) {
+            verifiedEmail = payload.email.trim().toLowerCase();
+          }
+          if (payload.sub) {
+            verifiedGoogleId = payload.sub;
+          }
+          if (payload.name && !name) {
+            verifiedName = payload.name.trim();
+          }
+          if (payload.picture && !avatarUrl) {
+            verifiedAvatar = payload.picture;
+          }
+        } else {
+          console.warn('[Google Auth] Invalid idToken rejected, status:', tokenRes.status);
+          return res.status(401).json({
+            success: false,
+            error: 'Token de Google inválido o expirado.',
+          });
+        }
+      } catch (tokenErr) {
+        console.error('[Google Auth Verification Error]:', tokenErr.message);
+        return res.status(401).json({
+          success: false,
+          error: 'No se pudo verificar el token de Google con los servidores oficiales.',
+        });
+      }
+    } else {
+      if (!verifiedEmail || !verifiedGoogleId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Email y Google ID son requeridos.',
+        });
+      }
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(401).json({
+          success: false,
+          error: 'idToken es requerido para autenticar con Google en producción.',
+        });
+      }
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanName = (name || cleanEmail.split('@')[0]).trim();
+    const cleanEmail = verifiedEmail;
+    const cleanName = verifiedName;
     const clientInfo = parseFullClientInfo(req);
     const pool = getPool();
 

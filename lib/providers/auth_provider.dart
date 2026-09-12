@@ -28,7 +28,19 @@ class AuthProvider extends ChangeNotifier {
 
   AuthProvider([dynamic legacyParam, StorageService? storageService])
       : _storageService = (storageService ?? (legacyParam is StorageService ? legacyParam : StorageService())) {
+    _apiService.onUnauthorized = handleSessionExpired;
     _loadSavedSession();
+  }
+
+  Future<void> handleSessionExpired() async {
+    if (_state != AuthState.authenticated && _token == null) return;
+    _stopSessionHeartbeat();
+    await _storageService.clearUserAuth();
+    _currentUser = null;
+    _token = null;
+    _error = 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
+    _state = AuthState.unauthenticated;
+    notifyListeners();
   }
 
   void _startSessionHeartbeat() {
