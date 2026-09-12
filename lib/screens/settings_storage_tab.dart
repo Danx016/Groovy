@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -10,6 +12,7 @@ import '../services/cache_settings_service.dart';
 import '../services/local_music_service.dart';
 import '../services/offline_service.dart';
 import '../services/audio_cache_service.dart';
+import '../services/ytdlp_service.dart';
 import '../theme/app_theme.dart';
 import 'download_playlist_status_screen.dart';
 import '../widgets/settings/settings_section_card.dart';
@@ -40,6 +43,8 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   String _musicCacheSize = '0 B';
   int _parallelDownloads = 3;
   bool _keepScreenOn = true;
+  String? _ytDlpVersion;
+  bool _isUpdatingYtDlp = false;
 
   @override
   void initState() {
@@ -78,6 +83,12 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
       _parallelDownloads = _offlineService.getParallelDownloadsCount();
       _keepScreenOn = _offlineService.getKeepScreenOn();
     });
+
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      YtDlpService().getYtDlpVersion().then((v) {
+        if (mounted) setState(() => _ytDlpVersion = v);
+      });
+    }
   }
 
   Future<void> _loadOfflineInfo() async {
@@ -156,6 +167,8 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         const SizedBox(height: 24),
         _buildLocalMusicSection(),
         const SizedBox(height: 24),
+        _buildYtDlpSection(),
+        const SizedBox(height: 24),
         SettingsSectionCard(
           title: AppLocalizations.of(context)!.sectionBpmAnalysis,
           children: [
@@ -166,6 +179,71 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
           ],
         ),
         const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  Future<void> _handleUpdateYtDlp() async {
+    setState(() => _isUpdatingYtDlp = true);
+    final success = await YtDlpService().updateYtDlp(force: true);
+    final newVersion = await YtDlpService().getYtDlpVersion();
+    if (mounted) {
+      setState(() {
+        _isUpdatingYtDlp = false;
+        _ytDlpVersion = newVersion;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success
+                ? 'Motor yt-dlp actualizado con éxito (v${newVersion ?? "reciente"})'
+                : 'No se pudo actualizar o ya cuentas con la versión más reciente.',
+          ),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  }
+
+  Widget _buildYtDlpSection() {
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS) return const SizedBox.shrink();
+
+    final isDark = context.isDark;
+    return SettingsSectionCard(
+      title: 'Motor de Streaming (yt-dlp)',
+      children: [
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [Color(0xFFFF9500), Color(0xFFFF5E3A)]),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(CupertinoIcons.arrow_2_circlepath, color: Colors.white, size: 18),
+          ),
+          title: const Text('Extractor de Audio yt-dlp', style: TextStyle(fontSize: 16)),
+          subtitle: Text(
+            _ytDlpVersion != null
+                ? 'Versión activa: v$_ytDlpVersion'
+                : 'Detectando ejecutable...',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
+            ),
+          ),
+          trailing: _isUpdatingYtDlp
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : TextButton(
+                  onPressed: _handleUpdateYtDlp,
+                  child: const Text('Actualizar'),
+                ),
+        ),
       ],
     );
   }

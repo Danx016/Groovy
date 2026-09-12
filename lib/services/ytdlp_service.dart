@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
 
 List<Map<String, dynamic>> _decodeJsonList(String jsonStr) {
@@ -530,14 +531,190 @@ class YtDlpService {
     }
   }
 
-  // ── Binary Detection (Desktop) ──────────────────────────────────────────────
+  // ── Binary Detection & Auto-Updater (Desktop) ──────────────────────────────
+
+  bool _isUpdating = false;
+  DateTime? _lastAutoRecoveryAttempt;
+
+  bool get isUpdating => _isUpdating;
+  String? get detectedYtDlpPath => _detectedYtDlpPath;
+
+  /// Gets the version of the currently detected yt-dlp binary.
+  Future<String?> getYtDlpVersion() async {
+    if (kIsWeb) return null;
+    await _detectBinaries();
+    if (_detectedYtDlpPath != null) {
+      try {
+        final result = await Process.run(_detectedYtDlpPath!, ['--version']).timeout(
+          const Duration(seconds: 4),
+        );
+        if (result.exitCode == 0) {
+          return result.stdout.toString().trim();
+        }
+      } catch (_) {}
+    }
+    return null;
+  }
+
+  void _triggerAutoRecovery() {
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS || _isUpdating) return;
+    final now = DateTime.now();
+    if (_lastAutoRecoveryAttempt != null && now.difference(_lastAutoRecoveryAttempt!) < const Duration(hours: 1)) {
+      return; // Prevent spamming GitHub API if an unresolvable network issue occurs
+    }
+    _lastAutoRecoveryAttempt = now;
+    debugPrint('[yt-dlp] Triggering background auto-recovery / update check...');
+    updateYtDlp().catchError((err) {
+      debugPrint('[yt-dlp] Auto-recovery update error: $err');
+      return false;
+    });
+  }
+
+  /// Checks and updates yt-dlp binary from official GitHub releases.
+  /// Returns `true` if updated successfully, `false` otherwise.
+  Future<bool> updateYtDlp({bool force = false}) async {
+    if (kIsWeb || _isUpdating) return false;
+    if (Platform.isAndroid || Platform.isIOS) return false;
+
+    _isUpdating = true;
+    try {
+      final currentVersion = await getYtDlpVersion();
+      debugPrint('[yt-dlp updater] Current local version: $currentVersion');
+
+      // 1. Check latest release on GitHub
+      final releaseUri = Uri.parse('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest');
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+      final request = await client.getUrl(releaseUri);
+      request.headers.add('User-Agent', 'GroovyMusicApp/1.0');
+      request.headers.add('Accept', 'application/vnd.github.v3+json');
+      final response = await request.close().timeout(const Duration(seconds: 10));
+
+      if (response.statusCode != HttpStatus.ok) {
+        debugPrint('[yt-dlp updater] Failed to check GitHub releases: HTTP ${response.statusCode}');
+        client.close();
+        return false;
+      }
+
+      final body = await utf8.decoder.bind(response).join();
+      client.close();
+      final releaseJson = jsonDecode(body) as Map<String, dynamic>;
+      final latestTag = (releaseJson['tag_name'] as String? ?? '').replaceFirst('v', '').trim();
+      debugPrint('[yt-dlp updater] Latest GitHub version: $latestTag');
+
+      if (!force && currentVersion != null && currentVersion == latestTag) {
+        debugPrint('[yt-dlp updater] Already on the latest version ($currentVersion).');
+        return true;
+      }
+
+      // 2. Identify the appropriate asset to download
+      final assets = releaseJson['assets'] as List<dynamic>? ?? [];
+      final targetAssetName = Platform.isWindows ? 'yt-dlp.exe' : (Platform.isMacOS ? 'yt-dlp_macos' : 'yt-dlp_linux');
+      
+      var downloadUrl = '';
+      for (final asset in assets) {
+        final name = asset['name'] as String? ?? '';
+        if (name == (Platform.isWindows ? 'yt-dlp.exe' : 'yt-dlp') || name == targetAssetName) {
+          downloadUrl = asset['browser_download_url'] as String? ?? '';
+          break;
+        }
+      }
+
+      if (downloadUrl.isEmpty) {
+        downloadUrl = Platform.isWindows
+            ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
+            : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+      }
+
+      debugPrint('[yt-dlp updater] Downloading from: $downloadUrl');
+
+      // 3. Download to app support directory
+      final appSupportDir = await getApplicationSupportDirectory();
+      if (!await appSupportDir.exists()) {
+        await appSupportDir.create(recursive: true);
+      }
+      final binaryName = Platform.isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+      final targetFile = File('${appSupportDir.path}/$binaryName');
+      final tempFile = File('${appSupportDir.path}/$binaryName.tmp');
+
+      final downloadClient = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+      final dlReq = await downloadClient.getUrl(Uri.parse(downloadUrl));
+      dlReq.headers.add('User-Agent', 'GroovyMusicApp/1.0');
+      final dlRes = await dlReq.close().timeout(const Duration(seconds: 120));
+
+      if (dlRes.statusCode != HttpStatus.ok) {
+        downloadClient.close();
+        debugPrint('[yt-dlp updater] Download failed with status: ${dlRes.statusCode}');
+        return false;
+      }
+
+      final sink = tempFile.openWrite();
+      await dlRes.pipe(sink);
+      downloadClient.close();
+
+      final fileSize = await tempFile.length();
+      if (fileSize < 5 * 1024 * 1024) {
+        debugPrint('[yt-dlp updater] Downloaded file is too small ($fileSize bytes). Aborting.');
+        if (await tempFile.exists()) await tempFile.delete();
+        return false;
+      }
+
+      // 4. On Linux/macOS, chmod +x
+      if (!Platform.isWindows) {
+        try {
+          await Process.run('chmod', ['+x', tempFile.path]);
+        } catch (_) {}
+      }
+
+      // 5. Replace target binary
+      if (await targetFile.exists()) {
+        try {
+          await targetFile.delete();
+        } catch (_) {
+          final oldBackup = File('${appSupportDir.path}/$binaryName.old');
+          if (await oldBackup.exists()) await oldBackup.delete();
+          await targetFile.rename(oldBackup.path);
+        }
+      }
+      await tempFile.rename(targetFile.path);
+
+      // Verify the new binary works
+      final testResult = await Process.run(targetFile.path, ['--version']).timeout(
+        const Duration(seconds: 4),
+      );
+      if (testResult.exitCode == 0) {
+        _detectedYtDlpPath = targetFile.path;
+        _detectionDone = true;
+        debugPrint('[yt-dlp updater] ✅ Successfully updated yt-dlp to v${testResult.stdout.toString().trim()}');
+        return true;
+      } else {
+        debugPrint('[yt-dlp updater] ❌ New binary failed verification.');
+        return false;
+      }
+    } catch (e, stack) {
+      debugPrint('[yt-dlp updater] Error during update: $e\n$stack');
+      return false;
+    } finally {
+      _isUpdating = false;
+    }
+  }
 
   Future<void> _detectBinaries() async {
     if (kIsWeb || _detectionDone || Platform.isAndroid || Platform.isIOS) return;
     _detectionDone = true;
 
+    String? userBinaryPath;
+    try {
+      final appSupportDir = await getApplicationSupportDirectory();
+      final binaryName = Platform.isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+      final file = File('${appSupportDir.path}/$binaryName');
+      if (file.existsSync()) {
+        userBinaryPath = file.path;
+      }
+    } catch (_) {}
+
     final exeDir = File(Platform.resolvedExecutable).parent.path;
     final ytDlpCandidates = <String>[
+      if (userBinaryPath != null) userBinaryPath,
       if (Platform.isWindows) ...[
         '$exeDir/yt-dlp.exe',
         '${Directory.current.path}/yt-dlp.exe',
@@ -682,9 +859,12 @@ class YtDlpService {
             debugPrint('[yt-dlp/Desktop] ✅ Resolved $cleanId via subprocess (reliable path)');
             return info;
           }
+        } else {
+          _triggerAutoRecovery();
         }
       } catch (e) {
         debugPrint('[yt-dlp/Desktop] Subprocess error, falling back to Dart: $e');
+        _triggerAutoRecovery();
       }
     }
 
