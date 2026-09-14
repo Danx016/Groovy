@@ -122,7 +122,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
         (themeService.themeMode == ThemeMode.system && platformDark);
 
     final song = widget.song;
-    final libraryProvider = Provider.of<LibraryProvider>(context);
+    final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
 
     final artistName = song?.artist ?? 'Artista';
@@ -164,11 +164,12 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
         ? youtubeService.getCoverArtUrl(matchedArtist!.coverArt!, size: 150)
         : coverUrl;
 
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
       padding: const EdgeInsets.only(top: 12, bottom: 32),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -310,7 +311,8 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
           ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildArtistAvatarImage(String? fallbackUrl, bool isDark) {

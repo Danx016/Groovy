@@ -219,7 +219,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 360)}) {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 300)}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     try {

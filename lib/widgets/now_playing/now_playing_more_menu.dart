@@ -63,15 +63,9 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
     final subtitleColor = isDark ? Colors.white60 : Colors.black54;
     final dividerColor = isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08);
 
-    final libraryProvider = Provider.of<LibraryProvider>(context);
-    final inLibSong = libraryProvider.cachedAllSongs.firstWhere(
-      (s) => s.id == currentSong.id,
-      orElse: () => currentSong,
-    );
-    final isStarred = libraryProvider.isSongStarred(currentSong.id) ||
-        (inLibSong.starred ?? (currentSong.starred ?? false));
-
-    final isInLibrary = libraryProvider.cachedAllSongs.any((s) => s.id == currentSong.id);
+    final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
+    final isStarred = libraryProvider.isSongStarred(currentSong.id) || (currentSong.starred ?? false);
+    final isInLibrary = libraryProvider.isSongInLibrary(currentSong.id);
 
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = currentSong.coverArt != null
@@ -83,18 +77,19 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
             ? CachedNetworkImageProvider(coverUrl)
             : const AssetImage('assets/default_cover.png') as ImageProvider);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: isDark ? 0.5 : 0.14),
-            blurRadius: 24,
-            offset: const Offset(0, -4),
-          ),
-        ],
-      ),
+    return RepaintBoundary(
+      child: Container(
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+              blurRadius: 16,
+              offset: const Offset(0, -3),
+            ),
+          ],
+        ),
       child: SafeArea(
         top: false,
         child: Column(
@@ -331,7 +326,8 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildMenuItem({

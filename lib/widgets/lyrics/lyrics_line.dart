@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/lyric_line.dart';
 
@@ -26,16 +28,18 @@ class LyricsLineWidget extends StatefulWidget {
 class _LyricsLineWidgetState extends State<LyricsLineWidget> {
   bool _isHovered = false;
 
-  static const List<String> _fontFallback = [
-    '-apple-system',
-    'BlinkMacSystemFont',
-    'SF Pro Display',
-    'SF Pro Text',
-    'Inter',
-    'Segoe UI',
-    'Roboto',
-    'sans-serif',
-  ];
+  static final List<String> _fontFallback = !kIsWeb && Platform.isAndroid
+      ? const ['Roboto', 'sans-serif']
+      : const [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'SF Pro Display',
+          'SF Pro Text',
+          'Inter',
+          'Segoe UI',
+          'Roboto',
+          'sans-serif',
+        ];
 
   static const List<Shadow> _currentLineShadow = [
     Shadow(
@@ -60,37 +64,37 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
                     ? 0.40
                     : 0.36)));
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-          child: AnimatedScale(
-            scale: isCurrent ? 1.025 : 1.0,
-            alignment: Alignment.centerLeft,
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeOutCubic,
-            child: AnimatedOpacity(
-              opacity: targetOpacity,
-              duration: const Duration(milliseconds: 350),
+    return RepaintBoundary(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+            child: AnimatedScale(
+              scale: isCurrent ? 1.025 : 1.0,
+              alignment: Alignment.centerLeft,
+              duration: const Duration(milliseconds: 320),
               curve: Curves.easeOutCubic,
-              child: AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 350),
+              child: AnimatedOpacity(
+                opacity: targetOpacity,
+                duration: const Duration(milliseconds: 320),
                 curve: Curves.easeOutCubic,
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                  color: Colors.white,
-                  height: 1.25,
-                  fontFamilyFallback: _fontFallback,
-                  shadows: isCurrent ? _currentLineShadow : null,
+                child: Text(
+                  widget.line.text,
+                  style: TextStyle(
+                    fontSize: 32,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.5,
+                    color: Colors.white,
+                    height: 1.25,
+                    fontFamilyFallback: _fontFallback,
+                    shadows: _currentLineShadow,
+                  ),
                 ),
-                child: Text(widget.line.text),
               ),
             ),
           ),

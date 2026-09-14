@@ -489,8 +489,11 @@ class YoutubeService {
       );
     }
 
-    // Trigger background caching so subsequent plays of this song will be cached
-    unawaited(AudioCacheService().preloadSong(song, this));
+    // Trigger background caching so subsequent plays of this song will be cached.
+    // Delayed slightly so it does not contest initial stream playback buffering and bandwidth.
+    Future.delayed(const Duration(seconds: 3), () {
+      AudioCacheService().preloadSong(song, this).catchError((_) => null);
+    });
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Desktop: always route through our local proxy so that the correct

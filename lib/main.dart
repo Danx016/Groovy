@@ -8,7 +8,6 @@ import 'dart:async';
 import 'package:window_manager/window_manager.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
-import 'package:safe_device/safe_device.dart';
 
 import 'l10n/app_localizations.dart';
 import 'services/services.dart';

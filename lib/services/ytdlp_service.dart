@@ -60,6 +60,7 @@ class YtDlpService {
   // Stream Info cache: videoId -> YtStreamInfo
   final Map<String, YtStreamInfo> _streamInfoCache = {};
   final Map<String, DateTime> _streamCacheTime = {};
+  final Map<String, Future<YtStreamInfo>> _inFlightResolutions = {};
   static const Duration _cacheTtl = Duration(hours: 5, minutes: 30);
 
 
@@ -82,6 +83,7 @@ class YtDlpService {
     _fallbackYt = null;
     _streamInfoCache.clear();
     _streamCacheTime.clear();
+    _inFlightResolutions.clear();
   }
 
   yt.AudioStreamInfo _selectBestAudioStream(Iterable<yt.AudioStreamInfo> audioStreams) {
@@ -102,6 +104,8 @@ class YtDlpService {
     _streamCacheTime.remove(cleanId);
     _streamInfoCache.remove(videoId);
     _streamCacheTime.remove(videoId);
+    _inFlightResolutions.remove(cleanId);
+    _inFlightResolutions.remove(videoId);
   }
 
   /// Warms up the stream cache in the background without blocking the UI.
@@ -826,8 +830,23 @@ class YtDlpService {
           return cached;
         }
       }
+
+      final inFlight = _inFlightResolutions[cleanId];
+      if (inFlight != null) {
+        return inFlight;
+      }
     }
 
+    final future = _doResolveStreamInfo(cleanId);
+    _inFlightResolutions[cleanId] = future;
+    try {
+      return await future;
+    } finally {
+      _inFlightResolutions.remove(cleanId);
+    }
+  }
+
+  Future<YtStreamInfo> _doResolveStreamInfo(String cleanId) async {
     // ── DESKTOP (Windows / macOS / Linux): yt-dlp subprocess FIRST ──────────
     // Diagnosis confirmed: yt-dlp subprocess gives HTTP 206 for all songs.
     // youtube_explode_dart FastDart sometimes generates URLs that give 403
@@ -839,8 +858,9 @@ class YtDlpService {
           '-j',
           '-f',
           'ba/b[acodec!=none]/best',
+          '--no-playlist',
           '--extractor-args',
-          'youtube:player_client=tv_embedded,ios,android,mweb',
+          'youtube:player_client=android,web,mweb;skip=translated_subs,comments,webpage,dash,hls',
           '--no-warnings',
           '--no-check-certificates',
           targetUrl,

@@ -1177,6 +1177,11 @@ class LibraryProvider extends ChangeNotifier {
     return false;
   }
 
+  bool isSongInLibrary(String songId) {
+    if (songId.isEmpty) return false;
+    return _cachedAllSongs.any((s) => s.id == songId);
+  }
+
   Future<bool> toggleStarSong(Song song) async {
     final bool currentStarred = isSongStarred(song.id) || (song.starred ?? false);
     final bool newStarred = !currentStarred;

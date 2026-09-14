@@ -144,7 +144,7 @@ class OfflineService {
     if (await offDir.exists()) {
       await for (final entity in offDir.list()) {
         if (entity is File && entity.path.endsWith('.mp3')) {
-          final songId = entity.path.split('/').last.replaceAll('.mp3', '');
+          final songId = entity.path.split(RegExp(r'[\\/]')).last.replaceAll('.mp3', '');
           if (_isFileValid(songId, entity)) diskIds.add(songId);
         }
       }
