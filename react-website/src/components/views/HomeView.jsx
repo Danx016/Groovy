@@ -328,9 +328,21 @@ export const HomeView = ({ setActiveTab, onSelectArtist, onSelectAlbum }) => {
     return () => { isMounted = false; };
   }, []);
 
-  const recentSongs = (history && history.length > 0)
-    ? history.slice(0, 10)
-    : feeds?.trending?.slice(0, 8) || [];
+  const recentSongs = React.useMemo(() => {
+    const list = (history && history.length > 0) ? history : (feeds?.trending || []);
+    const seen = new Set();
+    const unique = [];
+    for (const song of list) {
+      if (!song) continue;
+      const key = String(song.id || `${song.title}-${song.artist}`);
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(song);
+      }
+      if (unique.length >= 10) break;
+    }
+    return unique;
+  }, [history, feeds]);
 
   const recommendedMixes = feeds?.trending ? feeds.trending.slice(2, 12) : [];
 

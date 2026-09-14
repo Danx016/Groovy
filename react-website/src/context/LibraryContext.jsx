@@ -45,17 +45,26 @@ export const LibraryProvider = ({ children }) => {
       }
 
       if (histRes.status === 'fulfilled' && histRes.value.history) {
-        setHistory(
-          histRes.value.history.map((h) => ({
-            id: h.id || h.song_id || h.songId,
-            title: h.title,
-            artist: h.artist,
-            album: h.album,
-            coverArt: h.coverArt || h.cover_art,
-            duration: h.duration || 0,
-            playedAt: h.played_at || h.playedAt,
-          }))
-        );
+        const rawHistory = histRes.value.history.map((h) => ({
+          id: h.id || h.song_id || h.songId,
+          title: h.title,
+          artist: h.artist,
+          album: h.album,
+          coverArt: h.coverArt || h.cover_art,
+          duration: h.duration || 0,
+          playedAt: h.played_at || h.playedAt,
+        }));
+        const seen = new Set();
+        const uniqueHistory = [];
+        for (const item of rawHistory) {
+          if (!item) continue;
+          const key = String(item.id || `${item.title}-${item.artist}`);
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueHistory.push(item);
+          }
+        }
+        setHistory(uniqueHistory);
       }
     } catch (e) {
       console.error('Error fetching library from MySQL:', e);
