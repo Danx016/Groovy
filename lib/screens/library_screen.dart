@@ -9,6 +9,7 @@ import 'artists_screen.dart';
 import 'albums_screen.dart';
 import 'all_songs_screen.dart';
 import 'playlists_screen.dart';
+import 'downloads_screen.dart';
 import 'settings_screen.dart';
 import 'account_screen.dart';
 import '../l10n/app_localizations.dart';
@@ -261,6 +262,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     title: 'Canciones',
                     dividerColor: dividerColor,
                     onTap: () => _navigate(context, const AllSongsScreen()),
+                  ),
+
+                  // 5. Descargas
+                  _AppleMusicLibraryTile(
+                    icon: CupertinoIcons.arrow_down_circle,
+                    title: 'Descargas',
+                    dividerColor: dividerColor,
+                    onTap: () => _navigate(context, const DownloadsScreen()),
                   ),
                 ],
               ),

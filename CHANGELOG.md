@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2026-09-14
+
+### Added
+- **Acceso directo a Descargas (`LibraryScreen` & `DesktopNavigationSidebar`)**: Agregado acceso directo a la pantalla de música descargada offline tanto en la biblioteca móvil como en la barra lateral de escritorio para gestionar y reproducir canciones y álbumes sin conexión de manera inmediata.
+- **Diálogos y Alertas Modernos (`GroovyConfirmDialog`)**: Nuevo componente reutilizable con diseño dark glassmorphism, esquinas redondeadas (`28px`), fondo `#18181B`, badge luminoso con resplandor (*glow*) y botones estilo píldora.
+- **Persistencia y Reanudación de Actualizaciones (`UpdateService` & `MainScreen`)**: Si el usuario descarga una actualización y selecciona actualizar más tarde, la aplicación guarda la ruta del instalador de forma persistente y le permite instalarlo de inmediato al reiniciar sin volver a descargar el archivo.
+
+### Changed
+- **Rediseño visual de Ajustes / Preferencias (`SettingsScreen` & `SettingsSectionCard`)**: Nueva navegación moderna con pestañas pastilla animadas en móvil y sidebar en escritorio, integrando las 6 secciones de configuración con la estética de Groovy.
+- **Tema global de diálogos (`AppTheme.dialogTheme`)**: Soporte universal para que cualquier alerta del sistema adopte el tema oscuro redondeado de Groovy.
+
 ## [1.2.1] - 2026-09-13
 
 ### Fixed

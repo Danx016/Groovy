@@ -22,6 +22,7 @@ import '../screens/album_screen.dart';
 import '../screens/artist_screen.dart';
 import '../screens/song_credits_screen.dart';
 import '../utils/album_sanitizer.dart';
+import 'groovy_confirm_dialog.dart';
 
 class SongTile extends StatelessWidget {
   final Song song;
@@ -507,24 +508,14 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
         onTap: () async {
           final l10n = AppLocalizations.of(context)!;
           final messenger = ScaffoldMessenger.of(context);
-          final confirm = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: Text(AppLocalizations.of(context)!.removeDownload),
-              content: Text(
-                AppLocalizations.of(context)!.removeDownloadConfirm,
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: Text(AppLocalizations.of(context)!.cancel),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: Text(AppLocalizations.of(context)!.remove),
-                ),
-              ],
-            ),
+          final confirm = await GroovyConfirmDialog.show(
+            context,
+            title: l10n.removeDownload,
+            message: l10n.removeDownloadConfirm,
+            confirmLabel: l10n.remove,
+            cancelLabel: l10n.cancel,
+            isDestructive: true,
+            icon: CupertinoIcons.trash_fill,
           );
           if (confirm == true) {
             await _offlineService.deleteSong(widget.song.id);

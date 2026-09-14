@@ -75,6 +75,28 @@ class AppTheme {
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: Colors.white,
+          elevation: 16,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(
+              color: Colors.black.withValues(alpha: 0.08),
+              width: 1,
+            ),
+          ),
+          titleTextStyle: const TextStyle(
+            color: Colors.black87,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+          contentTextStyle: TextStyle(
+            color: Colors.black.withValues(alpha: 0.7),
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
         dividerTheme:
             const DividerThemeData(color: lightDivider, thickness: 0.5),
         textTheme: TextTheme(
@@ -165,6 +187,28 @@ class AppTheme {
           elevation: 0,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+        dialogTheme: DialogThemeData(
+          backgroundColor: const Color(0xFF18181B),
+          elevation: 16,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(
+              color: Colors.white.withValues(alpha: 0.1),
+              width: 1,
+            ),
+          ),
+          titleTextStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.3,
+          ),
+          contentTextStyle: TextStyle(
+            color: Colors.white.withValues(alpha: 0.8),
+            fontSize: 14,
+            height: 1.4,
+          ),
         ),
         dividerTheme:
             const DividerThemeData(color: darkDivider, thickness: 0.5),
@@ -260,6 +304,30 @@ class AppTheme {
         color: surface,
         elevation: 0,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      dialogTheme: DialogThemeData(
+        backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+        elevation: 16,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.1)
+                : Colors.black.withValues(alpha: 0.08),
+            width: 1,
+          ),
+        ),
+        titleTextStyle: TextStyle(
+          color: fg,
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+        ),
+        contentTextStyle: TextStyle(
+          color: isDark ? Colors.white.withValues(alpha: 0.8) : Colors.black87,
+          fontSize: 14,
+          height: 1.4,
+        ),
       ),
       dividerTheme: DividerThemeData(color: divider, thickness: 0.5),
       textTheme: TextTheme(

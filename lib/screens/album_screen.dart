@@ -341,19 +341,14 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
   Future<void> _removeDownloads() async {
     if (_songs.isEmpty || _album == null) return;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Remove downloads?'),
-        content: Text('Remove all ${_songs.length} downloaded songs from "${_album!.name}"?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+    final confirmed = await GroovyConfirmDialog.show(
+      context,
+      title: '¿Eliminar descargas?',
+      message: '¿Eliminar las ${_songs.length} canciones descargadas de "${_album!.name}"?',
+      confirmLabel: 'Eliminar',
+      cancelLabel: 'Cancelar',
+      isDestructive: true,
+      icon: CupertinoIcons.trash_fill,
     );
     if (confirmed == true && mounted) {
       await OfflineService().cancelPlaylistDownload(_album!.id);

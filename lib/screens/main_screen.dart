@@ -239,6 +239,10 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   static void showUpdateDialogStatic(BuildContext context, ReleaseInfo release) {
+    UpdateService.isInstallerDownloaded(release).then((ready) {
+      UpdateService.isInstallerReadyNotifier.value = ready;
+    });
+
     final l10n = AppLocalizations.of(context)!;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final changelog = UpdateService.stripMarkdown(release.body);
@@ -248,338 +252,451 @@ class _MainScreenState extends State<MainScreen> {
       barrierDismissible: false,
       builder: (ctx) {
         return ValueListenableBuilder<bool>(
-          valueListenable: UpdateService.isDownloadingNotifier,
-          builder: (dialogCtx, isDownloading, _) {
-            return ValueListenableBuilder<double>(
-              valueListenable: UpdateService.downloadProgressNotifier,
-              builder: (dialogCtx, progress, _) {
-                return ValueListenableBuilder<String?>(
-                  valueListenable: UpdateService.downloadErrorNotifier,
-                  builder: (dialogCtx, errorMessage, _) {
-                    return Dialog(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(28),
-                      ),
-                      backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
-                      elevation: 24,
-                      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                      child: Container(
-                        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 580),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(28),
-                          border: Border.all(
-                            color: isDark
-                                ? Colors.white.withValues(alpha: 0.1)
-                                : Colors.black.withValues(alpha: 0.06),
-                            width: 1,
+          valueListenable: UpdateService.isInstallerReadyNotifier,
+          builder: (dialogCtx, isInstallerReady, _) {
+            return ValueListenableBuilder<bool>(
+              valueListenable: UpdateService.isDownloadingNotifier,
+              builder: (dialogCtx, isDownloading, _) {
+                return ValueListenableBuilder<double>(
+                  valueListenable: UpdateService.downloadProgressNotifier,
+                  builder: (dialogCtx, progress, _) {
+                    return ValueListenableBuilder<String?>(
+                      valueListenable: UpdateService.downloadErrorNotifier,
+                      builder: (dialogCtx, errorMessage, _) {
+                        return Dialog(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(28),
                           ),
-                        ),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // Sleek Top Header
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
-                              child: Column(
-                                children: [
-                                  // Glowing Icon Badge
-                                  Container(
-                                    width: 64,
-                                    height: 64,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      gradient: const LinearGradient(
-                                        colors: [Color(0xFFFF334B), Color(0xFFE50914)],
-                                        begin: Alignment.topLeft,
-                                        end: Alignment.bottomRight,
-                                      ),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: const Color(0xFFE50914).withValues(alpha: 0.4),
-                                          blurRadius: 20,
-                                          offset: const Offset(0, 8),
-                                        ),
-                                      ],
-                                    ),
-                                    child: const Icon(
-                                      CupertinoIcons.sparkles,
-                                      color: Colors.white,
-                                      size: 30,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 18),
-                                  Text(
-                                    l10n.updateAvailable,
-                                    style: TextStyle(
-                                      fontSize: 22,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.5,
-                                      color: isDark ? Colors.white : Colors.black87,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Hay una nueva versión de Groovy lista para ti',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: isDark ? Colors.white60 : Colors.black54,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                  const SizedBox(height: 14),
-
-                                  // Version Transition Pill
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                                    decoration: BoxDecoration(
-                                      color: isDark
-                                          ? Colors.white.withValues(alpha: 0.08)
-                                          : Colors.black.withValues(alpha: 0.05),
-                                      borderRadius: BorderRadius.circular(20),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          'v${UpdateService.currentVersionDisplay}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark ? Colors.white54 : Colors.black54,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Icon(
-                                          Icons.arrow_forward_rounded,
-                                          size: 14,
-                                          color: isDark ? Colors.white38 : Colors.black38,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'v${UpdateService.cleanVersion(release.version)}',
-                                          style: const TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFF1DB954),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
+                          backgroundColor: isDark ? const Color(0xFF18181B) : Colors.white,
+                          elevation: 24,
+                          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+                          child: Container(
+                            constraints: const BoxConstraints(maxWidth: 420, maxHeight: 590),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(
+                                color: isDark
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : Colors.black.withValues(alpha: 0.06),
+                                width: 1,
                               ),
                             ),
-
-                            // Changelog Section
-                            Flexible(
-                              child: Container(
-                                margin: const EdgeInsets.symmetric(horizontal: 20),
-                                padding: const EdgeInsets.all(16),
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? Colors.black.withValues(alpha: 0.3)
-                                      : const Color(0xFFF4F4F5),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: SingleChildScrollView(
-                                  physics: const BouncingScrollPhysics(),
-                                  child: Text(
-                                    changelog,
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      height: 1.5,
-                                      color: isDark ? Colors.white70 : Colors.black87,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            // Progress Bar Section
-                            if (isDownloading)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: LinearProgressIndicator(
-                                        value: progress > 0 ? progress : null,
-                                        backgroundColor: isDark ? Colors.white12 : Colors.black12,
-                                        valueColor: const AlwaysStoppedAnimation<Color>(
-                                          Color(0xFFE50914),
-                                        ),
-                                        minHeight: 10,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      children: [
-                                        Text(
-                                          'Descargando en segundo plano...',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark ? Colors.white70 : Colors.black87,
-                                          ),
-                                        ),
-                                        Text(
-                                          '${(progress * 100).toInt()}%',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: Color(0xFFE50914),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-
-                            // Clear error box with friendly Spanish message
-                            if (errorMessage != null)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                                child: Container(
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: Colors.redAccent.withValues(alpha: 0.1),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(
-                                      color: Colors.redAccent.withValues(alpha: 0.3),
-                                    ),
-                                  ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                // Sleek Top Header
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(24, 26, 24, 14),
                                   child: Column(
-                                    mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          const Icon(
-                                            Icons.wifi_off_rounded,
-                                            color: Colors.redAccent,
-                                            size: 20,
+                                      // Glowing Icon Badge
+                                      Container(
+                                        width: 64,
+                                        height: 64,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: LinearGradient(
+                                            colors: isInstallerReady
+                                                ? const [Color(0xFF10B981), Color(0xFF059669)]
+                                                : const [Color(0xFFFF334B), Color(0xFFE50914)],
+                                            begin: Alignment.topLeft,
+                                            end: Alignment.bottomRight,
                                           ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              errorMessage,
-                                              style: const TextStyle(
-                                                color: Colors.redAccent,
-                                                fontSize: 12.5,
-                                                fontWeight: FontWeight.w500,
-                                                height: 1.3,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: (isInstallerReady
+                                                      ? const Color(0xFF10B981)
+                                                      : const Color(0xFFE50914))
+                                                  .withValues(alpha: 0.4),
+                                              blurRadius: 20,
+                                              offset: const Offset(0, 8),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Icon(
+                                          isInstallerReady
+                                              ? CupertinoIcons.checkmark_seal_fill
+                                              : CupertinoIcons.sparkles,
+                                          color: Colors.white,
+                                          size: 30,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        l10n.updateAvailable,
+                                        style: TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.5,
+                                          color: isDark ? Colors.white : Colors.black87,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        isInstallerReady
+                                            ? '¡Actualización descargada y lista para instalar!'
+                                            : 'Hay una nueva versión de Groovy lista para ti',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: isInstallerReady ? FontWeight.w600 : FontWeight.normal,
+                                          color: isInstallerReady
+                                              ? const Color(0xFF10B981)
+                                              : (isDark ? Colors.white60 : Colors.black54),
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 14),
+
+                                      // Version Transition Pill
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? Colors.white.withValues(alpha: 0.08)
+                                              : Colors.black.withValues(alpha: 0.05),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'v${UpdateService.currentVersionDisplay}',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark ? Colors.white54 : Colors.black54,
                                               ),
                                             ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: TextButton.icon(
-                                          onPressed: () {
-                                            launchUrl(
-                                              Uri.parse(release.htmlUrl),
-                                              mode: LaunchMode.externalApplication,
-                                            );
-                                          },
-                                          icon: const Icon(Icons.open_in_browser, size: 15),
-                                          label: const Text(
-                                            'Descargar desde la web',
-                                            style: TextStyle(fontSize: 12),
-                                          ),
-                                          style: TextButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            minimumSize: Size.zero,
-                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                          ),
+                                            const SizedBox(width: 8),
+                                            Icon(
+                                              Icons.arrow_forward_rounded,
+                                              size: 14,
+                                              color: isDark ? Colors.white38 : Colors.black38,
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              'v${UpdateService.cleanVersion(release.version)}',
+                                              style: const TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFF1DB954),
+                                              ),
+                                            ),
+                                            if (isInstallerReady) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1DB954).withValues(alpha: 0.2),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: const Text(
+                                                  'Lista',
+                                                  style: TextStyle(
+                                                    fontSize: 11,
+                                                    fontWeight: FontWeight.bold,
+                                                    color: Color(0xFF1DB954),
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ),
                                     ],
                                   ),
                                 ),
-                              ),
 
-                            // Bottom Action Buttons
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                              child: Row(
-                                children: [
-                                  if (!isDownloading)
-                                    Expanded(
-                                      child: TextButton(
-                                        onPressed: () {
-                                          if (errorMessage == null) {
-                                            // Only snooze if user explicitly chose "Remind Later"
-                                            UpdateService.snoozeUpdate(release.version);
-                                          }
-                                          Navigator.of(ctx).pop();
-                                        },
-                                        style: TextButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(vertical: 14),
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(16),
-                                          ),
-                                          foregroundColor:
-                                              isDark ? Colors.white60 : Colors.black54,
-                                        ),
-                                        child: Text(
-                                          errorMessage != null ? 'Cerrar' : l10n.remindLater,
-                                          style: const TextStyle(fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
+                                // Changelog Section
+                                Flexible(
+                                  child: Container(
+                                    margin: const EdgeInsets.symmetric(horizontal: 20),
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.black.withValues(alpha: 0.3)
+                                          : const Color(0xFFF4F4F5),
+                                      borderRadius: BorderRadius.circular(16),
                                     ),
-                                  if (!isDownloading) const SizedBox(width: 12),
-                                  Expanded(
-                                    flex: isDownloading ? 1 : 2,
-                                    child: ElevatedButton.icon(
-                                      onPressed: isDownloading
-                                          ? () => Navigator.of(ctx).pop()
-                                          : () async {
-                                              await UpdateService.startDownload(release);
-                                              if (ctx.mounted && UpdateService.downloadErrorNotifier.value == null) {
-                                                Navigator.of(ctx).pop();
-                                              }
-                                            },
-                                      icon: Icon(
-                                        isDownloading
-                                            ? CupertinoIcons.check_mark_circled
-                                            : (errorMessage != null
-                                                ? CupertinoIcons.arrow_clockwise
-                                                : CupertinoIcons.arrow_down_to_line_alt),
-                                        size: 18,
-                                      ),
-                                      label: Text(
-                                        isDownloading
-                                            ? 'Continuar en segundo plano'
-                                            : (errorMessage != null ? 'Reintentar descarga' : 'Actualizar ahora'),
-                                        style: const TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFFE50914),
-                                        foregroundColor: Colors.white,
-                                        elevation: 0,
-                                        padding: const EdgeInsets.symmetric(vertical: 14),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(16),
+                                    child: SingleChildScrollView(
+                                      physics: const BouncingScrollPhysics(),
+                                      child: Text(
+                                        changelog,
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          height: 1.5,
+                                          color: isDark ? Colors.white70 : Colors.black87,
                                         ),
                                       ),
                                     ),
                                   ),
-                                ],
-                              ),
+                                ),
+
+                                // Progress Bar Section
+                                if (isDownloading)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: LinearProgressIndicator(
+                                            value: progress > 0 ? progress : null,
+                                            backgroundColor: isDark ? Colors.white12 : Colors.black12,
+                                            valueColor: const AlwaysStoppedAnimation<Color>(
+                                              Color(0xFFE50914),
+                                            ),
+                                            minHeight: 10,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text(
+                                              'Descargando en segundo plano...',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
+                                                color: isDark ? Colors.white70 : Colors.black87,
+                                              ),
+                                            ),
+                                            Text(
+                                              '${(progress * 100).toInt()}%',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.bold,
+                                                color: Color(0xFFE50914),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+
+                                // Installer ready notice
+                                if (isInstallerReady && !isDownloading)
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF1DB954).withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: const Color(0xFF1DB954).withValues(alpha: 0.25),
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            CupertinoIcons.checkmark_circle_fill,
+                                            color: Color(0xFF1DB954),
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'El instalador ya está descargado. Puedes instalarlo ahora sin volver a descargar.',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w500,
+                                                color: isDark ? Colors.white70 : Colors.black87,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                // Clear error box with friendly Spanish message
+                                if (errorMessage != null)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.redAccent.withValues(alpha: 0.1),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: Colors.redAccent.withValues(alpha: 0.3),
+                                        ),
+                                      ),
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Icon(
+                                                Icons.wifi_off_rounded,
+                                                color: Colors.redAccent,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Expanded(
+                                                child: Text(
+                                                  errorMessage,
+                                                  style: const TextStyle(
+                                                    color: Colors.redAccent,
+                                                    fontSize: 12.5,
+                                                    fontWeight: FontWeight.w500,
+                                                    height: 1.3,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          const SizedBox(height: 8),
+                                          Align(
+                                            alignment: Alignment.centerRight,
+                                            child: TextButton.icon(
+                                              onPressed: () {
+                                                launchUrl(
+                                                  Uri.parse(release.htmlUrl),
+                                                  mode: LaunchMode.externalApplication,
+                                                );
+                                              },
+                                              icon: const Icon(Icons.open_in_browser, size: 15),
+                                              label: const Text(
+                                                'Descargar desde la web',
+                                                style: TextStyle(fontSize: 12),
+                                              ),
+                                              style: TextButton.styleFrom(
+                                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                minimumSize: Size.zero,
+                                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+
+                                // Bottom Action Buttons
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(20, 14, 20, 16),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          if (!isDownloading)
+                                            Expanded(
+                                              child: TextButton(
+                                                onPressed: () {
+                                                  if (errorMessage == null && !isInstallerReady) {
+                                                    // Only snooze if user explicitly chose "Remind Later" and not already downloaded
+                                                    UpdateService.snoozeUpdate(release.version);
+                                                  }
+                                                  Navigator.of(ctx).pop();
+                                                },
+                                                style: TextButton.styleFrom(
+                                                  padding: const EdgeInsets.symmetric(vertical: 14),
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius: BorderRadius.circular(16),
+                                                  ),
+                                                  foregroundColor:
+                                                      isDark ? Colors.white60 : Colors.black54,
+                                                ),
+                                                child: Text(
+                                                  isInstallerReady
+                                                      ? 'Instalar más tarde'
+                                                      : (errorMessage != null ? 'Cerrar' : l10n.remindLater),
+                                                  style: const TextStyle(fontWeight: FontWeight.w600),
+                                                ),
+                                              ),
+                                            ),
+                                          if (!isDownloading) const SizedBox(width: 12),
+                                          Expanded(
+                                            flex: isDownloading ? 1 : 2,
+                                            child: ElevatedButton.icon(
+                                              onPressed: isDownloading
+                                                  ? () => Navigator.of(ctx).pop()
+                                                  : (isInstallerReady
+                                                      ? () async {
+                                                          await UpdateService.installDownloadedUpdate(release);
+                                                        }
+                                                      : () async {
+                                                          await UpdateService.startDownload(release, autoInstall: true);
+                                                          if (ctx.mounted &&
+                                                              UpdateService.downloadErrorNotifier.value == null &&
+                                                              !UpdateService.isDownloadingNotifier.value) {
+                                                            Navigator.of(ctx).pop();
+                                                          }
+                                                        }),
+                                              icon: Icon(
+                                                isDownloading
+                                                    ? CupertinoIcons.check_mark_circled
+                                                    : (isInstallerReady
+                                                        ? CupertinoIcons.play_arrow_solid
+                                                        : (errorMessage != null
+                                                            ? CupertinoIcons.arrow_clockwise
+                                                            : CupertinoIcons.arrow_down_to_line_alt)),
+                                                size: 18,
+                                              ),
+                                              label: Text(
+                                                isDownloading
+                                                    ? 'Continuar en segundo plano'
+                                                    : (isInstallerReady
+                                                        ? 'Instalar ahora'
+                                                        : (errorMessage != null
+                                                            ? 'Reintentar descarga'
+                                                            : 'Actualizar ahora')),
+                                                style: const TextStyle(
+                                                  fontSize: 15,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor: isInstallerReady
+                                                    ? const Color(0xFF1DB954)
+                                                    : const Color(0xFFE50914),
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius: BorderRadius.circular(16),
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      if (isInstallerReady && !isDownloading) ...[
+                                        const SizedBox(height: 6),
+                                        TextButton(
+                                          onPressed: () async {
+                                            await UpdateService.deleteDownloadedInstaller(release);
+                                            await UpdateService.startDownload(release, autoInstall: true);
+                                          },
+                                          style: TextButton.styleFrom(
+                                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+                                            minimumSize: Size.zero,
+                                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                          ),
+                                          child: Text(
+                                            '¿El archivo falló? Volver a descargar',
+                                            style: TextStyle(
+                                              fontSize: 11.5,
+                                              color: isDark ? Colors.white38 : Colors.black45,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );

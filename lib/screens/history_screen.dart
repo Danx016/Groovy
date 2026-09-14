@@ -181,25 +181,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _confirmClearHistory() async {
     final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l10n?.clearListeningHistory ?? 'Borrar historial de reproducción'),
-        content: Text(l10n?.confirmClearHistory ?? '¿Estás seguro de que deseas borrar el historial?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n?.cancel ?? 'Cancelar'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              l10n?.delete ?? 'Eliminar',
-              style: const TextStyle(color: Color(0xFFFF3B30)),
-            ),
-          ),
-        ],
-      ),
+    final confirmed = await GroovyConfirmDialog.show(
+      context,
+      title: l10n?.clearListeningHistory ?? 'Borrar historial de reproducción',
+      message: l10n?.confirmClearHistory ?? '¿Estás seguro de que deseas borrar el historial?',
+      confirmLabel: l10n?.delete ?? 'Eliminar',
+      cancelLabel: l10n?.cancel ?? 'Cancelar',
+      isDestructive: true,
+      icon: Icons.history_toggle_off_rounded,
     );
 
     if (confirmed == true) {

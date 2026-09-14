@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.2.1';
+  static String currentVersion = '1.2.2';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -98,6 +98,7 @@ class UpdateService {
   static final ValueNotifier<double> downloadProgressNotifier = ValueNotifier<double>(0.0);
   static final ValueNotifier<String?> downloadErrorNotifier = ValueNotifier<String?>(null);
   static final ValueNotifier<ReleaseInfo?> availableUpdateNotifier = ValueNotifier<ReleaseInfo?>(null);
+  static final ValueNotifier<bool> isInstallerReadyNotifier = ValueNotifier<bool>(false);
 
   static final _dio = Dio(
     BaseOptions(
@@ -122,7 +123,99 @@ class UpdateService {
       if (info.version.isNotEmpty) {
         currentVersion = info.version;
       }
+      await cleanupOldInstallers();
     } catch (_) {}
+  }
+
+  /// Returns the standardized installer filename for this platform and version
+  static String getInstallerFileName(ReleaseInfo release) {
+    final v = cleanVersion(release.version);
+    if (!kIsWeb && Platform.isWindows) {
+      return 'Groovy-Update-v$v-Setup.exe';
+    } else if (!kIsWeb && Platform.isLinux) {
+      if (release.debDownloadUrl != null) {
+        return 'Groovy-Update-v$v.deb';
+      } else {
+        return 'Groovy-Update-v$v.AppImage';
+      }
+    } else {
+      return 'app-update-v$v.apk';
+    }
+  }
+
+  /// Returns the local destination file path for this release's installer
+  static Future<String> getInstallerFilePath(ReleaseInfo release) async {
+    final dir = await getTemporaryDirectory();
+    return '${dir.path}/${getInstallerFileName(release)}';
+  }
+
+  /// Checks if the installer for this release has already been completely downloaded
+  static Future<bool> isInstallerDownloaded(ReleaseInfo release) async {
+    try {
+      final path = await getInstallerFilePath(release);
+      final file = File(path);
+      if (await file.exists()) {
+        final len = await file.length();
+        // A complete installer binary must be at least 1MB
+        if (len > 1024 * 1024) {
+          return true;
+        }
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Deletes the local installer for this release if the user explicitly wants to re-download
+  static Future<void> deleteDownloadedInstaller(ReleaseInfo release) async {
+    try {
+      final path = await getInstallerFilePath(release);
+      final file = File(path);
+      if (await file.exists()) {
+        await file.delete();
+      }
+      final partFile = File('$path.part');
+      if (await partFile.exists()) {
+        await partFile.delete();
+      }
+    } catch (_) {}
+    isInstallerReadyNotifier.value = false;
+    downloadProgressNotifier.value = 0.0;
+  }
+
+  /// Cleans up obsolete installers and stale partial downloads
+  static Future<void> cleanupOldInstallers({String? currentAppVersion}) async {
+    try {
+      final dir = await getTemporaryDirectory();
+      final currentClean = cleanVersion(currentAppVersion ?? currentVersion);
+      final entities = dir.listSync();
+      for (final entity in entities) {
+        if (entity is File) {
+          final name = entity.uri.pathSegments.last;
+          if (name.startsWith('Groovy-Update-') || name.startsWith('app-update-')) {
+            if (name.endsWith('.part') || name.endsWith('.downloading')) {
+              try {
+                await entity.delete();
+              } catch (_) {}
+            } else {
+              final regExp = RegExp(r'[-_]v?([0-9]+(?:\.[0-9]+)+(?:\+[0-9]+)?)');
+              final match = regExp.firstMatch(name);
+              if (match != null) {
+                final fileVersion = match.group(1);
+                if (fileVersion != null && !isNewer(fileVersion, currentClean)) {
+                  try {
+                    await entity.delete();
+                  } catch (_) {}
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('UpdateService: cleanupOldInstallers error: $e');
+    }
   }
 
   /// Snooze an update version for 24 hours so it won't prompt repeatedly on launch
@@ -219,6 +312,9 @@ class UpdateService {
 
       final release = ReleaseInfo.fromJson(data);
       if (isNewer(release.version, currentVersion)) {
+        final isDownloaded = await isInstallerDownloaded(release);
+        isInstallerReadyNotifier.value = isDownloaded;
+
         if (!force) {
           final snoozed = await isUpdateSnoozed(release.version);
           if (snoozed) {
@@ -236,23 +332,109 @@ class UpdateService {
     }
   }
 
-  static Future<void> startDownload(ReleaseInfo release) async {
+  /// Installs an already downloaded update file
+  static Future<void> installDownloadedUpdate(ReleaseInfo release) async {
+    final filePath = await getInstallerFilePath(release);
+    final file = File(filePath);
+    if (!await file.exists()) {
+      isInstallerReadyNotifier.value = false;
+      downloadErrorNotifier.value = 'El instalador ya no se encuentra en el dispositivo. Vuelve a descargarlo.';
+      return;
+    }
+
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        await _channel.invokeMethod('installApk', {'filePath': filePath});
+      } on PlatformException catch (pe) {
+        if (pe.code == 'NEED_PERMISSION') {
+          downloadErrorNotifier.value =
+              'Activa el permiso "Instalar apps desconocidas" en Ajustes y pulsa Instalar de nuevo.';
+        } else {
+          downloadErrorNotifier.value =
+              'Error al iniciar instalación: ${pe.message ?? pe.code}';
+        }
+      }
+    } else if (!kIsWeb && Platform.isWindows) {
+      try {
+        await Process.start(
+          filePath,
+          ['/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
+          mode: ProcessStartMode.detached,
+        );
+        await Future.delayed(const Duration(milliseconds: 1500));
+        exit(0);
+      } catch (_) {
+        try {
+          await Process.start(
+            'cmd.exe',
+            ['/c', 'start', '""', filePath],
+            mode: ProcessStartMode.detached,
+          );
+          await Future.delayed(const Duration(milliseconds: 1500));
+          exit(0);
+        } catch (err) {
+          debugPrint('Failed to launch Windows update installer: $err');
+          downloadErrorNotifier.value =
+              'No se pudo ejecutar el instalador. Ábrelo manualmente desde tu carpeta temporal o descarga de GitHub.';
+        }
+      }
+    } else if (!kIsWeb && Platform.isLinux) {
+      if (filePath.endsWith('.deb')) {
+        try {
+          await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
+          await Future.delayed(const Duration(milliseconds: 1500));
+          exit(0);
+        } catch (err) {
+          debugPrint('Failed to open deb installer with xdg-open: $err');
+          await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+        }
+        return;
+      }
+
+      final appImageEnv = Platform.environment['APPIMAGE'];
+      if (appImageEnv != null && appImageEnv.isNotEmpty) {
+        try {
+          await Process.run('chmod', ['+x', filePath]);
+          await File(filePath).copy(appImageEnv);
+          await Process.start(
+            appImageEnv,
+            [],
+            mode: ProcessStartMode.detached,
+          );
+          await Future.delayed(const Duration(milliseconds: 500));
+          exit(0);
+        } catch (e) {
+          debugPrint('Linux AppImage self-update failed: $e');
+          await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+        }
+      } else {
+        await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+      }
+    }
+  }
+
+  /// Downloads the release installer. If autoInstall is true and download completes, proceeds to install.
+  static Future<void> startDownload(ReleaseInfo release, {bool autoInstall = false}) async {
+    // If the installer is already downloaded, don't download again!
+    if (await isInstallerDownloaded(release)) {
+      isInstallerReadyNotifier.value = true;
+      if (autoInstall) {
+        await installDownloadedUpdate(release);
+      }
+      return;
+    }
+
     final String? downloadUrl;
-    final String filename;
     if (!kIsWeb && Platform.isWindows) {
       downloadUrl = release.windowsSetupDownloadUrl ?? release.htmlUrl;
-      filename = 'Groovy-Update-Setup.exe';
     } else if (!kIsWeb && Platform.isLinux) {
       if (release.debDownloadUrl != null) {
         downloadUrl = release.debDownloadUrl;
-        filename = 'Groovy-Update.deb';
       } else {
         downloadUrl = release.appImageDownloadUrl ?? release.htmlUrl;
-        filename = 'groovy-update.AppImage';
       }
     } else {
       downloadUrl = release.apkDownloadUrl;
-      filename = 'app-update.apk';
     }
 
     if (downloadUrl == null || downloadUrl.isEmpty) {
@@ -264,20 +446,22 @@ class UpdateService {
     isDownloadingNotifier.value = true;
     downloadProgressNotifier.value = 0.0;
     downloadErrorNotifier.value = null;
+    isInstallerReadyNotifier.value = false;
+
+    final targetPath = await getInstallerFilePath(release);
+    final partPath = '$targetPath.part';
 
     try {
-      final dir = await getTemporaryDirectory();
-      final filePath = '${dir.path}/$filename';
-      final file = File(filePath);
-      if (await file.exists()) {
+      final partFile = File(partPath);
+      if (await partFile.exists()) {
         try {
-          await file.delete();
+          await partFile.delete();
         } catch (_) {}
       }
 
       await _dio.download(
         downloadUrl,
-        filePath,
+        partPath,
         onReceiveProgress: (received, total) {
           if (total > 0) {
             final p = (received / total).clamp(0.0, 1.0);
@@ -286,105 +470,31 @@ class UpdateService {
         },
       );
 
+      // Once download finishes completely, atomically rename .part to the final installer file
+      final completedPartFile = File(partPath);
+      if (await completedPartFile.exists()) {
+        final finalFile = File(targetPath);
+        if (await finalFile.exists()) {
+          try {
+            await finalFile.delete();
+          } catch (_) {}
+        }
+        await completedPartFile.rename(targetPath);
+      }
+
       isDownloadingNotifier.value = false;
       downloadProgressNotifier.value = 1.0;
+      isInstallerReadyNotifier.value = true;
 
-      if (!kIsWeb && Platform.isAndroid) {
-        try {
-          await _channel.invokeMethod('installApk', {'filePath': filePath});
-        } on PlatformException catch (pe) {
-          if (pe.code == 'NEED_PERMISSION') {
-            downloadErrorNotifier.value =
-                'Activa el permiso "Instalar apps desconocidas" en Ajustes y pulsa Actualizar de nuevo.';
-          } else {
-            downloadErrorNotifier.value =
-                'Error al iniciar instalación: ${pe.message ?? pe.code}';
-          }
-        }
-      } else if (!kIsWeb && Platform.isWindows) {
-        try {
-          await Process.start(
-            filePath,
-            ['/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
-            mode: ProcessStartMode.detached,
-          );
-          await Future.delayed(const Duration(milliseconds: 1500));
-          exit(0);
-        } catch (_) {
-          try {
-            await Process.start(
-              'cmd.exe',
-              ['/c', 'start', '""', filePath],
-              mode: ProcessStartMode.detached,
-            );
-            await Future.delayed(const Duration(milliseconds: 1500));
-            exit(0);
-          } catch (err) {
-            debugPrint('Failed to launch Windows update installer: $err');
-            downloadErrorNotifier.value =
-                'No se pudo ejecutar el instalador. Descárgalo directamente de GitHub.';
-          }
-        }
-      } else if (!kIsWeb && Platform.isLinux) {
-        if (filePath.endsWith('.deb')) {
-          try {
-            // Launches Ubuntu Software / App Center / GDebi with the package ready to install in 2 clicks
-            await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
-            await Future.delayed(const Duration(milliseconds: 1500));
-            exit(0);
-          } catch (err) {
-            debugPrint('Failed to open deb installer with xdg-open: $err');
-            await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
-          }
-          return;
-        }
-
-        // Linux: If running as AppImage, replace self and relaunch.
-        // Otherwise open the downloads page so the user can grab the new AppImage.
-        final appImageEnv = Platform.environment['APPIMAGE'];
-        final appImageUrl = release.appImageDownloadUrl;
-
-        if (appImageEnv != null && appImageEnv.isNotEmpty && appImageUrl != null) {
-          // Download the new AppImage over a temp file, then swap atomically.
-          final tmpPath = '$appImageEnv.new';
-          try {
-            await _dio.download(
-              appImageUrl,
-              tmpPath,
-              onReceiveProgress: (received, total) {
-                if (total > 0) {
-                  downloadProgressNotifier.value = (received / total).clamp(0.0, 1.0);
-                }
-              },
-            );
-            // Make it executable and atomically replace the current AppImage
-            await Process.run('chmod', ['+x', tmpPath]);
-            await File(tmpPath).rename(appImageEnv);
-            // Relaunch the new AppImage
-            await Process.start(
-              appImageEnv,
-              [],
-              mode: ProcessStartMode.detached,
-            );
-            await Future.delayed(const Duration(milliseconds: 500));
-            exit(0);
-          } catch (e) {
-            debugPrint('Linux AppImage self-update failed: $e');
-            // Fallback: open GitHub releases page
-            await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
-          }
-        } else {
-          // Not running as AppImage (e.g. tar.gz install) — open releases page
-          await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
-        }
+      if (autoInstall) {
+        await installDownloadedUpdate(release);
       }
     } catch (e) {
       isDownloadingNotifier.value = false;
       downloadErrorNotifier.value = formatDownloadError(e);
-      // Delete any broken or incomplete temporary file
+      // Delete any broken or incomplete temporary partial file
       try {
-        final dir = await getTemporaryDirectory();
-        final file = File('${dir.path}/$filename');
+        final file = File(partPath);
         if (await file.exists()) {
           await file.delete();
         }
@@ -409,7 +519,7 @@ class UpdateService {
             body: '',
             assets: [ReleaseAsset(name: 'app-release.apk', browserDownloadUrl: downloadUrl)],
           );
-      await startDownload(release);
+      await startDownload(release, autoInstall: true);
     } catch (e) {
       onError(e.toString());
     }

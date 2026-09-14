@@ -15,6 +15,7 @@ import '../../services/offline_service.dart';
 import '../../services/theme_service.dart';
 import '../../utils/album_sanitizer.dart';
 import 'add_to_menu.dart';
+import '../groovy_confirm_dialog.dart';
 
 class NowPlayingMoreMenu extends StatefulWidget {
   final Song? song;
@@ -246,24 +247,15 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 onTap: () async {
                   final nav = Navigator.of(context);
                   final messenger = ScaffoldMessenger.of(context);
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (ctx) => AlertDialog(
-                      title: const Text('Eliminar descarga'),
-                      content: Text(
+                  final confirm = await GroovyConfirmDialog.show(
+                    context,
+                    title: 'Eliminar descarga',
+                    message:
                         '¿Deseas eliminar "${currentSong.title}" de tus descargas sin conexión?',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, false),
-                          child: const Text('Cancelar'),
-                        ),
-                        TextButton(
-                          onPressed: () => Navigator.pop(ctx, true),
-                          child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
-                        ),
-                      ],
-                    ),
+                    confirmLabel: 'Eliminar',
+                    cancelLabel: 'Cancelar',
+                    isDestructive: true,
+                    icon: CupertinoIcons.trash_fill,
                   );
                   if (confirm == true) {
                     await offlineService.deleteSong(currentSong.id);

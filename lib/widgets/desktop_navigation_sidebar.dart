@@ -11,6 +11,7 @@ import '../screens/history_screen.dart';
 import '../screens/artists_screen.dart';
 import '../screens/albums_screen.dart';
 import '../screens/all_songs_screen.dart';
+import '../screens/downloads_screen.dart';
 import '../screens/account_screen.dart';
 import 'user_avatar.dart';
 
@@ -72,6 +73,10 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
 
   void _navigateToSongs() {
     _push(MaterialPageRoute(builder: (_) => const AllSongsScreen()));
+  }
+
+  void _navigateToDownloads() {
+    _push(MaterialPageRoute(builder: (_) => const DownloadsScreen()));
   }
 
   void _navigateToAccount() {
@@ -163,6 +168,11 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
                       icon: Icons.music_note_rounded,
                       label: 'Canciones',
                       onTap: _navigateToSongs,
+                    ),
+                    _SidebarSubItem(
+                      icon: Icons.download_done_rounded,
+                      label: 'Descargas',
+                      onTap: _navigateToDownloads,
                     ),
                   ],
 
