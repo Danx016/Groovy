@@ -1674,7 +1674,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get supportParagraph1 =>
-      'I\'m Danil, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.';
+      'I\'m Danilo, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.';
 
   @override
   String get supportParagraph2 =>
@@ -1692,7 +1692,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get supportDonationTitle => 'Support with a Donation';
 
   @override
-  String get supportDonationSubtitle => 'via Revolut - any amount helps!';
+  String get supportDonationSubtitle =>
+      'via Bre-B / Llave Nu - any amount helps!';
 
   @override
   String get supportDiscordTitle => 'Join our Discord';
@@ -1717,7 +1718,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get supportWayEnjoy => 'Just enjoy the music! 🎵';
 
   @override
-  String get supportMadeWithLove => 'Made with 💙 in Italy';
+  String get supportMadeWithLove => 'Made with 💙 in El Carmen de Bolívar';
 
   @override
   String get playbackSpeed => 'Playback Speed';

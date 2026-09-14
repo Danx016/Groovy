@@ -3181,7 +3181,7 @@ abstract class AppLocalizations {
   /// No description provided for @supportParagraph1.
   ///
   /// In en, this message translates to:
-  /// **'I\'m Danil, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.'**
+  /// **'I\'m Danilo, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.'**
   String get supportParagraph1;
 
   /// No description provided for @supportParagraph2.
@@ -3211,7 +3211,7 @@ abstract class AppLocalizations {
   /// No description provided for @supportDonationSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'via Revolut - any amount helps!'**
+  /// **'via Bre-B / Llave Nu - any amount helps!'**
   String get supportDonationSubtitle;
 
   /// No description provided for @supportDiscordTitle.
@@ -3259,7 +3259,7 @@ abstract class AppLocalizations {
   /// No description provided for @supportMadeWithLove.
   ///
   /// In en, this message translates to:
-  /// **'Made with 💙 in Italy'**
+  /// **'Made with 💙 in El Carmen de Bolívar'**
   String get supportMadeWithLove;
 
   /// Title of the playback speed bottom sheet

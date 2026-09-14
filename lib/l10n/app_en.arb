@@ -1823,12 +1823,12 @@
 
   "@_SUPPORT": {},
   "supportGreeting": "Hey there! 👋",
-  "supportParagraph1": "I'm Danil, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.",
+  "supportParagraph1": "I'm Danilo, the developer behind Groovy. I built this app because I love music and believe everyone deserves a beautiful, free music player.",
   "supportParagraph2": "Groovy is completely free and open-source. No ads and no subscription fees. I work on it in my free time because I genuinely enjoy making something useful for people like you.",
   "supportParagraph3": "But servers, development tools, and coffee aren't free 😅 If Groovy has become a part of your daily life and you'd like to say \"thanks,\" a small donation would mean the world to me. It helps cover costs and keeps me motivated to add new features.",
   "supportParagraph4": "No pressure at all though - your enjoyment of the app is already the best reward! 💙",
   "supportDonationTitle": "Support with a Donation",
-  "supportDonationSubtitle": "via Revolut - any amount helps!",
+  "supportDonationSubtitle": "via Bre-B / Llave Nu - any amount helps!",
   "supportDiscordTitle": "Join our Discord",
   "supportDiscordSubtitle": "Get help, suggest features, or just chat",
   "supportWaysTitle": "Other ways to support",
@@ -1836,7 +1836,7 @@
   "supportWayShare": "Tell your friends about Groovy",
   "supportWayBugs": "Report bugs or suggest features",
   "supportWayEnjoy": "Just enjoy the music! 🎵",
-  "supportMadeWithLove": "Made with 💙 in Italy",
+  "supportMadeWithLove": "Made with 💙 in El Carmen de Bolívar",
 
   "@_NOW_PLAYING_DIALOGS": {},
   "playbackSpeed": "Playback Speed",

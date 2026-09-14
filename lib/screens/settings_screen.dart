@@ -281,7 +281,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Versión ${UpdateService.currentVersion} • Hecho con pasión',
+                  'Versión ${UpdateService.currentVersion} • Hecho con 💙 en El Carmen de Bolívar',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.white24 : Colors.black26,

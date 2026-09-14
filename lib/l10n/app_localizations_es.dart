@@ -1682,7 +1682,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get supportParagraph1 =>
-      'Soy Danil, el desarrollador detrás de Groovy. Creé esta aplicación porque amo la música y creo que todos merecen un reproductor de música hermoso y gratuito.';
+      'Soy Danilo, el desarrollador detrás de Groovy. Creé esta aplicación porque amo la música y creo que todos merecen un reproductor de música hermoso y gratuito.';
 
   @override
   String get supportParagraph2 =>
@@ -1701,7 +1701,7 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get supportDonationSubtitle =>
-      'vía Revolut - ¡cualquier aporte ayuda!';
+      'vía Bre-B / Llave Nu - ¡cualquier aporte ayuda!';
 
   @override
   String get supportDiscordTitle => 'Únete a nuestro Discord';
@@ -1726,7 +1726,7 @@ class AppLocalizationsEs extends AppLocalizations {
   String get supportWayEnjoy => '¡Solo disfruta la música! 🎵';
 
   @override
-  String get supportMadeWithLove => 'Hecho con 💙 en Italia';
+  String get supportMadeWithLove => 'Hecho con 💙 en El Carmen de Bolívar';
 
   @override
   String get playbackSpeed => 'Velocidad de reproducción';

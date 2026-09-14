@@ -1924,12 +1924,12 @@
     "description": "Explanation of what device ID is"
   },
   "supportGreeting": "¡Hola! 👋",
-  "supportParagraph1": "Soy Danil, el desarrollador detrás de Groovy. Creé esta aplicación porque amo la música y creo que todos merecen un reproductor de música hermoso y gratuito.",
+  "supportParagraph1": "Soy Danilo, el desarrollador detrás de Groovy. Creé esta aplicación porque amo la música y creo que todos merecen un reproductor de música hermoso y gratuito.",
   "supportParagraph2": "Groovy es completamente gratuito y de código abierto. Sin anuncios y sin suscripciones. Trabajo en él en mi tiempo libre porque realmente disfruto crear algo útil para personas como tú.",
   "supportParagraph3": "Pero los servidores, herramientas de desarrollo y café no son gratis 😅 Si Groovy se ha convertido en parte de tu día a día y quieres decir \"gracias\", una pequeña donación significaría muchísimo para mí. Ayuda a cubrir costes y me mantiene motivado para añadir nuevas funciones.",
   "supportParagraph4": "¡Sin ningún tipo de compromiso, tu disfrute de la app ya es la mejor recompensa! 💙",
   "supportDonationTitle": "Apoyar con una donación",
-  "supportDonationSubtitle": "vía Revolut - ¡cualquier aporte ayuda!",
+  "supportDonationSubtitle": "vía Bre-B / Llave Nu - ¡cualquier aporte ayuda!",
   "supportDiscordTitle": "Únete a nuestro Discord",
   "supportDiscordSubtitle": "Obtén ayuda, sugiere funciones o simplemente charla",
   "supportWaysTitle": "Otras formas de apoyar",
@@ -1937,7 +1937,7 @@
   "supportWayShare": "Cuéntales a tus amigos sobre Groovy",
   "supportWayBugs": "Reporta errores o sugiere funciones",
   "supportWayEnjoy": "¡Solo disfruta la música! 🎵",
-  "supportMadeWithLove": "Hecho con 💙 en Italia",
+  "supportMadeWithLove": "Hecho con 💙 en El Carmen de Bolívar",
   "playbackSpeed": "Velocidad de reproducción",
   "@playbackSpeed": {
     "description": "Title of the playback speed bottom sheet"

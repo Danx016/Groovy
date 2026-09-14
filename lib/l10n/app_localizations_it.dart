@@ -1677,11 +1677,11 @@ class AppLocalizationsIt extends AppLocalizations {
 
   @override
   String get supportParagraph1 =>
-      'Sono Danil, lo sviluppatore di Groovy. Ho creato questa app perché amo la musica e credo che tutti meritino un lettore musicale bellissimo e gratuito.';
+      'Sono Danilo, lo sviluppatore di Groovy. Ho creato questa app perché amo la musica e credo che tutti meritino un lettore musicale bellissimo e gratuito.';
 
   @override
   String get supportParagraph2 =>
-      'Groovy è completamente gratuito e open-source. Nessuna pubblicità, nessun abbonamento. Ci lavoro nel tempo libero perché mi piace davvero creare qualcosa di utile per persone come te.';
+      'Groovy è completamente gratuito e open-source. Nessuna pubblicità e nessun abbonamento. Ci lavoro nel mio tempo libero perché mi piace davvero creare qualcosa di utile per persone come te.';
 
   @override
   String get supportParagraph3 =>
@@ -1695,7 +1695,8 @@ class AppLocalizationsIt extends AppLocalizations {
   String get supportDonationTitle => 'Supporta con una Donazione';
 
   @override
-  String get supportDonationSubtitle => 'via Revolut - qualsiasi cifra aiuta!';
+  String get supportDonationSubtitle =>
+      'via Bre-B / Llave Nu - qualsiasi cifra aiuta!';
 
   @override
   String get supportDiscordTitle => 'Unisciti al nostro Discord';
@@ -1717,10 +1718,10 @@ class AppLocalizationsIt extends AppLocalizations {
   String get supportWayBugs => 'Segnala bug o suggerisci funzionalità';
 
   @override
-  String get supportWayEnjoy => 'Semplicemente goditi la musica! 🎵';
+  String get supportWayEnjoy => 'Goditi semplicemente la musica! 🎵';
 
   @override
-  String get supportMadeWithLove => 'Fatto con 💙 in Italia';
+  String get supportMadeWithLove => 'Fatto con 💙 a El Carmen de Bolívar';
 
   @override
   String get playbackSpeed => 'Playback Speed';
@@ -1871,5 +1872,5 @@ class AppLocalizationsIt extends AppLocalizations {
   String get selectPlaylist => 'Seleziona Playlist';
 
   @override
-  String get endOfSong => 'Fine Brano';
+  String get endOfSong => 'End of Song';
 }
