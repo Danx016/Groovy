@@ -8,6 +8,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
 import 'youtube_service.dart';
+import 'ytdlp_service.dart';
+import 'lrclib_service.dart';
+import 'audio_cache_service.dart';
 
 enum DownloadStatus { queued, downloading, done, failed }
 
@@ -83,6 +86,7 @@ class OfflineService {
   bool _isBackgroundDownloadActive = false;
 
   static const String _keyDownloadedSongs = 'offline_downloaded_songs';
+  static const String _keyDownloadedSongsData = 'offline_downloaded_songs_data';
   static const String _keyPendingScrobbles = 'pending_scrobbles';
   static const String _keyExpectedSizes = 'offline_expected_sizes';
   static const String _keyQueuedPlaylists = 'offline_queued_playlists';
@@ -95,6 +99,7 @@ class OfflineService {
   static const int _maxParallelDownloads = 5;
 
   Map<String, int> _expectedSizes = {};
+  Map<String, Map<String, dynamic>> _downloadedSongsData = {};
 
   /// Playlist IDs that have been queued for download but aren't fully done.
   /// Drives the outline-check badge in playlist list views.
@@ -130,6 +135,17 @@ class OfflineService {
       try {
         final raw = json.decode(sizesJson) as Map<String, dynamic>;
         _expectedSizes = raw.map((k, v) => MapEntry(k, v as int));
+      } catch (_) {}
+    }
+
+    // Load downloaded song metadata map
+    final songsDataJson = _prefs?.getString(_keyDownloadedSongsData);
+    if (songsDataJson != null) {
+      try {
+        final raw = json.decode(songsDataJson) as Map<String, dynamic>;
+        _downloadedSongsData = raw.map(
+          (k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)),
+        );
       } catch (_) {}
     }
 
@@ -347,6 +363,43 @@ class OfflineService {
     return _prefs?.getStringList(_keyDownloadedSongs) ?? [];
   }
 
+  /// Returns all downloaded songs as full Song objects from persisted metadata,
+  /// guaranteeing full offline availability even without network or cache.
+  List<Song> getDownloadedSongs() {
+    final ids = downloadedSongIds.value;
+    final List<Song> list = [];
+    for (final id in ids) {
+      final data = _downloadedSongsData[id];
+      if (data != null) {
+        try {
+          final s = Song.fromJson(data);
+          list.add(s);
+          continue;
+        } catch (_) {}
+      }
+      // Fallback if metadata is not in prefs
+      final filePath = _getSongPath(id);
+      list.add(Song(
+        id: id,
+        title: id,
+        artist: 'Offline Song',
+        isLocal: true,
+        path: filePath,
+      ));
+    }
+    return list;
+  }
+
+  Future<void> _saveDownloadedSongMetadata(Song song) async {
+    _downloadedSongsData[song.id] = song.toJson();
+    await _prefs?.setString(_keyDownloadedSongsData, json.encode(_downloadedSongsData));
+  }
+
+  Future<void> _removeDownloadedSongMetadata(String songId) async {
+    _downloadedSongsData.remove(songId);
+    await _prefs?.setString(_keyDownloadedSongsData, json.encode(_downloadedSongsData));
+  }
+
   int getDownloadedCount() {
     return getDownloadedSongIds().length;
   }
@@ -390,48 +443,121 @@ class OfflineService {
   }) async {
     if (_offlineDir == null) await initialize();
 
-    // Persist expected size before downloading so reconciliation can use it
-    // even if the app is killed mid-download.
     if (song.size != null && song.size! > 0) {
       await _persistExpectedSize(song.id, song.size!);
     }
 
     final filePath = _getSongPath(song.id);
+    final targetFile = File(filePath);
+
+    // 1. If already downloaded and valid on disk, mark done immediately
+    if (await targetFile.exists() && await targetFile.length() >= 65536) {
+      downloadedSongIds.value = {...downloadedSongIds.value, song.id};
+      await _saveDownloadedSongMetadata(song);
+      onProgress?.call(1.0);
+      return true;
+    }
+
     try {
-      // Use /download (original file, no transcoding) so size matches song.size
-      final url = musicService.getDownloadUrl(song.id);
+      // 2. Fast Path: If song is already in AudioCacheService, copy directly (0 ms network)
+      final cachedFile = await AudioCacheService().getCachedSongFile(song.id);
+      if (cachedFile != null && await cachedFile.exists() && await cachedFile.length() >= 65536) {
+        debugPrint('[OfflineService] ⚡ Copying song directly from audio cache: "${song.title}"');
+        await cachedFile.copy(filePath);
+        onProgress?.call(1.0);
+      } else {
+        // 3. Network Path: Resolve video ID & stream via YtDlpService
+        final videoId = await musicService.resolveVideoIdForSong(song);
+        if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+          throw Exception('Cannot resolve video ID for "${song.title}" (${song.id})');
+        }
 
-      final dio = Dio();
-      await dio.download(
-        url,
-        filePath,
-        onReceiveProgress: (received, total) {
-          if (total > 0 && onProgress != null) {
-            onProgress(received / total);
+        final streamInfo = await YtDlpService().resolveStreamInfo(videoId);
+        if (streamInfo.url.isEmpty) {
+          throw Exception('Empty stream URL for $videoId');
+        }
+
+        final partPath = '$filePath.part';
+        final partFile = File(partPath);
+        if (await partFile.exists()) {
+          await partFile.delete().catchError((_) => partFile);
+        }
+
+        final client = HttpClient()
+          ..connectionTimeout = const Duration(seconds: 15)
+          ..idleTimeout = const Duration(seconds: 15);
+
+        try {
+          final req = await client.getUrl(Uri.parse(streamInfo.url));
+          streamInfo.headers.forEach((k, v) {
+            final lower = k.toLowerCase();
+            if (lower != 'host' &&
+                lower != 'content-length' &&
+                lower != 'accept-encoding' &&
+                lower != 'connection') {
+              req.headers.set(k, v);
+            }
+          });
+          if (!req.headers.toString().toLowerCase().contains('user-agent')) {
+            req.headers.set(
+              HttpHeaders.userAgentHeader,
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            );
           }
-        },
-      );
+          req.headers.set(HttpHeaders.acceptHeader, '*/*');
 
-      // Validate against stored expected size (or 64 KB floor if unknown)
-      if (!isSongDownloaded(song.id)) {
-        throw Exception('Downloaded file for ${song.id} failed size check');
+          final resp = await req.close();
+          if (resp.statusCode != 200 && resp.statusCode != 206) {
+            await resp.drain<void>().catchError((_) {});
+            throw Exception('Stream HTTP ${resp.statusCode}');
+          }
+
+          final totalBytes = resp.contentLength;
+          int receivedBytes = 0;
+          final sink = partFile.openWrite();
+
+          await for (final chunk in resp) {
+            sink.add(chunk);
+            receivedBytes += chunk.length;
+            if (totalBytes > 0 && onProgress != null) {
+              onProgress(receivedBytes / totalBytes);
+            }
+          }
+          await sink.flush();
+          await sink.close();
+
+          final partLength = await partFile.length();
+          if (partLength < 65536) {
+            await partFile.delete().catchError((_) => partFile);
+            throw Exception('Downloaded file too small ($partLength bytes)');
+          }
+
+          if (await targetFile.exists()) {
+            await targetFile.delete().catchError((_) => targetFile);
+          }
+          await partFile.rename(targetFile.path);
+        } finally {
+          client.close(force: true);
+        }
       }
+
+      // 4. Update index and persist metadata
       final downloadedIds = getDownloadedSongIds();
       if (!downloadedIds.contains(song.id)) {
         downloadedIds.add(song.id);
         await _prefs?.setStringList(_keyDownloadedSongs, downloadedIds);
       }
-      // Notify reactive listeners (SongTile badges, playlist checkmarks)
+      await _saveDownloadedSongMetadata(song);
       downloadedSongIds.value = {...downloadedSongIds.value, song.id};
 
+      // 5. Download Cover Art
       try {
-        if (song.coverArt != null) {
-          final coverUrl = musicService.getCoverArtUrl(song.coverArt, size: 600);
+        if (song.coverArt != null && song.coverArt!.isNotEmpty) {
+          final coverUrl = musicService.getCoverArtUrl(song.coverArt!, size: 600);
           if (coverUrl.isNotEmpty) {
             final dioCover = Dio();
             final songCoverPath = _getCoverArtPath(song.id);
             await dioCover.download(coverUrl, songCoverPath);
-            // Also save indexed by coverArt ID so album/playlist views can find it offline
             final artIdPath = _getCoverArtByArtIdPath(song.coverArt!);
             if (!File(artIdPath).existsSync()) {
               await File(songCoverPath).copy(artIdPath);
@@ -441,23 +567,26 @@ class OfflineService {
       } catch (e) {
         debugPrint('Error downloading cover art for ${song.title}: $e');
       }
+
+      // 6. Download Synced Lyrics via LRCLIB
       try {
-        final lyricsMap = <String, dynamic>{};
-        final syncedLyrics = await musicService.getLyricsBySongId(song.id);
-        if (syncedLyrics != null) lyricsMap['lyricsList'] = syncedLyrics;
-        final plainLyrics = await musicService.getLyrics(
+        final lrcLibRes = await LrcLibService().searchLyrics(
           artist: song.artist,
           title: song.title,
-        );
-        if (plainLyrics != null) lyricsMap['lyrics'] = plainLyrics;
-        if (lyricsMap.isNotEmpty) await saveLyrics(song.id, lyricsMap);
+          durationSeconds: song.duration,
+        ).catchError((_) => null);
+
+        if (lrcLibRes != null && lrcLibRes.isNotEmpty) {
+          await saveLyrics(song.id, lrcLibRes);
+          debugPrint('[OfflineService] 📝 Saved synced lyrics for "${song.title}"');
+        }
       } catch (e) {
-        debugPrint('Error downloading lyrics for ${song.title}: $e');
+        debugPrint('Error downloading synced lyrics for ${song.title}: $e');
       }
 
       return true;
     } catch (e) {
-      debugPrint('Error downloading song: $e');
+      debugPrint('[OfflineService] Error downloading song "${song.title}": $e');
       return false;
     }
   }
@@ -707,6 +836,7 @@ class OfflineService {
       final downloadedIds = getDownloadedSongIds();
       downloadedIds.remove(songId);
       await _prefs?.setStringList(_keyDownloadedSongs, downloadedIds);
+      await _removeDownloadedSongMetadata(songId);
       downloadedSongIds.value = {...downloadedSongIds.value}..remove(songId);
       _expectedSizes.remove(songId);
       await _prefs?.setString(_keyExpectedSizes, json.encode(_expectedSizes));
@@ -740,6 +870,8 @@ class OfflineService {
       }
 
       await _prefs?.setStringList(_keyDownloadedSongs, []);
+      await _prefs?.remove(_keyDownloadedSongsData);
+      _downloadedSongsData = {};
       await _prefs?.remove(_keyExpectedSizes);
       await _prefs?.remove(_keyQueuedPlaylists);
       await _prefs?.remove(_keyQueuedPlaylistData);

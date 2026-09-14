@@ -11,6 +11,7 @@ import '../../screens/song_credits_screen.dart';
 import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
+import '../../services/offline_service.dart';
 import '../../services/theme_service.dart';
 import '../../utils/album_sanitizer.dart';
 import 'add_to_menu.dart';
@@ -33,6 +34,8 @@ class NowPlayingMoreMenu extends StatefulWidget {
 
 class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
   static const Color _appleRed = Color(0xFFFA2D48);
+  bool _isDownloading = false;
+  double _downloadProgress = 0.0;
 
   void _openPlaylistPicker(BuildContext context, Song song) {
     showModalBottomSheet(
@@ -66,6 +69,8 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
     final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
     final isStarred = libraryProvider.isSongStarred(currentSong.id) || (currentSong.starred ?? false);
     final isInLibrary = libraryProvider.isSongInLibrary(currentSong.id);
+    final offlineService = OfflineService();
+    final isDownloaded = offlineService.isSongDownloaded(currentSong.id);
 
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final coverUrl = currentSong.coverArt != null
@@ -216,7 +221,103 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               },
             ),
 
-            // 2. Agregar a una playlist...
+            // 2. Descargar canción para modo offline
+            if (_isDownloading)
+              _buildMenuItem(
+                iconWidget: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                    value: _downloadProgress > 0 ? _downloadProgress : null,
+                    strokeWidth: 2.2,
+                    color: _appleRed,
+                  ),
+                ),
+                title: 'Descargando... ${(_downloadProgress * 100).toInt()}%',
+                textColor: textColor,
+                onTap: () {},
+              )
+            else if (isDownloaded)
+              _buildMenuItem(
+                icon: CupertinoIcons.arrow_down_circle_fill,
+                iconColor: Colors.green,
+                title: 'Descargada (Eliminar descarga)',
+                textColor: textColor,
+                onTap: () async {
+                  final nav = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Eliminar descarga'),
+                      content: Text(
+                        '¿Deseas eliminar "${currentSong.title}" de tus descargas sin conexión?',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('Cancelar'),
+                        ),
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm == true) {
+                    await offlineService.deleteSong(currentSong.id);
+                    if (mounted) {
+                      nav.pop();
+                      messenger.showSnackBar(
+                        const SnackBar(
+                          content: Text('Descarga eliminada'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                  }
+                },
+              )
+            else
+              _buildMenuItem(
+                icon: CupertinoIcons.arrow_down_circle,
+                title: 'Descargar canción',
+                textColor: textColor,
+                onTap: () async {
+                  setState(() {
+                    _isDownloading = true;
+                    _downloadProgress = 0.0;
+                  });
+                  final nav = Navigator.of(context);
+                  final messenger = ScaffoldMessenger.of(context);
+                  final success = await offlineService.downloadSong(
+                    currentSong,
+                    youtubeService,
+                    onProgress: (p) {
+                      if (mounted) {
+                        setState(() => _downloadProgress = p);
+                      }
+                    },
+                  );
+                  if (mounted) {
+                    setState(() => _isDownloading = false);
+                    nav.pop();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          success
+                              ? 'Descargada para modo offline (audio y letras sincronizadas)'
+                              : 'No se pudo descargar la canción',
+                        ),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                },
+              ),
+
+            // 3. Agregar a una playlist...
             _buildMenuItem(
               icon: Icons.playlist_add_rounded,
               title: 'Agregar a una playlist...',
@@ -331,7 +432,9 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
   }
 
   Widget _buildMenuItem({
-    required IconData icon,
+    IconData? icon,
+    Widget? iconWidget,
+    Color? iconColor,
     required String title,
     required Color textColor,
     required VoidCallback onTap,
@@ -342,7 +445,7 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
         padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 13.0),
         child: Row(
           children: [
-            Icon(icon, color: _appleRed, size: 24),
+            iconWidget ?? Icon(icon, color: iconColor ?? _appleRed, size: 24),
             const SizedBox(width: 16),
             Expanded(
               child: Text(

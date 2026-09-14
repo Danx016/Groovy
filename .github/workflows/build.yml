@@ -108,6 +108,11 @@ jobs:
           else
             flutter build apk --release
           fi
+          
+          # Create branded Groovy.apk alongside app-release.apk
+          if [ -f "build/app/outputs/flutter-apk/app-release.apk" ]; then
+            cp "build/app/outputs/flutter-apk/app-release.apk" "build/app/outputs/flutter-apk/Groovy.apk"
+          fi
       
       - name: Upload APKs
         uses: actions/upload-artifact@v4
@@ -516,7 +521,7 @@ jobs:
           ### 📦 Descargas Disponibles:
 
           **📱 Android:**
-          - \`app-release.apk\` — APK universal para cualquier dispositivo Android
+          - \`Groovy.apk\` — APK universal para cualquier dispositivo Android (también disponible como \`app-release.apk\`)
 
           **🪟 Windows:**
           - \`Groovy-Setup.exe\` — Instalador con asistente para Windows

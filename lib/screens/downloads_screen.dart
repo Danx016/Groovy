@@ -23,28 +23,45 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
   @override
   void initState() {
     super.initState();
+    OfflineService().downloadedSongIds.addListener(_loadDownloads);
     _loadDownloads();
   }
 
+  @override
+  void dispose() {
+    OfflineService().downloadedSongIds.removeListener(_loadDownloads);
+    super.dispose();
+  }
+
   void _loadDownloads() {
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
     final offlineService = OfflineService();
+    final downloadedFromService = offlineService.getDownloadedSongs();
     final downloadedIds = offlineService.getDownloadedSongIds().toSet();
 
     final allSongs = libraryProvider.cachedAllSongs;
     final allAlbums = libraryProvider.cachedAllAlbums;
 
-    final List<Song> dSongs = [];
-    final Set<String> albumIds = {};
-
+    final Map<String, Song> songMap = {};
+    // Seed with OfflineService metadata (persisted locally)
+    for (final song in downloadedFromService) {
+      songMap[song.id] = song;
+    }
+    // Enrich with any active memory metadata from libraryProvider
     for (final song in allSongs) {
       if (downloadedIds.contains(song.id)) {
-        dSongs.add(song);
-        if (song.albumId != null) {
-          albumIds.add(song.albumId!);
-        }
+        songMap[song.id] = song;
+      }
+    }
+
+    final List<Song> dSongs = songMap.values.toList();
+    final Set<String> albumIds = {};
+    for (final song in dSongs) {
+      if (song.albumId != null) {
+        albumIds.add(song.albumId!);
       }
     }
 

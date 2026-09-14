@@ -10,6 +10,7 @@ import 'recommendation_service.dart';
 import 'ytdlp_service.dart';
 import 'album_resolver_service.dart';
 import 'audio_cache_service.dart';
+import 'offline_service.dart';
 
 class PingResult {
   final bool success;
@@ -466,7 +467,17 @@ class YoutubeService {
   }
 
   Future<AudioSource?> getYoutubeAudioSource(Song song) async {
-    // 1. Check local audio cache first (instant 0ms playback on Windows & Android)
+    // 0. Check permanent offline downloads first (instant 0ms playback offline & online)
+    final offlinePath = OfflineService().getLocalPath(song.id);
+    if (offlinePath != null && File(offlinePath).existsSync()) {
+      debugPrint('[YouTube] ⚡ Playing "${song.title}" (${song.id}) directly from offline downloads: $offlinePath');
+      return AudioSource.file(
+        offlinePath,
+        tag: song.id,
+      );
+    }
+
+    // 1. Check local audio cache next
     final cached = await AudioCacheService().getCachedSongFile(song.id);
     if (cached != null) {
       debugPrint('[YouTube] ⚡ Playing "${song.title}" (${song.id}) directly from local disk cache: ${cached.path}');
@@ -478,6 +489,16 @@ class YoutubeService {
 
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
+
+    // Check offline downloads with resolved videoId
+    final offlinePathByVideoId = OfflineService().getLocalPath(videoId);
+    if (offlinePathByVideoId != null && File(offlinePathByVideoId).existsSync()) {
+      debugPrint('[YouTube] ⚡ Playing "${song.title}" ($videoId) directly from offline downloads: $offlinePathByVideoId');
+      return AudioSource.file(
+        offlinePathByVideoId,
+        tag: song.id,
+      );
+    }
 
     // Check again with resolved videoId if song.id was a custom ID
     final cachedByVideoId = await AudioCacheService().getCachedSongFile(videoId);

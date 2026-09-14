@@ -89,8 +89,8 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
                 size: 45068261,
               },
               {
-                name: 'app-release.apk',
-                browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/app-release.apk`,
+                name: 'Groovy.apk',
+                browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy.apk`,
                 size: 32400000,
               },
               {
@@ -134,9 +134,9 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
     size: 45068261,
   };
 
-  const androidApk = getAsset('app-release') || getAsset('.apk') || {
-    name: 'app-release.apk',
-    browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/app-release.apk`,
+  const androidApk = getAsset('groovy.apk') || getAsset('app-release') || getAsset('.apk') || {
+    name: 'Groovy.apk',
+    browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy.apk`,
     size: 32400000,
   };
 
@@ -165,7 +165,7 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
   const faqs = [
     {
       q: '¿Cómo instalo la aplicación en Android?',
-      a: 'Descarga el archivo APK directo (app-release.apk) pulsando el botón verde. Al abrirlo, tu navegador te pedirá confirmar "Instalar aplicaciones de fuentes desconocidas". Concédele el permiso y se instalará en segundos.',
+      a: 'Descarga el archivo APK directo (Groovy.apk) pulsando el botón verde. Al abrirlo, tu navegador te pedirá confirmar "Instalar aplicaciones de fuentes desconocidas". Concédele el permiso y se instalará en segundos.',
     },
     {
       q: '¿Cómo funciona Groovy Connect?',
