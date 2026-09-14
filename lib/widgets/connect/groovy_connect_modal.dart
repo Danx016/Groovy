@@ -416,10 +416,20 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
     final isGroovyConnected = groovyConnect.isConnected;
     final isRemoteConnected = isCastConnected || isUpnpConnected || isGroovyConnected;
 
-    // Filter out local self-device and deduplicate by unique device ID
+    // Filter out local self-device, Web clients, and deduplicate by unique device ID
     final Map<String, GroovyRemoteDevice> uniqueDevices = {};
     for (final dev in groovyConnect.discoveredDevices) {
       if (dev.id == groovyConnect.localDeviceId) continue;
+      if (dev.platform.toLowerCase() == 'web' || dev.platform.toLowerCase() == 'browser') continue;
+
+      final isSamePlatform = dev.platform.toLowerCase() == groovyConnect.localPlatform.toLowerCase();
+      final isSameName = dev.name.toLowerCase() == groovyConnect.localDeviceName.toLowerCase() ||
+          dev.name.toLowerCase() == groovyConnect.localModel.toLowerCase();
+      final isSameIp = groovyConnect.localIp.isNotEmpty && dev.host.isNotEmpty &&
+          (dev.host == groovyConnect.localIp || dev.host == '127.0.0.1');
+
+      if (isSamePlatform && (isSameName || isSameIp)) continue;
+
       uniqueDevices[dev.id] = dev;
     }
     final groovyDevices = uniqueDevices.values.toList();

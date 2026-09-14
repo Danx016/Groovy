@@ -2528,14 +2528,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _sendTelemetryHeartbeat(overridePlaying: true);
 
     if (_groovyConnectService?.isConnected == true) {
-      _isRenderingRemotely = true;
-      _optimisticRemotePlayPauseState = true;
-      _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
-      _remoteAnchorPosition = _position;
-      _remoteAnchorTime = DateTime.now();
-      _manageRemotePositionTicker();
-      unawaited(_groovyConnectService!.sendControl('play'));
-      return;
+      final connected = _groovyConnectService!.connectedDevice;
+      if (connected == null || !_groovyConnectService!.discoveredDevices.any((d) => d.id == connected.id)) {
+        debugPrint('[PlayerProvider] Remote device is disconnected or unreachable. Falling back to local playback.');
+        _groovyConnectService!.disconnect();
+        disableGroovyConnectRemote();
+      } else {
+        _isRenderingRemotely = true;
+        _optimisticRemotePlayPauseState = true;
+        _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
+        _remoteAnchorPosition = _position;
+        _remoteAnchorTime = DateTime.now();
+        _manageRemotePositionTicker();
+        unawaited(_groovyConnectService!.sendControl('play'));
+        return;
+      }
     }
     if (_castService.isConnected) {
       await _castService.play();

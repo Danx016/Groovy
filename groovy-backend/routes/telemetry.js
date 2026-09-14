@@ -38,6 +38,7 @@ router.get('/playback', async (req, res) => {
   try {
     const client = parseFullClientInfo(req);
     const userId = req.user?.id || 0;
+    const callerDeviceId = req.query.deviceId || '';
     const pool = getPool();
 
     const [rows] = await pool.query(`
@@ -47,15 +48,19 @@ router.get('/playback', async (req, res) => {
         device_key, COALESCE(device_key, CONCAT(platform, '_', device_name)) as device_id
       FROM user_live_playback
       WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
-        AND last_ping_at >= NOW() - INTERVAL 120 SECOND
+        AND LOWER(platform) NOT IN ('web', 'browser')
+        AND last_ping_at >= NOW() - INTERVAL 30 SECOND
+        AND (? = '' OR device_key != ?)
       ORDER BY last_ping_at DESC
-    `, [userId, userId, client.ip]);
+    `, [userId, userId, client.ip, callerDeviceId, callerDeviceId]);
 
-    // Deduplicate by unique device_key rather than generic platform+name
+    // Deduplicate by physical device (same platform and device name/model)
     const seen = new Set();
     const uniqueDevices = [];
     for (const row of rows) {
-      const key = row.device_key || row.device_id || `${(row.platform || '').trim().toLowerCase()}_${(row.device_name || row.device_model || '').trim().toLowerCase()}`;
+      const p = (row.platform || '').trim().toLowerCase();
+      const d = (row.device_model || row.device_name || '').trim().toLowerCase();
+      const key = `${p}_${d}`;
       if (!seen.has(key)) {
         seen.add(key);
         uniqueDevices.push(row);
@@ -150,14 +155,14 @@ router.post('/command', authenticateToken, async (req, res) => {
       pool.query(`
         UPDATE user_live_playback 
         SET is_playing = 1 
-        WHERE device_key = ? OR (user_id = ? AND user_id > 0)
-      `, [targetDeviceId, userId]).catch(() => {});
+        WHERE device_key = ?
+      `, [targetDeviceId]).catch(() => {});
     } else if (action === 'pause') {
       pool.query(`
         UPDATE user_live_playback 
         SET is_playing = 0 
-        WHERE device_key = ? OR (user_id = ? AND user_id > 0)
-      `, [targetDeviceId, userId]).catch(() => {});
+        WHERE device_key = ?
+      `, [targetDeviceId]).catch(() => {});
     } else if (action === 'seek' && payload) {
       const seekVal = typeof payload === 'object' ? payload.value : payload;
       if (typeof seekVal === 'number') {
@@ -165,8 +170,8 @@ router.post('/command', authenticateToken, async (req, res) => {
         pool.query(`
           UPDATE user_live_playback 
           SET position = ? 
-          WHERE device_key = ? OR (user_id = ? AND user_id > 0)
-        `, [seekSec, targetDeviceId, userId]).catch(() => {});
+          WHERE device_key = ?
+        `, [seekSec, targetDeviceId]).catch(() => {});
       }
     } else if (action === 'volume' && payload) {
       const volVal = typeof payload === 'object' ? payload.value : payload;
@@ -175,8 +180,8 @@ router.post('/command', authenticateToken, async (req, res) => {
         pool.query(`
           UPDATE user_live_playback 
           SET volume = ? 
-          WHERE device_key = ? OR (user_id = ? AND user_id > 0)
-        `, [clampedVol, targetDeviceId, userId]).catch(() => {});
+          WHERE device_key = ?
+        `, [clampedVol, targetDeviceId]).catch(() => {});
       }
     }
 

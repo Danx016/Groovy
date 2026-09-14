@@ -573,17 +573,18 @@ class GroovyConnectService extends ChangeNotifier {
 
   Future<void> _runCloudCommandLoop() async {
     while (_isListeningCloudCommands) {
+      bool hadCommands = false;
       if (_localDeviceId.isNotEmpty) {
-        await _pollCloudCommands();
+        hadCommands = await _pollCloudCommands();
       }
       if (!_isListeningCloudCommands) break;
-      await Future.delayed(const Duration(milliseconds: 60));
+      await Future.delayed(hadCommands ? const Duration(milliseconds: 150) : const Duration(milliseconds: 1500));
     }
   }
 
-  /// Polls pending cloud commands targeting this device.
-  Future<void> _pollCloudCommands() async {
-    if (_localDeviceId.isEmpty || _isPollingCommands) return;
+  /// Polls pending cloud commands targeting this device. Returns true if commands were processed.
+  Future<bool> _pollCloudCommands() async {
+    if (_localDeviceId.isEmpty || _isPollingCommands) return false;
     _isPollingCommands = true;
 
     try {
@@ -591,6 +592,7 @@ class GroovyConnectService extends ChangeNotifier {
         deviceId: _localDeviceId,
         token: _cachedAuthToken,
       );
+      if (commands.isEmpty) return false;
 
       for (final cmd in commands) {
         try {
@@ -646,8 +648,9 @@ class GroovyConnectService extends ChangeNotifier {
           debugPrint('[GroovyConnect] Error processing command: $cmdError');
         }
       }
+      return true;
     } catch (e) {
-      // Ignore intermittent poll drops
+      return false;
     } finally {
       _isPollingCommands = false;
     }
@@ -728,14 +731,31 @@ class GroovyConnectService extends ChangeNotifier {
       final devicesList = await GroovyApiService().fetchUserDevices(token: token);
 
       for (final item in devicesList) {
+        final remotePlatform = (item['platform']?.toString() ?? '').toLowerCase();
+        // 1. Web players cannot act as Groovy Connect audio renderers
+        if (remotePlatform == 'web' || remotePlatform == 'browser') continue;
+
         final remoteDeviceId = item['device_key']?.toString() ??
             item['device_id']?.toString() ??
             '${item['platform']}_${item['device_name']}';
 
-        // Do not discover self by ID
+        // 2. Do not discover self by ID
         if (remoteDeviceId == _localDeviceId) continue;
 
         final remoteDeviceName = item['device_name']?.toString() ?? item['device_model']?.toString() ?? 'Groovy Device';
+        final remoteDeviceModel = item['device_model']?.toString() ?? '';
+        final localIpCandidate = item['local_ip']?.toString() ?? item['localIp']?.toString() ?? item['ip_address']?.toString() ?? '';
+
+        // 3. Do not discover self: same physical machine (same platform and name/model, or same platform and local IP)
+        final isSamePlatform = remotePlatform == _localPlatform.toLowerCase();
+        final isSameName = remoteDeviceName.toLowerCase() == _localDeviceName.toLowerCase() ||
+            remoteDeviceName.toLowerCase() == _localModel.toLowerCase() ||
+            (remoteDeviceModel.isNotEmpty && remoteDeviceModel.toLowerCase() == _localModel.toLowerCase());
+        final isSameIp = _localIp.isNotEmpty && localIpCandidate.isNotEmpty &&
+            (localIpCandidate == _localIp || localIpCandidate == '127.0.0.1');
+
+        if (isSamePlatform && (isSameName || isSameIp)) continue;
+
         final remoteDevicePlatform = item['platform']?.toString() ?? 'Dispositivo';
 
         final isPlaying = item['is_playing'] == 1 || item['is_playing'] == true;
@@ -753,7 +773,6 @@ class GroovyConnectService extends ChangeNotifier {
           );
         }
 
-        final localIpCandidate = item['local_ip']?.toString() ?? item['localIp']?.toString() ?? item['ip_address']?.toString() ?? '';
         final localPortCandidate = (item['local_port'] as num?)?.toInt() ?? (item['localPort'] as num?)?.toInt() ?? (item['port'] as num?)?.toInt() ?? 42425;
 
         final existing = _discoveredDevices[remoteDeviceId];
@@ -790,14 +809,14 @@ class GroovyConnectService extends ChangeNotifier {
     }
   }
 
-  /// Removes devices that haven't sent a ping in over 60 seconds.
+  /// Removes devices that haven't sent a ping in over 30 seconds.
   /// Never prunes the active connected device while connected.
   void _pruneStaleDevices() {
     final now = DateTime.now();
     _discoveredDevices.removeWhere((id, dev) {
       if (_connectedDevice?.id == id) {
-        // Never disconnect the active device unless completely silent for > 120s
-        final isConnectedStale = now.difference(_connectedDevice!.lastSeen).inSeconds > 120;
+        // Never disconnect the active device unless completely silent for > 60s
+        final isConnectedStale = now.difference(_connectedDevice!.lastSeen).inSeconds > 60;
         if (isConnectedStale) {
           _connectedDevice = null;
           _statusSyncTimer?.cancel();
@@ -805,7 +824,7 @@ class GroovyConnectService extends ChangeNotifier {
         }
         return false;
       }
-      return now.difference(dev.lastSeen).inSeconds > 60;
+      return now.difference(dev.lastSeen).inSeconds > 30;
     });
     notifyListeners();
   }
