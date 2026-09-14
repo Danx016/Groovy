@@ -154,6 +154,23 @@ class AppTheme {
           type: BottomNavigationBarType.fixed,
           elevation: 0,
         ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF1E1E22),
+          elevation: 10,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: 0.5,
+            ),
+          ),
+          contentTextStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         cupertinoOverrideTheme: CupertinoThemeData(
           primaryColor: accent,
         ),
@@ -267,6 +284,23 @@ class AppTheme {
           type: BottomNavigationBarType.fixed,
           elevation: 0,
         ),
+        snackBarTheme: SnackBarThemeData(
+          behavior: SnackBarBehavior.floating,
+          backgroundColor: const Color(0xFF1E1E22),
+          elevation: 10,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+            side: BorderSide(
+              color: Colors.white.withValues(alpha: 0.12),
+              width: 0.5,
+            ),
+          ),
+          contentTextStyle: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         cupertinoOverrideTheme: CupertinoThemeData(
           primaryColor: accent,
           brightness: Brightness.dark,
@@ -367,6 +401,23 @@ class AppTheme {
         unselectedItemColor: secondary,
         type: BottomNavigationBarType.fixed,
         elevation: 0,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: isDark ? const Color(0xFF1E1E22) : const Color(0xFF323236),
+        elevation: 10,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+          side: BorderSide(
+            color: isDark ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
+            width: 0.5,
+          ),
+        ),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
       ),
       cupertinoOverrideTheme: CupertinoThemeData(
         primaryColor: accent,

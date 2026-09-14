@@ -5,6 +5,7 @@ import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/settings/settings_section_card.dart';
 import '../utils/context_extensions.dart';
+import '../widgets/apple_music_toast.dart';
 import 'main_screen.dart';
 
 class SettingsAboutTab extends StatelessWidget {
@@ -53,26 +54,24 @@ class SettingsAboutTab extends StatelessWidget {
               subtitle: const Text('Comprobar si hay una versión más reciente', style: TextStyle(fontSize: 12)),
               trailing: const Icon(Icons.chevron_right, size: 20),
               onTap: () async {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Buscando actualizaciones...'),
-                    duration: Duration(seconds: 2),
-                    behavior: SnackBarBehavior.floating,
-                  ),
+                AppleMusicToast.show(
+                  context,
+                  message: 'Buscando actualizaciones...',
+                  isLoading: true,
                 );
                 await UpdateService.clearSnooze();
                 final release = await UpdateService.checkForUpdate(force: true);
                 if (!context.mounted) return;
+                AppleMusicToast.dismiss();
                 if (release != null) {
                   MainScreen.showUpdateDialog(context, release);
                 } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('¡Tienes la última versión instalada (v${UpdateService.currentVersionDisplay})!'),
-                      backgroundColor: const Color(0xFF1DB954),
-                      behavior: SnackBarBehavior.floating,
-                      duration: const Duration(seconds: 3),
-                    ),
+                  AppleMusicToast.show(
+                    context,
+                    message:
+                        '¡Tienes la última versión instalada (v${UpdateService.currentVersionDisplay})!',
+                    icon: CupertinoIcons.checkmark_alt_circle_fill,
+                    iconColor: const Color(0xFF34C759),
                   );
                 }
               },

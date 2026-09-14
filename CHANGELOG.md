@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.4] - 2026-09-14
+
+### Added
+- **Alertas y Notificaciones Cápsula estilo Apple Music / Dynamic Island (`AppleMusicToast`)**: Nuevo sistema de avisos y notificaciones flotantes tipo píldora (`#1E1E22` dark glassmorphism, esquinas curvas de `24px` y acento en rojo Apple Music / verde esmeralda) que reemplaza los SnackBars rectangulares de Material 3 al buscar actualizaciones o notificar el estado del sistema.
+- **Soporte y donaciones Bre-B (`SettingsSupportTab`)**: Integración directa de donaciones en Colombia a través de Bre-B con código QR escaneable oficial de Nu, Llave `@GOM880`, enlace a la comunidad de Discord y mensaje "Hecho con 💙 en El Carmen de Bolívar por Danilo".
+
+### Changed
+- **Pantalla de Descargas estilo Apple Music 100% en español (`DownloadsScreen`)**: Traducción integral de toda la pantalla de descargas al español ("Descargas", "Canciones", "Álbumes", etc.), gran tipografía de cabecera iOS con botón de retroceso en rojo Apple Music, pestañas estilo píldora con contador de elementos, botones de acción "Reproducir" y "Aleatorio", buscador Cupertino nativo y estados vacíos con ilustración y llamada a la acción.
+- **Tema global de SnackBars (`AppTheme.snackBarTheme`)**: Configuración de tema flotante y bordes curvos de 24px en todos los temas del sistema para consistencia visual.
+
 ## [1.2.3] - 2026-09-14
 
 ### Changed
