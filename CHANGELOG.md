@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-09-13
+
+### Fixed
+- **Doble presencia y colisión de dispositivos en Groovy Connect (`GroovyConnectService` & `GroovyConnectModal`)**: Eliminada la duplicación de "PC local" y "PC nube" al filtrar rigurosamente sesiones web y dispositivos que compartan la misma identidad o IP física de la máquina local.
+- **Auto-recuperación y fallback a audio local (`PlayerProvider`)**: Si un dispositivo remoto se desconecta, no responde o falla la transferencia, el reproductor cancela el modo remoto de forma automática e inicia la reproducción local sin dejar la pista congelada en 0:00.
+- **Aislamiento de comandos en backend (`routes/telemetry.js`)**: Corregida la propagación accidental de órdenes de pausa que afectaba a todos los dispositivos del usuario, garantizando que cada comando de reproducción apunte única y exclusivamente a su `targetDeviceId`.
+- **Exclusión de clientes Web de Groovy Connect**: Filtrado de plataformas `Web`/navegador en `GET /api/telemetry/playback` y reducción de la ventana de sesiones inactivas a 30 segundos, eliminando dispositivos fantasma persistentes.
+- **Optimización de sondeo en segundo plano (`_runCloudCommandLoop`)**: Implementado sondeo adaptativo con espera de 1500ms en reposo, reduciendo drásticamente el consumo de CPU, batería y ancho de banda.
+- **Deduplicación en "Reproducciones recientes" del reproductor Web (`HomeView.jsx` & `LibraryContext.jsx`)**: Eliminadas tarjetas repetidas de la misma pista en la pantalla de Inicio y sincronización de historial único.
+
 ## [1.2.0] - 2026-09-13
 
 ### Added
