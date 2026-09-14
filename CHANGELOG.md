@@ -5,6 +5,12 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.3] - 2026-09-14
+
+### Changed
+- **Configuración estilo Apple Music / iOS (`SettingsScreen`)**: Rediseño completo de la pantalla de ajustes adoptando la interfaz de lista agrupada de Apple Music (iOS Grouped List) con tarjetas `#1C1C1E`, bordes redondeados (`14px`), tarjeta de perfil Apple ID y subpantallas fluidas con navegación nativa en rojo.
+- **Eliminación de pestañas innecesarias**: Removidas por completo las secciones de *Reproducción* y *Almacenamiento* de la configuración a petición del usuario.
+
 ## [1.2.2] - 2026-09-14
 
 ### Added
