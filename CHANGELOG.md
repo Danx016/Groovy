@@ -5,6 +5,12 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.6] - 2026-09-17
+
+### Added
+- **Carátulas Originales de Estudio de Apple Music (HD 1400×1400) (`AppleMusicArtworkService`)**: Nuevo servicio que resuelve automáticamente las portadas oficiales originales de álbum de Apple Music / iTunes Storefront en ultra alta resolución, sustituyendo las miniaturas recortadas de YouTube con caché de 2 niveles (RAM + disco).
+- **Apple Music Motion Artwork (Videos en bucle oficiales) (`AnimatedAlbumArtView`)**: Soporte nativo para streams de video HLS oficiales de Apple Music (`motionDetailSquare` de `mvod.itunes.apple.com`) acelerados por GPU vía `media_kit_video`, con reproducción silenciosa sincronizada con Play/Pausa, transición fluida de fallback y selector en Ajustes -> Pantalla.
+
 ## [1.2.5] - 2026-09-16
 
 ### Added

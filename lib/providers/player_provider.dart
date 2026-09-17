@@ -22,6 +22,7 @@ import '../services/ytdlp_service.dart';
 import '../services/lrclib_service.dart';
 import '../services/palette_service.dart';
 import '../services/audio_cache_service.dart';
+import '../services/apple_music_artwork_service.dart';
 
 import '../services/storage_service.dart';
 import '../services/groovy_api_service.dart';
@@ -86,6 +87,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _remoteVolumeDebounceTimer;
 
   String? _resolvedArtworkUrl;
+  String? get resolvedArtworkUrl => _resolvedArtworkUrl;
+
+  String? _motionVideoUrl;
+  String? get motionVideoUrl => _motionVideoUrl;
 
   RadioStation? _currentRadioStation;
   bool _isPlayingRadio = false;
@@ -1131,19 +1136,57 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         ? coverArtId
         : _youtubeService.getCoverArtUrl(coverArtId, size: 800);
 
-    _resolvedArtworkUrl = directUrl;
+    // 1. Instant check for official Apple Music original HD artwork from memory/disk cache
+    final appleCached = AppleMusicArtworkService.getCachedArtwork(song.title, song.artist);
+    final effectiveUrl = (appleCached != null && appleCached.artworkUrl.isNotEmpty)
+        ? appleCached.artworkUrl
+        : directUrl;
+
+    _resolvedArtworkUrl = effectiveUrl;
+    _motionVideoUrl = appleCached?.motionVideoUrl;
     if (_currentSong?.id == song.id) _updateAndroidAuto();
+
+    // 2. Resolve Apple Music metadata and motion artwork in the background
+    if (!song.isLocal) {
+      final targetSongId = song.id;
+      AppleMusicArtworkService().resolveArtworkForSong(song).then((appleRes) {
+        if (appleRes != null && _currentSong?.id == targetSongId) {
+          bool needsNotify = false;
+          if (appleRes.artworkUrl.isNotEmpty && _resolvedArtworkUrl != appleRes.artworkUrl) {
+            _resolvedArtworkUrl = appleRes.artworkUrl;
+            _updateAndroidAuto();
+            needsNotify = true;
+            final ImageProvider appleImg = CachedNetworkImageProvider(appleRes.artworkUrl);
+            PaletteService.extractColors(appleImg, targetSongId).catchError((_) => <Color>[]);
+          }
+          if (appleRes.motionVideoUrl != null && _motionVideoUrl != appleRes.motionVideoUrl) {
+            _motionVideoUrl = appleRes.motionVideoUrl;
+            needsNotify = true;
+          } else if (_motionVideoUrl == null && appleRes.collectionViewUrl != null) {
+            AppleMusicArtworkService().resolveMotionVideo(appleRes.collectionViewUrl!).then((mUrl) {
+              if (mUrl != null && mUrl.isNotEmpty && _currentSong?.id == targetSongId) {
+                _motionVideoUrl = mUrl;
+                notifyListeners();
+              }
+            }).catchError((_) {});
+          }
+          if (needsNotify) {
+            notifyListeners();
+          }
+        }
+      }).catchError((_) {});
+    }
 
     // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
     final songId = song.id;
     if (PaletteService.getCachedColors(songId) == null) {
-      final ImageProvider imgProvider = CachedNetworkImageProvider(directUrl);
+      final ImageProvider imgProvider = CachedNetworkImageProvider(effectiveUrl);
       PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
     }
 
     // Cache the image file locally so Android notification / lock screen loads it instantly from disk!
     try {
-      final file = await DefaultCacheManager().getSingleFile(directUrl);
+      final file = await DefaultCacheManager().getSingleFile(effectiveUrl);
       if (file.existsSync() && _currentSong?.id == song.id) {
         _resolvedArtworkUrl = Uri.file(file.path).toString();
         _updateAndroidAuto();

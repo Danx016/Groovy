@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import '../models/models.dart';
 import '../utils/album_sanitizer.dart';
+import 'apple_music_artwork_service.dart';
 
 /// Service that accurately resolves real album metadata, cover art, and playable tracks
 /// using official YouTube Music and Deezer endpoints, preventing generic "Album"/"Artist"
@@ -122,9 +123,32 @@ class AlbumResolverService {
     return null;
   }
 
-  /// Resolves the album title, artist, and cover art for a track using Deezer Search API
+  /// Resolves the album title, artist, and cover art for a track using Apple Music (with Deezer fallback)
   Future<({String albumTitle, String artistName, String? coverArt, String? albumId})?>
       _resolveAlbumInfoFromSong(String songTitle, String? artistName) async {
+    // 1. Try Apple Music first for official original album metadata & 1400x1400 artwork
+    try {
+      final appleRes = await AppleMusicArtworkService().resolveArtwork(
+        title: songTitle,
+        artist: artistName,
+      );
+      if (appleRes != null &&
+          appleRes.albumName != null &&
+          appleRes.albumName!.isNotEmpty) {
+        return (
+          albumTitle: appleRes.albumName!,
+          artistName: appleRes.artistName ?? artistName ?? '',
+          coverArt: appleRes.artworkUrl,
+          albumId: appleRes.collectionId != null
+              ? 'am_${appleRes.collectionId}'
+              : null,
+        );
+      }
+    } catch (e) {
+      debugPrint('[AlbumResolver] Apple Music resolve note: $e');
+    }
+
+    // 2. Fallback to Deezer Search API
     try {
       final cleanArtist = (artistName != null && !_isPlaceholder(artistName)) ? artistName : '';
       final query = cleanArtist.isNotEmpty

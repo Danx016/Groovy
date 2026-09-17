@@ -22,6 +22,7 @@ import '../models/song.dart';
 import '../models/album.dart';
 import '../services/palette_service.dart';
 import '../services/youtube_service.dart';
+import '../services/apple_music_artwork_service.dart';
 import '../services/offline_service.dart';
 import '../services/lrc_ttml_parser.dart';
 import '../widgets/now_playing/queue_view.dart';
@@ -78,14 +79,33 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   ImageProvider _resolveImageProvider(Song? song, YoutubeService youtubeService) {
-    if (song == null || song.coverArt == null || song.coverArt!.isEmpty) {
+    if (song == null) {
+      return const AssetImage('assets/default_cover.png');
+    }
+
+    // 1. Check if Apple Music original HD artwork is cached
+    final appleCached = AppleMusicArtworkService.getCachedArtwork(song.title, song.artist);
+    if (appleCached != null && appleCached.artworkUrl.isNotEmpty) {
+      return CachedNetworkImageProvider(appleCached.artworkUrl);
+    }
+
+    // 2. Check if PlayerProvider resolved an artwork URL (Apple Music or local disk)
+    final resolvedUrl = _playerProvider?.resolvedArtworkUrl;
+    if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+      if (_isLocalFilePath(resolvedUrl)) {
+        return FileImage(File(resolvedUrl.replaceFirst('file://', '')));
+      }
+      return CachedNetworkImageProvider(resolvedUrl);
+    }
+
+    if (song.coverArt == null || song.coverArt!.isEmpty) {
       return const AssetImage('assets/default_cover.png');
     }
     final raw = song.coverArt!;
     if (song.isLocal || _isLocalFilePath(raw)) {
       return FileImage(File(raw));
     }
-    final coverUrl = youtubeService.getCoverArtUrl(raw, size: 600);
+    final coverUrl = youtubeService.getCoverArtUrl(raw, size: 800);
     if (_isLocalFilePath(coverUrl)) {
       return FileImage(File(coverUrl));
     }
@@ -152,17 +172,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   void _onPlayerChanged() {
     if (!mounted || _playerProvider == null) return;
     final currentSong = _playerProvider!.currentSong;
-    if (currentSong != null && _lastSong?.id != currentSong.id) {
+    if (currentSong == null) return;
+
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+    final newImageProvider = _resolveImageProvider(currentSong, youtubeService);
+    final isSongChange = _lastSong?.id != currentSong.id;
+    final isImageChange = _currentImageProvider != newImageProvider;
+
+    if (isSongChange || isImageChange) {
       _lastSong = currentSong;
       
       // 1. Instant cached color check
       final cachedColors = PaletteService.getCachedColors(currentSong.id);
       
-      // 2. Resolve image provider smoothly
-      final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-      final newImageProvider = _resolveImageProvider(currentSong, youtubeService);
-      
-      // 3. Instant lyrics cache check
+      // 2. Instant lyrics cache check
       final hasCachedLyrics = _lyricsCache.containsKey(currentSong.id);
       final cachedLyrics = hasCachedLyrics ? _lyricsCache[currentSong.id]! : <LyricLine>[];
 
@@ -175,8 +198,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         if (cachedColors != null) {
           _bgColors = cachedColors;
         }
-        _fetchedLyrics = cachedLyrics;
-        _isLoadingLyrics = !hasCachedLyrics;
+        if (isSongChange) {
+          _fetchedLyrics = cachedLyrics;
+          _isLoadingLyrics = !hasCachedLyrics;
+        }
       });
 
       // 4. Stagger background work so UI frame stays 120 FPS buttery smooth
@@ -186,7 +211,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         });
       }
 
-      if (!hasCachedLyrics) {
+      if (isSongChange && !hasCachedLyrics) {
         _lyricsDebounceTimer = Timer(const Duration(milliseconds: 220), () {
           if (mounted) _fetchLyrics();
         });
@@ -691,6 +716,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       tag: widget.heroTag,
                       isPlaying: isPlaying,
                       dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
+                      motionVideoUrl: _playerProvider?.motionVideoUrl,
                     ),
                   ),
                 ),
@@ -1115,6 +1141,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     tag: currentSong?.id ?? widget.heroTag,
                     isPlaying: isPlaying,
                     dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
+                    motionVideoUrl: _playerProvider?.motionVideoUrl,
                   ),
                 ),
 
@@ -1263,6 +1290,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   tag: currentSong?.id ?? widget.heroTag,
                   isPlaying: isPlaying,
                   dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
+                  motionVideoUrl: _playerProvider?.motionVideoUrl,
                 ),
               ),
 

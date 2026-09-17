@@ -8,6 +8,7 @@ class AlbumArtView extends StatelessWidget {
   final bool isFavorite;
   final VoidCallback? onFavoriteToggle;
   final Color? dominantColor;
+  final String? motionVideoUrl;
 
   const AlbumArtView({
     super.key,
@@ -17,6 +18,7 @@ class AlbumArtView extends StatelessWidget {
     this.isFavorite = false,
     this.onFavoriteToggle,
     this.dominantColor,
+    this.motionVideoUrl,
   });
 
   @override
@@ -28,6 +30,7 @@ class AlbumArtView extends StatelessWidget {
       isFavorite: isFavorite,
       onFavoriteToggle: onFavoriteToggle,
       dominantColor: dominantColor,
+      motionVideoUrl: motionVideoUrl,
     );
   }
 }

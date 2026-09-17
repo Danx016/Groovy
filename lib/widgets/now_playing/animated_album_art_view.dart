@@ -1,10 +1,13 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import '../../services/player_ui_settings_service.dart';
 
 /// Widget de carátula animada de altísimo rendimiento inspirado en Apple Music.
 /// 
 /// Características:
+/// - Reproducción en bucle del video oficial Apple Music Motion Artwork (.m3u8) acelerado por GPU.
 /// - Transición fluida (crossfade) de 350ms entre canciones para eliminar tirones.
 /// - Escala elástica sincronizada con Play/Pause (1.0 en Play, 0.88 en Pausa).
 /// - Micro-respiración orgánica cinematográfica durante reproducción.
@@ -18,6 +21,7 @@ class AnimatedAlbumArtView extends StatefulWidget {
   final VoidCallback? onFavoriteToggle;
   final double borderRadius;
   final Color? dominantColor;
+  final String? motionVideoUrl;
 
   const AnimatedAlbumArtView({
     super.key,
@@ -28,6 +32,7 @@ class AnimatedAlbumArtView extends StatefulWidget {
     this.onFavoriteToggle,
     this.borderRadius = 22.0,
     this.dominantColor,
+    this.motionVideoUrl,
   });
 
   @override
@@ -44,13 +49,20 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
 
   final PlayerUiSettingsService _settingsService = PlayerUiSettingsService();
   bool _animationsEnabled = true;
+  bool _motionVideoEnabled = true;
+
+  Player? _videoPlayer;
+  VideoController? _videoController;
+  bool _isVideoReady = false;
 
   @override
   void initState() {
     super.initState();
 
     _animationsEnabled = _settingsService.getAnimatedArtwork();
+    _motionVideoEnabled = _settingsService.getMotionArtworkVideo();
     _settingsService.animatedArtworkNotifier.addListener(_onSettingsChanged);
+    _settingsService.motionArtworkVideoNotifier.addListener(_onSettingsChanged);
 
     // Animación de escala elástica Apple Music al pausar/reproducir
     _playPauseController = AnimationController(
@@ -78,19 +90,60 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
     );
 
     _syncAnimations();
+
+    if (_motionVideoEnabled && widget.motionVideoUrl != null && widget.motionVideoUrl!.isNotEmpty) {
+      _initVideoPlayer(widget.motionVideoUrl!);
+    }
   }
 
   void _onSettingsChanged() {
     if (!mounted) return;
     setState(() {
       _animationsEnabled = _settingsService.animatedArtworkNotifier.value;
+      _motionVideoEnabled = _settingsService.motionArtworkVideoNotifier.value;
+      if (!_motionVideoEnabled) {
+        _disposeVideoPlayer();
+      } else if (widget.motionVideoUrl != null && widget.motionVideoUrl!.isNotEmpty && _videoPlayer == null) {
+        _initVideoPlayer(widget.motionVideoUrl!);
+      }
       _syncAnimations();
     });
+  }
+
+  void _initVideoPlayer(String url) async {
+    _disposeVideoPlayer();
+    try {
+      final p = Player();
+      final c = VideoController(p);
+      _videoPlayer = p;
+      _videoController = c;
+
+      // Keep silent - the track's audio is played by the main audio player
+      await p.setVolume(0);
+      await p.setPlaylistMode(PlaylistMode.loop);
+      await p.open(Media(url), play: widget.isPlaying);
+
+      if (mounted && _videoPlayer == p) {
+        setState(() {
+          _isVideoReady = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('[MotionArtwork] Video init note: $e');
+    }
+  }
+
+  void _disposeVideoPlayer() {
+    _videoPlayer?.dispose();
+    _videoPlayer = null;
+    _videoController = null;
+    _isVideoReady = false;
   }
 
   void _syncAnimations() {
     if (widget.isPlaying) {
       _playPauseController.animateTo(1.0);
+      _videoPlayer?.play();
       if (_animationsEnabled) {
         if (!_motionController.isAnimating) {
           _motionController.repeat(reverse: true);
@@ -104,6 +157,7 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
       }
     } else {
       _playPauseController.animateTo(0.0);
+      _videoPlayer?.pause();
       _motionController.stop();
       _shimmerController.stop();
     }
@@ -115,11 +169,20 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
     if (oldWidget.isPlaying != widget.isPlaying) {
       _syncAnimations();
     }
+    if (oldWidget.motionVideoUrl != widget.motionVideoUrl) {
+      if (_motionVideoEnabled && widget.motionVideoUrl != null && widget.motionVideoUrl!.isNotEmpty) {
+        _initVideoPlayer(widget.motionVideoUrl!);
+      } else {
+        _disposeVideoPlayer();
+      }
+    }
   }
 
   @override
   void dispose() {
     _settingsService.animatedArtworkNotifier.removeListener(_onSettingsChanged);
+    _settingsService.motionArtworkVideoNotifier.removeListener(_onSettingsChanged);
+    _disposeVideoPlayer();
     _playPauseController.dispose();
     _motionController.dispose();
     _shimmerController.dispose();
@@ -200,7 +263,7 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
                 clipBehavior: Clip.none,
                 alignment: Alignment.center,
                 children: [
-                  // 1. Halo ambiental (Glow) con opacidad compositada en GPU (0 coste de re-renderizado)
+                  // 1. Halo ambiental (Glow) con opacidad compositada en GPU
                   if (widget.dominantColor != null && _animationsEnabled)
                     Positioned.fill(
                       child: RepaintBoundary(
@@ -241,8 +304,22 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
                         child: Stack(
                           fit: StackFit.passthrough,
                           children: [
-                            // Imagen con transición fluida
+                            // Imagen con transición fluida (siempre de base)
                             artworkSwitcher,
+
+                            // Video oficial de Apple Music Motion Artwork (en bucle silencioso)
+                            if (_motionVideoEnabled && _videoController != null && _isVideoReady)
+                              Positioned.fill(
+                                child: AnimatedOpacity(
+                                  opacity: _isVideoReady ? 1.0 : 0.0,
+                                  duration: const Duration(milliseconds: 400),
+                                  child: Video(
+                                    controller: _videoController!,
+                                    fit: BoxFit.cover,
+                                    controls: NoVideoControls,
+                                  ),
+                                ),
+                              ),
 
                             // 3. Sutil reflejo de luz ambiental Apple Music Sheen
                             if (_animationsEnabled && playValue > 0.1)
