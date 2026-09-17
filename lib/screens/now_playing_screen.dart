@@ -155,26 +155,39 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     if (currentSong != null && _lastSong?.id != currentSong.id) {
       _lastSong = currentSong;
       
-      // 1. Instant color update if already in PaletteService cache (0 ms!)
+      // 1. Instant cached color check
       final cachedColors = PaletteService.getCachedColors(currentSong.id);
-      if (cachedColors != null) {
-        _colorDebounceTimer?.cancel();
-        _bgColors = cachedColors;
+      
+      // 2. Resolve image provider smoothly
+      final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+      final newImageProvider = _resolveImageProvider(currentSong, youtubeService);
+      
+      // 3. Instant lyrics cache check
+      final hasCachedLyrics = _lyricsCache.containsKey(currentSong.id);
+      final cachedLyrics = hasCachedLyrics ? _lyricsCache[currentSong.id]! : <LyricLine>[];
+
+      _colorDebounceTimer?.cancel();
+      _lyricsDebounceTimer?.cancel();
+
+      // Single atomic setState: update artwork, colors, and lyrics in one frame
+      setState(() {
+        _currentImageProvider = newImageProvider;
+        if (cachedColors != null) {
+          _bgColors = cachedColors;
+        }
+        _fetchedLyrics = cachedLyrics;
+        _isLoadingLyrics = !hasCachedLyrics;
+      });
+
+      // 4. Stagger background work so UI frame stays 120 FPS buttery smooth
+      if (cachedColors == null) {
+        _colorDebounceTimer = Timer(const Duration(milliseconds: 140), () {
+          if (mounted) _extractColors();
+        });
       }
 
-      // 2. Update cover image provider
-      _updateImageProviderAndColors();
-      
-      // 3. Check lyrics cache or debounce network fetch
-      _lyricsDebounceTimer?.cancel();
-      if (_lyricsCache.containsKey(currentSong.id)) {
-        setState(() {
-          _fetchedLyrics = _lyricsCache[currentSong.id]!;
-          _isLoadingLyrics = false;
-        });
-      } else {
-        setState(() => _isLoadingLyrics = true);
-        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 180), () {
+      if (!hasCachedLyrics) {
+        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 220), () {
           if (mounted) _fetchLyrics();
         });
       }
@@ -182,33 +195,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   static final Map<String, List<LyricLine>> _lyricsCache = {};
-
-  void _updateImageProviderAndColors() {
-    if (_lastSong == null) return;
-    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-    final newImageProvider = _resolveImageProvider(_lastSong, youtubeService);
-    
-    // Instant cache hit check (0 ms)
-    final cachedColors = PaletteService.getCachedColors(_lastSong!.id);
-    if (cachedColors != null) {
-      _colorDebounceTimer?.cancel();
-      setState(() {
-        _currentImageProvider = newImageProvider;
-        _bgColors = cachedColors;
-      });
-      return;
-    }
-
-    setState(() {
-      _currentImageProvider = newImageProvider;
-    });
-
-    // Debounce palette extraction to keep UI butter-smooth during rapid skips
-    _colorDebounceTimer?.cancel();
-    _colorDebounceTimer = Timer(const Duration(milliseconds: 60), () {
-      if (mounted) _extractColors();
-    });
-  }
 
   List<LyricLine> _extractParsedLines(Map<String, dynamic> raw) {
     if (raw['structuredLyrics'] != null) {
@@ -290,12 +276,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         }
       }
       
-      // 2. Online fetch: Try LRCLIB for synchronized lyrics
+      // 2. Online fetch: Try LRCLIB for synchronized lyrics with exact duration matching
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
+        final durSeconds = (song.duration != null && song.duration! > 0)
+            ? song.duration!
+            : (_playerProvider?.duration.inSeconds ?? 0);
         final lrcLibRes = await LrcLibService().searchLyrics(
           artist: song.artist,
           title: song.title,
-          durationSeconds: song.duration,
+          durationSeconds: durSeconds > 0 ? durSeconds : null,
         ).catchError((_) => null);
 
         if (lrcLibRes != null) {
@@ -699,8 +688,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     aspectRatio: 1.0,
                     child: AlbumArtView(
                       image: _currentImageProvider ?? widget.image,
-                      tag: currentSong?.id ?? widget.heroTag,
+                      tag: widget.heroTag,
                       isPlaying: isPlaying,
+                      dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                     ),
                   ),
                 ),
@@ -1117,37 +1107,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 // Album Art
-                Container(
+                SizedBox(
                   width: coverSize,
                   height: coverSize,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.40),
-                        blurRadius: 30,
-                        spreadRadius: 2,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Hero(
-                      tag: widget.heroTag,
-                      child: Image(
-                        image: _currentImageProvider ?? widget.image,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: Colors.white10,
-                          child: const Icon(
-                            Icons.music_note_rounded,
-                            color: Colors.white38,
-                            size: 64,
-                          ),
-                        ),
-                      ),
-                    ),
+                  child: AlbumArtView(
+                    image: _currentImageProvider ?? widget.image,
+                    tag: currentSong?.id ?? widget.heroTag,
+                    isPlaying: isPlaying,
+                    dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                   ),
                 ),
 
@@ -1287,38 +1254,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // 1. Centered Cover Art with rounded corners and drop shadow
-              Container(
+              // 1. Centered Cover Art
+              SizedBox(
                 width: coverSize,
                 height: coverSize,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.45),
-                      blurRadius: 36,
-                      spreadRadius: 4,
-                      offset: const Offset(0, 16),
-                    ),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: Hero(
-                    tag: widget.heroTag,
-                    child: Image(
-                      image: _currentImageProvider ?? widget.image,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: Colors.white10,
-                        child: const Icon(
-                          Icons.music_note_rounded,
-                          color: Colors.white38,
-                          size: 72,
-                        ),
-                      ),
-                    ),
-                  ),
+                child: AlbumArtView(
+                  image: _currentImageProvider ?? widget.image,
+                  tag: currentSong?.id ?? widget.heroTag,
+                  isPlaying: isPlaying,
+                  dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                 ),
               ),
 

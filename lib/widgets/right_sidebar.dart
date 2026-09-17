@@ -163,6 +163,7 @@ class _RightSidebarState extends State<RightSidebar> {
     final songId = song.id;
     try {
       final offlineService = OfflineService();
+      final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
       List<LyricLine> parsed = [];
 
       // 1. Offline / Local check
@@ -173,12 +174,15 @@ class _RightSidebarState extends State<RightSidebar> {
         }
       }
 
-      // 2. Online fetch via LRCLIB
+      // 2. Online fetch via LRCLIB with exact duration matching
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
+        final durSeconds = (song.duration != null && song.duration! > 0)
+            ? song.duration!
+            : playerProvider.duration.inSeconds;
         final lrcLibRes = await LrcLibService().searchLyrics(
           artist: song.artist,
           title: song.title,
-          durationSeconds: song.duration,
+          durationSeconds: durSeconds > 0 ? durSeconds : null,
         ).catchError((_) => null);
 
         if (lrcLibRes != null) {

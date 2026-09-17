@@ -12,6 +12,7 @@ class PlayerUiSettingsService {
   static const String _keyArtworkShadow = 'artwork_shadow';
   static const String _keyArtworkShadowColor = 'artwork_shadow_color';
   static const String _keyLiveSearch = 'search_live_search';
+  static const String _keyAnimatedArtwork = 'artwork_animated_enabled';
 
   static final PlayerUiSettingsService _instance =
       PlayerUiSettingsService._internal();
@@ -26,6 +27,7 @@ class PlayerUiSettingsService {
   final ValueNotifier<bool> showMiniPlayerShuffleNotifier = ValueNotifier(false);
   final ValueNotifier<bool> liveSearchNotifier = ValueNotifier(true);
   final ValueNotifier<double> albumArtCornerRadiusNotifier = ValueNotifier(8.0);
+  final ValueNotifier<bool> animatedArtworkNotifier = ValueNotifier(true);
 
   final ValueNotifier<String> artworkShapeNotifier = ValueNotifier('rounded');
 
@@ -46,6 +48,7 @@ class PlayerUiSettingsService {
     artworkShadowNotifier.value = getArtworkShadow();
     artworkShadowColorNotifier.value = getArtworkShadowColor();
     liveSearchNotifier.value = getLiveSearch();
+    animatedArtworkNotifier.value = getAnimatedArtwork();
   }
 
   Future<void> setShowVolumeSlider(bool show) async {
@@ -147,6 +150,16 @@ class PlayerUiSettingsService {
     return _prefs?.getBool(_keyLiveSearch) ?? true;
   }
 
+  Future<void> setAnimatedArtwork(bool enabled) async {
+    await initialize();
+    await _prefs!.setBool(_keyAnimatedArtwork, enabled);
+    animatedArtworkNotifier.value = enabled;
+  }
+
+  bool getAnimatedArtwork() {
+    return _prefs?.getBool(_keyAnimatedArtwork) ?? true;
+  }
+
   void dispose() {
     showStarRatingsNotifier.dispose();
     showMiniPlayerHeartNotifier.dispose();
@@ -154,6 +167,7 @@ class PlayerUiSettingsService {
     showMiniPlayerShuffleNotifier.dispose();
     liveSearchNotifier.dispose();
     albumArtCornerRadiusNotifier.dispose();
+    animatedArtworkNotifier.dispose();
     artworkShapeNotifier.dispose();
     artworkShadowNotifier.dispose();
     artworkShadowColorNotifier.dispose();

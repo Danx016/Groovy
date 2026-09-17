@@ -121,10 +121,10 @@ class LrcLibService {
       }
     }
 
-    // 3. Duration verification if both are present
+    // 3. Duration verification if both are present (strict tolerance: max 8s difference)
     if (expectedDuration != null && expectedDuration > 10 && resultDuration != null && resultDuration > 10) {
       final diff = (resultDuration - expectedDuration).abs();
-      if (diff > 25) {
+      if (diff > 8) {
         return false;
       }
     }
@@ -132,7 +132,7 @@ class LrcLibService {
     return true;
   }
 
-  /// Searches for lyrics with multi-provider fallback.
+  /// Searches for lyrics with multi-provider fallback and exact duration matching.
   Future<Map<String, dynamic>?> searchLyrics({
     String? artist,
     required String title,
@@ -142,7 +142,8 @@ class LrcLibService {
 
     final cleanedTitle = cleanTitle(title);
     final cleanedArtist = (artist != null && artist.isNotEmpty) ? cleanArtist(artist) : null;
-    final cacheKey = '${cleanedArtist?.toLowerCase() ?? ''}|${cleanedTitle.toLowerCase()}';
+    final durKey = durationSeconds != null && durationSeconds > 0 ? '|$durationSeconds' : '';
+    final cacheKey = '${cleanedArtist?.toLowerCase() ?? ''}|${cleanedTitle.toLowerCase()}$durKey';
 
     if (_cache.containsKey(cacheKey)) {
       return _cache[cacheKey];
@@ -160,7 +161,7 @@ class LrcLibService {
     }
 
     // ==========================================
-    // 1. SOURCE: LRCLIB (Exact match)
+    // 1. SOURCE: LRCLIB (Exact match with duration)
     // ==========================================
     final getPairs = <MapEntry<String, String>>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
@@ -172,13 +173,31 @@ class LrcLibService {
 
     for (final pair in getPairs) {
       try {
-        final response = await _dio.get(
+        final queryParams = <String, dynamic>{
+          'artist_name': pair.key,
+          'track_name': pair.value,
+        };
+        if (durationSeconds != null && durationSeconds > 0) {
+          queryParams['duration'] = durationSeconds;
+        }
+
+        var response = await _dio.get(
           '/get',
-          queryParameters: {
-            'artist_name': pair.key,
-            'track_name': pair.value,
-          },
+          queryParameters: queryParams,
         );
+
+        // If not found with duration, try without duration parameter as fallback
+        if ((response.statusCode != 200 || response.data == null) && queryParams.containsKey('duration')) {
+          try {
+            response = await _dio.get(
+              '/get',
+              queryParameters: {
+                'artist_name': pair.key,
+                'track_name': pair.value,
+              },
+            );
+          } catch (_) {}
+        }
 
         if (response.statusCode == 200 && response.data != null && response.data is Map) {
           final resMap = response.data as Map<String, dynamic>;
@@ -190,7 +209,7 @@ class LrcLibService {
             final result = _parseLrcLibResponse(resMap);
             if (result != null) {
               _cache[cacheKey] = result;
-              debugPrint('[LRCLIB] Exact verified match found for "${pair.key} - ${pair.value}"');
+              debugPrint('[LRCLIB] Exact verified match found for "${pair.key} - ${pair.value}" (dur: $rDur s)');
               return result;
             }
           }
@@ -199,7 +218,7 @@ class LrcLibService {
     }
 
     // ==========================================
-    // 2. SOURCE: LRCLIB (Search query with strict candidate validation)
+    // 2. SOURCE: LRCLIB (Search query with duration-scored candidate validation)
     // ==========================================
     final searchQueries = <String>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
@@ -224,6 +243,8 @@ class LrcLibService {
           final list = searchResp.data as List;
           if (list.isNotEmpty) {
             Map<String, dynamic>? bestMatch;
+            int? bestDiff;
+
             for (final item in list) {
               if (item is Map<String, dynamic>) {
                 final rTrack = item['trackName'] as String? ?? '';
@@ -242,9 +263,16 @@ class LrcLibService {
                 final synced = item['syncedLyrics'] as String?;
                 final plain = item['plainLyrics'] as String?;
                 if (synced != null && synced.trim().isNotEmpty) {
-                  bestMatch = item;
-                  break;
-                } else if (plain != null && plain.trim().isNotEmpty && bestMatch == null) {
+                  final diff = (durationSeconds != null && rDur != null)
+                      ? (rDur - durationSeconds).abs()
+                      : 0;
+
+                  if (bestDiff == null || diff < bestDiff) {
+                    bestMatch = item;
+                    bestDiff = diff;
+                    if (diff <= 2) break; // Exact duration match found!
+                  }
+                } else if (bestMatch == null && plain != null && plain.trim().isNotEmpty) {
                   bestMatch = item;
                 }
               }
@@ -254,7 +282,7 @@ class LrcLibService {
               final result = _parseLrcLibResponse(bestMatch);
               if (result != null) {
                 _cache[cacheKey] = result;
-                debugPrint('[LRCLIB] Verified search match found for "$query"');
+                debugPrint('[LRCLIB] Best query candidate matched for "$query" (diff: ${bestDiff ?? 0} s)');
                 return result;
               }
             }

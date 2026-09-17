@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.5] - 2026-09-16
+
+### Added
+- **Carátula Animada estilo Apple Music (`AnimatedAlbumArtView`)**: Efecto de respiración orgánica cinemática, halo de resplandor ambiental (*ambient glow*) reactivo a los colores dominantes de la pista y destello de luz dinámico, con interruptor de encendido/apagado en Ajustes -> Pantalla.
+
+### Fixed
+- **Bucle de Pausa en Windows y Android (`PlayerProvider`)**: Corregida la condición de carrera asíncrona en el stream nativo de audio (`_playerStateSub`) y eliminadas llamadas de volumen parásitas que provocaban que la reproducción volviese a quedar en *play* tras pausar.
+- **Desplazamiento fluido de Letras en Vivo (`LyricsListView` & `LyricsLineWidget`)**: Optimización del scroll automático con curva de amortiguación cúbica de 600ms e interpolación tipográfica fluida (`AnimatedDefaultTextStyle`) sin tirones ni saltos toscos.
+- **Búsqueda estricta por duración exacta en LRCLIB (`LrcLibService`)**: Envío del parámetro `duration` exacto en segundos en las peticiones a la API de LRCLIB y tolerancia estricta de 8s para evitar sincronizar letras de versiones erróneas o con intros de video.
+
 ## [1.2.4] - 2026-09-14
 
 ### Added

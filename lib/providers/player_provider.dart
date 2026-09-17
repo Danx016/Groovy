@@ -1587,16 +1587,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (_isRenderingRemotely) return;
 
         final wasPlaying = _isPlaying;
-        final bool isOptimisticLocalActive = _optimisticLocalPlayPauseTime != null &&
-            DateTime.now().difference(_optimisticLocalPlayPauseTime!) < const Duration(milliseconds: 600);
+        final bool isOptimisticLocalActive = _optimisticLocalPlayPauseState != null &&
+            _optimisticLocalPlayPauseTime != null &&
+            DateTime.now().difference(_optimisticLocalPlayPauseTime!) < const Duration(milliseconds: 2500);
 
         if (isOptimisticLocalActive) {
           if (state.playing == _optimisticLocalPlayPauseState) {
+            _isPlaying = state.playing;
             _optimisticLocalPlayPauseTime = null;
             _optimisticLocalPlayPauseState = null;
           }
+          // While optimistic local play/pause is active and state.playing has not
+          // caught up to the desired state yet (stale native events), do NOT revert _isPlaying!
         } else {
           _isPlaying = state.playing;
+          _optimisticLocalPlayPauseTime = null;
+          _optimisticLocalPlayPauseState = null;
         }
 
         if (state.playing || state.processingState == ProcessingState.ready) {
@@ -2584,15 +2590,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _telemetryTimer?.cancel();
     _sendTelemetryHeartbeat(overridePlaying: false);
 
-    if (_groovyConnectService?.isConnected == true) {
-      _isRenderingRemotely = true;
-      _optimisticRemotePlayPauseState = false;
-      _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
-      _remoteAnchorPosition = _position;
-      _remoteAnchorTime = null;
-      _manageRemotePositionTicker();
-      unawaited(_groovyConnectService!.sendControl('pause'));
-      return;
+    if (_isRenderingRemotely || _groovyConnectService?.isConnected == true) {
+      final connected = _groovyConnectService?.connectedDevice;
+      if (connected == null || !_groovyConnectService!.discoveredDevices.any((d) => d.id == connected.id)) {
+        debugPrint('[PlayerProvider] Remote device is disconnected or unreachable. Falling back to local playback.');
+        _groovyConnectService?.disconnect();
+        disableGroovyConnectRemote();
+      } else {
+        _isRenderingRemotely = true;
+        _optimisticRemotePlayPauseState = false;
+        _optimisticRemotePlayPauseUntil = DateTime.now().add(const Duration(milliseconds: 3000));
+        _remoteAnchorPosition = _position;
+        _remoteAnchorTime = null;
+        _manageRemotePositionTicker();
+        unawaited(_groovyConnectService!.sendControl('pause'));
+        return;
+      }
     }
 
     if (_castService.isConnected) {
@@ -2600,9 +2613,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else if (_upnpService.isConnected) {
       await _upnpService.pause();
     } else {
-      // Instantly pause local audio without waiting for fade-out lag
-      unawaited(_audioPlayer.pause());
-      unawaited(_audioPlayer.setVolume(_effectiveVolume));
+      try {
+        await _audioPlayer.pause();
+      } catch (e) {
+        debugPrint('[Player] Error pausing local audio: $e');
+      }
     }
   }
 
@@ -2635,14 +2650,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> togglePlayPause() async {
     if (_isPlaying) {
-      _isPlaying = false;
-      notifyListeners();
-      _updateAndroidAuto();
       await pause();
     } else {
-      _isPlaying = true;
-      notifyListeners();
-      _updateAndroidAuto();
       await play();
     }
   }
