@@ -22,7 +22,6 @@ import '../models/song.dart';
 import '../models/album.dart';
 import '../services/palette_service.dart';
 import '../services/youtube_service.dart';
-import '../services/apple_music_artwork_service.dart';
 import '../services/offline_service.dart';
 import '../services/lrc_ttml_parser.dart';
 import '../widgets/now_playing/queue_view.dart';
@@ -83,13 +82,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return const AssetImage('assets/default_cover.png');
     }
 
-    // 1. Check if Apple Music original HD artwork is cached
-    final appleCached = AppleMusicArtworkService.getCachedArtwork(song.title, song.artist);
-    if (appleCached != null && appleCached.artworkUrl.isNotEmpty) {
-      return CachedNetworkImageProvider(appleCached.artworkUrl);
-    }
-
-    // 2. Check if PlayerProvider resolved an artwork URL (Apple Music or local disk)
+    // Check if PlayerProvider resolved an artwork URL (from disk cache)
     final resolvedUrl = _playerProvider?.resolvedArtworkUrl;
     if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
       if (_isLocalFilePath(resolvedUrl)) {
@@ -716,7 +709,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                       tag: currentSong?.id ?? widget.heroTag,
                       isPlaying: isPlaying,
                       dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
-                      motionVideoUrl: _playerProvider?.motionVideoUrl,
                     ),
                   ),
                 ),
@@ -1141,7 +1133,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     tag: currentSong?.id ?? widget.heroTag,
                     isPlaying: isPlaying,
                     dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
-                    motionVideoUrl: _playerProvider?.motionVideoUrl,
                   ),
                 ),
 
@@ -1290,7 +1281,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   tag: currentSong?.id ?? widget.heroTag,
                   isPlaying: isPlaying,
                   dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
-                  motionVideoUrl: _playerProvider?.motionVideoUrl,
                 ),
               ),
 

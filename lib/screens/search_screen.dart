@@ -13,6 +13,7 @@ import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import '../models/album.dart';
 import '../models/artist.dart';
+import '../models/song.dart';
 import 'artist_screen.dart';
 
 import '../l10n/app_localizations.dart';
@@ -458,6 +459,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     )
                   : null,
               onTap: () {
+                recentSearches.addItem(item);
                 if (item.type == RecentSearchType.artist) {
                   NavigationHelper.push(
                     context,
@@ -484,8 +486,18 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                     ),
                   );
-                } else if (item.type == RecentSearchType.song && item.song != null) {
-                  player.playSongWithRadio(item.song!);
+                } else if (item.type == RecentSearchType.song) {
+                  if (item.song != null) {
+                    player.playSongWithRadio(item.song!);
+                  } else {
+                    final fallbackSong = Song(
+                      id: item.id,
+                      title: item.title,
+                      artist: item.subtitle?.replaceFirst('Canción • ', ''),
+                      coverArt: item.imageUrl,
+                    );
+                    player.playSongWithRadio(fallbackSong);
+                  }
                 }
               },
             );
@@ -695,6 +707,7 @@ class _SearchScreenState extends State<SearchScreen> {
                             overflow: TextOverflow.ellipsis,
                           ),
                           onTap: () {
+                            RecentSearchesService().addArtist(artist);
                             setState(() => _showSuggestions = false);
                             NavigationHelper.push(
                               context,
@@ -739,6 +752,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 )
                               : null,
                           onTap: () {
+                            RecentSearchesService().addAlbum(album);
                             setState(() => _showSuggestions = false);
                             NavigationHelper.push(
                               context,
@@ -783,6 +797,7 @@ class _SearchScreenState extends State<SearchScreen> {
                                 )
                               : null,
                           onTap: () {
+                            RecentSearchesService().addSong(song);
                             setState(() => _showSuggestions = false);
                             final playerProvider = Provider.of<PlayerProvider>(
                               context,

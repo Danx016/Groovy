@@ -22,8 +22,6 @@ class SettingsDisplayTab extends StatefulWidget {
 class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   final _playerUiSettings = PlayerUiSettingsService();
   bool _liveSearch = true;
-  bool _animatedArtwork = true;
-  bool _motionArtworkVideo = true;
 
   ThemeMode _themeMode = ThemeMode.system;
   AccentColor _accentColor = AccentColor.red;
@@ -43,8 +41,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
 
     setState(() {
       _liveSearch = _playerUiSettings.getLiveSearch();
-      _animatedArtwork = _playerUiSettings.getAnimatedArtwork();
-      _motionArtworkVideo = _playerUiSettings.getMotionArtworkVideo();
       _themeMode = themeService.themeMode;
       _accentColor = themeService.accentColor;
       _liquidGlass = themeService.liquidGlass;
@@ -63,18 +59,8 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
         ),
         const SizedBox(height: 24),
 
-        // 2. Carátula Animada (Apple Music)
-        SettingsSectionCard(
-          title: 'REPRODUCCIÓN Y ARTE',
-          children: [
-            _buildAnimatedArtworkToggle(),
-            const SettingsDivider(),
-            _buildMotionVideoToggle(),
-          ],
-        ),
-        const SizedBox(height: 24),
 
-        // 3. Idioma
+        // 2. Idioma
         SettingsSectionCard(
           title: AppLocalizations.of(context)!.language.toUpperCase(),
           children: [
@@ -230,65 +216,7 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
     );
   }
 
-  Widget _buildAnimatedArtworkToggle() {
-    final isDark = context.isDark;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFFFF2D55), Color(0xFFFA233B)],
-        icon: CupertinoIcons.play_circle,
-      ),
-      title: const Text(
-        'Carátula animada',
-        style: TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        'Animación cinemática y resplandor ambiental estilo Apple Music',
-        style: TextStyle(
-          fontSize: 13,
-          color: isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _animatedArtwork,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _animatedArtwork = value);
-          await _playerUiSettings.setAnimatedArtwork(value);
-        },
-      ),
-    );
-  }
 
-  Widget _buildMotionVideoToggle() {
-    final isDark = context.isDark;
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFF5E5CE6), Color(0xFFBF5AF2)],
-        icon: CupertinoIcons.videocam_fill,
-      ),
-      title: const Text(
-        'Motion Artwork (Video oficial)',
-        style: TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        'Reproduce el video en bucle oficial de Apple Music en álbumes compatibles',
-        style: TextStyle(
-          fontSize: 13,
-          color: isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _motionArtworkVideo,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _motionArtworkVideo = value);
-          await _playerUiSettings.setMotionArtworkVideo(value);
-        },
-      ),
-    );
-  }
 
   Widget _buildLiveSearchToggle() {
     return ListTile(

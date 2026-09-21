@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -119,26 +120,57 @@ class RecentSearchesService extends ChangeNotifier {
 
   static const String _storageKey = 'groovy_recent_searches';
   List<RecentSearchItem> _items = [];
+  bool _initialized = false;
+  Completer<void>? _initCompleter;
 
   List<RecentSearchItem> get items => List.unmodifiable(_items);
 
   Future<void> initialize() async {
+    if (_initialized) return;
+    if (_initCompleter != null) return _initCompleter!.future;
+    _initCompleter = Completer<void>();
+
     try {
       final prefs = await SharedPreferences.getInstance();
+      try {
+        await prefs.reload();
+      } catch (_) {}
+
       final raw = prefs.getString(_storageKey);
       if (raw != null && raw.isNotEmpty) {
         final List<dynamic> list = jsonDecode(raw);
-        _items = list
-            .map((e) => RecentSearchItem.fromJson(e as Map<String, dynamic>))
-            .toList();
+        final loaded = <RecentSearchItem>[];
+        for (final e in list) {
+          if (e is Map<String, dynamic>) {
+            try {
+              loaded.add(RecentSearchItem.fromJson(e));
+            } catch (err) {
+              debugPrint('[RecentSearchesService] item decode error: $err');
+            }
+          }
+        }
+
+        // Preserve any items already added in memory before initialization finished
+        for (final existing in _items) {
+          loaded.removeWhere((i) => i.id == existing.id && i.type == existing.type);
+          loaded.insert(0, existing);
+        }
+        _items = loaded;
       }
+      _initialized = true;
+      _initCompleter!.complete();
     } catch (e) {
       debugPrint('[RecentSearchesService] load error: $e');
+      _initialized = true;
+      _initCompleter!.complete();
     }
     notifyListeners();
   }
 
   Future<void> addItem(RecentSearchItem item) async {
+    if (!_initialized) {
+      await initialize();
+    }
     _items.removeWhere((i) => i.id == item.id && i.type == item.type);
     _items.insert(0, item);
     if (_items.length > 30) {
@@ -183,22 +215,38 @@ class RecentSearchesService extends ChangeNotifier {
   }
 
   Future<void> removeItem(String id, RecentSearchType type) async {
+    if (!_initialized) {
+      await initialize();
+    }
     _items.removeWhere((i) => i.id == id && i.type == type);
     notifyListeners();
     await _save();
   }
 
   Future<void> clear() async {
+    if (!_initialized) {
+      await initialize();
+    }
     _items.clear();
     notifyListeners();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_storageKey);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_storageKey);
+    } catch (e) {
+      debugPrint('[RecentSearchesService] clear error: $e');
+    }
   }
 
   Future<void> _save() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final raw = jsonEncode(_items.map((i) => i.toJson()).toList());
+      final list = <Map<String, dynamic>>[];
+      for (final item in _items) {
+        try {
+          list.add(item.toJson());
+        } catch (_) {}
+      }
+      final raw = jsonEncode(list);
       await prefs.setString(_storageKey, raw);
     } catch (e) {
       debugPrint('[RecentSearchesService] save error: $e');

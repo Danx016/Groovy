@@ -216,9 +216,6 @@ void main() async {
   FavoritePlaylistsService().initialize().catchError((e) {
     debugPrint('Failed to initialize favorite playlists service: $e');
   });
-  RecentSearchesService().initialize().catchError((e) {
-    debugPrint('Failed to initialize recent searches service: $e');
-  });
   AnalyticsService().initialize().catchError((e) {
     debugPrint('Failed to initialize analytics: $e');
   });
@@ -239,10 +236,13 @@ void main() async {
     PlayerUiSettingsService().initialize().catchError((e) {
       debugPrint('Failed to initialize player UI settings: $e');
     }),
+    RecentSearchesService().initialize().catchError((e) {
+      debugPrint('Failed to initialize recent searches service: $e');
+    }),
     initAudioService(),
   ]);
 
-  final audioHandler = initResults[2] as GroovyAudioHandler;
+  final audioHandler = initResults[3] as GroovyAudioHandler;
 
   // Create TranscodingService instance to share across providers
   final transcodingService = TranscodingService();
