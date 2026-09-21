@@ -136,6 +136,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Timer? _telemetryTimer;
   DateTime? _optimisticLocalPlayPauseTime;
   bool? _optimisticLocalPlayPauseState;
+  bool _togglePending = false;  // prevents re-entrant double-tap desync
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
@@ -1604,12 +1605,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // caught up to the desired state yet (stale native events), do NOT revert _isPlaying!
         } else {
           final bool recentUserPause = _lastUserPauseTime != null &&
-              DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 4);
+              DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 6);
           if (recentUserPause && state.playing) {
             // User explicitly requested pause; ignore stale native playing events
             // and enforce audio pause on the underlying player
             _isPlaying = false;
             _audioPlayer.pause().catchError((_) {});
+            return; // skip notifyListeners — already done optimistically
           } else {
             _isPlaying = state.playing;
             _optimisticLocalPlayPauseTime = null;
@@ -2681,10 +2683,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> togglePlayPause() async {
-    if (_isPlaying) {
-      await pause();
-    } else {
-      await play();
+    // Guard against re-entrant calls (double-taps) that would flip state twice
+    if (_togglePending) return;
+    _togglePending = true;
+    try {
+      // Use the native player state as the authoritative tiebreaker so that even
+      // if _isPlaying is momentarily out of sync we make the correct decision.
+      final nativeIsPlaying = _audioPlayer.playing;
+      final effectiveIsPlaying = _isPlaying || nativeIsPlaying;
+      if (effectiveIsPlaying) {
+        await pause();
+      } else {
+        await play();
+      }
+    } finally {
+      // Release debounce after a short cooldown so rapid taps are collapsed
+      Future.delayed(const Duration(milliseconds: 350), () {
+        _togglePending = false;
+      });
     }
   }
 
