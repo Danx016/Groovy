@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-09-21
+
+### Changed & Optimized
+- **Eliminación definitiva de Apple Music Artwork y Motion Artwork en video**: Removidos por completo los servicios y widgets de carátula animada y video HLS que sobrecargaban CPU, GPU y memoria en Windows y Android.
+- **Rendimiento ultra ligero y carga instantánea de carátula**: Miniaturas directas y almacenamiento en caché optimizado con carga inmediata, sin pantalla transparente ni esperas de 2 segundos.
+- **Persistencia de Búsquedas Recientes corregida (`SearchScreen`)**: Las canciones buscadas recientemente ahora se guardan y sincronizan inmediatamente con el almacenamiento persistente (`SharedPreferences`) sin borrarse ni revertir al historial antiguo.
+- **Botón Play/Pause sin desincronización ni rebote (`PlayerProvider`)**: Implementado debounce de 350ms con `_togglePending`, validación con el estado nativo del motor de audio (`_audioPlayer.playing`) y ventana de protección extendida a 6 segundos tras pausar.
+- **Sincronización global de versiones para auto-actualización**: Actualizadas todas las referencias de versión en Flutter, Android, Windows, Web y Backend a `1.3.0` (`UpdateService`, `pubspec.yaml`, `README`, API y sitios).
+
 ## [1.2.7] - 2026-09-21
 
 ### Fixed
