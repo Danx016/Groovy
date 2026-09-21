@@ -713,7 +713,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     aspectRatio: 1.0,
                     child: AlbumArtView(
                       image: _currentImageProvider ?? widget.image,
-                      tag: widget.heroTag,
+                      tag: currentSong?.id ?? widget.heroTag,
                       isPlaying: isPlaying,
                       dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                       motionVideoUrl: _playerProvider?.motionVideoUrl,

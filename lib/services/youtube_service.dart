@@ -306,14 +306,10 @@ class _DesktopAudioProxyServer {
         upstreamResp = retryResp;
       }
 
-      // The proxy adds an internal `bytes=0-` request for clients that did
-      // not send a Range header. Present that initial response as a complete
-      // stream; preserve 206 only for real client range requests.
-      request.response.statusCode = (rangeHeader != null)
-          ? upstreamResp.statusCode
-          : (upstreamResp.statusCode == 206
-              ? HttpStatus.ok
-              : upstreamResp.statusCode);
+      // Forward upstream HTTP status code directly (206 Partial Content is critical
+      // for media streaming engines like MPV/MediaKit so they stream continuously
+      // and do not hit premature EOF at the 10MB chunk boundary)
+      request.response.statusCode = upstreamResp.statusCode;
       request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
 
       final isWebm = (streamInfo.ext == 'webm' ||

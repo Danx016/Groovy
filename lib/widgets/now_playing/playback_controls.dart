@@ -114,11 +114,9 @@ class _PlayPauseButtonState extends State<_PlayPauseButton> {
         setState(() => _isPressed = true);
         HapticFeedback.mediumImpact();
       },
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
+      onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
+      onTap: widget.onTap,
       child: AnimatedScale(
         scale: _isPressed ? 0.78 : 1.0,
         duration: const Duration(milliseconds: 140),
@@ -175,11 +173,9 @@ class _MainControlButtonState extends State<_MainControlButton> {
         setState(() => _isPressed = true);
         HapticFeedback.mediumImpact();
       },
-      onTapUp: (_) {
-        setState(() => _isPressed = false);
-        widget.onTap();
-      },
+      onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
+      onTap: widget.onTap,
       child: AnimatedScale(
         scale: _isPressed ? 0.76 : 1.0,
         duration: const Duration(milliseconds: 140),

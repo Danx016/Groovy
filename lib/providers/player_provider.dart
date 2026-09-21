@@ -1643,9 +1643,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // While optimistic local play/pause is active and state.playing has not
           // caught up to the desired state yet (stale native events), do NOT revert _isPlaying!
         } else {
-          _isPlaying = state.playing;
-          _optimisticLocalPlayPauseTime = null;
-          _optimisticLocalPlayPauseState = null;
+          final bool recentUserPause = _lastUserPauseTime != null &&
+              DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 4);
+          if (recentUserPause && state.playing) {
+            // User explicitly requested pause; ignore stale native playing events
+            // and enforce audio pause on the underlying player
+            _isPlaying = false;
+            _audioPlayer.pause().catchError((_) {});
+          } else {
+            _isPlaying = state.playing;
+            _optimisticLocalPlayPauseTime = null;
+            _optimisticLocalPlayPauseState = null;
+          }
         }
 
         if (state.playing || state.processingState == ProcessingState.ready) {
@@ -1714,7 +1723,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         final bool naturalTrackEnd = (wasPlaying && !state.playing && isNearTrackEnd && !userExplicitlyPaused);
 
-        if (state.processingState == ProcessingState.completed || naturalTrackEnd) {
+        final bool isGenuineTrackEnd = (effDur <= const Duration(seconds: 5)) ||
+            (_position >= effDur - const Duration(seconds: 3));
+
+        if ((state.processingState == ProcessingState.completed && isGenuineTrackEnd) || naturalTrackEnd) {
           if (_currentSong != null && _lastCompletedSongId != _currentSong!.id) {
             _lastCompletedSongId = _currentSong!.id;
             debugPrint(
@@ -1722,6 +1734,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _onSongComplete().catchError(
                 (e) => debugPrint('[Player] _onSongComplete error: $e'));
           }
+        } else if (state.processingState == ProcessingState.completed &&
+            !isGenuineTrackEnd &&
+            _currentSong != null &&
+            !userExplicitlyPaused &&
+            wasPlaying) {
+          // Premature EOF due to network/proxy chunk boundary in middle of track: auto-recover without restarting to 0
+          debugPrint('[Player] ⚠️ Premature stream EOF at $_position of $effDur for "${_currentSong?.title}". Auto-recovering playback...');
+          final resumePos = _position;
+          Future.microtask(() async {
+            if (_isPlaying && _currentSong != null) {
+              await seek(resumePos);
+              await play();
+            }
+          });
         }
 
         if (state.processingState == ProcessingState.buffering && !wasPlaying) {
@@ -2628,6 +2654,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _lastUserPauseTime = DateTime.now();
     _optimisticLocalPlayPauseState = false;
     _optimisticLocalPlayPauseTime = DateTime.now();
+    _windowsPositionTimer?.cancel();
+    _windowsPositionTimer = null;
+    _lastPolledPosition = null;
     notifyListeners();
     _updateAndroidAuto();
     _telemetryTimer?.cancel();

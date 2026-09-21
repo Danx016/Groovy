@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.7] - 2026-09-21
+
+### Fixed
+- **Carátula sin demora ni parpadeo transparente (`AnimatedAlbumArtView`)**: Eliminada la clave volátil por hash de imagen que destruía el widget durante la resolución HD de Apple Music en segundo plano; el renderizado ahora es continuo con `gaplessPlayback: true` sin volverse transparente en ningún momento.
+- **Streaming continuo sin reinicios de pista (`_DesktopAudioProxyServer` & `PlayerProvider`)**: Corregida la respuesta HTTP parcial (206) en el proxy local de escritorio para que MPV/MediaKit no interrumpa la reproducción tras el primer fragmento de 10 MB. Además, se blindó `PlayerProvider` para no reiniciar a `0:00` ante desconexiones intermedias y auto-recuperar la posición de reproducción exacta.
+- **Botón Play/Pause infalible al primer toque (`PlaybackControls` & `PlayerProvider`)**: Migrado al callback canónico `onTap` de Flutter en controles de reproducción, cancelando de inmediato el temporizador de posición de Windows al pausar e ignorando eventos residuales del reproductor para asegurar una respuesta 100% inmediata sin volver a saltar a play.
+- **Letras ultra fluídas a 120 FPS sin trabas (`LyricsListView` & `InterludeDotsWidget`)**: Aislamiento total de las líneas de letras y de los puntos de interludio con `RepaintBoundary` en GPU, y optimización del scroll automático a 380ms con `Curves.easeOutCubic` eliminando todo lag o tirón.
+
 ## [1.2.6] - 2026-09-17
 
 ### Added

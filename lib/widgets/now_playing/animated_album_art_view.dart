@@ -217,7 +217,7 @@ class _AnimatedAlbumArtViewState extends State<AnimatedAlbumArtView>
         );
       },
       child: RepaintBoundary(
-        key: ValueKey('${widget.tag}_${widget.image.hashCode}'),
+        key: ValueKey(widget.tag),
         child: Image(
           image: widget.image,
           fit: BoxFit.cover,

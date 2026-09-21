@@ -86,9 +86,10 @@ class _InterludeDotsWidgetState extends State<InterludeDotsWidget>
       return _buildStaticDots();
     }
 
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
         final t = _controller.value * 2 * math.pi;
 
         return Padding(
@@ -119,6 +120,7 @@ class _InterludeDotsWidgetState extends State<InterludeDotsWidget>
           ),
         );
       },
+      ),
     );
   }
 }
