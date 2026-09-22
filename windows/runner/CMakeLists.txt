@@ -45,3 +45,13 @@ add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
   "${CMAKE_CURRENT_SOURCE_DIR}/discord_game_sdk.dll"
   $<TARGET_FILE_DIR:${BINARY_NAME}>
 )
+
+# Copy yt-dlp.exe to the build output directory if present
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../yt-dlp.exe")
+  add_custom_command(TARGET ${BINARY_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../yt-dlp.exe"
+    $<TARGET_FILE_DIR:${BINARY_NAME}>
+  )
+endif()
+

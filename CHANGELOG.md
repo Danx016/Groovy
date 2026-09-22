@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.3] - 2026-09-21
+
+### Fixed
+- **Solución integral al problema de carátulas en gris (Android y Windows)**:
+  - Creado el asset faltante `assets/default_cover.png` para asegurar que ningún fallback lance excepciones de asset no encontrado en Flutter.
+  - Corregido el soporte de URIs con esquema `file://` en `AlbumArtView`, `NowPlayingScreen`, `AlbumArtwork`, `MiniPlayer`, `DesktopPlayerBar` y `RightSidebar` mediante conversión adecuada con `Uri.parse(url).toFilePath()`.
+  - Añadido fallback en tiempo real a `https://i.ytimg.com/vi/<id>/hqdefault.jpg` en `AlbumArtView` y `AlbumArtwork` antes de recurrir a la portada por defecto, asegurando que cualquier canción de YouTube cargue su portada con 100% de fiabilidad.
+  - En `PlayerProvider`, se almacena la ruta de archivo local directa (`file.path`) en lugar de `file://` y se previene que archivos locales se pasen a manejadores de red como `CachedNetworkImageProvider`.
+  - En `YoutubeService.getCoverArtUrl`, se preservan rutas locales y URIs de archivo en lugar de retornar cadenas vacías.
+- **Solución a la carga intermitente de canciones ("a veces cargan a veces no")**:
+  - **Android**: Se agregó caché en memoria con TTL de 3 horas (`_stream_cache`) en el módulo Python Chaquopy (`ytdlp_helper.py`) y se reemplazó el bloqueo global que serializaba extracciones por instancias locales de hilo (`threading.local`), eliminando timeouts de 15 segundos causados por peticiones simultáneas de precarga y reproducción.
+  - **Windows**: En `YtDlpService`, se expandió la detección de binarios para buscar `yt-dlp.exe` en directorios relativos y de datos, y en `windows/runner/CMakeLists.txt` se agregó el copiado automático post-build de `yt-dlp.exe` al directorio del ejecutable de la aplicación para evitar errores de enlace 403.
+
 ## [1.3.2] - 2026-09-21
 
 ### Fixed

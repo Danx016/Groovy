@@ -13,35 +13,51 @@ def _upgrade_thumbnail(url):
     url = url.replace('/default.jpg', '/hqdefault.jpg')
     return url
 
-_stream_ydl = None
-_stream_lock = threading.Lock()
+import time
+
+_stream_cache = {}  # clean_id -> (timestamp, result_dict)
+_stream_cache_lock = threading.Lock()
+_CACHE_TTL_SECONDS = 3 * 3600  # 3 hours (YouTube direct URLs are valid for 6 hours)
+_thread_local = threading.local()
+
+def _get_clean_id(video_id_or_url):
+    s = str(video_id_or_url).strip()
+    if 'v=' in s:
+        m = re.search(r'v=([a-zA-Z0-9_-]{11})', s)
+        if m:
+            return m.group(1)
+    if 'youtu.be/' in s:
+        m = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', s)
+        if m:
+            return m.group(1)
+    m = re.search(r'([a-zA-Z0-9_-]{11})', s)
+    if m:
+        return m.group(1)
+    return s
 
 def _get_stream_ydl():
-    global _stream_ydl
-    if _stream_ydl is None:
-        with _stream_lock:
-            if _stream_ydl is None:
-                ydl_opts = {
-                    'format': 'ba/b[acodec!=none]/bestaudio/best',
-                    'quiet': True,
-                    'no_warnings': True,
-                    'nocheckcertificate': True,
-                    'noplaylist': True,
-                    'skip_download': True,
-                    'lazy_extractors': True,
-                    'no_color': True,
-                    'youtube_include_dash_manifest': False,
-                    'youtube_include_hls_manifest': False,
-                    'extractor_args': {
-                        'youtube': {
-                            # Android, Web and Mweb clients: tv_embedded is deprecated by YouTube and iOS formats require GVS PO Tokens
-                            'player_client': ['android', 'web', 'mweb'],
-                            'skip': ['translated_subs', 'comments', 'webpage', 'dash', 'hls']
-                        }
-                    }
+    if not hasattr(_thread_local, 'ydl'):
+        ydl_opts = {
+            'format': 'ba/b[acodec!=none]/bestaudio/best',
+            'quiet': True,
+            'no_warnings': True,
+            'nocheckcertificate': True,
+            'noplaylist': True,
+            'skip_download': True,
+            'lazy_extractors': True,
+            'no_color': True,
+            'youtube_include_dash_manifest': False,
+            'youtube_include_hls_manifest': False,
+            'extractor_args': {
+                'youtube': {
+                    # Android, Web and Mweb clients: tv_embedded is deprecated by YouTube and iOS formats require GVS PO Tokens
+                    'player_client': ['android', 'web', 'mweb'],
+                    'skip': ['translated_subs', 'comments', 'webpage', 'dash', 'hls']
                 }
-                _stream_ydl = yt_dlp.YoutubeDL(ydl_opts)
-    return _stream_ydl
+            }
+        }
+        _thread_local.ydl = yt_dlp.YoutubeDL(ydl_opts)
+    return _thread_local.ydl
 
 def warmup():
     """Pre-warms the YoutubeDL instance in the background so initial playback doesn't incur startup overhead."""
@@ -51,17 +67,27 @@ def warmup():
         print(f"[ytdlp_helper] Warmup note: {e}")
 
 def _extract_stream(video_id_or_url):
-    target = video_id_or_url if str(video_id_or_url).startswith("http") else f"https://www.youtube.com/watch?v={video_id_or_url}"
+    clean_id = _get_clean_id(video_id_or_url)
+    now = time.time()
+
+    # 1. Fast cache hit (0ms)
+    with _stream_cache_lock:
+        cached = _stream_cache.get(clean_id)
+        if cached and (now - cached[0] < _CACHE_TTL_SECONDS):
+            return cached[1]
+
+    target = f"https://www.youtube.com/watch?v={clean_id}" if len(clean_id) == 11 else (
+        video_id_or_url if str(video_id_or_url).startswith("http") else f"https://www.youtube.com/watch?v={video_id_or_url}"
+    )
+
     ydl = _get_stream_ydl()
     try:
-        with _stream_lock:
-            info = ydl.extract_info(target, download=False)
+        info = ydl.extract_info(target, download=False)
     except Exception:
-        global _stream_ydl
-        _stream_ydl = None
+        if hasattr(_thread_local, 'ydl'):
+            del _thread_local.ydl
         ydl = _get_stream_ydl()
-        with _stream_lock:
-            info = ydl.extract_info(target, download=False)
+        info = ydl.extract_info(target, download=False)
 
     url = info.get('url')
     headers = info.get('http_headers') or {}
@@ -73,12 +99,18 @@ def _extract_stream(video_id_or_url):
             headers = entries[0].get('http_headers') or headers
             ext = entries[0].get('ext') or ext
 
-    return {
+    result = {
         'url': url or '',
         'headers': headers,
         'http_headers': headers,
         'ext': ext,
     }
+
+    if url:
+        with _stream_cache_lock:
+            _stream_cache[clean_id] = (now, result)
+
+    return result
 
 def get_stream_url(video_id_or_url):
     """Extracts direct audio stream URL and matching HTTP headers using yt-dlp."""

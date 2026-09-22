@@ -39,6 +39,25 @@ class AlbumArtView extends StatelessWidget {
             filterQuality: FilterQuality.medium,
             errorBuilder: (context, error, stackTrace) {
               debugPrint('[AlbumArtView] Image error ($error) for tag $tag');
+              final match = RegExp(r'([a-zA-Z0-9_-]{11})').firstMatch(tag);
+              final videoId = match?.group(1);
+              if (videoId != null && videoId.isNotEmpty) {
+                return Image.network(
+                  'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+                  fit: BoxFit.cover,
+                  filterQuality: FilterQuality.medium,
+                  errorBuilder: (_, __, ___) => Image.asset(
+                    'assets/default_cover.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      child: const Center(
+                        child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
+                      ),
+                    ),
+                  ),
+                );
+              }
               return Image.asset(
                 'assets/default_cover.png',
                 fit: BoxFit.cover,

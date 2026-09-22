@@ -231,13 +231,26 @@ class _RightSidebarState extends State<RightSidebar> {
 
   void _openFullscreenNowPlaying(BuildContext context, Song song) {
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-    final coverUrl = song.coverArt != null
-        ? youtubeService.getCoverArtUrl(song.coverArt, size: 600)
-        : null;
-    final ImageProvider imageProvider;
-    if (coverUrl != null && coverUrl.isNotEmpty) {
+    final rawArt = (song.coverArt != null && song.coverArt!.isNotEmpty)
+        ? song.coverArt!
+        : song.id;
+    final coverUrl = youtubeService.getCoverArtUrl(rawArt, size: 800);
+    ImageProvider imageProvider;
+    if (coverUrl.isNotEmpty) {
       if (song.isLocal || isLocalFilePath(coverUrl)) {
-        imageProvider = FileImage(File(coverUrl));
+        try {
+          final filePath = coverUrl.startsWith('file://')
+              ? Uri.parse(coverUrl).toFilePath()
+              : coverUrl;
+          final f = File(filePath);
+          if (f.existsSync()) {
+            imageProvider = FileImage(f);
+          } else {
+            imageProvider = CachedNetworkImageProvider(coverUrl);
+          }
+        } catch (_) {
+          imageProvider = const AssetImage('assets/default_cover.png');
+        }
       } else {
         imageProvider = CachedNetworkImageProvider(coverUrl);
       }

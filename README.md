@@ -2,7 +2,7 @@
 
 **Groovy** is a modern, high-performance music streaming application and web client with an elegant Apple Music-inspired interface. Stream your music library, enjoy official high-definition album covers, experience animated motion artwork, and sync time-coded lyrics smoothly across Android, Windows, Web, macOS, Linux, and iOS.
 
-[![Groovy](https://img.shields.io/badge/Groovy-v1.3.2-fa243c?style=for-the-badge&logo=github)](https://github.com/Danx016/Groovy)
+[![Groovy](https://img.shields.io/badge/Groovy-v1.3.3-fa243c?style=for-the-badge&logo=github)](https://github.com/Danx016/Groovy)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platforms-Android%20%7C%20Windows%20%7C%20Web%20%7C%20macOS%20%7C%20Linux%20%7C%20iOS-informational?style=for-the-badge)](https://github.com/Danx016/Groovy/releases)
 

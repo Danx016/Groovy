@@ -1093,20 +1093,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   String? _resolveArtworkUrl() {
     if (_currentSong == null) return null;
-    if (_currentSong!.coverArt == null) return null;
-    if (_currentSong!.isLocal) {
-      return Uri.file(_currentSong!.coverArt!).toString();
-    }
-
     if (_resolvedArtworkUrl != null && _resolvedArtworkUrl!.isNotEmpty) {
       return _resolvedArtworkUrl;
     }
-
-    final cover = _currentSong!.coverArt!;
-    if (cover.startsWith('http://') || cover.startsWith('https://')) {
-      return cover;
+    if (_currentSong!.isLocal && _currentSong!.coverArt != null) {
+      return _currentSong!.coverArt!;
     }
-    return _youtubeService.getCoverArtUrl(cover, size: 800);
+    final raw = (_currentSong!.coverArt != null && _currentSong!.coverArt!.isNotEmpty)
+        ? _currentSong!.coverArt!
+        : _currentSong!.id;
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      return raw;
+    }
+    return _youtubeService.getCoverArtUrl(raw, size: 800);
   }
 
   Future<void> _refreshArtworkUrl() async {
@@ -1116,7 +1115,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
     if (song.isLocal && song.coverArt != null) {
-      _resolvedArtworkUrl = Uri.file(song.coverArt!).toString();
+      _resolvedArtworkUrl = song.coverArt!;
       if (_currentSong?.id == song.id) {
         _updateAndroidAuto();
         notifyListeners();
@@ -1127,8 +1126,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     await _offlineService.initialize();
 
     final localPath = _offlineService.getLocalCoverArtPath(song.id);
-    if (localPath != null) {
-      _resolvedArtworkUrl = Uri.file(localPath).toString();
+    if (localPath != null && File(localPath).existsSync()) {
+      _resolvedArtworkUrl = localPath;
       if (_currentSong?.id == song.id) {
         _updateAndroidAuto();
         notifyListeners();
@@ -1148,25 +1147,42 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         notifyListeners();
       }
 
-      // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
       final songId = song.id;
-      if (PaletteService.getCachedColors(songId) == null) {
-        final ImageProvider imgProvider = CachedNetworkImageProvider(directUrl);
-        PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
-      }
+      final isLocal = song.isLocal ||
+          directUrl.startsWith('file://') ||
+          directUrl.startsWith('/') ||
+          (directUrl.length > 2 && directUrl[1] == ':');
 
-      // Cache the image file locally in background so Android notification / lock screen loads it from disk without blocking!
-      unawaited(
-        DefaultCacheManager().getSingleFile(directUrl).then((file) {
-          if (file.existsSync() && _currentSong?.id == songId) {
-            _resolvedArtworkUrl = Uri.file(file.path).toString();
-            _updateAndroidAuto();
-            notifyListeners();
+      if (isLocal) {
+        try {
+          final filePath = directUrl.startsWith('file://')
+              ? Uri.parse(directUrl).toFilePath()
+              : directUrl;
+          final f = File(filePath);
+          if (f.existsSync() && PaletteService.getCachedColors(songId) == null) {
+            PaletteService.extractColors(FileImage(f), songId).catchError((_) => <Color>[]);
           }
-        }).catchError((e) {
-          debugPrint('[Artwork] Cache file download note: $e');
-        }),
-      );
+        } catch (_) {}
+      } else {
+        // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
+        if (PaletteService.getCachedColors(songId) == null) {
+          final ImageProvider imgProvider = CachedNetworkImageProvider(directUrl);
+          PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
+        }
+
+        // Cache the image file locally in background so Android notification / lock screen loads it from disk without blocking!
+        unawaited(
+          DefaultCacheManager().getSingleFile(directUrl).then((file) {
+            if (file.existsSync() && _currentSong?.id == songId) {
+              _resolvedArtworkUrl = file.path; // Store direct filesystem path
+              _updateAndroidAuto();
+              notifyListeners();
+            }
+          }).catchError((e) {
+            debugPrint('[Artwork] Cache file download note: $e');
+          }),
+        );
+      }
     }
   }
 

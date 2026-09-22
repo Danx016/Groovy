@@ -722,7 +722,13 @@ class YtDlpService {
       if (userBinaryPath != null) userBinaryPath,
       if (Platform.isWindows) ...[
         '$exeDir/yt-dlp.exe',
+        '$exeDir/data/yt-dlp.exe',
+        '$exeDir/../../../../yt-dlp.exe',
+        '$exeDir/../../../yt-dlp.exe',
+        '$exeDir/../../yt-dlp.exe',
+        '$exeDir/../yt-dlp.exe',
         '${Directory.current.path}/yt-dlp.exe',
+        '${Directory.current.path}/windows/yt-dlp.exe',
         'yt-dlp.exe',
       ],
       if (Platform.isLinux || Platform.isMacOS) ...[
@@ -864,7 +870,7 @@ class YtDlpService {
           '--no-warnings',
           '--no-check-certificates',
           targetUrl,
-        ], timeout: const Duration(seconds: 15));
+        ], timeout: const Duration(seconds: 20));
 
         if (result != null && result.exitCode == 0) {
           final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
@@ -896,7 +902,7 @@ class YtDlpService {
       try {
         final jsonStr = await _androidChannel
             .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
-            .timeout(const Duration(seconds: 15));
+            .timeout(const Duration(seconds: 20));
         if (jsonStr != null && jsonStr.isNotEmpty) {
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final url = data['url'] as String? ?? '';

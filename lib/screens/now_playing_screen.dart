@@ -72,6 +72,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   bool _isLocalFilePath(String? s) {
     if (s == null || s.isEmpty) return false;
+    if (s.startsWith('file://')) return true;
     if (s.startsWith('/')) return true;
     if (s.length > 2 && s[1] == ':') return true;
     return false;
@@ -86,12 +87,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final resolvedUrl = _playerProvider?.resolvedArtworkUrl;
     if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
       if (_isLocalFilePath(resolvedUrl)) {
-        final filePath = resolvedUrl.replaceFirst('file://', '');
-        final file = File(filePath);
-        if (file.existsSync()) {
-          return FileImage(file);
-        }
-      } else {
+        try {
+          final filePath = resolvedUrl.startsWith('file://')
+              ? Uri.parse(resolvedUrl).toFilePath()
+              : resolvedUrl;
+          final file = File(filePath);
+          if (file.existsSync()) {
+            return FileImage(file);
+          }
+        } catch (_) {}
+      } else if (resolvedUrl.startsWith('http://') || resolvedUrl.startsWith('https://')) {
         return CachedNetworkImageProvider(resolvedUrl);
       }
     }
@@ -101,10 +106,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         : song.id;
 
     if (song.isLocal || _isLocalFilePath(raw)) {
-      final localFile = File(raw);
-      if (localFile.existsSync()) {
-        return FileImage(localFile);
-      }
+      try {
+        final filePath = raw.startsWith('file://')
+            ? Uri.parse(raw).toFilePath()
+            : raw;
+        final localFile = File(filePath);
+        if (localFile.existsSync()) {
+          return FileImage(localFile);
+        }
+      } catch (_) {}
     }
 
     if (raw.startsWith('http://') || raw.startsWith('https://')) {
@@ -723,7 +733,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     aspectRatio: 1.0,
                     child: AlbumArtView(
                       image: _currentImageProvider ?? widget.image,
-                      tag: currentSong?.id ?? widget.heroTag,
+                      tag: (currentSong?.id == widget.song?.id) ? widget.heroTag : 'cover_${currentSong?.id ?? widget.heroTag}',
                       isPlaying: isPlaying,
                       dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                     ),
@@ -1147,7 +1157,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   height: coverSize,
                   child: AlbumArtView(
                     image: _currentImageProvider ?? widget.image,
-                    tag: currentSong?.id ?? widget.heroTag,
+                    tag: (currentSong?.id == widget.song?.id) ? widget.heroTag : 'cover_${currentSong?.id ?? widget.heroTag}',
                     isPlaying: isPlaying,
                     dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                   ),
@@ -1295,7 +1305,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 height: coverSize,
                 child: AlbumArtView(
                   image: _currentImageProvider ?? widget.image,
-                  tag: currentSong?.id ?? widget.heroTag,
+                  tag: (currentSong?.id == widget.song?.id) ? widget.heroTag : 'cover_${currentSong?.id ?? widget.heroTag}',
                   isPlaying: isPlaying,
                   dominantColor: _bgColors.isNotEmpty ? _bgColors.first : null,
                 ),

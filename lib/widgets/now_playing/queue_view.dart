@@ -1,10 +1,8 @@
-import 'dart:io';
 import 'package:flutter/cupertino.dart' hide RepeatMode;
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/player_provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../services/youtube_service.dart';
 import '../../models/song.dart';
 import '../album_artwork.dart';
@@ -243,51 +241,13 @@ class _QueueSongTile extends StatelessWidget {
   });
 
   Widget _buildCover(YoutubeService youtubeService) {
-    final coverArt = song.coverArt;
-    if (coverArt == null || coverArt.isEmpty) {
-      return Container(
-        width: 46,
-        height: 46,
-        color: Colors.white.withValues(alpha: 0.12),
-        child: const Icon(Icons.music_note, color: Colors.white70),
-      );
-    }
-
-    if (song.isLocal || isLocalFilePath(coverArt)) {
-      return Image.file(
-        File(coverArt),
-        width: 46,
-        height: 46,
-        fit: BoxFit.cover,
-        cacheWidth: 140,
-        cacheHeight: 140,
-        errorBuilder: (_, __, ___) => Container(
-          width: 46,
-          height: 46,
-          color: Colors.white.withValues(alpha: 0.12),
-          child: const Icon(Icons.music_note, color: Colors.white70),
-        ),
-      );
-    }
-
-    return CachedNetworkImage(
-      imageUrl: youtubeService.getCoverArtUrl(coverArt, size: 120),
-      memCacheWidth: 140,
-      memCacheHeight: 140,
-      width: 46,
-      height: 46,
-      fit: BoxFit.cover,
-      placeholder: (context, url) => Container(
-        width: 46,
-        height: 46,
-        color: Colors.white.withValues(alpha: 0.12),
-      ),
-      errorWidget: (context, url, error) => Container(
-        width: 46,
-        height: 46,
-        color: Colors.white.withValues(alpha: 0.12),
-        child: const Icon(Icons.music_note, color: Colors.white70),
-      ),
+    final rawArt = (song.coverArt != null && song.coverArt!.isNotEmpty)
+        ? song.coverArt!
+        : song.id;
+    return AlbumArtwork(
+      coverArt: rawArt,
+      size: 46,
+      borderRadius: 8,
     );
   }
 

@@ -115,7 +115,9 @@ class SongTile extends StatelessWidget {
       return Stack(
         children: [
           AlbumArtwork(
-            coverArt: song.coverArt,
+            coverArt: (song.coverArt != null && song.coverArt!.isNotEmpty)
+                ? song.coverArt
+                : song.id,
             size: 50,
             preserveAspectRatio: true,
           ),
@@ -319,7 +321,12 @@ class _SongOptionsSheetState extends State<_SongOptionsSheet> {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Row(
                 children: [
-                  AlbumArtwork(coverArt: widget.song.coverArt, size: 60),
+                  AlbumArtwork(
+                    coverArt: (widget.song.coverArt != null && widget.song.coverArt!.isNotEmpty)
+                        ? widget.song.coverArt
+                        : widget.song.id,
+                    size: 60,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

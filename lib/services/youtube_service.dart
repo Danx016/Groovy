@@ -587,6 +587,9 @@ class YoutubeService {
 
   String getCoverArtUrl(String? id, {int size = 800}) {
     if (id == null || id.isEmpty) return '';
+    if (id.startsWith('file://') || id.startsWith('/') || (id.length > 2 && id[1] == ':')) {
+      return id;
+    }
     if (id.startsWith('http://') || id.startsWith('https://')) {
       var url = id;
       // Upgrade Google User Content / YouTube Music album artwork to 800x800 quality

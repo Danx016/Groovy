@@ -8,6 +8,7 @@ import '../services/offline_service.dart';
 
 bool isLocalFilePath(String? s) {
   if (s == null || s.isEmpty) return false;
+  if (s.startsWith('file://')) return true;
   if (s.startsWith('/')) return true;
   if (s.length > 2 && s[1] == ':') return true;
   return false;
@@ -177,16 +178,23 @@ class AlbumArtwork extends StatelessWidget {
     if (coverArt == null || coverArt!.isEmpty) return _buildPlaceholder(isDark);
 
     if (isLocalFilePath(coverArt)) {
-      final artFile = File(coverArt!);
-      return Image.file(
-        artFile,
-        key: ValueKey(coverArt),
-        fit: BoxFit.contain,
-        cacheWidth: cacheSize,
-        cacheHeight: cacheSize,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
-      );
+      try {
+        final path = coverArt!.startsWith('file://')
+            ? Uri.parse(coverArt!).toFilePath()
+            : coverArt!;
+        final artFile = File(path);
+        if (artFile.existsSync()) {
+          return Image.file(
+            artFile,
+            key: ValueKey(coverArt),
+            fit: BoxFit.contain,
+            cacheWidth: cacheSize,
+            cacheHeight: cacheSize,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
+          );
+        }
+      } catch (_) {}
     }
 
     if (OfflineService().downloadedSongIds.value.isNotEmpty) {
@@ -238,16 +246,23 @@ class AlbumArtwork extends StatelessWidget {
     if (coverArt == null || coverArt!.isEmpty) return _buildPlaceholder(isDark);
 
     if (isLocalFilePath(coverArt)) {
-      final artFile = File(coverArt!);
-      return Image.file(
-        artFile,
-        key: ValueKey(coverArt),
-        fit: BoxFit.cover,
-        cacheWidth: cacheSize,
-        cacheHeight: cacheSize,
-        filterQuality: FilterQuality.medium,
-        errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
-      );
+      try {
+        final path = coverArt!.startsWith('file://')
+            ? Uri.parse(coverArt!).toFilePath()
+            : coverArt!;
+        final artFile = File(path);
+        if (artFile.existsSync()) {
+          return Image.file(
+            artFile,
+            key: ValueKey(coverArt),
+            fit: BoxFit.cover,
+            cacheWidth: cacheSize,
+            cacheHeight: cacheSize,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (ctx, err, stack) => _buildPlaceholder(isDark),
+          );
+        }
+      } catch (_) {}
     }
 
     if (OfflineService().downloadedSongIds.value.isNotEmpty) {
@@ -296,17 +311,28 @@ class AlbumArtwork extends StatelessWidget {
   }
 
   Widget _buildNetworkImageFallback(String url, bool isDark, BoxFit fit) {
-    final fallbackUrl = url.contains('/sddefault.jpg')
-        ? url.replaceAll('/sddefault.jpg', '/hqdefault.jpg')
-        : (url.contains('=w1200-h1200')
-            ? url.replaceAll('=w1200-h1200-l90-rj', '=w800-h800')
-            : url);
+    String fallbackUrl = url;
+    if (url.contains('/sddefault.jpg') || url.contains('/mqdefault.jpg')) {
+      fallbackUrl = url.replaceAll(RegExp(r'/(sd|mq)default\.jpg'), '/hqdefault.jpg');
+    } else if (url.contains('=w800-h800') || url.contains('=w1200-h1200')) {
+      fallbackUrl = url.replaceAll(RegExp(r'=w\d+-h\d+[^/]*'), '=w544-h544');
+    }
     return Image.network(
       fallbackUrl,
       fit: fit,
       filterQuality: FilterQuality.medium,
       errorBuilder: (ctx, err, stack) {
         debugPrint('Network image fallback error: $err');
+        final match = RegExp(r'([a-zA-Z0-9_-]{11})').firstMatch(url);
+        final vid = match?.group(1);
+        if (vid != null && vid.isNotEmpty && !fallbackUrl.contains('/vi/$vid/')) {
+          return Image.network(
+            'https://i.ytimg.com/vi/$vid/hqdefault.jpg',
+            fit: fit,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (_, __, ___) => _buildPlaceholder(isDark),
+          );
+        }
         return _buildPlaceholder(isDark);
       },
     );
@@ -324,11 +350,15 @@ class AlbumArtwork extends StatelessWidget {
               : [Colors.grey.shade300, Colors.grey.shade200],
         ),
       ),
-      child: Center(
-        child: Icon(
-          Icons.music_note_rounded,
-          size: iconSize,
-          color: isDark ? Colors.white24 : Colors.black12,
+      child: Image.asset(
+        'assets/default_cover.png',
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => Center(
+          child: Icon(
+            Icons.music_note_rounded,
+            size: iconSize,
+            color: isDark ? Colors.white24 : Colors.black12,
+          ),
         ),
       ),
     );
