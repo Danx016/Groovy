@@ -78,10 +78,10 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
         ? youtubeService.getCoverArtUrl(currentSong.coverArt, size: 300)
         : null;
 
-    final ImageProvider effectiveImage = widget.imageProvider ??
+    final ImageProvider? effectiveImage = widget.imageProvider ??
         (coverUrl != null
             ? CachedNetworkImageProvider(coverUrl)
-            : const AssetImage('assets/default_cover.png') as ImageProvider);
+            : null);
 
     return RepaintBoundary(
       child: Container(
@@ -135,14 +135,19 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image(
-                        image: effectiveImage,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => Container(
-                          color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
-                          child: const Icon(CupertinoIcons.music_note, size: 24, color: Colors.grey),
-                        ),
-                      ),
+                      child: effectiveImage != null
+                          ? Image(
+                              image: effectiveImage,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Container(
+                                color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+                                child: const Icon(CupertinoIcons.music_note, size: 24, color: Colors.grey),
+                              ),
+                            )
+                          : Container(
+                              color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+                              child: const Icon(CupertinoIcons.music_note, size: 24, color: Colors.grey),
+                            ),
                     ),
                   ),
                   const SizedBox(width: 14),
@@ -221,6 +226,40 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 }
               },
             ),
+
+            // Reproducir a continuación y Añadir a la cola (cuando se abre para una canción específica)
+            if (widget.song != null) ...[
+              _buildMenuItem(
+                icon: Icons.play_arrow_rounded,
+                title: 'Reproducir a continuación',
+                textColor: textColor,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  playerProvider.addToQueueNext(currentSong);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Se reproducirá a continuación'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+              _buildMenuItem(
+                icon: Icons.queue_music_rounded,
+                title: 'Añadir a la cola',
+                textColor: textColor,
+                onTap: () {
+                  Navigator.of(context).pop();
+                  playerProvider.addAllToQueue([currentSong]);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Añadida a la cola'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                },
+              ),
+            ],
 
             // 2. Descargar canción para modo offline
             if (_isDownloading)

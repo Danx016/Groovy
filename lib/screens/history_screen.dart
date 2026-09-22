@@ -76,6 +76,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _loadHistory({bool forceRefresh = false}) async {
     try {
+      // 0. Instant in-memory history from PlayerProvider for 0ms reactivity
+      final inMemoryHistory = _playerProvider?.playbackHistory ?? [];
+      if (inMemoryHistory.isNotEmpty && mounted) {
+        setState(() {
+          _recentSongs = inMemoryHistory;
+          _isLoading = false;
+        });
+      }
+
       // 1. Fetch local persistent playback history from StorageService
       final localHistory = await StorageService().getPlaybackHistory();
 
@@ -100,7 +109,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
       // 3. Recommendation profiles fallback (in case local storage is empty)
       List<Song> recommendationHistory = [];
-      if (localHistory.isEmpty && cloudHistory.isEmpty && _recommendationService != null) {
+      if (localHistory.isEmpty && inMemoryHistory.isEmpty && cloudHistory.isEmpty && _recommendationService != null) {
         final profiles = _recommendationService!.profiles;
         final songMap = _libraryProvider?.songsByIdMap ?? {};
 
@@ -143,6 +152,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
         }
       }
 
+      for (final s in inMemoryHistory) {
+        addIfNotPresent(s);
+      }
       for (final s in localHistory) {
         addIfNotPresent(s);
       }
@@ -192,6 +204,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     );
 
     if (confirmed == true) {
+      _playerProvider?.clearHistory();
       await StorageService().clearPlaybackHistory();
       if (!mounted) return;
       final recService = Provider.of<RecommendationService>(context, listen: false);

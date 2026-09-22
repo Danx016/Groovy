@@ -58,10 +58,10 @@ class _SongCreditsScreenState extends State<SongCreditsScreen> {
         ? youtubeService.getCoverArtUrl(widget.song.coverArt, size: 600)
         : null;
 
-    final ImageProvider effectiveImage = widget.imageProvider ??
+    final ImageProvider? effectiveImage = widget.imageProvider ??
         (coverUrl != null
             ? CachedNetworkImageProvider(coverUrl)
-            : const AssetImage('assets/default_cover.png') as ImageProvider);
+            : null);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -106,14 +106,19 @@ class _SongCreditsScreenState extends State<SongCreditsScreen> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
-                        child: Image(
-                          image: effectiveImage,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
-                            child: const Icon(CupertinoIcons.music_note, size: 64, color: Colors.grey),
-                          ),
-                        ),
+                        child: effectiveImage != null
+                            ? Image(
+                                image: effectiveImage,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+                                  child: const Icon(CupertinoIcons.music_note, size: 64, color: Colors.grey),
+                                ),
+                              )
+                            : Container(
+                                color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+                                child: const Icon(CupertinoIcons.music_note, size: 64, color: Colors.grey),
+                              ),
                       ),
                     ),
                   ),

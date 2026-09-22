@@ -103,7 +103,7 @@ class StorageService {
       }
 
       list.removeWhere((item) {
-        if (item is Map<String, dynamic>) {
+        if (item is Map) {
           return item['id']?.toString() == song.id;
         }
         return false;
@@ -130,10 +130,15 @@ class StorageService {
       final list = json.decode(historyJson) as List<dynamic>;
       final songs = <Song>[];
       for (final item in list) {
-        if (item is Map<String, dynamic>) {
+        if (item is Map) {
           try {
-            songs.add(Song.fromJson(item));
-          } catch (_) {}
+            final map = item is Map<String, dynamic>
+                ? item
+                : Map<String, dynamic>.from(item);
+            songs.add(Song.fromJson(map));
+          } catch (e) {
+            debugPrint('[StorageService] getPlaybackHistory song parse error: $e');
+          }
         }
       }
       return songs;

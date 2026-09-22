@@ -100,7 +100,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     if (widget.isActive && !oldWidget.isActive) {
       setState(() {});
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentLine(duration: const Duration(milliseconds: 600));
+        _scrollToCurrentLine(duration: const Duration(milliseconds: 320));
       });
     }
   }
@@ -219,7 +219,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 650)}) {
+  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 320)}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     try {
@@ -243,7 +243,7 @@ class _LyricsListViewState extends State<LyricsListView> {
             _scrollController.animateTo(
               clamped,
               duration: duration,
-              curve: const Cubic(0.25, 1.0, 0.5, 1.0),
+              curve: Curves.easeOutCubic,
             );
           }
         }
@@ -363,7 +363,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                       _currentLyricIndex = lyricIndex;
                     });
                     _resumeAutoScrollTimer?.cancel();
-                    _scrollToCurrentLine(duration: const Duration(milliseconds: 380));
+                    _scrollToCurrentLine(duration: const Duration(milliseconds: 320));
                   },
                 ),
               );

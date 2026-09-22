@@ -140,8 +140,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           SliverToBoxAdapter(
-            child: Consumer2<LibraryProvider, RecommendationService>(
-              builder: (context, libraryProvider, recommendationService, _) {
+            child: Consumer3<LibraryProvider, RecommendationService, PlayerProvider>(
+              builder: (context, libraryProvider, recommendationService, playerProvider, _) {
                 if (libraryProvider.isLoading &&
                     !libraryProvider.isInitialized) {
                   return _buildLoadingState(isDesktop, hPad);
@@ -188,12 +188,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     .toList();
                 List<Playlist> playlists = libraryProvider.playlists;
 
-                // Extract recent songs from profiles / recentlyPlayed with O(1) indexed lookup
+                // Extract recent songs: prioritize actual persistent playback history (YouTube, streams, local)
+                // then fall back to profiles indexed in library
                 final cachedSongMap = libraryProvider.songsByIdMap;
                 final recentSongsFromProfiles = recommendationService.recentlyPlayed
                     .where((id) => cachedSongMap.containsKey(id))
                     .map((id) => cachedSongMap[id]!)
                     .toList();
+                final recentSongs = playerProvider.playbackHistory.isNotEmpty
+                    ? playerProvider.playbackHistory
+                    : recentSongsFromProfiles;
 
                 return Padding(
                   padding: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 0),
@@ -203,11 +207,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(height: 12),
 
                       // 1. REPRODUCCIONES RECIENTES
-                      if (recentSongsFromProfiles.isNotEmpty)
+                      if (recentSongs.isNotEmpty)
                         _buildMixSection(
                           context: context,
                           title: 'Reproducciones recientes',
-                          songs: recentSongsFromProfiles,
+                          songs: recentSongs,
                           isDesktop: isDesktop,
                           hPad: hPad,
                           onSeeAllTap: () => NavigationHelper.push(

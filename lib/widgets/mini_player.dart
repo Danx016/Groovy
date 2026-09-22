@@ -302,7 +302,11 @@ class _MiniPlayerRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          _MiniPlayerControls(isRadio: isPlayingRadio),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {}, // Absorb taps so tapping controls area never accidentally triggers handleTap
+            child: _MiniPlayerControls(isRadio: isPlayingRadio),
+          ),
         ],
       ),
     );
@@ -359,7 +363,7 @@ class _MiniPlayerControls extends StatelessWidget {
                 provider.togglePlayPause();
               },
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+              constraints: const BoxConstraints(minWidth: 48, minHeight: 48),
               icon: Icon(
                 isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                 size: 34,

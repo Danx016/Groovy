@@ -5,6 +5,40 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.6] - 2026-09-22
+
+### Fixed
+- **Placeholders de imágenes limpios y elegantes sin logo de Groovy**:
+  - Se eliminó el uso del logo de Groovy como placeholder cuando las carátulas o avatares no cargan o no están disponibles.
+  - En `AlbumArtwork`, los placeholders ahora renderizan contenedores nativos con degradados sutiles (estilo Apple Music tanto en modo oscuro como claro):
+    - En artistas (avatares circulares): icono de persona (`Icons.person_rounded`).
+    - En álbumes y canciones: icono de nota musical (`Icons.music_note_rounded`).
+  - En `ArtistCard` y `ArtistTile`, se añadió fallback a `ArtistImageService.getCachedArtistImageUrl` para aprovechar imágenes de artistas en caché local.
+  - En `NowPlayingMoreMenu` y `SongCreditsScreen`, se reemplazó el fallback por contenedores limpios con icono musical de Cupertino.
+  - Se reemplazó el asset `assets/default_cover.png` por una carátula neutral minimalista de música sin el logo de la aplicación.
+- **Respuesta instantánea y fiable del botón Play/Pause (`PlayerProvider` y `MiniPlayer`)**:
+  - Se eliminó el bloqueo asíncrono en `play()` donde `_audioPlayer.play()` esperaba indefinidamente a que finalizara la pista musical (`just_audio`), lo cual dejaba `_togglePending` bloqueado en `true` e ignoraba los toques posteriores del usuario en pausa.
+  - Se limpió `_lastUserPauseTime` al invocar `play()`, evitando que el listener de `playerStateStream` interpretara la reproducción intencionada del usuario como un evento retrasado y pausara automáticamente la música.
+  - Se optimizó el cooldown de debounce en `togglePlayPause` a 150 ms para evitar doble toque accidental manteniendo respuesta instantánea (0 ms) a la pulsación.
+  - En `MiniPlayer`, se aisló el área de controles de reproducción para absorber eventos de toque y se expandió el área de toque del botón play/pause a 48x48 dp, evitando que toques en el botón abran accidentalmente la pantalla completa del reproductor.
+- **Fluidez y eliminación de lag en carátula y letras sincronizadas (`AlbumArtView`, `LyricsLineWidget` y `LyricsListView`)**:
+  - **Carátula (`AlbumArtView`)**: Se reemplazó el `TweenAnimationBuilder` con recálculo dinámico de desenfoque gaussiano por fotograma (`blurRadius` variable en `BoxDecoration`) por un `AnimatedScale` acelerado por hardware junto a una sombra estática (`BoxShadow`) cacheada en GPU. Esto elimina por completo la sobrecarga en el rasterizador de shaders de la GPU durante las transiciones de Play/Pause.
+  - **Letras (`LyricsLineWidget`)**: Se eliminó el widget `AnimatedDefaultTextStyle` que mantenía cientos de controladores de animación concurrentes interpolando estilos estáticos idénticos en cada línea de la canción. Ahora se utiliza un `TextStyle` estático reutilizable, dejando las transiciones exclusivamente a `AnimatedScale` y `AnimatedOpacity` a 300 ms con `Curves.easeOutCubic`.
+  - **Desplazamiento fluido (`LyricsListView`)**: Se redujo la duración del scroll automático de 650 ms a 320 ms con curva `Curves.easeOutCubic`. Esto evita que líneas consecutivas o rápidas interrumpan animaciones de scroll anteriores a mitad de camino, eliminando tirones y saltos visuales bruscos.
+- **Guardado y visualización inmediata del historial de reproducciones (`PlayerProvider`, `HomeScreen` y `StorageService`)**:
+  - **Registro inmediato**: Se trasladó el guardado del historial `_recordSongPlayback(song)` al inicio síncrono de `playSong()`. Anteriormente se ejecutaba al final de operaciones asíncronas de red y streaming, provocando que si el usuario cambiaba o saltaba de canción rápidamente (`currentGen != _playGeneration`), la canción se descartara y nunca se guardara en el historial.
+  - **Historial reactivo en memoria (`PlayerProvider.playbackHistory`)**: Se añadió una lista reactiva en memoria inicializada desde `StorageService`. Cada reproducción actualiza la lista y notifica a los listeners al instante (0 ms), permitiendo que la interfaz refleje el cambio de inmediato sin depender de lecturas demoradas en disco.
+  - **Visualización en Inicio (`HomeScreen`)**: La sección "Reproducciones recientes" ahora lee directamente de `playerProvider.playbackHistory`, mostrando canciones reproducidas desde YouTube, streaming y búsquedas en lugar de limitarse a canciones ya guardadas en la biblioteca local.
+  - **Robustez en almacenamiento (`StorageService` y `Song.fromJson`)**: Se corrigió el filtrado de mapas al decodificar JSON para admitir cualquier instancia de `Map` y se aseguró el casteo seguro de `replayGain`, previniendo que registros válidos se ignoraran silenciosamente.
+- **Reproducción instantánea en Windows sin quedarse cargando indefinidamente (`GroovyAudioHandler` y `YoutubeService`)**:
+  - **Causa raíz identificada**: `GroovyAudioHandler` configuraba globalmente `darwinLoadControl: DarwinLoadControl(automaticallyWaitsToMinimizeStalling: false)` dentro de `AudioLoadConfiguration`. Al cargar cualquier pista de audio en Windows o Linux, `just_audio` intentaba invocar `platform.setAutomaticallyWaitsToMinimizeStalling(...)`. Al ser un método exclusivo de Apple (AVPlayer), el backend nativo de escritorio (`just_audio_media_kit`) no lo implementaba y lanzaba un `UnimplementedError` interno durante `_setPlatformActive`. Esto rompía la carga asíncrona de la canción, dejando el reproductor en estado `AudioProcessingState.loading` y `_isLoading: true` de forma permanente ("cargando indefinidamente").
+  - **Corrección en `GroovyAudioHandler`**: Se condicionó `AudioLoadConfiguration` por plataforma: `androidLoadControl` solo se inyecta en Android y `darwinLoadControl` únicamente en iOS/macOS. En Windows y Linux no se inyectan controles de Darwin, permitiendo que `just_audio_media_kit` cargue y reproduzca la fuente de audio en ~600 ms sin excepciones.
+  - **Robustez en `YoutubeService` en escritorio**: En Windows, macOS y Linux, si la resolución de stream online no entrega una URL válida, el servicio retorna de forma segura `null` para activar los reintentos y recuperación limpia de cola en lugar de retornar un `_YoutubeStreamAudioSource` (no soportado por `libmpv`).
+- **Menú de opciones (3 puntos) en canciones de Búsquedas Recientes (`SearchScreen` y `NowPlayingMoreMenu`)**:
+  - En la sección "Búsquedas recientes" de `SearchScreen`, el icono de 3 puntos (`trailing`) era un widget `Icon` estático sin interacción ni manejador táctil.
+  - Se transformó en un `IconButton` con padding y área táctil optimizada (40x40 dp) que previene la propagación de eventos a la fila completa.
+  - Al presionar los 3 puntos, se abre el modal inferior estilizado de Apple Music (`NowPlayingMoreMenu`) permitiendo reproducir a continuación, añadir a la cola, agregar/eliminar de favoritos o biblioteca, descargar sin conexión, agregar a playlist, consultar créditos e ir al álbum/artista.
+
 ## [1.3.5] - 2026-09-22
 
 ### Fixed

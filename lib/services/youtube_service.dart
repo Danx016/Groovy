@@ -348,6 +348,7 @@ class YoutubeService {
       } catch (e) {
         debugPrint('[YouTube] Desktop stream resolve error for $videoId: $e');
       }
+      return null;
     }
     return buildAudioSource(videoId);
   }

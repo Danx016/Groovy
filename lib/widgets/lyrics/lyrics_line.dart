@@ -49,6 +49,16 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
     ),
   ];
 
+  static final TextStyle _lyricTextStyle = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+    color: Colors.white,
+    height: 1.25,
+    fontFamilyFallback: _fontFallback,
+    shadows: _currentLineShadow,
+  );
+
   @override
   Widget build(BuildContext context) {
     final isCurrent = widget.state == LyricLineState.current;
@@ -77,25 +87,15 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
             child: AnimatedScale(
               scale: isCurrent ? 1.025 : 1.0,
               alignment: Alignment.centerLeft,
-              duration: const Duration(milliseconds: 550),
-              curve: const Cubic(0.25, 0.1, 0.25, 1.0),
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeOutCubic,
               child: AnimatedOpacity(
                 opacity: targetOpacity,
-                duration: const Duration(milliseconds: 550),
-                curve: const Cubic(0.25, 0.1, 0.25, 1.0),
-                child: AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 550),
-                  curve: const Cubic(0.25, 0.1, 0.25, 1.0),
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                    color: Colors.white,
-                    height: 1.25,
-                    fontFamilyFallback: _fontFallback,
-                    shadows: _currentLineShadow,
-                  ),
-                  child: Text(widget.line.text),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutCubic,
+                child: Text(
+                  widget.line.text,
+                  style: _lyricTextStyle,
                 ),
               ),
             ),

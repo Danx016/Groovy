@@ -26,8 +26,37 @@ class AlbumArtView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Inner image: clipped, Hero-wrapped, gapless, medium quality for speed.
-    final imageWidget = RepaintBoundary(
+    Widget buildFallback() {
+      return Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              dominantColor ?? const Color(0xFF2C2C2E),
+              const Color(0xFF1C1C1E),
+            ],
+          ),
+        ),
+        child: const Center(
+          child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
+        ),
+      );
+    }
+
+    // Inner image: clipped, Hero-wrapped, gapless, medium quality for speed, with cached deep shadow.
+    final imageWidget = Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22.0),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x55000000),
+            blurRadius: 24.0,
+            spreadRadius: 0.0,
+            offset: Offset(0, 10.0),
+          ),
+        ],
+      ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(22.0),
         child: Hero(
@@ -46,28 +75,10 @@ class AlbumArtView extends StatelessWidget {
                   'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
                   fit: BoxFit.cover,
                   filterQuality: FilterQuality.medium,
-                  errorBuilder: (_, __, ___) => Image.asset(
-                    'assets/default_cover.png',
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
-                      color: Colors.white.withValues(alpha: 0.12),
-                      child: const Center(
-                        child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
-                      ),
-                    ),
-                  ),
+                  errorBuilder: (_, __, ___) => buildFallback(),
                 );
               }
-              return Image.asset(
-                'assets/default_cover.png',
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
-                  color: Colors.white.withValues(alpha: 0.12),
-                  child: const Center(
-                    child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
-                  ),
-                ),
-              );
+              return buildFallback();
             },
           ),
         ),
@@ -75,36 +86,12 @@ class AlbumArtView extends StatelessWidget {
     );
 
     return RepaintBoundary(
-      child: TweenAnimationBuilder<double>(
-        tween: Tween<double>(end: isPlaying ? 1.0 : 0.0),
-        duration: const Duration(milliseconds: 450),
+      child: AnimatedScale(
+        scale: isPlaying ? 1.0 : 0.88,
+        duration: const Duration(milliseconds: 350),
         curve: const Cubic(0.22, 1.0, 0.36, 1.0),
+        alignment: Alignment.center,
         child: imageWidget,
-        builder: (context, animValue, child) {
-          final scale = 0.88 + (0.12 * animValue);
-          final blurRadius = 14.0 + (14.0 * animValue);
-          final shadowAlpha = 0.20 + (0.18 * animValue);
-          final offsetY = 6.0 + (8.0 * animValue);
-
-          return Transform.scale(
-            scale: scale,
-            alignment: Alignment.center,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(22.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: shadowAlpha),
-                    blurRadius: blurRadius,
-                    spreadRadius: 0.0,
-                    offset: Offset(0, offsetY),
-                  ),
-                ],
-              ),
-              child: child!,
-            ),
-          );
-        },
       ),
     );
   }

@@ -58,7 +58,7 @@ class Song {
   });
 
   factory Song.fromJson(Map<String, dynamic> json) {
-    final replayGain = json['replayGain'] as Map<String, dynamic>?;
+    final replayGain = (json['replayGain'] as Map?)?.cast<String, dynamic>();
 
     return Song(
       id: json['id']?.toString() ?? '',

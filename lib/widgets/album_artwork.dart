@@ -34,6 +34,7 @@ class AlbumArtwork extends StatelessWidget {
   final BoxShadow? shadow;
 
   final bool preserveAspectRatio;
+  final IconData? placeholderIcon;
 
   const AlbumArtwork({
     super.key,
@@ -42,6 +43,7 @@ class AlbumArtwork extends StatelessWidget {
     this.borderRadius,
     this.shadow,
     this.preserveAspectRatio = false,
+    this.placeholderIcon,
   });
 
   @override
@@ -339,26 +341,27 @@ class AlbumArtwork extends StatelessWidget {
   }
 
   Widget _buildPlaceholder(bool isDark) {
-    final iconSize = size.isFinite ? (size / 3).clamp(16.0, 60.0) : 48.0;
+    final iconSize = size.isFinite ? (size / 2.8).clamp(16.0, 60.0) : 48.0;
+    final defaultIcon = (borderRadius != null && borderRadius! >= (size.isFinite ? size / 2 - 2 : 20))
+        ? Icons.person_rounded
+        : Icons.music_note_rounded;
+    final effectiveIcon = placeholderIcon ?? defaultIcon;
+
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark
-              ? [const Color(0xFF2A2A2A), const Color(0xFF1A1A1A)]
-              : [Colors.grey.shade300, Colors.grey.shade200],
+              ? [const Color(0xFF2C2C2E), const Color(0xFF1C1C1E)]
+              : [const Color(0xFFE5E5EA), const Color(0xFFD1D1D6)],
         ),
       ),
-      child: Image.asset(
-        'assets/default_cover.png',
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Center(
-          child: Icon(
-            Icons.music_note_rounded,
-            size: iconSize,
-            color: isDark ? Colors.white24 : Colors.black12,
-          ),
+      child: Center(
+        child: Icon(
+          effectiveIcon,
+          size: iconSize,
+          color: isDark ? Colors.white38 : Colors.black26,
         ),
       ),
     );

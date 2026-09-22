@@ -61,6 +61,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool _shuffleEnabled = false;
   bool _gaplessEnabled = true;
   final List<String> _shuffleHistory = [];
+  List<Song> _playbackHistory = [];
   RepeatMode _repeatMode = RepeatMode.off;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
@@ -1255,6 +1256,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Duration get position => _position;
   Duration get duration => _duration;
   Song? get currentSong => _currentSong;
+  List<Song> get playbackHistory => List.unmodifiable(_playbackHistory);
   bool get hasNext =>
       _queue.isNotEmpty &&
       (_currentIndex < _queue.length - 1 ||
@@ -1613,6 +1615,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
     });
 
+    _storageService.getPlaybackHistory().then((history) {
+      if (_isDisposed) return;
+      _playbackHistory = history;
+      notifyListeners();
+    });
+
     _playerStateSub = _audioPlayer.playerStateStream.listen(
       (state) {
         // In remote-playback mode the local player is stopped/paused; ignore
@@ -1634,7 +1642,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           // caught up to the desired state yet (stale native events), do NOT revert _isPlaying!
         } else {
           final bool recentUserPause = _lastUserPauseTime != null &&
-              DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 6);
+              DateTime.now().difference(_lastUserPauseTime!) < const Duration(milliseconds: 1500);
           if (recentUserPause && state.playing) {
             // User explicitly requested pause; ignore stale native playing events
             // and enforce audio pause on the underlying player
@@ -2074,7 +2082,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
   }
 
+  void clearHistory() {
+    _playbackHistory.clear();
+    _storageService.clearPlaybackHistory();
+    notifyListeners();
+  }
+
   void _recordSongPlayback(Song song) {
+    // 1. Maintain reactive in-memory playback history for 0ms UI update
+    _playbackHistory.removeWhere((s) => s.id == song.id);
+    _playbackHistory.insert(0, song);
+    if (_playbackHistory.length > 200) {
+      _playbackHistory = _playbackHistory.sublist(0, 200);
+    }
+    notifyListeners();
+
     if (_recommendationService != null) {
       _recommendationService!.trackSongPlay(
         song,
@@ -2198,6 +2220,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isPlaying = true;
     _isLoading = true;
     _lastPlaybackError = null; // clear previous error on new play attempt
+    _lastUserPauseTime = null; // clear pause intent on new song play
+    _recordSongPlayback(song);
     notifyListeners();
     _saveQueueState();
 
@@ -2334,7 +2358,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           unawaited(_applyReplayGain(song));
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
-          await _audioPlayer.play();
+          unawaited(_audioPlayer.play().catchError((e) {
+            debugPrint('[Player] Error during play(): $e');
+          }));
           _isPlaying = true;
           _isLoading = false;
           notifyListeners();
@@ -2356,7 +2382,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           unawaited(_applyReplayGain(song));
           await _audioPlayer.setUrl(playUrl, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
-          await _audioPlayer.play();
+          unawaited(_audioPlayer.play().catchError((e) {
+            debugPrint('[Player] Error during play(): $e');
+          }));
+          _isPlaying = true;
+          _isLoading = false;
+          notifyListeners();
         } else if (_gaplessEnabled) {
           try {
             await _buildAndSetConcatenatingSource(
@@ -2383,7 +2414,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (currentGen != _playGeneration) return;
           await _audioPlayer.seek(initialPosition ?? Duration.zero);
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _ensureAudioFocus(() async {
+            unawaited(_audioPlayer.play().catchError((e) {
+              debugPrint('[Player] Error during play(): $e');
+            }));
+          });
         } else {
           final String playUrl;
           if (song.isLocal == true && song.path != null) {
@@ -2426,7 +2461,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _ensureAudioFocus(() async {
+            unawaited(_audioPlayer.play().catchError((e) {
+              debugPrint('[Player] Error during play(): $e');
+            }));
+          });
         }
       }
 
@@ -2557,7 +2596,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       await _audioPlayer.setVolume(_volume);
 
-      await _ensureAudioFocus(() => _audioPlayer.play());
+      await _ensureAudioFocus(() async {
+        unawaited(_audioPlayer.play().catchError((e) {
+          debugPrint('[Player] Error playing radio: $e');
+        }));
+      });
 
       _updateSystemServicesForRadio(station);
     } catch (e) {
@@ -2596,7 +2639,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> play() async {
-    // 1. Instant optimistic UI toggle (0ms latency)
+    // 1. Clear pause timestamp so stream listener never re-pauses playback
+    _lastUserPauseTime = null;
+
+    // 2. Instant optimistic UI toggle (0ms latency)
     _isPlaying = true;
     _optimisticLocalPlayPauseState = true;
     _optimisticLocalPlayPauseTime = DateTime.now();
@@ -2627,10 +2673,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } else if (_upnpService.isConnected) {
       await _upnpService.play();
     } else {
-      // If no song is selected yet but queue has songs (e.g. headphone play button pressed on app start), start first/saved queue song
+      // If no song is selected yet but queue has songs, start first/saved queue song
       if (_currentSong == null && _queue.isNotEmpty) {
         final targetIndex = (_currentIndex >= 0 && _currentIndex < _queue.length) ? _currentIndex : 0;
         await playSong(_queue[targetIndex], playlist: _queue, startIndex: targetIndex);
+        return;
+      }
+
+      if (_currentSong == null && _audioPlayer.audioSource == null) {
+        _isPlaying = false;
+        notifyListeners();
         return;
       }
 
@@ -2646,7 +2698,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       await _ensureAudioFocus(() async {
         // Ensure volume is properly restored to effective volume before playing
         await _audioPlayer.setVolume(_effectiveVolume);
-        await _audioPlayer.play();
+        unawaited(_audioPlayer.play().catchError((e) {
+          debugPrint('[Player] Error during play(): $e');
+        }));
       });
     }
   }
@@ -2724,22 +2778,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> togglePlayPause() async {
-    // Guard against re-entrant calls (double-taps) that would flip state twice
+    // Guard against rapid re-entrant double-taps
     if (_togglePending) return;
     _togglePending = true;
     try {
-      // Use the native player state as the authoritative tiebreaker so that even
-      // if _isPlaying is momentarily out of sync we make the correct decision.
-      final nativeIsPlaying = _audioPlayer.playing;
-      final effectiveIsPlaying = _isPlaying || nativeIsPlaying;
-      if (effectiveIsPlaying) {
+      if (_isPlaying) {
         await pause();
       } else {
         await play();
       }
     } finally {
-      // Release debounce after a short cooldown so rapid taps are collapsed
-      Future.delayed(const Duration(milliseconds: 350), () {
+      // Release debounce quickly so controls feel instantaneous and never get stuck
+      Future.delayed(const Duration(milliseconds: 150), () {
         _togglePending = false;
       });
     }

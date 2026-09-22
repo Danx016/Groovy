@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/artist.dart';
 import '../theme/app_theme.dart';
+import '../services/artist_image_service.dart';
 import 'album_artwork.dart';
 
 class ArtistCard extends StatefulWidget {
@@ -69,9 +70,12 @@ class _ArtistCardState extends State<ArtistCard> {
                       children: [
                         ClipOval(
                           child: AlbumArtwork(
-                            coverArt: widget.artist.coverArt,
+                            coverArt: widget.artist.coverArt ??
+                                widget.artist.artistImageUrl ??
+                                ArtistImageService.getCachedArtistImageUrl(widget.artist.name),
                             size: widget.size,
                             borderRadius: widget.size / 2,
+                            placeholderIcon: Icons.person_rounded,
                             shadow: const BoxShadow(color: Colors.transparent),
                           ),
                         ),
@@ -170,9 +174,12 @@ class ArtistTile extends StatelessWidget {
         decoration: const BoxDecoration(shape: BoxShape.circle),
         child: ClipOval(
           child: AlbumArtwork(
-            coverArt: artist.coverArt,
+            coverArt: artist.coverArt ??
+                artist.artistImageUrl ??
+                ArtistImageService.getCachedArtistImageUrl(artist.name),
             size: 50,
             borderRadius: 25,
+            placeholderIcon: Icons.person_rounded,
             shadow: const BoxShadow(color: Colors.transparent),
           ),
         ),

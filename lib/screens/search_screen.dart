@@ -15,6 +15,7 @@ import '../models/album.dart';
 import '../models/artist.dart';
 import '../models/song.dart';
 import 'artist_screen.dart';
+import '../widgets/now_playing/now_playing_more_menu.dart';
 
 import '../l10n/app_localizations.dart';
 import '../services/player_ui_settings_service.dart';
@@ -452,10 +453,31 @@ class _SearchScreenState extends State<SearchScreen> {
                 ],
               ),
               trailing: item.type == RecentSearchType.song
-                  ? const Icon(
-                      CupertinoIcons.ellipsis_vertical,
-                      size: 18,
-                      color: Colors.grey,
+                  ? IconButton(
+                      icon: const Icon(
+                        CupertinoIcons.ellipsis_vertical,
+                        size: 18,
+                        color: Colors.grey,
+                      ),
+                      splashRadius: 20,
+                      padding: const EdgeInsets.all(8),
+                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                      onPressed: () {
+                        final song = item.song ??
+                            Song(
+                              id: item.id,
+                              title: item.title,
+                              artist: item.subtitle?.replaceFirst('Canción • ', ''),
+                              coverArt: item.imageUrl,
+                            );
+                        showModalBottomSheet(
+                          context: context,
+                          backgroundColor: Colors.transparent,
+                          isScrollControlled: true,
+                          useRootNavigator: true,
+                          builder: (ctx) => NowPlayingMoreMenu(song: song),
+                        );
+                      },
                     )
                   : null,
               onTap: () {
