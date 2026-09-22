@@ -83,6 +83,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool? _optimisticRemotePlayPauseState;
   DateTime? _lastRemoteSeekTime;
   DateTime? _lastRemoteVolumeChangeTime;
+  double? _optimisticRemoteVolume;
   Timer? _remoteVolumeDebounceTimer;
 
   String? _resolvedArtworkUrl;
@@ -592,10 +593,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
     }
 
-    final bool isRecentVolumeChange = _lastRemoteVolumeChangeTime != null &&
+    final bool isRecentVolumeChange = (_optimisticRemoteVolume != null || _lastRemoteVolumeChangeTime != null) &&
+        _lastRemoteVolumeChangeTime != null &&
         DateTime.now().difference(_lastRemoteVolumeChangeTime!) < const Duration(seconds: 4);
 
     if (!isRecentVolumeChange) {
+      _optimisticRemoteVolume = null;
       if ((_volume - volume).abs() > 0.05) {
         _volume = volume;
         _audioHandler.updateRemoteVolume((_volume * 100).round());
