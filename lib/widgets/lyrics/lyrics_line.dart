@@ -74,30 +74,22 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
                     ? 0.40
                     : 0.36)));
 
-    return RepaintBoundary(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-            child: AnimatedScale(
-              scale: isCurrent ? 1.025 : 1.0,
-              alignment: Alignment.centerLeft,
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeOutCubic,
-              child: AnimatedOpacity(
-                opacity: targetOpacity,
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOutCubic,
-                child: Text(
-                  widget.line.text,
-                  style: _lyricTextStyle,
-                ),
-              ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+          child: AnimatedOpacity(
+            opacity: targetOpacity,
+            duration: const Duration(milliseconds: 320),
+            curve: Curves.easeInOutCubic,
+            child: Text(
+              widget.line.text,
+              style: _lyricTextStyle,
             ),
           ),
         ),

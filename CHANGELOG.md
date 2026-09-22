@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.8] - 2026-09-22
+
+### Fixed & Improved
+- **Letras sincronizadas ultra-fluidas en Android estilo Apple Music (`LyricsListView` y `LyricsLineWidget`)**:
+  - Se eliminó el doble `RepaintBoundary` anidado por cada verso que sobrecargaba la GPU en dispositivos móviles con más de 160 capas de composición por fotograma.
+  - Se removió `AnimatedScale` durante el desplazamiento de letras, evitando la invalidación constante de la memoria caché de glifos y eliminando el efecto de parpadeo y tirones al cambiar de línea.
+  - Curva de desplazamiento adaptativa `Curves.easeInOutCubic` con aceleración y desaceleración suave (580ms para saltos de estrofas y 440ms para líneas contiguas), eliminando los saltos secos y logrando un desplazamiento suave idéntico a Apple Music.
+- **Restauración y optimización de la precarga de la siguiente canción (`PlayerProvider` y `AudioCacheService`)**:
+  - Soporte de precarga universal para todas las pistas: ahora las canciones con IDs de Deezer o búsquedas (`dz_...`) resuelven de inmediato su video de YouTube en segundo plano y precalientan la caché de streaming (`warmUpStreamCache`).
+  - Corrección de descarga en `AudioCacheService`: se incorporó la cabecera `Range: bytes=0-` obligatoria para que los servidores CDN de Google Video respondan con `HTTP 206 Partial Content` en lugar de fallar silenciosamente con `HTTP 403 Forbidden`.
+  - Creación de alias de archivos por `videoId` y `song.id` en el disco local para garantizar inicios de reproducción instantáneos (0ms).
+  - Sincronización de precarga en modo aleatorio (Shuffle) mediante `_nextShuffledIndex`, asegurando que la pista que se precarga sea exactamente la que sonará después.
+
 ## [1.3.7] - 2026-09-22
 
 ### Fixed & Improved

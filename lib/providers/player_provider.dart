@@ -83,7 +83,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   bool? _optimisticRemotePlayPauseState;
   DateTime? _lastRemoteSeekTime;
   DateTime? _lastRemoteVolumeChangeTime;
-  double? _optimisticRemoteVolume;
   Timer? _remoteVolumeDebounceTimer;
 
   String? _resolvedArtworkUrl;
@@ -1343,13 +1342,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _preloadSong(nextSong);
   }
 
+  int? _nextShuffledIndex;
+
   Song? _getNextSongToPreload() {
     if (_queue.isEmpty || _currentIndex < 0) return null;
     if (_repeatMode == RepeatMode.one) return _currentSong;
     if (_shuffleEnabled && _queue.length > 1) {
-      for (int i = 0; i < _queue.length; i++) {
-        if (i != _currentIndex) return _queue[i];
+      if (_nextShuffledIndex == null ||
+          _nextShuffledIndex == _currentIndex ||
+          _nextShuffledIndex! >= _queue.length) {
+        int next;
+        do {
+          next = Random().nextInt(_queue.length);
+        } while (next == _currentIndex);
+        _nextShuffledIndex = next;
       }
+      return _queue[_nextShuffledIndex!];
     }
     if (_currentIndex < _queue.length - 1) {
       return _queue[_currentIndex + 1];
@@ -1365,18 +1373,31 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       '[Player Preload] ⚡ Pre-buffering next song: "${nextSong.title}" (${nextSong.id})',
     );
 
-    // 1. Preload audio stream into local disk cache for instant 0ms startup
+    // 1. Preload audio stream & warm up stream info for instant 0ms startup
     if (nextSong.isLocal != true) {
-      unawaited(
-        _audioCacheService.preloadSong(nextSong, _youtubeService).catchError((e) {
-          debugPrint('[Player Preload] AudioCache preload error (harmless): $e');
-          return null;
-        }),
-      );
-      final cleanId = nextSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
-      if (cleanId.length == 11) {
-        YtDlpService().warmUpStreamCache(cleanId);
-      }
+      unawaited(() async {
+        try {
+          String videoId = nextSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+          if (!RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+            videoId = await _youtubeService.resolveVideoIdForSong(nextSong);
+            if (videoId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+              final qIdx = _queue.indexWhere((s) => s.id == nextSong.id);
+              if (qIdx != -1) {
+                _queue[qIdx] = _queue[qIdx].copyWith(
+                  id: videoId,
+                  coverArt: (_queue[qIdx].coverArt == null || _queue[qIdx].coverArt!.isEmpty) ? videoId : _queue[qIdx].coverArt,
+                );
+              }
+            }
+          }
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+            YtDlpService().warmUpStreamCache(videoId);
+          }
+          await _audioCacheService.preloadSong(nextSong, _youtubeService);
+        } catch (e) {
+          debugPrint('[Player Preload] Audio preload error (harmless): $e');
+        }
+      }());
     }
 
     // 2. Preload synced lyrics in cache
@@ -2000,10 +2021,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_shuffleEnabled && _queue.length > 1) {
       _shuffleHistory.add(_currentSong?.id ?? '');
       if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
-      int next;
-      do {
-        next = Random().nextInt(_queue.length);
-      } while (next == _currentIndex);
+      int next = _nextShuffledIndex ?? -1;
+      if (next < 0 || next == _currentIndex || next >= _queue.length) {
+        do {
+          next = Random().nextInt(_queue.length);
+        } while (next == _currentIndex);
+      }
+      _nextShuffledIndex = null;
       nextIndex = next;
     } else if (_currentIndex < _queue.length - 1) {
       nextIndex = _currentIndex + 1;
@@ -2495,12 +2519,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
 
       // Preload next track in background for instantaneous (0ms) transition
-      if (_queue.isNotEmpty && _currentIndex + 1 < _queue.length) {
-        final nextSong = _queue[_currentIndex + 1];
-        if (nextSong.isLocal != true) {
-          YtDlpService().warmUpStreamCache(nextSong.id);
-          unawaited(_audioCacheService.preloadSong(nextSong, _youtubeService));
-        }
+      final nextSongToPreload = _getNextSongToPreload();
+      if (nextSongToPreload != null && nextSongToPreload.id != _currentSong?.id) {
+        _lastPreloadedSongId = nextSongToPreload.id;
+        _preloadSong(nextSongToPreload);
       }
     } catch (e) {
       // If this playSong call has been superseded by a newer play request (e.g. user passed/returned tracks),

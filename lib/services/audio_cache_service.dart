@@ -159,13 +159,15 @@ class AudioCacheService {
       }
 
       final client = HttpClient()
-        ..connectionTimeout = const Duration(seconds: 12)
-        ..idleTimeout = const Duration(seconds: 12);
+        ..connectionTimeout = const Duration(seconds: 15)
+        ..idleTimeout = const Duration(seconds: 25);
 
       try {
         final req = await client.getUrl(Uri.parse(streamInfo.url));
+        bool hasUserAgent = false;
         streamInfo.headers.forEach((k, v) {
           final lower = k.toLowerCase();
+          if (lower == 'user-agent') hasUserAgent = true;
           if (lower != 'host' &&
               lower != 'content-length' &&
               lower != 'accept-encoding' &&
@@ -173,13 +175,16 @@ class AudioCacheService {
             req.headers.set(k, v);
           }
         });
-        if (!req.headers.toString().toLowerCase().contains('user-agent')) {
+        if (!hasUserAgent) {
           req.headers.set(
             HttpHeaders.userAgentHeader,
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            Platform.isAndroid
+                ? 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36'
+                : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           );
         }
         req.headers.set(HttpHeaders.acceptHeader, '*/*');
+        req.headers.set('Range', 'bytes=0-');
 
         final resp = await req.close();
         if (resp.statusCode != 200 && resp.statusCode != 206) {
@@ -200,6 +205,16 @@ class AudioCacheService {
           debugPrint(
             '[AudioCache] ✅ Successfully cached "${song.title}" ($partLength bytes, ${(partLength / (1024 * 1024)).toStringAsFixed(2)} MB)',
           );
+
+          if (videoId != song.id) {
+            final videoIdFile = File('$dirPath/${_filenameForSong(videoId)}');
+            try {
+              if (!await videoIdFile.exists()) {
+                await targetFile.copy(videoIdFile.path);
+              }
+            } catch (_) {}
+          }
+
           return targetFile;
         } else {
           await partFile.delete().catchError((_) => partFile);

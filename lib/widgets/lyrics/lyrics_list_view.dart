@@ -100,7 +100,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     if (widget.isActive && !oldWidget.isActive) {
       setState(() {});
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentLine(duration: const Duration(milliseconds: 320));
+        _scrollToCurrentLine();
       });
     }
   }
@@ -219,7 +219,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration duration = const Duration(milliseconds: 320)}) {
+  void _scrollToCurrentLine({Duration? duration}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
 
     try {
@@ -239,11 +239,17 @@ class _LyricsListViewState extends State<LyricsListView> {
             _scrollController.position.minScrollExtent,
             _scrollController.position.maxScrollExtent,
           );
-          if ((_scrollController.offset - clamped).abs() > 1.0) {
+          final scrollDelta = (_scrollController.offset - clamped).abs();
+          if (scrollDelta > 1.0) {
+            // Adaptive duration & smooth Apple-style ease-in-out curve:
+            // Stanza transitions glide gracefully without abrupt jerky snaps
+            final effectiveDuration = duration ?? (scrollDelta > 140
+                ? const Duration(milliseconds: 580)
+                : const Duration(milliseconds: 440));
             _scrollController.animateTo(
               clamped,
-              duration: duration,
-              curve: Curves.easeOutCubic,
+              duration: effectiveDuration,
+              curve: Curves.easeInOutCubic,
             );
           }
         }
@@ -314,7 +320,7 @@ class _LyricsListViewState extends State<LyricsListView> {
               
               if (item.type == ItemType.interlude) {
                 final isCurrentInterlude = _currentIndex == index && widget.isActive;
-                return RepaintBoundary(
+                return KeyedSubtree(
                   key: _keys[index],
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
@@ -346,26 +352,24 @@ class _LyricsListViewState extends State<LyricsListView> {
                   ? (lyricIndex - _currentLyricIndex).abs().clamp(0, 2) 
                   : 2;
 
-              return RepaintBoundary(
+              return LyricsLineWidget(
                 key: _keys[index],
-                child: LyricsLineWidget(
-                  line: line,
-                  state: state,
-                  distance: distance,
-                  isUnsynced: isUnsynced,
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    widget.onSeek(line.startTime);
-                    
-                    setState(() {
-                      _isManualScrolling = false;
-                      _currentIndex = index;
-                      _currentLyricIndex = lyricIndex;
-                    });
-                    _resumeAutoScrollTimer?.cancel();
-                    _scrollToCurrentLine(duration: const Duration(milliseconds: 320));
-                  },
-                ),
+                line: line,
+                state: state,
+                distance: distance,
+                isUnsynced: isUnsynced,
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  widget.onSeek(line.startTime);
+                  
+                  setState(() {
+                    _isManualScrolling = false;
+                    _currentIndex = index;
+                    _currentLyricIndex = lyricIndex;
+                  });
+                  _resumeAutoScrollTimer?.cancel();
+                  _scrollToCurrentLine();
+                },
               );
             }),
           ),
