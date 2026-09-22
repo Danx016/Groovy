@@ -5,6 +5,20 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.7] - 2026-09-22
+
+### Fixed & Improved
+- **Pantalla completa nativa en Windows y controles del reproductor (`NowPlayingScreen` y `MainScreen`)**:
+  - Al abrir la pantalla de reproducción estilo Apple Music ("Pantalla completa") en Windows, macOS y Linux, la aplicación ahora invoca automáticamente la API nativa de pantalla completa (`windowManager.setFullScreen(true)`), ocultando por completo la barra de tareas de Windows y la barra de título superior.
+  - El botón superior derecho de pantalla completa ahora alterna dinámicamente entre pantalla completa y modo ventana normal (cambiando su icono entre `close_fullscreen_rounded` y `fullscreen_rounded`).
+  - Se añadió el atajo global de teclado `F11` para alternar la pantalla completa en cualquier momento (tanto en la vista principal como en el reproductor).
+  - Al cerrar la vista del reproductor con `Esc` o el botón `X`, la ventana restaura automáticamente su estado original previo (`windowManager.setFullScreen(false)`).
+- **Corrección de volumen al reproducir en otro dispositivo (`VolumeSlider`, `PlayerProvider` y `AudioHandler`)**:
+  - Se eliminó el problema por el cual al subir el volumen mientras se reproduce en otro dispositivo (Groovy Connect, Cast, UPnP), el volumen se bajaba automáticamente a la mitad (50%):
+    - **Seguimiento por delta en `VolumeSlider`**: Se corrigió el listener de volumen de hardware en Android para que calcule el diferencial (`delta = volume - prevHwVol`) en lugar de sobreescribir el volumen remoto con el volumen inactivo del dispositivo local (~50%).
+    - **Preservación del volumen en `GroovyAudioHandler`**: `setRemotePlayback` ahora preserva el volumen activo en lugar de forzarlo a 50% por omisión al iniciar o actualizar la reproducción remota.
+    - **Protección de telemetría en `PlayerProvider`**: Se mantiene una ventana de gracia activa de 4 segundos frente a reportes de estado y telemetría desactualizados que llegan fuera de orden por la red, evitando que paquetes antiguos reviertan el deslizador de volumen.
+
 ## [1.3.6] - 2026-09-22
 
 ### Fixed

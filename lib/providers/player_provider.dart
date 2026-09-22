@@ -374,7 +374,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _remoteAnchorPosition = _position;
       _remoteAnchorTime = _isPlaying ? DateTime.now() : null;
       _manageRemotePositionTicker();
-      _audioHandler.setRemotePlayback(isRemote: true);
+      _audioHandler.setRemotePlayback(
+        isRemote: true,
+        volume: (_volume * 100).round(),
+      );
       notifyListeners();
       _updateAllServices();
     } else if (_isRenderingRemotely && !_castService.isConnected && !_upnpService.isConnected) {
@@ -593,12 +596,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final bool isRecentVolumeChange = _lastRemoteVolumeChangeTime != null &&
         DateTime.now().difference(_lastRemoteVolumeChangeTime!) < const Duration(seconds: 4);
 
-    if (isRecentVolumeChange) {
-      if (_optimisticRemoteVolume != null && (volume - _optimisticRemoteVolume!).abs() <= 0.05) {
-        _lastRemoteVolumeChangeTime = null;
-        _optimisticRemoteVolume = null;
-      }
-    } else {
+    if (!isRecentVolumeChange) {
       if ((_volume - volume).abs() > 0.05) {
         _volume = volume;
         _audioHandler.updateRemoteVolume((_volume * 100).round());
@@ -2171,7 +2169,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _activeAudioSongId = song.id;
       _isPlaying = true;
       _isLoading = true;
-      _audioHandler.setRemotePlayback(isRemote: true);
+      _audioHandler.setRemotePlayback(
+        isRemote: true,
+        volume: (_volume * 100).round(),
+      );
       if (_audioPlayer.playing) {
         await _audioPlayer.stop();
       }
@@ -3372,6 +3373,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _onRemoteVolumeChange(int volume) {
     final normalized = (volume / 100.0).clamp(0.0, 1.0);
+    if ((_volume - normalized).abs() < 0.02) return;
     if (_groovyConnectService?.isConnected == true) {
       setVolume(normalized);
     } else if (_castService.isConnected) {

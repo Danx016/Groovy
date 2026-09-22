@@ -18,6 +18,7 @@ class _VolumeSliderState extends State<VolumeSlider> {
   bool _isDragging = false;
   double _dragValue = 0.0;
   double _systemVolume = 0.5;
+  double? _lastKnownHardwareVolume;
   bool _hasListener = false;
 
   @override
@@ -27,18 +28,28 @@ class _VolumeSliderState extends State<VolumeSlider> {
       try {
         VolumeController.instance.showSystemUI = false;
         VolumeController.instance.getVolume().then((volume) {
-          if (mounted) setState(() => _systemVolume = volume);
+          if (mounted) {
+            setState(() {
+              _systemVolume = volume;
+              _lastKnownHardwareVolume = volume;
+            });
+          }
         }).catchError((_) {});
 
         VolumeController.instance.addListener((volume) {
           if (!mounted || _isDragging) return;
+          final prevHwVol = _lastKnownHardwareVolume;
+          _lastKnownHardwareVolume = volume;
           setState(() => _systemVolume = volume);
-          // Forward hardware volume changes to remote device if connected via Groovy Connect
+
+          // Forward hardware volume changes (delta) to remote device if connected via Groovy Connect
           final groovyConnect = context.read<GroovyConnectService>();
-          if (groovyConnect.isConnected) {
-            final playerProvider = context.read<PlayerProvider>();
-            if ((playerProvider.volume - volume).abs() > 0.03) {
-              playerProvider.setVolume(volume);
+          if (groovyConnect.isConnected && prevHwVol != null) {
+            final delta = volume - prevHwVol;
+            if (delta.abs() > 0.01) {
+              final playerProvider = context.read<PlayerProvider>();
+              final target = (playerProvider.volume + delta).clamp(0.0, 1.0);
+              playerProvider.setVolume(target);
             }
           }
         });

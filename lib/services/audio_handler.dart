@@ -470,7 +470,7 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   // hardware volume keys and Android Auto control the remote renderer.
   // ---------------------------------------------------------------------------
 
-  void setRemotePlayback({required bool isRemote, int volume = 50}) {
+  void setRemotePlayback({required bool isRemote, int? volume}) {
     _remotePlayback = isRemote;
     if (kIsWeb || !Platform.isAndroid) {
       if (!isRemote) {
@@ -479,7 +479,9 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
       return;
     }
     if (isRemote) {
-      _remoteVolume = volume.clamp(0, _remoteMaxVolume);
+      if (volume != null) {
+        _remoteVolume = volume.clamp(0, _remoteMaxVolume);
+      }
       androidPlaybackInfo.add(
         RemoteAndroidPlaybackInfo(
           volumeControlType: AndroidVolumeControlType.absolute,

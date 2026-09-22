@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' hide RepeatMode;
 import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import '../widgets/blurred_gradient_background.dart';
 import '../widgets/now_playing/album_art_view.dart';
 import '../widgets/now_playing/marquee_text.dart';
@@ -69,6 +70,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   bool _showLyricsInLandscape = true;
   Timer? _colorDebounceTimer;
   Timer? _lyricsDebounceTimer;
+  bool _wasFullScreenBefore = false;
+  bool _isWindowFullScreen = false;
 
   bool _isLocalFilePath(String? s) {
     if (s == null || s.isEmpty) return false;
@@ -172,6 +175,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       Future.delayed(const Duration(milliseconds: 200), () {
         if (mounted) _fetchLyrics();
       });
+    }
+
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      _initFullScreenState();
     }
   }
 
@@ -374,7 +381,44 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
   }
 
-  void _exitFullScreen() {
+  Future<void> _initFullScreenState() async {
+    try {
+      _wasFullScreenBefore = await windowManager.isFullScreen();
+      if (!_wasFullScreenBefore) {
+        await windowManager.setFullScreen(true);
+      }
+      if (mounted) {
+        setState(() => _isWindowFullScreen = true);
+      }
+    } catch (e) {
+      debugPrint('Error entering full screen in NowPlayingScreen: $e');
+    }
+  }
+
+  Future<void> _toggleWindowFullScreen() async {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      try {
+        final isFs = await windowManager.isFullScreen();
+        await windowManager.setFullScreen(!isFs);
+        if (mounted) {
+          setState(() => _isWindowFullScreen = !isFs);
+        }
+      } catch (e) {
+        debugPrint('Error toggling full screen: $e');
+      }
+    }
+  }
+
+  void _exitFullScreen() async {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      try {
+        if (!_wasFullScreenBefore) {
+          await windowManager.setFullScreen(false);
+        }
+      } catch (e) {
+        debugPrint('Error exiting full screen: $e');
+      }
+    }
     if (mounted) {
       Navigator.of(context).pop();
     }
@@ -382,6 +426,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
   @override
   void dispose() {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      if (!_wasFullScreenBefore) {
+        windowManager.setFullScreen(false);
+      }
+    }
     _playerProvider?.removeListener(_onPlayerChanged);
     _colorDebounceTimer?.cancel();
     _lyricsDebounceTimer?.cancel();
@@ -1052,11 +1101,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         return Focus(
           autofocus: true,
           onKeyEvent: (node, event) {
-            if (event is KeyDownEvent &&
-                (event.logicalKey == LogicalKeyboardKey.escape ||
-                    event.logicalKey == LogicalKeyboardKey.f11)) {
-              _exitFullScreen();
-              return KeyEventResult.handled;
+            if (event is KeyDownEvent) {
+              if (event.logicalKey == LogicalKeyboardKey.escape) {
+                _exitFullScreen();
+                return KeyEventResult.handled;
+              } else if (event.logicalKey == LogicalKeyboardKey.f11) {
+                _toggleWindowFullScreen();
+                return KeyEventResult.handled;
+              }
             }
             return KeyEventResult.ignored;
           },
@@ -1103,16 +1155,20 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _GlassIconButton(
-                    icon: Icons.close_fullscreen_rounded,
+                    icon: _isWindowFullScreen
+                        ? Icons.close_fullscreen_rounded
+                        : Icons.fullscreen_rounded,
                     size: 18,
-                    tooltip: 'Salir de pantalla completa (Esc)',
-                    onTap: _exitFullScreen,
+                    tooltip: _isWindowFullScreen
+                        ? 'Salir de pantalla completa (F11)'
+                        : 'Pantalla completa (F11)',
+                    onTap: _toggleWindowFullScreen,
                   ),
                   const SizedBox(width: 8),
                   _GlassIconButton(
                     icon: Icons.close_rounded,
                     size: 20,
-                    tooltip: 'Cerrar',
+                    tooltip: 'Cerrar (Esc)',
                     onTap: _exitFullScreen,
                   ),
                 ],

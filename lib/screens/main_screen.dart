@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:window_manager/window_manager.dart';
 import 'package:provider/provider.dart';
 import '../services/display_mode_service.dart';
 import '../providers/providers.dart';
@@ -19,6 +20,25 @@ import 'home_screen.dart';
 import 'library_screen.dart';
 import 'search_screen.dart';
 import 'fantasy_screen.dart';
+
+class ToggleFullScreenIntent extends Intent {
+  const ToggleFullScreenIntent();
+}
+
+class _ToggleFullScreenAction extends Action<ToggleFullScreenIntent> {
+  @override
+  Object? invoke(ToggleFullScreenIntent intent, [BuildContext? targetContext]) async {
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      try {
+        final isFs = await windowManager.isFullScreen();
+        await windowManager.setFullScreen(!isFs);
+      } catch (e) {
+        debugPrint('Error toggling full screen: $e');
+      }
+    }
+    return null;
+  }
+}
 
 class PlayPauseIntent extends Intent {
   const PlayPauseIntent();
@@ -833,12 +853,14 @@ class _MainScreenState extends State<MainScreen> {
           const SingleActivator(LogicalKeyboardKey.mediaPause): const PlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const NextTrackIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const PreviousTrackIntent(),
+          const SingleActivator(LogicalKeyboardKey.f11): const ToggleFullScreenIntent(),
         },
         child: Actions(
           actions: <Type, Action<Intent>>{
             PlayPauseIntent: _PlayPauseAction(context),
             NextTrackIntent: _NextTrackAction(context),
             PreviousTrackIntent: _PreviousTrackAction(context),
+            ToggleFullScreenIntent: _ToggleFullScreenAction(),
           },
           child: Focus(
             autofocus: true,
