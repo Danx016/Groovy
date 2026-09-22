@@ -149,21 +149,74 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
     late StreamSubscription<List<int>> responseSubscription;
     late StreamController<List<int>> responseController;
+    IOSink? cacheSink;
+    File? cacheTargetFile;
+    File? cachePartFile;
+    int bytesReceived = 0;
+
+    if (start == 0) {
+      AudioCacheService().getCacheFiles(_videoId).then((pair) {
+        if (pair != null && !pair.$1.existsSync()) {
+          cacheTargetFile = pair.$1;
+          cachePartFile = pair.$2;
+          try {
+            cacheSink = cachePartFile!.openWrite();
+          } catch (_) {
+            cacheSink = null;
+          }
+        }
+      }).catchError((_) {});
+    }
+
     responseController = StreamController<List<int>>(
       sync: true,
       onListen: () {
         responseSubscription = resp.listen(
-          responseController.add,
-          onError: responseController.addError,
-          onDone: () {
+          (chunk) {
+            responseController.add(chunk);
+            bytesReceived += chunk.length;
+            if (cacheSink != null) {
+              try {
+                cacheSink!.add(chunk);
+              } catch (_) {}
+            }
+          },
+          onError: (err, st) {
+            try {
+              cacheSink?.close();
+            } catch (_) {}
+            responseController.addError(err, st);
+          },
+          onDone: () async {
             client.close(force: false);
             responseController.close();
+            if (cacheSink != null) {
+              try {
+                await cacheSink!.flush();
+                await cacheSink!.close();
+                if (cachePartFile != null &&
+                    cacheTargetFile != null &&
+                    cachePartFile!.existsSync() &&
+                    bytesReceived >= 100 * 1024 &&
+                    (sourceLength == null || bytesReceived >= sourceLength)) {
+                  await cachePartFile!.rename(cacheTargetFile!.path);
+                  debugPrint('[AudioCache] ⚡ Tee-cached live stream to disk: ${cacheTargetFile!.path}');
+                }
+              } catch (e) {
+                debugPrint('[AudioCache] Tee-cache finalize note: $e');
+              }
+            }
           },
         );
       },
       onCancel: () async {
         await responseSubscription.cancel();
         client.close(force: true);
+        if (cacheSink != null) {
+          try {
+            await cacheSink!.close();
+          } catch (_) {}
+        }
       },
     );
 
@@ -394,6 +447,18 @@ class YoutubeService {
       return _resolvedVideoIdCache[song.id]!;
     }
 
+    // Check persistent SQLite database first for 0ms lookup
+    final dbResolved = await _db.getResolvedVideoId(song.id);
+    if (dbResolved != null && dbResolved.isNotEmpty) {
+      _resolvedVideoIdCache[song.id] = dbResolved;
+      return dbResolved;
+    }
+
+    void cacheAndPersist(String id) {
+      _resolvedVideoIdCache[song.id] = id;
+      unawaited(_db.saveResolvedVideoId(song.id, id));
+    }
+
     try {
       // 1. Clean title and artist to strip suffixes like (Remastered...), [Official Audio], etc.
       String cleanTitle = song.title
@@ -413,7 +478,7 @@ class YoutubeService {
       for (final item in musicList) {
         final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
         if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
-          _resolvedVideoIdCache[song.id] = id;
+          cacheAndPersist(id);
           return id;
         }
       }
@@ -421,7 +486,7 @@ class YoutubeService {
       for (final item in ytList) {
         final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
         if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
-          _resolvedVideoIdCache[song.id] = id;
+          cacheAndPersist(id);
           return id;
         }
       }
@@ -436,7 +501,7 @@ class YoutubeService {
           for (final item in list) {
             final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
             if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
-              _resolvedVideoIdCache[song.id] = id;
+              cacheAndPersist(id);
               return id;
             }
           }
@@ -449,7 +514,7 @@ class YoutubeService {
         for (final item in directList) {
           final id = (item['id'] as String? ?? '').replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
           if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
-            _resolvedVideoIdCache[song.id] = id;
+            cacheAndPersist(id);
             return id;
           }
         }
@@ -505,12 +570,6 @@ class YoutubeService {
         tag: song.id,
       );
     }
-
-    // Trigger background caching so subsequent plays of this song will be cached.
-    // Delayed slightly so it does not contest initial stream playback buffering and bandwidth.
-    Future.delayed(const Duration(seconds: 3), () {
-      AudioCacheService().preloadSong(song, this).catchError((_) => null);
-    });
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Desktop: always route through our local proxy so that the correct

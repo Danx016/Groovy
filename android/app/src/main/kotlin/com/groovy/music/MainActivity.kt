@@ -116,6 +116,13 @@ class MainActivity : AudioServiceFragmentActivity() {
             if (!Python.isStarted()) {
                 Python.start(AndroidPlatform(this))
             }
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    val py = Python.getInstance()
+                    val helper = py.getModule("ytdlp_helper")
+                    helper.callAttr("warmup")
+                } catch (_: Exception) {}
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }

@@ -18,7 +18,7 @@ import '../utils/album_sanitizer.dart';
 /// millions of rows can be written without spikes in memory usage.
 class LibraryDatabaseService {
   static const String _dbName = 'groovy_library.db';
-  static const int _dbVersion = 2; // bumped from 1 after schema changes
+  static const int _dbVersion = 3; // bumped from 2 for resolved_video_ids table
   static const int _batchSize = 1000;
 
   Database? _db;
@@ -82,9 +82,27 @@ class LibraryDatabaseService {
             'ALTER TABLE songs ADD COLUMN userRating INTEGER');
       } catch (_) {}
     }
+    if (oldVersion < 3) {
+      try {
+        await db.execute('''
+          CREATE TABLE IF NOT EXISTS resolved_video_ids (
+            original_id TEXT PRIMARY KEY,
+            youtube_id TEXT NOT NULL,
+            resolved_at INTEGER NOT NULL
+          )
+        ''');
+      } catch (_) {}
+    }
   }
 
   Future<void> _createSchema(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS resolved_video_ids (
+        original_id TEXT PRIMARY KEY,
+        youtube_id TEXT NOT NULL,
+        resolved_at INTEGER NOT NULL
+      )
+    ''');
     await db.execute('''
       CREATE TABLE IF NOT EXISTS songs (
         id TEXT PRIMARY KEY,
@@ -866,5 +884,39 @@ class LibraryDatabaseService {
       coverArt: m['coverArt'] as String?,
       songs: songList,
     );
+  }
+
+  // ── Video ID Resolution Cache ──────────────────────────────────────────
+
+  Future<String?> getResolvedVideoId(String originalId) async {
+    try {
+      final db = await database;
+      final rows = await db.query(
+        'resolved_video_ids',
+        columns: ['youtube_id'],
+        where: 'original_id = ?',
+        whereArgs: [originalId],
+        limit: 1,
+      );
+      if (rows.isNotEmpty) {
+        return rows.first['youtube_id'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> saveResolvedVideoId(String originalId, String youtubeId) async {
+    try {
+      final db = await database;
+      await db.insert(
+        'resolved_video_ids',
+        {
+          'original_id': originalId,
+          'youtube_id': youtubeId,
+          'resolved_at': DateTime.now().millisecondsSinceEpoch,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } catch (_) {}
   }
 }

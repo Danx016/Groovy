@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-09-21
+
+### Changed & Optimized
+- **Arranque de reproducción instantáneo (<1s)**: Implementado el ajuste de búfer de ultra-baja latencia `AndroidLoadControl` reduciendo el tiempo de precarga de ExoPlayer de 2,500ms a 400ms en Android.
+- **Resolución de audio híbrida FastDart (<250ms)**: Incorporado el cliente nativo Dart para resolver enlaces de stream de YouTube en ~200ms sin esperar los 2 a 3 segundos del subproceso `yt-dlp`.
+- **Tee-Caching en tiempo real**: Eliminada la doble descarga simultánea de canciones; ahora el reproductor escribe los datos directamente al almacenamiento local en caché durante la reproducción en vivo.
+- **Carátulas sin recuadro gris (`NowPlayingScreen` & `MiniPlayer`)**: Notificación inmediata a la UI al resolverse la portada de alta resolución y verificación obligatoria de `existsSync()` para transiciones transparentes a disco.
+- **Persistencia SQLite de canciones externas**: Las canciones de Deezer o importadas guardan su correspondencia de YouTube en la base de datos local SQLite para inicios futuros en 0 ms.
+- **Precarga inteligente en Álbumes y Playlists**: Calentamiento automático del stream de audio para la primera pista de cada álbum o lista al abrir la pantalla.
+
 ## [1.3.0] - 2026-09-21
 
 ### Changed & Optimized

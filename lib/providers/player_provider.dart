@@ -1117,7 +1117,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     if (song.isLocal) {
       _resolvedArtworkUrl = Uri.file(song.coverArt!).toString();
-      if (_currentSong?.id == song.id) _updateAndroidAuto();
+      if (_currentSong?.id == song.id) {
+        _updateAndroidAuto();
+        notifyListeners();
+      }
       return;
     }
 
@@ -1126,7 +1129,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final localPath = _offlineService.getLocalCoverArtPath(song.id);
     if (localPath != null) {
       _resolvedArtworkUrl = Uri.file(localPath).toString();
-      if (_currentSong?.id == song.id) _updateAndroidAuto();
+      if (_currentSong?.id == song.id) {
+        _updateAndroidAuto();
+        notifyListeners();
+      }
       return;
     }
 
@@ -1136,7 +1142,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         : _youtubeService.getCoverArtUrl(coverArtId, size: 800);
 
     _resolvedArtworkUrl = directUrl;
-    if (_currentSong?.id == song.id) _updateAndroidAuto();
+    if (_currentSong?.id == song.id) {
+      _updateAndroidAuto();
+      notifyListeners();
+    }
 
     // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
     final songId = song.id;
@@ -1145,16 +1154,18 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
     }
 
-    // Cache the image file locally so Android notification / lock screen loads it instantly from disk!
-    try {
-      final file = await DefaultCacheManager().getSingleFile(directUrl);
-      if (file.existsSync() && _currentSong?.id == song.id) {
-        _resolvedArtworkUrl = Uri.file(file.path).toString();
-        _updateAndroidAuto();
-      }
-    } catch (e) {
-      debugPrint('[Artwork] Cache file download note: $e');
-    }
+    // Cache the image file locally in background so Android notification / lock screen loads it from disk without blocking!
+    unawaited(
+      DefaultCacheManager().getSingleFile(directUrl).then((file) {
+        if (file.existsSync() && _currentSong?.id == songId) {
+          _resolvedArtworkUrl = Uri.file(file.path).toString();
+          _updateAndroidAuto();
+          notifyListeners();
+        }
+      }).catchError((e) {
+        debugPrint('[Artwork] Cache file download note: $e');
+      }),
+    );
   }
 
   void _updateAndroidAuto() {
@@ -1364,7 +1375,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // 3. Preload cover artwork into Flutter image cache
     if (nextSong.coverArt != null) {
       final coverUrl =
-          _youtubeService.getCoverArtUrl(nextSong.coverArt, size: 300);
+          _youtubeService.getCoverArtUrl(nextSong.coverArt, size: 800);
       if (coverUrl.isNotEmpty) {
         try {
           CachedNetworkImageProvider(coverUrl).resolve(ImageConfiguration.empty);
@@ -2172,6 +2183,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     _saveQueueState();
 
+    // Fast-start: immediately launch background stream resolution for YouTube IDs
+    // so network and extraction run in parallel while Flutter stops previous audio and prepares playback
+    if (song.isLocal != true) {
+      final cleanId = song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+      if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+        YtDlpService().warmUpStreamCache(cleanId);
+      }
+    }
+
     // Immediately report live playback presence to backend
     _startTelemetryHeartbeat();
     _sendTelemetryHeartbeat(overridePlaying: true);
@@ -2192,6 +2212,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         try {
           final resolvedYtId = await _youtubeService.resolveVideoIdForSong(song);
           if (resolvedYtId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(resolvedYtId)) {
+            YtDlpService().warmUpStreamCache(resolvedYtId);
             final updatedSong = song.copyWith(
               id: resolvedYtId,
               coverArt: (song.coverArt == null || song.coverArt!.isEmpty) ? resolvedYtId : song.coverArt,
@@ -2291,10 +2312,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (youtubeSource != null) {
           _concatenatingSource = null;
+          unawaited(_ensureAudioFocus(() async {}));
+          unawaited(_applyReplayGain(song));
           await _audioPlayer.setAudioSource(youtubeSource, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
-          await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _audioPlayer.play();
           _isPlaying = true;
           _isLoading = false;
           notifyListeners();
@@ -2312,10 +2334,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             }
           }
           if (currentGen != _playGeneration) return;
+          unawaited(_ensureAudioFocus(() async {}));
+          unawaited(_applyReplayGain(song));
           await _audioPlayer.setUrl(playUrl, initialPosition: initialPosition ?? Duration.zero);
           if (currentGen != _playGeneration) return;
-          await _applyReplayGain(song);
-          await _ensureAudioFocus(() => _audioPlayer.play());
+          await _audioPlayer.play();
         } else if (_gaplessEnabled) {
           try {
             await _buildAndSetConcatenatingSource(
@@ -2827,6 +2850,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } while (next == _currentIndex);
       _currentIndex = next;
       _currentSong = _queue[next];
+      if (_currentSong != null && _currentSong!.isLocal != true) {
+        final cleanId = _currentSong!.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+          YtDlpService().warmUpStreamCache(cleanId);
+        }
+      }
       _position = Duration.zero;
       _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
       _isLoading = true;
@@ -2844,6 +2873,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final nextIndex = _currentIndex + 1;
       _currentIndex = nextIndex;
       _currentSong = _queue[nextIndex];
+      if (_currentSong != null && _currentSong!.isLocal != true) {
+        final cleanId = _currentSong!.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+          YtDlpService().warmUpStreamCache(cleanId);
+        }
+      }
       _position = Duration.zero;
       _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
       _isLoading = true;
@@ -2980,6 +3015,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (prev != -1) {
         _currentIndex = prev;
         _currentSong = _queue[prev];
+        if (_currentSong != null && _currentSong!.isLocal != true) {
+          final cleanId = _currentSong!.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+            YtDlpService().warmUpStreamCache(cleanId);
+          }
+        }
         _position = Duration.zero;
         _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
         _isLoading = true;
@@ -3000,6 +3041,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final prevIndex = _currentIndex - 1;
       _currentIndex = prevIndex;
       _currentSong = _queue[prevIndex];
+      if (_currentSong != null && _currentSong!.isLocal != true) {
+        final cleanId = _currentSong!.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+          YtDlpService().warmUpStreamCache(cleanId);
+        }
+      }
       _position = Duration.zero;
       _duration = _currentSong!.duration != null ? Duration(seconds: _currentSong!.duration!) : Duration.zero;
       _isLoading = true;

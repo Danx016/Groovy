@@ -37,9 +37,25 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
   static bool get _ownsFocusNatively =>
       !kIsWeb && (Platform.isAndroid || Platform.isWindows || Platform.isLinux);
 
+  static AudioLoadConfiguration get _lowLatencyAudioLoadConfiguration =>
+      const AudioLoadConfiguration(
+        androidLoadControl: AndroidLoadControl(
+          minBufferDuration: Duration(seconds: 15),
+          maxBufferDuration: Duration(seconds: 30),
+          bufferForPlaybackDuration: Duration(milliseconds: 400),
+          bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
+          prioritizeTimeOverSizeThresholds: true,
+        ),
+        darwinLoadControl: DarwinLoadControl(
+          automaticallyWaitsToMinimizeStalling: false,
+          preferredForwardBufferDuration: Duration(seconds: 10),
+        ),
+      );
+
   final AudioPlayer _player = AudioPlayer(
     handleAudioSessionActivation: !_ownsFocusNatively,
     handleInterruptions: !_ownsFocusNatively,
+    audioLoadConfiguration: _lowLatencyAudioLoadConfiguration,
   );
   static const _pitchChannel = MethodChannel('com.groovy.music/pitch');
 

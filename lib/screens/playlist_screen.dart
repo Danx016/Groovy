@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/youtube_service.dart';
+import '../services/ytdlp_service.dart';
 import '../services/offline_service.dart';
 import '../services/favorite_playlists_service.dart';
 import '../theme/app_theme.dart';
@@ -77,6 +78,13 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
           _isLoading = false;
         });
         _updateDownloadState();
+        if (playlist.songs != null && playlist.songs!.isNotEmpty && playlist.songs!.first.isLocal != true) {
+          final firstSong = playlist.songs!.first;
+          final cleanId = firstSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+            YtDlpService().warmUpStreamCache(cleanId);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {

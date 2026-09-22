@@ -82,28 +82,45 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return const AssetImage('assets/default_cover.png');
     }
 
-    // Check if PlayerProvider resolved an artwork URL (from disk cache)
+    final raw = song.coverArt;
+    final coverUrl = (raw != null && raw.isNotEmpty)
+        ? youtubeService.getCoverArtUrl(raw, size: 800)
+        : '';
+
+    // Check if PlayerProvider resolved an artwork URL (from disk cache or directUrl)
     final resolvedUrl = _playerProvider?.resolvedArtworkUrl;
     if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
       if (_isLocalFilePath(resolvedUrl)) {
-        return FileImage(File(resolvedUrl.replaceFirst('file://', '')));
+        final filePath = resolvedUrl.replaceFirst('file://', '');
+        final file = File(filePath);
+        if (file.existsSync()) {
+          return FileImage(file);
+        }
+      } else {
+        return CachedNetworkImageProvider(resolvedUrl);
       }
-      return CachedNetworkImageProvider(resolvedUrl);
     }
 
-    if (song.coverArt == null || song.coverArt!.isEmpty) {
+    if (raw == null || raw.isEmpty) {
       return const AssetImage('assets/default_cover.png');
     }
-    final raw = song.coverArt!;
+
     if (song.isLocal || _isLocalFilePath(raw)) {
-      return FileImage(File(raw));
+      final localFile = File(raw);
+      if (localFile.existsSync()) {
+        return FileImage(localFile);
+      }
     }
-    final coverUrl = youtubeService.getCoverArtUrl(raw, size: 800);
-    if (_isLocalFilePath(coverUrl)) {
-      return FileImage(File(coverUrl));
-    }
+
     if (coverUrl.isNotEmpty) {
-      return CachedNetworkImageProvider(coverUrl);
+      if (_isLocalFilePath(coverUrl)) {
+        final file = File(coverUrl);
+        if (file.existsSync()) {
+          return FileImage(file);
+        }
+      } else {
+        return CachedNetworkImageProvider(coverUrl);
+      }
     }
     return const AssetImage('assets/default_cover.png');
   }

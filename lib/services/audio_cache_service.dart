@@ -90,6 +90,19 @@ class AudioCacheService {
     return null;
   }
 
+  /// Returns target cache file and part file for a song to enable live tee-caching.
+  Future<(File targetFile, File partFile)?> getCacheFiles(String songId) async {
+    try {
+      if (!_cacheSettings.getMusicCacheEnabled()) return null;
+      final dirPath = await _ensureCacheDir();
+      final targetFile = File('$dirPath/${_filenameForSong(songId)}');
+      final partFile = File('$dirPath/${_filenameForSong(songId)}.part');
+      return (targetFile, partFile);
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Preloads and caches the audio stream for [song] in the background.
   ///
   /// If already cached or downloaded in [OfflineService], returns immediately.

@@ -1,5 +1,6 @@
 import json
 import re
+import threading
 import concurrent.futures
 import yt_dlp
 
@@ -12,45 +13,72 @@ def _upgrade_thumbnail(url):
     url = url.replace('/hqdefault.jpg', '/sddefault.jpg')
     return url
 
+_stream_ydl = None
+_stream_lock = threading.Lock()
+
+def _get_stream_ydl():
+    global _stream_ydl
+    if _stream_ydl is None:
+        with _stream_lock:
+            if _stream_ydl is None:
+                ydl_opts = {
+                    'format': 'ba/b[acodec!=none]/bestaudio/best',
+                    'quiet': True,
+                    'no_warnings': True,
+                    'nocheckcertificate': True,
+                    'noplaylist': True,
+                    'skip_download': True,
+                    'lazy_extractors': True,
+                    'no_color': True,
+                    'youtube_include_dash_manifest': False,
+                    'youtube_include_hls_manifest': False,
+                    'extractor_args': {
+                        'youtube': {
+                            # Android, Web and Mweb clients: tv_embedded is deprecated by YouTube and iOS formats require GVS PO Tokens
+                            'player_client': ['android', 'web', 'mweb'],
+                            'skip': ['translated_subs', 'comments', 'webpage', 'dash', 'hls']
+                        }
+                    }
+                }
+                _stream_ydl = yt_dlp.YoutubeDL(ydl_opts)
+    return _stream_ydl
+
+def warmup():
+    """Pre-warms the YoutubeDL instance in the background so initial playback doesn't incur startup overhead."""
+    try:
+        _get_stream_ydl()
+    except Exception as e:
+        print(f"[ytdlp_helper] Warmup note: {e}")
+
 def _extract_stream(video_id_or_url):
     target = video_id_or_url if str(video_id_or_url).startswith("http") else f"https://www.youtube.com/watch?v={video_id_or_url}"
-    ydl_opts = {
-        'format': 'ba/b[acodec!=none]/bestaudio/best',
-        'quiet': True,
-        'no_warnings': True,
-        'nocheckcertificate': True,
-        'noplaylist': True,
-        'skip_download': True,
-        'lazy_extractors': True,
-        'no_color': True,
-        'youtube_include_dash_manifest': False,
-        'youtube_include_hls_manifest': False,
-        'extractor_args': {
-            'youtube': {
-                # Android, Web and Mweb clients: tv_embedded is deprecated by YouTube and iOS formats require GVS PO Tokens
-                'player_client': ['android', 'web', 'mweb'],
-                'skip': ['translated_subs', 'comments', 'webpage', 'dash', 'hls']
-            }
-        }
-    }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(target, download=False)
-        url = info.get('url')
-        headers = info.get('http_headers') or {}
-        ext = info.get('ext') or 'mp4'
-        if not url and 'entries' in info:
-            entries = info.get('entries') or []
-            if entries and entries[0]:
-                url = entries[0].get('url')
-                headers = entries[0].get('http_headers') or headers
-                ext = entries[0].get('ext') or ext
+    ydl = _get_stream_ydl()
+    try:
+        with _stream_lock:
+            info = ydl.extract_info(target, download=False)
+    except Exception:
+        global _stream_ydl
+        _stream_ydl = None
+        ydl = _get_stream_ydl()
+        with _stream_lock:
+            info = ydl.extract_info(target, download=False)
 
-        return {
-            'url': url or '',
-            'headers': headers,
-            'http_headers': headers,
-            'ext': ext,
-        }
+    url = info.get('url')
+    headers = info.get('http_headers') or {}
+    ext = info.get('ext') or 'mp4'
+    if not url and 'entries' in info:
+        entries = info.get('entries') or []
+        if entries and entries[0]:
+            url = entries[0].get('url')
+            headers = entries[0].get('http_headers') or headers
+            ext = entries[0].get('ext') or ext
+
+    return {
+        'url': url or '',
+        'headers': headers,
+        'http_headers': headers,
+        'ext': ext,
+    }
 
 def get_stream_url(video_id_or_url):
     """Extracts direct audio stream URL and matching HTTP headers using yt-dlp."""

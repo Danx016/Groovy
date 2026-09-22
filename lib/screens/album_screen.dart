@@ -283,6 +283,13 @@ class _AlbumScreenState extends State<AlbumScreen> {
           _isLoading = false;
         });
         _updateDownloadState();
+        if (songs.isNotEmpty && songs.first.isLocal != true) {
+          final firstSong = songs.first;
+          final cleanId = firstSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+            YtDlpService().warmUpStreamCache(cleanId);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
