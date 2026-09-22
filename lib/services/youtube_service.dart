@@ -267,8 +267,6 @@ class _DesktopAudioProxyServer {
           req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
         } else if (rangeHeader != null) {
           req.headers.set(HttpHeaders.rangeHeader, rangeHeader);
-        } else {
-          req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-');
         }
         return await req.close();
       }
@@ -292,12 +290,9 @@ class _DesktopAudioProxyServer {
         if (retryResp.statusCode == 403 ||
             retryResp.statusCode == 410 ||
             retryResp.statusCode == 429) {
-          // Still failing — tell MPV to retry in 1s while we already have the new URL cached
           await retryResp.drain().catchError((_) {});
-          debugPrint('[AudioProxy] Still ${ retryResp.statusCode} after refresh for $cleanId — returning 503 Retry-After');
-          request.response.statusCode = 503;
-          request.response.headers.set('Retry-After', '1');
-          request.response.headers.set(HttpHeaders.contentTypeHeader, 'text/plain');
+          debugPrint('[AudioProxy] Still ${retryResp.statusCode} after refresh for $cleanId');
+          request.response.statusCode = retryResp.statusCode;
           await request.response.close();
           return;
         }
@@ -519,16 +514,30 @@ class YoutubeService {
     }
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      // Desktop: always route through our local proxy so that the correct
-      // authentication headers (User-Agent, etc.) are forwarded to GoogleVideo.
-      // Passing the direct URL to just_audio_media_kit causes MPV to receive
-      // it through its own internal proxy which strips the headers → 403/fail.
+      // Desktop: pre-resolve the stream info FIRST so that yt-dlp finishes in Dart
+      // and the stream URL is fully cached in memory. When the player (libmpv) connects
+      // to the local proxy server, the proxy answers immediately (0ms) instead of hanging
+      // the TCP socket for 4-5 seconds while spawning a subprocess.
+      YtStreamInfo? streamInfo;
+      try {
+        streamInfo = await _ytdlp.resolveStreamInfo(videoId);
+      } catch (e) {
+        debugPrint('[YouTube] Desktop pre-resolve stream info error for $videoId: $e');
+      }
+
       await _DesktopAudioProxyServer.instance.ensureStarted();
       final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
       if (proxyUrl.isNotEmpty) {
         debugPrint('[YouTube] Desktop: routing $videoId through local proxy → $proxyUrl');
         return AudioSource.uri(
           Uri.parse(proxyUrl),
+          tag: song.id,
+        );
+      } else if (streamInfo != null && streamInfo.url.isNotEmpty) {
+        debugPrint('[YouTube] Desktop: local proxy unavailable, falling back to direct stream URL');
+        return AudioSource.uri(
+          Uri.parse(streamInfo.url),
+          headers: streamInfo.headers,
           tag: song.id,
         );
       }

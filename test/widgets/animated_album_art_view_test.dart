@@ -71,7 +71,7 @@ void main() {
       expect(find.byType(AnimatedAlbumArtView), findsOneWidget);
     });
 
-    testWidgets('AlbumArtView forwards dominantColor and delegates to AnimatedAlbumArtView', (tester) async {
+    testWidgets('AlbumArtView renders directly with high-performance TweenAnimationBuilder', (tester) async {
       const imageProvider = AssetImage('assets/images/placeholder.png');
 
       await tester.pumpWidget(
@@ -88,7 +88,7 @@ void main() {
       );
 
       expect(find.byType(AlbumArtView), findsOneWidget);
-      expect(find.byType(AnimatedAlbumArtView), findsOneWidget);
+      expect(find.byType(TweenAnimationBuilder<double>), findsOneWidget);
     });
 
     testWidgets('PlayerUiSettingsService toggles animated artwork properly', (tester) async {

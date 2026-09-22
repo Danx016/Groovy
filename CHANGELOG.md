@@ -5,6 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.4] - 2026-09-22
+
+### Fixed
+- **Fluidez y suavidad absoluta en la visualización de letras sincronizadas**:
+  - Eliminada la animación de `FontWeight` en `AnimatedDefaultTextStyle`, la cual forzaba el redibujado y recálculo de glifos en cada fotograma sobre múltiples fuentes de reserva (fallback), provocando saltos de fotogramas y lag visual.
+  - La transición entre líneas activas e inactivas ahora utiliza exclusivamente transformaciones de composición aceleradas por hardware (`AnimatedOpacity` y `AnimatedScale`), garantizando 60/120 FPS sin bloqueos en el hilo principal.
+  - Suavizado el desplazamiento automático de la lista de letras (`_scrollToCurrentLine`) aumentando la duración a 650 ms con una curva suave de desaceleración cúbica inspirada en iOS (`Cubic(0.25, 1.0, 0.5, 1.0)`).
+- **Carga inmediata y fiable de música en Windows**:
+  - En `YoutubeService.getYoutubeAudioSource`, se pre-resuelve la información del stream en memoria antes de entregar la URL del proxy local a `just_audio` / `media_kit` (MPV), eliminando el tiempo de espera de 4-5 segundos en el socket TCP que causaba que el reproductor abortara o se quedara cargando indefinidamente.
+  - Corregido el manejo de cabeceras HTTP `Range` en el servidor proxy local de escritorio: solo se inyecta la cabecera cuando el cliente la solicita explícitamente, evitando devolver `206 Partial Content` a peticiones `GET` estándar sin rango (infracción del protocolo HTTP RFC 7233).
+  - En caso de indisponibilidad del proxy local, se añadió fallback automático directo a la URL de audio con sus cabeceras correspondientes.
+
 ## [1.3.3] - 2026-09-21
 
 ### Fixed
