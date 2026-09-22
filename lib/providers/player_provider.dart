@@ -1111,11 +1111,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _refreshArtworkUrl() async {
     final song = _currentSong;
-    if (song == null || song.coverArt == null) {
+    if (song == null) {
       _resolvedArtworkUrl = null;
       return;
     }
-    if (song.isLocal) {
+    if (song.isLocal && song.coverArt != null) {
       _resolvedArtworkUrl = Uri.file(song.coverArt!).toString();
       if (_currentSong?.id == song.id) {
         _updateAndroidAuto();
@@ -1136,36 +1136,38 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       return;
     }
 
-    final coverArtId = song.coverArt!;
-    final directUrl = (coverArtId.startsWith('http://') || coverArtId.startsWith('https://'))
-        ? coverArtId
-        : _youtubeService.getCoverArtUrl(coverArtId, size: 800);
+    final rawArt = (song.coverArt != null && song.coverArt!.isNotEmpty)
+        ? song.coverArt!
+        : song.id;
+    final directUrl = _youtubeService.getCoverArtUrl(rawArt, size: 800);
 
-    _resolvedArtworkUrl = directUrl;
-    if (_currentSong?.id == song.id) {
-      _updateAndroidAuto();
-      notifyListeners();
+    if (directUrl.isNotEmpty) {
+      _resolvedArtworkUrl = directUrl;
+      if (_currentSong?.id == song.id) {
+        _updateAndroidAuto();
+        notifyListeners();
+      }
+
+      // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
+      final songId = song.id;
+      if (PaletteService.getCachedColors(songId) == null) {
+        final ImageProvider imgProvider = CachedNetworkImageProvider(directUrl);
+        PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
+      }
+
+      // Cache the image file locally in background so Android notification / lock screen loads it from disk without blocking!
+      unawaited(
+        DefaultCacheManager().getSingleFile(directUrl).then((file) {
+          if (file.existsSync() && _currentSong?.id == songId) {
+            _resolvedArtworkUrl = Uri.file(file.path).toString();
+            _updateAndroidAuto();
+            notifyListeners();
+          }
+        }).catchError((e) {
+          debugPrint('[Artwork] Cache file download note: $e');
+        }),
+      );
     }
-
-    // Pre-warm background palette cache immediately in parallel so entering NowPlayingScreen has a 0ms instant cache hit
-    final songId = song.id;
-    if (PaletteService.getCachedColors(songId) == null) {
-      final ImageProvider imgProvider = CachedNetworkImageProvider(directUrl);
-      PaletteService.extractColors(imgProvider, songId).catchError((_) => <Color>[]);
-    }
-
-    // Cache the image file locally in background so Android notification / lock screen loads it from disk without blocking!
-    unawaited(
-      DefaultCacheManager().getSingleFile(directUrl).then((file) {
-        if (file.existsSync() && _currentSong?.id == songId) {
-          _resolvedArtworkUrl = Uri.file(file.path).toString();
-          _updateAndroidAuto();
-          notifyListeners();
-        }
-      }).catchError((e) {
-        debugPrint('[Artwork] Cache file download note: $e');
-      }),
-    );
   }
 
   void _updateAndroidAuto() {

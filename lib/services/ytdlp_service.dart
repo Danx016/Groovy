@@ -134,10 +134,10 @@ class YtDlpService {
   static String _upgradeThumbnail(String? url) {
     if (url == null || url.isEmpty) return '';
     var upgraded = url;
-    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-l90-rj');
-    upgraded = upgraded.replaceAll('/mqdefault.jpg', '/sddefault.jpg');
-    upgraded = upgraded.replaceAll('/default.jpg', '/sddefault.jpg');
-    upgraded = upgraded.replaceAll('/hqdefault.jpg', '/sddefault.jpg');
+    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w800-h800-l90-rj');
+    upgraded = upgraded.replaceAll('/sddefault.jpg', '/hqdefault.jpg');
+    upgraded = upgraded.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
+    upgraded = upgraded.replaceAll('/default.jpg', '/hqdefault.jpg');
     return upgraded;
   }
 
@@ -847,46 +847,6 @@ class YtDlpService {
   }
 
   Future<YtStreamInfo> _doResolveStreamInfo(String cleanId) async {
-    // ── FAST PATH: Pure-Dart Innertube (Android / TV client) ────────────────
-    // Resolves in ~150-250ms without waiting for heavy yt-dlp Python/subprocess.
-    // If it succeeds, returns immediately; if it times out (650ms) or fails, falls
-    // through to yt-dlp.
-    try {
-      final manifest = await _fallbackClient.videos.streamsClient
-          .getManifest(cleanId, ytClients: [
-            yt.YoutubeApiClient.android,
-            yt.YoutubeApiClient.tv,
-          ])
-          .timeout(const Duration(milliseconds: 650));
-      final audioOnly = manifest.audioOnly;
-      if (audioOnly.isNotEmpty) {
-        final best = _selectBestAudioStream(audioOnly);
-        final url = best.url.toString();
-        if (url.isNotEmpty) {
-          final isAndroid = url.contains('&c=ANDROID') || url.contains('c=ANDROID');
-          final isTv = url.contains('&c=TVHTML5') || url.contains('c=TVHTML5');
-          final userAgent = isAndroid
-              ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
-              : isTv
-                  ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
-                  : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
-          final info = YtStreamInfo(
-            url: url,
-            headers: {
-              'User-Agent': userAgent,
-              'Origin': 'https://www.youtube.com',
-              'Referer': 'https://www.youtube.com/',
-            },
-            ext: best.container.name,
-          );
-          _streamInfoCache[cleanId] = info;
-          _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/FastDart] ⚡ Ultra-fast resolved $cleanId in <250ms via native Dart client');
-          return info;
-        }
-      }
-    } catch (_) {}
-
     // ── DESKTOP (Windows / macOS / Linux): yt-dlp subprocess FIRST ──────────
     // Diagnosis confirmed: yt-dlp subprocess gives HTTP 206 for all songs.
     // youtube_explode_dart FastDart sometimes generates URLs that give 403

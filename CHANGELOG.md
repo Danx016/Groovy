@@ -5,6 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-09-21
+
+### Fixed
+- **Solución definitiva al recuadro gris en la carátula**:
+  - Se eliminó la reescritura de miniaturas a `/sddefault.jpg` (la cual arrojaba error HTTP 404 en más del 50% de canciones y videos de YouTube) sustituyéndola por `/hqdefault.jpg` de disponibilidad 100% garantizada en la CDN.
+  - En `NowPlayingScreen`, se corrigió `_resolveImageProvider` para priorizar la portada oficial de alta resolución del tema (`song.coverArt`) evitando descartarla hacia miniaturas inexistentes.
+  - En `AlbumArtView`, se implementó fallback resiliente a la portada por defecto ante fallos de conexión o carga en lugar del recuadro gris vacío.
+  - En `PlayerProvider` y `MiniPlayer`, se agregaron comprobaciones de fallback directo por ID y sincronización de estado.
+- **Solución al bloqueo de reproducción ("canción se queda cargando")**:
+  - En Windows / Desktop, se restauró la prioridad absoluta del subproceso `yt-dlp` en el proxy local de audio, evitando bloqueos por HTTP 403 Forbidden y reintentos 503 infinitos en MPV.
+  - Se removió la escritura concurrente de archivos en el stream en vivo de ExoPlayer / JustAudio para garantizar reproducción fluida sin bloqueos de I/O.
+
 ## [1.3.1] - 2026-09-21
 
 ### Changed & Optimized

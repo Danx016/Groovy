@@ -37,12 +37,19 @@ class AlbumArtView extends StatelessWidget {
             fit: BoxFit.cover,
             gaplessPlayback: true,
             filterQuality: FilterQuality.medium,
-            errorBuilder: (context, error, stackTrace) => Container(
-              color: Colors.white.withValues(alpha: 0.12),
-              child: const Center(
-                child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
-              ),
-            ),
+            errorBuilder: (context, error, stackTrace) {
+              debugPrint('[AlbumArtView] Image error ($error) for tag $tag');
+              return Image.asset(
+                'assets/default_cover.png',
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  child: const Center(
+                    child: Icon(Icons.music_note_rounded, color: Colors.white70, size: 64),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ),

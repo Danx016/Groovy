@@ -19,7 +19,7 @@ void main() {
 
     test('should build cover art URL correctly for YouTube video ID', () {
       final url = service.getCoverArtUrl('dQw4w9WgXcQ', size: 300);
-      expect(url, equals('https://i.ytimg.com/vi/dQw4w9WgXcQ/sddefault.jpg'));
+      expect(url, equals('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg'));
     });
 
     test('should return original URL if already full HTTP URL', () {

@@ -7,10 +7,10 @@ import yt_dlp
 def _upgrade_thumbnail(url):
     if not url:
         return ""
-    url = re.sub(r'=(w\d+-h\d+|s\d+)[^/]*', '=w1200-h1200-l90-rj', url)
-    url = url.replace('/mqdefault.jpg', '/sddefault.jpg')
-    url = url.replace('/default.jpg', '/sddefault.jpg')
-    url = url.replace('/hqdefault.jpg', '/sddefault.jpg')
+    url = re.sub(r'=(w\d+-h\d+|s\d+)[^/]*', '=w800-h800-l90-rj', url)
+    url = url.replace('/sddefault.jpg', '/hqdefault.jpg')
+    url = url.replace('/mqdefault.jpg', '/hqdefault.jpg')
+    url = url.replace('/default.jpg', '/hqdefault.jpg')
     return url
 
 _stream_ydl = None

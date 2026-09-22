@@ -42,9 +42,12 @@ class MiniPlayer extends StatelessWidget {
           }
           if (currentSong != null) {
             final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-            final coverUrl = currentSong.coverArt != null ? youtubeService.getCoverArtUrl(currentSong.coverArt, size: 800) : null;
+            final rawArt = (currentSong.coverArt != null && currentSong.coverArt!.isNotEmpty)
+                ? currentSong.coverArt!
+                : currentSong.id;
+            final coverUrl = youtubeService.getCoverArtUrl(rawArt, size: 800);
             final ImageProvider imageProvider;
-            if (coverUrl != null && coverUrl.isNotEmpty) {
+            if (coverUrl.isNotEmpty) {
               if ((currentSong.isLocal || isLocalFilePath(coverUrl)) && File(coverUrl).existsSync()) {
                 imageProvider = FileImage(File(coverUrl));
               } else {

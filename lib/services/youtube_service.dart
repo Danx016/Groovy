@@ -149,74 +149,21 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
     late StreamSubscription<List<int>> responseSubscription;
     late StreamController<List<int>> responseController;
-    IOSink? cacheSink;
-    File? cacheTargetFile;
-    File? cachePartFile;
-    int bytesReceived = 0;
-
-    if (start == 0) {
-      AudioCacheService().getCacheFiles(_videoId).then((pair) {
-        if (pair != null && !pair.$1.existsSync()) {
-          cacheTargetFile = pair.$1;
-          cachePartFile = pair.$2;
-          try {
-            cacheSink = cachePartFile!.openWrite();
-          } catch (_) {
-            cacheSink = null;
-          }
-        }
-      }).catchError((_) {});
-    }
-
     responseController = StreamController<List<int>>(
       sync: true,
       onListen: () {
         responseSubscription = resp.listen(
-          (chunk) {
-            responseController.add(chunk);
-            bytesReceived += chunk.length;
-            if (cacheSink != null) {
-              try {
-                cacheSink!.add(chunk);
-              } catch (_) {}
-            }
-          },
-          onError: (err, st) {
-            try {
-              cacheSink?.close();
-            } catch (_) {}
-            responseController.addError(err, st);
-          },
-          onDone: () async {
+          responseController.add,
+          onError: responseController.addError,
+          onDone: () {
             client.close(force: false);
             responseController.close();
-            if (cacheSink != null) {
-              try {
-                await cacheSink!.flush();
-                await cacheSink!.close();
-                if (cachePartFile != null &&
-                    cacheTargetFile != null &&
-                    cachePartFile!.existsSync() &&
-                    bytesReceived >= 100 * 1024 &&
-                    (sourceLength == null || bytesReceived >= sourceLength)) {
-                  await cachePartFile!.rename(cacheTargetFile!.path);
-                  debugPrint('[AudioCache] ⚡ Tee-cached live stream to disk: ${cacheTargetFile!.path}');
-                }
-              } catch (e) {
-                debugPrint('[AudioCache] Tee-cache finalize note: $e');
-              }
-            }
           },
         );
       },
       onCancel: () async {
         await responseSubscription.cancel();
         client.close(force: true);
-        if (cacheSink != null) {
-          try {
-            await cacheSink!.close();
-          } catch (_) {}
-        }
       },
     );
 
@@ -642,17 +589,18 @@ class YoutubeService {
     if (id == null || id.isEmpty) return '';
     if (id.startsWith('http://') || id.startsWith('https://')) {
       var url = id;
-      // Upgrade Google User Content / YouTube Music album artwork to 1200x1200px lossless quality
-      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-l90-rj');
-      // Upgrade YouTube thumbnails to standard definition / high resolution
-      url = url.replaceAll('/mqdefault.jpg', '/sddefault.jpg');
-      url = url.replaceAll('/default.jpg', '/sddefault.jpg');
-      url = url.replaceAll('/hqdefault.jpg', '/sddefault.jpg');
+      // Upgrade Google User Content / YouTube Music album artwork to 800x800 quality
+      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w800-h800-l90-rj');
+      // Ensure we use hqdefault.jpg which is guaranteed to exist on YouTube CDN
+      // (sddefault.jpg 404s for many music tracks and video uploads)
+      url = url.replaceAll('/sddefault.jpg', '/hqdefault.jpg');
+      url = url.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
+      url = url.replaceAll('/default.jpg', '/hqdefault.jpg');
       return url;
     }
     final cleanId = id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
     if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
-      return 'https://i.ytimg.com/vi/$cleanId/sddefault.jpg';
+      return 'https://i.ytimg.com/vi/$cleanId/hqdefault.jpg';
     }
     return '';
   }

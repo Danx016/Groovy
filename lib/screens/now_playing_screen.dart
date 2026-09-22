@@ -82,12 +82,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return const AssetImage('assets/default_cover.png');
     }
 
-    final raw = song.coverArt;
-    final coverUrl = (raw != null && raw.isNotEmpty)
-        ? youtubeService.getCoverArtUrl(raw, size: 800)
-        : '';
-
-    // Check if PlayerProvider resolved an artwork URL (from disk cache or directUrl)
+    // 1. Check if PlayerProvider resolved an artwork URL (from disk cache or directUrl)
     final resolvedUrl = _playerProvider?.resolvedArtworkUrl;
     if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
       if (_isLocalFilePath(resolvedUrl)) {
@@ -101,9 +96,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
     }
 
-    if (raw == null || raw.isEmpty) {
-      return const AssetImage('assets/default_cover.png');
-    }
+    final raw = (song.coverArt != null && song.coverArt!.isNotEmpty)
+        ? song.coverArt!
+        : song.id;
 
     if (song.isLocal || _isLocalFilePath(raw)) {
       final localFile = File(raw);
@@ -112,16 +107,21 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
     }
 
-    if (coverUrl.isNotEmpty) {
-      if (_isLocalFilePath(coverUrl)) {
-        final file = File(coverUrl);
-        if (file.existsSync()) {
-          return FileImage(file);
-        }
-      } else {
-        return CachedNetworkImageProvider(coverUrl);
-      }
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      final upgraded = youtubeService.getCoverArtUrl(raw, size: 800);
+      return CachedNetworkImageProvider(upgraded.isNotEmpty ? upgraded : raw);
     }
+
+    final fallbackCover = youtubeService.getCoverArtUrl(raw, size: 800);
+    if (fallbackCover.isNotEmpty) {
+      return CachedNetworkImageProvider(fallbackCover);
+    }
+
+    final songIdCover = youtubeService.getCoverArtUrl(song.id, size: 800);
+    if (songIdCover.isNotEmpty) {
+      return CachedNetworkImageProvider(songIdCover);
+    }
+
     return const AssetImage('assets/default_cover.png');
   }
 
