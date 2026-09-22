@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.5] - 2026-09-22
+
+### Fixed
+- **Solución definitiva al problema de reproducción en Windows (eliminación de proxy loopback)**:
+  - Se eliminó el servidor proxy local artificial (`_DesktopAudioProxyServer`), el cual causaba desconexiones de socket, bloqueos por firewall/antivirus en puertos aleatorios locales y errores de demuxer de FFmpeg (`mov,mp4,m4a,3gp,3g2,mj2: partial file`) al cerrar las conexiones HTTP prematuramente.
+  - En Windows, macOS y Linux, el reproductor `libmpv` (vía `just_audio_media_kit`) ahora recibe directamente la URL de Google Video acompañada de sus cabeceras HTTP de autenticación (`User-Agent`, `Accept`, etc.).
+  - `libmpv` utiliza su propio motor nativo en C/C++ para transmitir en tiempo real, manejar cabeceras HTTP Range continuas y buscar (seek) sin intermediarios locales, permitiendo que las canciones comiencen a reproducirse instantáneamente.
+
 ## [1.3.4] - 2026-09-22
 
 ### Fixed

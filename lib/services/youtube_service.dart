@@ -177,195 +177,12 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   }
 }
 
-class _DesktopAudioProxyServer {
-  static final _DesktopAudioProxyServer instance =
-      _DesktopAudioProxyServer._internal();
-  _DesktopAudioProxyServer._internal();
-
-  HttpServer? _server;
-  int? _port;
-  final YtDlpService _ytdlp = YtDlpService();
-  HttpClient? _sharedClient;
-
-  HttpClient get _client {
-    _sharedClient ??= HttpClient()
-      ..idleTimeout = const Duration(seconds: 30)
-      ..connectionTimeout = const Duration(seconds: 10);
-    return _sharedClient!;
-  }
-
-  Future<void> ensureStarted() async {
-    if (_server != null) return;
-    try {
-      _server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
-      _port = _server!.port;
-      debugPrint('[AudioProxy] Local proxy server running on http://127.0.0.1:$_port');
-      _server!.listen(_handleRequest, onError: (e) {
-        debugPrint('[AudioProxy] Server error: $e');
-      });
-    } catch (e) {
-      debugPrint('[AudioProxy] Failed to start local proxy: $e');
-    }
-  }
-
-  Future<String> getProxyUrl(String videoId) async {
-    await ensureStarted();
-    if (_port != null) {
-      return 'http://127.0.0.1:$_port/stream?id=$videoId';
-    }
-    return '';
-  }
-
-  Future<void> _handleRequest(HttpRequest request) async {
-    if (request.uri.path != '/stream') {
-      request.response.statusCode = HttpStatus.notFound;
-      await request.response.close();
-      return;
-    }
-
-    final videoId = request.uri.queryParameters['id'] ?? '';
-    if (videoId.isEmpty) {
-      request.response.statusCode = HttpStatus.badRequest;
-      await request.response.close();
-      return;
-    }
-
-    final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
-
-    try {
-      var streamInfo = await _ytdlp.resolveStreamInfo(cleanId);
-      if (streamInfo.url.isEmpty) {
-        request.response.statusCode = HttpStatus.notFound;
-        await request.response.close();
-        return;
-      }
-
-      final rangeHeader = request.headers.value(HttpHeaders.rangeHeader);
-
-      Future<HttpClientResponse> fetchUpstream(String url, Map<String, String> headers) async {
-        final req = await _client.getUrl(Uri.parse(url));
-        bool hasUserAgent = false;
-        headers.forEach((key, value) {
-          final lower = key.toLowerCase();
-          if (lower == 'user-agent') hasUserAgent = true;
-          if (lower != 'host' &&
-              lower != 'content-length' &&
-              lower != 'range' &&
-              lower != 'accept-encoding' &&
-              lower != 'connection') {
-            req.headers.set(key, value);
-          }
-        });
-        if (!hasUserAgent) {
-          req.headers.set(
-            HttpHeaders.userAgentHeader,
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          );
-        }
-        req.headers.set(HttpHeaders.acceptHeader, '*/*');
-        if (request.method == 'HEAD') {
-          req.headers.set(HttpHeaders.rangeHeader, 'bytes=0-0');
-        } else if (rangeHeader != null) {
-          req.headers.set(HttpHeaders.rangeHeader, rangeHeader);
-        }
-        return await req.close();
-      }
-
-      var upstreamResp = await fetchUpstream(streamInfo.url, streamInfo.headers);
-      debugPrint('[AudioProxy] Upstream status for $cleanId: ${upstreamResp.statusCode}');
-
-      if (upstreamResp.statusCode == 403 ||
-          upstreamResp.statusCode == 410 ||
-          upstreamResp.statusCode == 429) {
-        debugPrint('[AudioProxy] Stream rejected (${upstreamResp.statusCode}) for $cleanId, refreshing...');
-        await upstreamResp.drain().catchError((_) {});
-
-        // Refresh cache in background immediately so next request is instant
-        _ytdlp.invalidateCache(cleanId);
-        final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
-        debugPrint('[AudioProxy] Refreshed URL for $cleanId, retrying upstream...');
-        final retryResp = await fetchUpstream(freshInfo.url, freshInfo.headers);
-        debugPrint('[AudioProxy] Retry upstream status for $cleanId: ${retryResp.statusCode}');
-
-        if (retryResp.statusCode == 403 ||
-            retryResp.statusCode == 410 ||
-            retryResp.statusCode == 429) {
-          await retryResp.drain().catchError((_) {});
-          debugPrint('[AudioProxy] Still ${retryResp.statusCode} after refresh for $cleanId');
-          request.response.statusCode = retryResp.statusCode;
-          await request.response.close();
-          return;
-        }
-
-        streamInfo = freshInfo;
-        upstreamResp = retryResp;
-      }
-
-      // Forward upstream HTTP status code directly (206 Partial Content is critical
-      // for media streaming engines like MPV/MediaKit so they stream continuously
-      // and do not hit premature EOF at the 10MB chunk boundary)
-      request.response.statusCode = upstreamResp.statusCode;
-      request.response.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
-
-      final isWebm = (streamInfo.ext == 'webm' ||
-          streamInfo.ext == 'opus' ||
-          streamInfo.url.contains('mime=audio%2Fwebm') ||
-          streamInfo.url.contains('mime=audio/webm'));
-      final defaultType = isWebm ? 'audio/webm' : 'audio/mp4';
-      final contentType =
-          upstreamResp.headers.contentType?.mimeType ?? defaultType;
-      request.response.headers.set(HttpHeaders.contentTypeHeader, contentType);
-
-      final contentRange =
-          upstreamResp.headers.value(HttpHeaders.contentRangeHeader);
-      if (contentRange != null) {
-        request.response.headers.set(HttpHeaders.contentRangeHeader, contentRange);
-      }
-
-      if (upstreamResp.contentLength >= 0) {
-        request.response.contentLength = upstreamResp.contentLength;
-      }
-
-      if (request.method == 'HEAD') {
-        await upstreamResp.drain().catchError((_) {});
-        await request.response.close();
-        return;
-      }
-
-      // Stream continuous audio data to player without premature disconnection
-      try {
-        await request.response.addStream(upstreamResp);
-        await request.response.close();
-      } catch (e) {
-        // Normal when client seeks or closes socket after buffer
-      }
-    } catch (e) {
-      // Normal when seeking or skipping to another song
-      debugPrint('[AudioProxy] Stream finished or connection closed for $cleanId: $e');
-      try {
-        await request.response.close();
-      } catch (_) {}
-    }
-  }
-
-  void dispose() {
-    _server?.close(force: true);
-    _server = null;
-    _port = null;
-    _sharedClient?.close(force: true);
-    _sharedClient = null;
-  }
-}
-
 class YoutubeService {
   final YtDlpService _ytdlp = YtDlpService();
   final LibraryDatabaseService _db = LibraryDatabaseService();
 
   void dispose() {
     _ytdlp.dispose();
-    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      _DesktopAudioProxyServer.instance.dispose();
-    }
   }
 
   bool get isYoutube => true;
@@ -514,32 +331,22 @@ class YoutubeService {
     }
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      // Desktop: pre-resolve the stream info FIRST so that yt-dlp finishes in Dart
-      // and the stream URL is fully cached in memory. When the player (libmpv) connects
-      // to the local proxy server, the proxy answers immediately (0ms) instead of hanging
-      // the TCP socket for 4-5 seconds while spawning a subprocess.
-      YtStreamInfo? streamInfo;
+      // Desktop (Windows, Linux, macOS) uses libmpv via just_audio_media_kit.
+      // Passing the stream URL with authentication headers directly to AudioSource.uri
+      // allows libmpv's native C++ FFmpeg demuxer to stream directly from Google CDN
+      // with full HTTP range support, avoiding loopback socket timeouts and demuxer truncation.
       try {
-        streamInfo = await _ytdlp.resolveStreamInfo(videoId);
+        final streamInfo = await _ytdlp.resolveStreamInfo(videoId);
+        if (streamInfo.url.isNotEmpty) {
+          debugPrint('[YouTube] Desktop: streaming directly via libmpv with headers for $videoId');
+          return AudioSource.uri(
+            Uri.parse(streamInfo.url),
+            headers: streamInfo.headers,
+            tag: song.id,
+          );
+        }
       } catch (e) {
-        debugPrint('[YouTube] Desktop pre-resolve stream info error for $videoId: $e');
-      }
-
-      await _DesktopAudioProxyServer.instance.ensureStarted();
-      final proxyUrl = await _DesktopAudioProxyServer.instance.getProxyUrl(videoId);
-      if (proxyUrl.isNotEmpty) {
-        debugPrint('[YouTube] Desktop: routing $videoId through local proxy → $proxyUrl');
-        return AudioSource.uri(
-          Uri.parse(proxyUrl),
-          tag: song.id,
-        );
-      } else if (streamInfo != null && streamInfo.url.isNotEmpty) {
-        debugPrint('[YouTube] Desktop: local proxy unavailable, falling back to direct stream URL');
-        return AudioSource.uri(
-          Uri.parse(streamInfo.url),
-          headers: streamInfo.headers,
-          tag: song.id,
-        );
+        debugPrint('[YouTube] Desktop stream resolve error for $videoId: $e');
       }
     }
     return buildAudioSource(videoId);

@@ -15,11 +15,9 @@ void main() {
   setUpAll(() => HttpOverrides.global = _RealHttpOverrides());
 
   final ytdlp = YtDlpService();
-  final proxy = _DesktopAudioProxyServer.instance;
 
   tearDownAll(() {
     ytdlp.dispose();
-    proxy.dispose();
   });
 
   // ── Test matrix: diverse genres, regions and client types ─────────────────
@@ -70,18 +68,17 @@ void main() {
           return;
         }
 
-        // 2. Hit the URL directly (simulates what proxy does)
-        await proxy.ensureStarted();
-        final proxyUrl = await proxy.getProxyUrl(videoId);
-        print('  🌐 Proxy URL: $proxyUrl');
-
+        // 2. Hit the direct stream URL with headers
         final client = HttpClient();
         try {
-          final req = await client.getUrl(Uri.parse(proxyUrl));
+          final req = await client.getUrl(Uri.parse(info.url));
+          info.headers.forEach((k, v) {
+            req.headers.set(k, v);
+          });
           req.headers.set('Range', 'bytes=0-65535');
           final resp = await req.close().timeout(const Duration(seconds: 15));
 
-          print('  📡 HTTP Status via proxy: ${resp.statusCode}');
+          print('  📡 HTTP Status direct: ${resp.statusCode}');
 
           if (resp.statusCode == 206 || resp.statusCode == 200) {
             final bytes = <int>[];
@@ -111,14 +108,4 @@ String _clientParam(String url) {
   if (url.contains('c=IOS')) return 'IOS';
   if (url.contains('c=WEB')) return 'WEB';
   return 'unknown';
-}
-
-// Expose internals for testing
-extension _ProxyExpose on _DesktopAudioProxyServer {
-  Future<void> ensureStarted() async {
-    await _DesktopAudioProxyServer.instance.ensureStarted();
-  }
-  Future<String> getProxyUrl(String id) =>
-      _DesktopAudioProxyServer.instance.getProxyUrl(id);
-  void dispose() => _DesktopAudioProxyServer.instance.dispose();
 }
