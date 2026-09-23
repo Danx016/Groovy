@@ -78,6 +78,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
+  const [dataError, setDataError] = useState(null);
 
   const isAuthorized = isAdmin || currentUser?.email === 'danilorodelo355@gmail.com';
 
@@ -105,14 +106,15 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     if (!isAuthorized) return;
     try {
       const [liveRes, sessionsRes] = await Promise.all([
-        adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] })),
-        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
+        adminApi.getLivePlayback(),
+        adminApi.getSessions(100),
       ]);
       setLiveListeners(liveRes?.listeners || []);
       setConnectedUsers(liveRes?.connectedUsers || []);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
     } catch (e) {
-      console.warn('Error fetching live playback / sessions:', e);
+      console.error('Error fetching live playback / sessions:', e);
+      setDataError(`No se pudo actualizar la actividad en vivo: ${e.message}`);
     }
   }, [isAuthorized]);
 
@@ -120,12 +122,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     if (!isAuthorized) return;
     setIsLoading(true);
     setActionMessage(null);
+    setDataError(null);
     try {
       const [metricsRes, usersRes, sessionsRes, liveRes] = await Promise.all([
-        adminApi.getMetrics().catch(() => ({ metrics: null })),
-        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
-        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
-        adminApi.getLivePlayback().catch(() => ({ listeners: [], connectedUsers: [] })),
+        adminApi.getMetrics(),
+        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }),
+        adminApi.getSessions(100),
+        adminApi.getLivePlayback(),
       ]);
 
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
@@ -135,7 +138,12 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       setConnectedUsers(liveRes?.connectedUsers || []);
     } catch (err) {
       console.error('Error fetching admin data:', err);
-      setActionMessage({ type: 'error', text: 'Error al conectar con la base de datos: ' + err.message });
+      setDataError(`No se pudieron cargar los datos reales del servidor: ${err.message}`);
+      setMetrics(null);
+      setUsers([]);
+      setSessions([]);
+      setLiveListeners([]);
+      setConnectedUsers([]);
     } finally {
       setIsLoading(false);
     }
@@ -916,6 +924,15 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               </button>
             </div>
           )}
+          {dataError && (
+            <div style={{
+              padding: '12px 18px', borderRadius: '10px', marginBottom: '24px',
+              background: 'rgba(255,59,48,0.12)', border: '0.5px solid rgba(255,59,48,0.3)',
+              color: '#FF8A80', fontSize: '13px',
+            }}>
+              {dataError}
+            </div>
+          )}
 
           {/* GROOVY METRICS STRIP (Expanded with Listening Time & Live Listeners) */}
           <div style={{
@@ -965,7 +982,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 {formatListeningTime(metrics?.totalListenSeconds ?? 0)}
               </div>
               <p style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', fontWeight: 600 }}>
-                {formatListeningTime(metrics?.totalSongDurationSeconds || 170000)} en catálogo
+                {formatListeningTime(metrics?.totalSongDurationSeconds ?? 0)} en reproducciones registradas
               </p>
             </div>
 

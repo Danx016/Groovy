@@ -58,6 +58,7 @@ export const AdminView = () => {
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
+  const [dataError, setDataError] = useState(null);
 
   const handleAdminLogin = async (e) => {
     e.preventDefault();
@@ -79,17 +80,22 @@ export const AdminView = () => {
     }
     setIsLoading(true);
     setActionMessage(null);
+    setDataError(null);
     try {
       const [metricsRes, usersRes, sessionsRes] = await Promise.all([
-        adminApi.getMetrics().catch(() => ({ metrics: null })),
-        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }).catch(() => ({ users: [] })),
-        adminApi.getSessions(100).catch(() => ({ sessions: [] })),
+        adminApi.getMetrics(),
+        adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }),
+        adminApi.getSessions(100),
       ]);
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
       if (usersRes?.users) setUsers(usersRes.users);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
     } catch (err) {
       console.error('Error fetching admin data:', err);
+      setDataError(`No se pudieron cargar los datos reales del servidor: ${err.message}`);
+      setMetrics(null);
+      setUsers([]);
+      setSessions([]);
     } finally {
       setIsLoading(false);
     }
@@ -380,6 +386,11 @@ export const AdminView = () => {
           <button onClick={() => setActionMessage(null)} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer' }}>
             <X size={16} />
           </button>
+        </div>
+      )}
+      {dataError && (
+        <div style={{ padding: '12px 18px', borderRadius: '10px', marginBottom: '24px', background: 'rgba(255,59,48,0.12)', border: '0.5px solid rgba(255,59,48,0.3)', color: '#FF8A80', fontSize: '13px' }}>
+          {dataError}
         </div>
       )}
 
