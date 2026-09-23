@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] - 2026-09-22
+
+### Fixed & Improved
+- **Estabilidad de conexión y control remoto de Groovy Connect (`PlayerProvider`, `GroovyConnectService`)**:
+  - Se optimizó la validación del dispositivo conectado en `play()` y `pause()`, eliminando desconexiones y caídas a reproducción local durante la inicialización o reanudación de reproducción remota.
+  - Registro automático e indexación inmediata del dispositivo conectado en la lista de dispositivos descubiertos (`_discoveredDevices`) al invocar `connectToDevice`.
+- **Alineación de suite de pruebas con widgets fluidos estilo Apple Music**:
+  - Actualización de las pruebas unitarias y de widgets (`LyricsLineWidget` y `AlbumArtView`) para validar `AnimatedOpacity` y `AnimatedScale` de alto rendimiento, logrando 100% de tests aprobados (148/148) en todas las plataformas.
+
 ## [1.4.0] - 2026-09-22
 
 ### Fixed & Improved
