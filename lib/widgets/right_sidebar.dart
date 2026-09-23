@@ -53,6 +53,7 @@ class _RightSidebarState extends State<RightSidebar> {
   List<LyricLine> _lyrics = [];
   bool _isLoadingLyrics = false;
   Timer? _lyricsDebounceTimer;
+  PlayerProvider? _playerProviderRef;
 
   static final Map<String, List<LyricLine>> _lyricsCache = {};
 
@@ -70,6 +71,24 @@ class _RightSidebarState extends State<RightSidebar> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final provider = Provider.of<PlayerProvider>(context, listen: false);
+    if (_playerProviderRef != provider) {
+      _playerProviderRef?.removeListener(_onPlayerNotified);
+      _playerProviderRef = provider;
+      _playerProviderRef?.addListener(_onPlayerNotified);
+      _onPlayerNotified();
+    }
+  }
+
+  void _onPlayerNotified() {
+    if (!mounted || _playerProviderRef == null) return;
+    final currentSong = _playerProviderRef!.currentSong;
+    _onSongChanged(currentSong);
+  }
+
+  @override
   void didUpdateWidget(covariant RightSidebar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialTab != widget.initialTab) {
@@ -79,6 +98,7 @@ class _RightSidebarState extends State<RightSidebar> {
 
   @override
   void dispose() {
+    _playerProviderRef?.removeListener(_onPlayerNotified);
     _lyricsDebounceTimer?.cancel();
     super.dispose();
   }
@@ -106,7 +126,15 @@ class _RightSidebarState extends State<RightSidebar> {
 
     final isSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
 
-    if (isSameSong) return;
+    if (isSameSong) {
+      // Safety: if stuck loading with no active timer, retry fetch
+      if (_isLoadingLyrics && _lyrics.isEmpty && _lyricsDebounceTimer == null) {
+        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+          if (mounted) _fetchLyrics(song);
+        });
+      }
+      return;
+    }
     _lastSong = song;
 
     _lyricsDebounceTimer?.cancel();
@@ -191,13 +219,18 @@ class _RightSidebarState extends State<RightSidebar> {
       List<LyricLine> parsed = [];
 
       // 1. Instant disk cache lookup for any song
-      final raw = await offlineService.getLocalLyrics(songId);
+      final raw = await offlineService.getLocalLyrics(songId)
+          .timeout(const Duration(seconds: 3), onTimeout: () => null);
       if (raw != null) {
         parsed = _extractParsedLines(raw);
       }
 
       // 2. Online fetch via LRCLIB, YouTube CC, and Genius with exact duration matching
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
+        // Check if song changed before starting expensive network calls
+        if (!mounted || !NowPlayingScreen.isSameTrack(_lastSong, song)) {
+          return;
+        }
         final durSeconds = (song.duration != null && song.duration! > 0)
             ? song.duration!
             : playerProvider.duration.inSeconds;
@@ -206,33 +239,41 @@ class _RightSidebarState extends State<RightSidebar> {
           title: song.title,
           durationSeconds: durSeconds > 0 ? durSeconds : null,
           songId: songId,
-        ).catchError((_) => null);
+        ).timeout(const Duration(seconds: 15), onTimeout: () => null).catchError((_) => null);
 
         if (lrcLibRes != null) {
           parsed = _extractParsedLines(lrcLibRes);
-          await offlineService.saveLyrics(songId, lrcLibRes).catchError((_) {});
+          offlineService.saveLyrics(songId, lrcLibRes).catchError((_) {});
+        }
+      }
+
+      if (!mounted) return;
+
+      if (parsed.isNotEmpty) {
+        _lyricsCache[songId] = parsed;
+        _lyricsCache[NowPlayingScreen.getLyricsCacheKey(song)] = parsed;
+        if (_lastSong != null) {
+          _lyricsCache[_lastSong!.id] = parsed;
         }
       }
 
       final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
-
-      if (!mounted || !isStillSameSong) return;
-
-      _lyricsCache[songId] = parsed;
-      _lyricsCache[NowPlayingScreen.getLyricsCacheKey(song)] = parsed;
-      if (_lastSong != null) {
-        _lyricsCache[_lastSong!.id] = parsed;
-      }
-      setState(() {
-        _lyrics = parsed;
-        _isLoadingLyrics = false;
-      });
-    } catch (_) {
-      final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
       if (mounted && isStillSameSong) {
         setState(() {
-          _lyrics = [];
+          _lyrics = parsed;
           _isLoadingLyrics = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching lyrics in sidebar: $e');
+    } finally {
+      // ALWAYS reset loading state if still mounted - prevents infinite spinner
+      if (mounted && _isLoadingLyrics) {
+        final isStillSame = NowPlayingScreen.isSameTrack(_lastSong, song);
+        setState(() {
+          if (isStillSame) {
+            _isLoadingLyrics = false;
+          }
         });
       }
     }
@@ -354,10 +395,6 @@ class _RightSidebarState extends State<RightSidebar> {
           final currentSong = player.currentSong;
           final radioStation = player.currentRadioStation;
           final isPlayingRadio = player.isPlayingRadio && radioStation != null;
-
-          if (currentSong != null) {
-            _onSongChanged(currentSong);
-          }
 
         return Container(
           width: 350,

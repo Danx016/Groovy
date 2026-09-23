@@ -34,22 +34,41 @@ class LrcLibService {
   final Map<String, Map<String, dynamic>> _cache = {};
 
   static final List<RegExp> _noiseRegexes = [
-    RegExp(r'\((?:official|music|video|audio|lyrics?|lyric video|visualizer|hd|4k|remastered|live|explicit|clip|video oficial|clip officiel|en vivo).*?\)', caseSensitive: false),
-    RegExp(r'\[(?:official|music|video|audio|lyrics?|lyric video|visualizer|hd|4k|remastered|live|explicit|clip|video oficial|clip officiel|en vivo).*?\]', caseSensitive: false),
+    RegExp(r'\((?:official|music|video|audio|lyrics?|lyric video|visualizer|hd|4k|remastered|live|explicit|clip|video oficial|clip officiel|en vivo|audio oficial).*?\)', caseSensitive: false),
+    RegExp(r'\[(?:official|music|video|audio|lyrics?|lyric video|visualizer|hd|4k|remastered|live|explicit|clip|video oficial|clip officiel|en vivo|audio oficial).*?\]', caseSensitive: false),
     RegExp(r'\((?:feat\.|ft\.|featuring).*?\)', caseSensitive: false),
     RegExp(r'\[(?:feat\.|ft\.|featuring).*?\]', caseSensitive: false),
     RegExp(r'(?:feat\.|ft\.|featuring).*$', caseSensitive: false),
     RegExp(r'\(prod\..*?\)', caseSensitive: false),
     RegExp(r'\[prod\..*?\]', caseSensitive: false),
-    RegExp(r'\((?:letra|audio oficial).*?\)', caseSensitive: false),
-    RegExp(r'\[(?:letra|audio oficial).*?\]', caseSensitive: false),
+    RegExp(r'\((?:letra|audio oficial|video lyric|letra / lyrics).*?\)', caseSensitive: false),
+    RegExp(r'\[(?:letra|audio oficial|video lyric|letra / lyrics).*?\]', caseSensitive: false),
   ];
 
   static final RegExp _multiSpaceRegex = RegExp(r'\s+');
-  static final RegExp _topicRegex = RegExp(r'\s*-\s*Topic$', caseSensitive: false);
-  static final RegExp _vevoRegex = RegExp(r'\s*VEVO$', caseSensitive: false);
-  static final RegExp _officialRegex = RegExp(r'\s*Official$', caseSensitive: false);
-  static final RegExp _featRegex = RegExp(r'(?:feat\.|ft\.|featuring).*$', caseSensitive: false);
+
+  static final List<RegExp> _artistNoiseRegexes = [
+    RegExp(r'\s*-\s*Topic$', caseSensitive: false),
+    RegExp(r'\s*VEVO$', caseSensitive: false),
+    RegExp(r'\s*(?:Canal\s+)?(?:Oficial|Official)\s*$', caseSensitive: false),
+    RegExp(r'\s*(?:Official|Oficial)\s+(?:Channel|Canal)\s*$', caseSensitive: false),
+    RegExp(r'\s*(?:Channel|Canal)\s*$', caseSensitive: false),
+    RegExp(r'(?:feat\.|ft\.|featuring).*$', caseSensitive: false),
+  ];
+
+  static String removeDiacritics(String text) {
+    const withDia = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÖØòóôõöøÈÉÊËèéêëÌÍÎÏìíîïÙÚÛÜùúûüÝýÿÑñÇç';
+    const withoutDia = 'AAAAAAaaaaaaOOOOOOooooooEEEEeeeeIIIIiiiiUUUUuuuuYyyNnCc';
+    var result = text;
+    for (int i = 0; i < withDia.length; i++) {
+      result = result.replaceAll(withDia[i], withoutDia[i]);
+    }
+    return result;
+  }
+
+  static String normalizeForMatching(String s) {
+    return removeDiacritics(s).toLowerCase().replaceAll(_multiSpaceRegex, ' ').trim();
+  }
 
   /// Cleans track titles by removing parentheses noise and tags.
   static String cleanTitle(String rawTitle) {
@@ -75,27 +94,27 @@ class LrcLibService {
     return title.isNotEmpty ? title : rawTitle;
   }
 
-  /// Cleans artist names.
+  /// Cleans artist names by stripping channel suffixes, topic tags, and official markers.
   static String cleanArtist(String rawArtist) {
     var artist = rawArtist;
-    artist = artist.replaceAll(_topicRegex, '');
-    artist = artist.replaceAll(_vevoRegex, '');
-    artist = artist.replaceAll(_officialRegex, '');
-    artist = artist.replaceAll(_featRegex, '');
+    for (final reg in _artistNoiseRegexes) {
+      artist = artist.replaceAll(reg, '');
+    }
     return artist.trim().isNotEmpty ? artist.trim() : rawArtist;
   }
 
-  /// Extracts primary artist (first artist before comma, &, or feat).
+  /// Extracts primary artist (first artist before comma, &, y, or feat).
   static String primaryArtist(String rawArtist) {
     final cleaned = cleanArtist(rawArtist);
-    final parts = cleaned.split(RegExp(r'[,&/]'));
+    final parts = cleaned.split(RegExp(r'[,&/]|(?:\s+y\s+)'));
     if (parts.isNotEmpty && parts.first.trim().isNotEmpty) {
       return parts.first.trim();
     }
     return cleaned;
   }
 
-  /// Validates that a candidate result strictly matches the expected artist & title.
+  /// Validates that a candidate result strictly matches the expected artist & title,
+  /// ignoring accents, casing, and channel noise.
   static bool _isCandidateValid(
     String resultTitle,
     String? resultArtist,
@@ -104,10 +123,10 @@ class LrcLibService {
     int? resultDuration,
     int? expectedDuration,
   ) {
-    final rTitle = cleanTitle(resultTitle).toLowerCase();
-    final eTitle = cleanTitle(expectedTitle).toLowerCase();
-    final rArtist = cleanArtist(resultArtist ?? '').toLowerCase();
-    final eArtist = cleanArtist(expectedArtist ?? '').toLowerCase();
+    final rTitle = normalizeForMatching(cleanTitle(resultTitle));
+    final eTitle = normalizeForMatching(cleanTitle(expectedTitle));
+    final rArtist = normalizeForMatching(cleanArtist(resultArtist ?? ''));
+    final eArtist = normalizeForMatching(cleanArtist(expectedArtist ?? ''));
 
     final fullResult = '$rArtist $rTitle';
     final fullExpected = '$eArtist $eTitle';
@@ -139,7 +158,8 @@ class LrcLibService {
     if (eArtist.isNotEmpty) {
       bool artistMatches = rArtist.contains(eArtist) ||
           eArtist.contains(rArtist) ||
-          fullResult.contains(eArtist);
+          fullResult.contains(eArtist) ||
+          fullExpected.contains(rArtist);
 
       if (!artistMatches) {
         final words = eArtist
@@ -160,10 +180,10 @@ class LrcLibService {
       }
     }
 
-    // 3. Duration verification if both are present (tolerance: up to 20s for music videos)
+    // 3. Duration verification if both are present (tolerance: up to 25s for music videos)
     if (expectedDuration != null && expectedDuration > 10 && resultDuration != null && resultDuration > 10) {
       final diff = (resultDuration - expectedDuration).abs();
-      if (diff > 20) {
+      if (diff > 25) {
         return false;
       }
     }
@@ -178,7 +198,7 @@ class LrcLibService {
 
     final yt = YoutubeExplode();
     try {
-      final manifest = await yt.videos.closedCaptions.getManifest(cleanId);
+      final manifest = await yt.videos.closedCaptions.getManifest(cleanId).timeout(const Duration(seconds: 4));
       if (manifest.tracks.isEmpty) return null;
 
       // Prefer Spanish, English, or non-auto-generated track
@@ -195,7 +215,7 @@ class LrcLibService {
         orElse: () => manifest.tracks.first,
       );
 
-      final track = await yt.videos.closedCaptions.get(selectedTrack);
+      final track = await yt.videos.closedCaptions.get(selectedTrack).timeout(const Duration(seconds: 4));
       if (track.captions.isEmpty) return null;
 
       final lines = <Map<String, dynamic>>[];
@@ -304,6 +324,17 @@ class LrcLibService {
     }
     if (cleanedArtist != null && cleanedArtist.isNotEmpty && cleanedTitle.isNotEmpty) {
       getPairs.add(MapEntry(cleanedArtist, cleanedTitle));
+      final pArtist = primaryArtist(cleanedArtist);
+      if (pArtist != cleanedArtist && !getPairs.any((p) => p.key == pArtist && p.value == cleanedTitle)) {
+        getPairs.add(MapEntry(pArtist, cleanedTitle));
+      }
+      final subArtists = cleanedArtist.split(RegExp(r'[,&/]|(?:\s+y\s+)'));
+      for (final sub in subArtists) {
+        final sTrim = cleanArtist(sub.trim());
+        if (sTrim.isNotEmpty && !getPairs.any((p) => p.key == sTrim && p.value == cleanedTitle)) {
+          getPairs.add(MapEntry(sTrim, cleanedTitle));
+        }
+      }
     }
 
     for (final pair in getPairs) {
@@ -364,6 +395,14 @@ class LrcLibService {
       final pArtist = primaryArtist(cleanedArtist);
       if (pArtist != cleanedArtist && !searchQueries.contains('$pArtist $cleanedTitle')) {
         searchQueries.add('$pArtist $cleanedTitle'.trim());
+      }
+      final subArtists = cleanedArtist.split(RegExp(r'[,&/]|(?:\s+y\s+)'));
+      for (final sub in subArtists) {
+        final sTrim = cleanArtist(sub.trim());
+        final q = '$sTrim $cleanedTitle'.trim();
+        if (sTrim.isNotEmpty && !searchQueries.contains(q)) {
+          searchQueries.add(q);
+        }
       }
     }
     if (cleanedTitle.isNotEmpty && !searchQueries.contains(cleanedTitle)) {

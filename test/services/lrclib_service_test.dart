@@ -71,6 +71,29 @@ void main() {
         LrcLibService.cleanArtist('Eminem ft. Rihanna'),
         equals('Eminem'),
       );
+      expect(
+        LrcLibService.cleanArtist('Diomedes Diaz Oficial'),
+        equals('Diomedes Diaz'),
+      );
+      expect(
+        LrcLibService.cleanArtist('Canal Oficial Bad Bunny'),
+        equals('Canal Oficial Bad Bunny'),
+      );
+      expect(
+        LrcLibService.cleanArtist('Bad Bunny Canal Oficial'),
+        equals('Bad Bunny'),
+      );
+    });
+
+    test('normalizes diacritics and casing for fuzzy matching', () {
+      expect(
+        LrcLibService.normalizeForMatching('Páginas De Oro'),
+        equals(LrcLibService.normalizeForMatching('Paginas De Oro')),
+      );
+      expect(
+        LrcLibService.normalizeForMatching('Diomedes Díaz'),
+        equals(LrcLibService.normalizeForMatching('Diomedes Diaz')),
+      );
     });
 
     test('extracts primary artist properly from collaboration strings', () {
@@ -98,6 +121,18 @@ void main() {
       expect(result!['value'], isNotNull);
       expect(result['value'].toString().toLowerCase(), contains('barkin'));
       expect(result['structuredLyrics'], isNotNull);
+    });
+
+    test('searchLyrics finds synced lyrics for Diomedes Diaz Oficial - Paginas De Oro', () async {
+      final result = await LrcLibService().searchLyrics(
+        artist: 'Diomedes Diaz Oficial',
+        title: 'Paginas De Oro',
+        durationSeconds: 251,
+      );
+
+      expect(result, isNotNull);
+      expect(result!['value'], isNotNull);
+      expect(result['value'].toString().toLowerCase(), contains('página linda'));
     });
   });
 }

@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-09-22
+
+### Fixed & Improved
+- **Solución integral al indicador de carga infinito en letras en Android y Windows (`now_playing_screen.dart`, `right_sidebar.dart`, `lrclib_service.dart`)**:
+  - **Eliminación de bloqueo de estado en `_isLoadingLyrics`**: Se aseguró que `_isLoadingLyrics` siempre se restablezca en el bloque `finally` con verificación de ciclo de vida seguro, previniendo que peticiones asíncronas con timeout o excepciones de red dejen el reproductor congelado mostrando el spinner de carga infinitamente.
+  - **Mecanismo de auto-recuperación ante estado estancado**: Cuando el usuario mantiene una canción o la pantalla se redibuja mientras las letras están en estado de carga sin temporizador activo (`_isLoadingLyrics == true` con letras vacías), el sistema reintenta automáticamente la obtención de letras en vez de abortar silenciosamente.
+  - **Timeouts de protección en almacenamiento local (`OfflineService`) y red**: Se añadieron tiempos límite estrictos de 3 segundos para lecturas de disco local y 15 segundos para peticiones remotas en barra lateral y pantalla completa, evitando bloqueos indefinidos por I/O.
+  - **Limpieza de nombres de canales oficiales de YouTube y normalización diacrítica**: Se mejoró el analizador de artistas en `LrcLibService` eliminando sufijos como `Oficial`, `Canal Oficial` y normalizando tildes/caracteres especiales para maximizar el emparejamiento con el catálogo de LRCLIB (ej. canciones de artistas con sufijo oficial o títulos con tildes).
+  - **Migración a listeners desacoplados en `RightSidebar`**: Se eliminó la invocación de `_onSongChanged` durante el ciclo `build`, usando `didChangeDependencies` y suscripción por listener para garantizar 120 FPS sin advertencias de framework ni rebotes de estado.
+
 ## [1.3.9] - 2026-09-22
 
 ### Fixed & Improved
