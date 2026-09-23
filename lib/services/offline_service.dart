@@ -118,8 +118,13 @@ class OfflineService {
       _downloadQueue = [];
   bool _queueProcessorRunning = false;
   String? _activePlaylistId;
+  Future<void>? _initFuture;
 
-  Future<void> initialize() async {
+  Future<void> initialize() {
+    return _initFuture ??= _doInitialize();
+  }
+
+  Future<void> _doInitialize() async {
     _prefs ??= await SharedPreferences.getInstance();
     final dir = await getApplicationDocumentsDirectory();
     _offlineDir = '${dir.path}/offline_music';

@@ -57,6 +57,14 @@ class _RightSidebarState extends State<RightSidebar> {
   PlayerProvider? _playerProviderRef;
 
   static final Map<String, List<LyricLine>> _lyricsCache = {};
+  static final Set<String> _checkedSongKeys = {};
+
+  static bool _hasCheckedLyrics(Song song) {
+    if (_checkedSongKeys.contains(song.id)) return true;
+    final key = NowPlayingScreen.getLyricsCacheKey(song);
+    if (_checkedSongKeys.contains(key)) return true;
+    return NowPlayingScreen.hasCheckedLyrics(song);
+  }
 
   static List<LyricLine>? _getCachedLyrics(Song song) {
     if (_lyricsCache.containsKey(song.id)) return _lyricsCache[song.id];
@@ -144,6 +152,15 @@ class _RightSidebarState extends State<RightSidebar> {
           });
         }
       });
+    } else if (_hasCheckedLyrics(song)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _lyrics = [];
+            _isLoadingLyrics = false;
+          });
+        }
+      });
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
@@ -208,6 +225,28 @@ class _RightSidebarState extends State<RightSidebar> {
 
   Future<void> _fetchLyrics(Song song, {bool force = false}) async {
     if (_isFetchingLyrics && !force) return;
+
+    if (!force) {
+      final cached = _getCachedLyrics(song);
+      if (cached != null && cached.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _lyrics = cached;
+            _isLoadingLyrics = false;
+          });
+        }
+        return;
+      }
+      if (_hasCheckedLyrics(song)) {
+        if (mounted) {
+          setState(() {
+            _isLoadingLyrics = false;
+          });
+        }
+        return;
+      }
+    }
+
     _isFetchingLyrics = true;
     final songId = song.id;
     try {
@@ -246,12 +285,16 @@ class _RightSidebarState extends State<RightSidebar> {
 
       if (!mounted) return;
 
-      if (parsed.isNotEmpty) {
-        _lyricsCache[songId] = parsed;
-        _lyricsCache[NowPlayingScreen.getLyricsCacheKey(song)] = parsed;
-        if (_lastSong != null) {
-          _lyricsCache[_lastSong!.id] = parsed;
-        }
+      _lyricsCache[songId] = parsed;
+      final key = NowPlayingScreen.getLyricsCacheKey(song);
+      _lyricsCache[key] = parsed;
+      _checkedSongKeys.add(songId);
+      _checkedSongKeys.add(key);
+      NowPlayingScreen.setCachedLyrics(song, parsed);
+
+      if (_lastSong != null) {
+        _lyricsCache[_lastSong!.id] = parsed;
+        _checkedSongKeys.add(_lastSong!.id);
       }
 
       final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);

@@ -33,6 +33,9 @@ class LrcLibService {
   // In-memory cache: "artist|title" -> response map
   final Map<String, Map<String, dynamic>> _cache = {};
 
+  // In-flight network/disk lookup deduplication
+  final Map<String, Future<Map<String, dynamic>?>> _inFlightRequests = {};
+
   static final List<RegExp> _noiseRegexes = [
     RegExp(r'\((?:official|music|video|audio|lyrics?|lyric video|visualizer|hd|4k|remastered|live|explicit|clip|video oficial|clip officiel|en vivo|audio oficial).*?\)', caseSensitive: false),
     RegExp(r'\[(?:official|music|video|audio|lyrics?|lyric video|visualizer|hd|4k|remastered|live|explicit|clip|video oficial|clip officiel|en vivo|audio oficial).*?\]', caseSensitive: false),
@@ -181,8 +184,13 @@ class LrcLibService {
     }
 
     // 3. Duration verification if both are present (tolerance: up to 25s for music videos)
-    if (expectedDuration != null && expectedDuration > 10 && resultDuration != null && resultDuration > 10) {
-      final diff = (resultDuration - expectedDuration).abs();
+    var expDur = expectedDuration;
+    if (expDur != null && expDur > 1800) expDur ~/= 1000;
+    var resDur = resultDuration;
+    if (resDur != null && resDur > 1800) resDur ~/= 1000;
+
+    if (expDur != null && expDur > 10 && resDur != null && resDur > 10) {
+      final diff = (resDur - expDur).abs();
       if (diff > 25) {
         return false;
       }
@@ -267,21 +275,68 @@ class LrcLibService {
     required String title,
     int? durationSeconds,
     String? songId,
-  }) async {
-    if (title.trim().isEmpty) return null;
+  }) {
+    if (title.trim().isEmpty) return Future.value(null);
+
+    // Normalize duration if passed as milliseconds (> 1800s / 30 mins)
+    var effectiveDuration = durationSeconds;
+    if (effectiveDuration != null && effectiveDuration > 1800) {
+      effectiveDuration = effectiveDuration ~/ 1000;
+    }
 
     final cleanedTitle = cleanTitle(title);
     final cleanedArtist = (artist != null && artist.isNotEmpty) ? cleanArtist(artist) : null;
-    final durKey = durationSeconds != null && durationSeconds > 0 ? '|$durationSeconds' : '';
+    final durKey = effectiveDuration != null && effectiveDuration > 0 ? '|$effectiveDuration' : '';
     final cacheKey = '${cleanedArtist?.toLowerCase() ?? ''}|${cleanedTitle.toLowerCase()}$durKey';
 
     // 1. In-memory cache
     if (_cache.containsKey(cacheKey)) {
-      return _cache[cacheKey];
+      return Future.value(_cache[cacheKey]);
     }
     if (songId != null && _cache.containsKey(songId)) {
-      return _cache[songId];
+      return Future.value(_cache[songId]);
     }
+
+    // 2. In-flight request deduplication (prevents duplicate network cascades on cold start)
+    final inFlightKey = songId ?? cacheKey;
+    if (_inFlightRequests.containsKey(inFlightKey)) {
+      return _inFlightRequests[inFlightKey]!;
+    }
+    if (_inFlightRequests.containsKey(cacheKey)) {
+      return _inFlightRequests[cacheKey]!;
+    }
+
+    late final Future<Map<String, dynamic>?> future;
+    future = _performSearchLyrics(
+      cleanedArtist: cleanedArtist,
+      cleanedTitle: cleanedTitle,
+      durationSeconds: effectiveDuration,
+      songId: songId,
+      cacheKey: cacheKey,
+      rawTitle: title,
+    ).whenComplete(() {
+      _inFlightRequests.remove(cacheKey);
+      if (songId != null) {
+        _inFlightRequests.remove(songId);
+      }
+    });
+
+    _inFlightRequests[cacheKey] = future;
+    if (songId != null) {
+      _inFlightRequests[songId] = future;
+    }
+
+    return future;
+  }
+
+  Future<Map<String, dynamic>?> _performSearchLyrics({
+    required String? cleanedArtist,
+    required String cleanedTitle,
+    required int? durationSeconds,
+    required String? songId,
+    required String cacheKey,
+    required String rawTitle,
+  }) async {
 
     // 2. Persistent disk cache (OfflineService)
     if (songId != null) {
@@ -291,7 +346,7 @@ class LrcLibService {
         if (localData != null && localData.isNotEmpty) {
           _cache[cacheKey] = localData;
           _cache[songId] = localData;
-          debugPrint('[Lyrics] ⚡ Instant disk cache hit for "$title" ($songId)');
+          debugPrint('[Lyrics] ⚡ Instant disk cache hit for "$rawTitle" ($songId)');
           return localData;
         }
       } catch (_) {}
@@ -300,8 +355,8 @@ class LrcLibService {
     // Extract potential artist and title candidates if title was "Artist - Track"
     String? extractedArtist;
     String? extractedTrack;
-    if (title.contains(' - ')) {
-      final parts = title.split(' - ');
+    if (rawTitle.contains(' - ')) {
+      final parts = rawTitle.split(' - ');
       if (parts.length >= 2) {
         extractedArtist = cleanArtist(parts[0]);
         extractedTrack = cleanTitle(parts.sublist(1).join(' - '));
@@ -503,7 +558,7 @@ class LrcLibService {
     // 4. SOURCE: Genius (25+ Million Songs Worldwide Repertoire)
     // ==========================================
     final geniusArtist = cleanedArtist ?? extractedArtist;
-    final geniusTitle = cleanedTitle.isNotEmpty ? cleanedTitle : (extractedTrack ?? title);
+    final geniusTitle = cleanedTitle.isNotEmpty ? cleanedTitle : (extractedTrack ?? rawTitle);
     if (geniusTitle.isNotEmpty) {
       try {
         final geniusLyrics = await _fetchGeniusLyrics(geniusArtist, geniusTitle);

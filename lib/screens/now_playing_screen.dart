@@ -55,11 +55,24 @@ class NowPlayingScreen extends StatefulWidget {
   });
 
   static final Map<String, List<LyricLine>> _lyricsCache = {};
+  static final Set<String> _checkedSongKeys = {};
 
   static String getLyricsCacheKey(Song song) {
     final artist = LrcLibService.normalizeForMatching(LrcLibService.cleanArtist(song.artist ?? ''));
     final title = LrcLibService.normalizeForMatching(LrcLibService.cleanTitle(song.title));
     return '$artist|$title';
+  }
+
+  static bool hasCachedLyrics(Song song) {
+    if (_lyricsCache.containsKey(song.id)) return true;
+    final key = getLyricsCacheKey(song);
+    return _lyricsCache.containsKey(key);
+  }
+
+  static bool hasCheckedLyrics(Song song) {
+    if (_checkedSongKeys.contains(song.id)) return true;
+    final key = getLyricsCacheKey(song);
+    return _checkedSongKeys.contains(key);
   }
 
   static List<LyricLine>? getCachedLyrics(Song song) {
@@ -70,8 +83,11 @@ class NowPlayingScreen extends StatefulWidget {
   }
 
   static void setCachedLyrics(Song song, List<LyricLine> lyrics) {
+    final key = getLyricsCacheKey(song);
     _lyricsCache[song.id] = lyrics;
-    _lyricsCache[getLyricsCacheKey(song)] = lyrics;
+    _lyricsCache[key] = lyrics;
+    _checkedSongKeys.add(song.id);
+    _checkedSongKeys.add(key);
   }
 
   static bool isSameTrack(Song? a, Song? b) {
@@ -196,6 +212,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       if (cachedLyrics != null && cachedLyrics.isNotEmpty) {
         _fetchedLyrics = cachedLyrics;
         _isLoadingLyrics = false;
+      } else if (NowPlayingScreen.hasCheckedLyrics(widget.song!)) {
+        _isLoadingLyrics = false;
       }
     }
 
@@ -209,7 +227,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
 
     // 4. Defer network lyrics fetch slightly (200ms) to ensure smooth entry
-    if (_fetchedLyrics.isEmpty) {
+    if (_fetchedLyrics.isEmpty && (widget.song == null || !NowPlayingScreen.hasCheckedLyrics(widget.song!))) {
       _lyricsDebounceTimer = Timer(const Duration(milliseconds: 200), () {
         if (mounted) _fetchLyrics();
       });
@@ -258,6 +276,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       // 2. Instant lyrics cache check across both ID and artist|title
       final cachedLyrics = NowPlayingScreen.getCachedLyrics(currentSong);
       final hasCachedLyrics = cachedLyrics != null && cachedLyrics.isNotEmpty;
+      final alreadyChecked = NowPlayingScreen.hasCheckedLyrics(currentSong);
 
       _colorDebounceTimer?.cancel();
       if (isSongChange) {
@@ -272,9 +291,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         }
         if (isSongChange) {
           _fetchedLyrics = cachedLyrics ?? <LyricLine>[];
-          _isLoadingLyrics = !hasCachedLyrics;
-        } else if (_fetchedLyrics.isEmpty && hasCachedLyrics) {
+          _isLoadingLyrics = !hasCachedLyrics && !alreadyChecked;
+        } else if (hasCachedLyrics) {
           _fetchedLyrics = cachedLyrics;
+          _isLoadingLyrics = false;
+        } else if (alreadyChecked) {
           _isLoadingLyrics = false;
         }
       });
@@ -286,11 +307,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         });
       }
 
-      if (isSongChange && !hasCachedLyrics) {
+      if (isSongChange && !hasCachedLyrics && !alreadyChecked) {
         _lyricsDebounceTimer = Timer(const Duration(milliseconds: 220), () {
           if (mounted) _fetchLyrics();
         });
-      } else if (!isSongChange && _fetchedLyrics.isEmpty && !hasCachedLyrics && !_isFetchingLyrics) {
+      } else if (!isSongChange && _fetchedLyrics.isEmpty && !hasCachedLyrics && !alreadyChecked && !_isFetchingLyrics) {
         _lyricsDebounceTimer ??= Timer(const Duration(milliseconds: 220), () {
           if (mounted) _fetchLyrics();
         });
@@ -367,6 +388,14 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         }
         return;
       }
+      if (NowPlayingScreen.hasCheckedLyrics(song)) {
+        if (mounted) {
+          setState(() {
+            _isLoadingLyrics = false;
+          });
+        }
+        return;
+      }
     }
 
     _isFetchingLyrics = true;
@@ -410,11 +439,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
       if (!mounted) return;
 
-      if (parsed.isNotEmpty) {
-        NowPlayingScreen.setCachedLyrics(song, parsed);
-        if (_lastSong != null && _lastSong!.id != songId) {
-          NowPlayingScreen.setCachedLyrics(_lastSong!, parsed);
-        }
+      NowPlayingScreen.setCachedLyrics(song, parsed);
+      if (_lastSong != null && _lastSong!.id != songId) {
+        NowPlayingScreen.setCachedLyrics(_lastSong!, parsed);
       }
 
       final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);

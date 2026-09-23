@@ -137,5 +137,24 @@ void main() {
 
       playerProvider.dispose();
     });
+
+    test('skipPrevious rewinds to previous track even when playing beyond 3 seconds', () async {
+      final song1 = Song(id: 'song_a', title: 'Song A', duration: 180);
+      final song2 = Song(id: 'song_b', title: 'Song B', duration: 180);
+      playerProvider.playSong(song2, playlist: [song1, song2], startIndex: 1);
+      expect(playerProvider.currentSong?.id, 'song_b');
+      expect(playerProvider.currentIndex, 1);
+
+      // Seek position past 3 seconds (e.g. 45 seconds into track)
+      await playerProvider.seek(const Duration(seconds: 45));
+      expect(playerProvider.position.inSeconds, 45);
+
+      // skipPrevious should now transition directly to song_a
+      await playerProvider.skipPrevious();
+      expect(playerProvider.currentSong?.id, 'song_a');
+      expect(playerProvider.currentIndex, 0);
+
+      playerProvider.dispose();
+    });
   });
 }

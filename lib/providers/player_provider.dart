@@ -1761,6 +1761,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 if (_lastPolledPosition == null ||
                     pos.inMilliseconds != _lastPolledPosition!.inMilliseconds) {
                   _lastPolledPosition = pos;
+                  if (_activeAudioSongId != null &&
+                      _currentSong != null &&
+                      _activeAudioSongId != _currentSong!.id) {
+                    return;
+                  }
                   _position = pos;
                   _positionController.add(pos);
                   _checkAndPreloadNextSong(pos);
@@ -1772,6 +1777,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   if (!_isRenderingRemotely &&
                       _isPlaying &&
                       !_isTransitioningSong &&
+                      _activeAudioSongId == _currentSong?.id &&
                       effDur > const Duration(seconds: 5) &&
                       pos >= effDur - const Duration(milliseconds: 250)) {
                     if (_currentSong != null &&
@@ -1821,9 +1827,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         final bool isGenuineTrackEnd = (effDur <= const Duration(seconds: 5)) ||
             (_position >= effDur - const Duration(seconds: 3));
 
-        if ((state.processingState == ProcessingState.completed &&
+        if (_activeAudioSongId == _currentSong?.id &&
+            ((state.processingState == ProcessingState.completed &&
                 isGenuineTrackEnd) ||
-            naturalTrackEnd) {
+            naturalTrackEnd)) {
           if (_currentSong != null &&
               _lastCompletedSongId != _currentSong!.id) {
             _lastCompletedSongId = _currentSong!.id;
@@ -1875,6 +1882,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // In remote-playback mode the local player sits idle at position zero;
         // ignore its ticks so they don't overwrite the UPnP/Cast position.
         if (_isRenderingRemotely) return;
+        if (_activeAudioSongId != null &&
+            _currentSong != null &&
+            _activeAudioSongId != _currentSong!.id) {
+          return;
+        }
 
         _position = position;
         _positionController.add(position);
@@ -1888,6 +1900,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (!_isRenderingRemotely &&
             _isPlaying &&
             !_isTransitioningSong &&
+            _activeAudioSongId == _currentSong?.id &&
             effDur > const Duration(seconds: 5) &&
             position >= effDur - const Duration(milliseconds: 250)) {
           if (_currentSong != null &&
@@ -3129,6 +3142,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         return; // another skip came in while fetching
     }
 
+    _activeAudioSongId = null;
+    _audioPlayer.pause().catchError((_) {});
+
     if (_shuffleEnabled && _queue.length > 1) {
       _shuffleHistory.add(_currentSong?.id ?? '');
       if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
@@ -3279,10 +3295,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_groovyConnectService?.isConnected == true) {
       _isRenderingRemotely = true;
-      if (_position.inSeconds > 3) {
-        await seek(Duration.zero);
-        return;
-      }
       _lastRemoteSeekTime = DateTime.now();
       _position = Duration.zero;
       _remoteAnchorPosition = Duration.zero;
@@ -3313,12 +3325,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       unawaited(_groovyConnectService!.sendControl('skipPrevious'));
       return;
     }
-    if (_position.inSeconds > 3) {
-      await seek(Duration.zero);
-      return;
-    }
 
     if (_queue.isEmpty) return;
+
+    _activeAudioSongId = null;
+    _audioPlayer.pause().catchError((_) {});
 
     if (_shuffleEnabled && _shuffleHistory.isNotEmpty) {
       final prevId = _shuffleHistory.removeLast();

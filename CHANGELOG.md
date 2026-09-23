@@ -5,6 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.4] - 2026-09-23
+
+### Fixed & Improved
+- **Corrección en reproducción previa (`skipPrevious`)**:
+  - Al pulsar "canción anterior", la app ahora retrocede a la canción previa de la cola sin quedar atrapada en la canción actual o reiniciar la pista cuando el progreso supera los 3 segundos.
+- **Carga de letras en arranque en frío (`NowPlayingScreen`, `RightSidebar`, `LrcLibService`)**:
+  - **Eliminación del bucle de re-petición en frío**: Se corrigió el bug por el cual la pantalla completa de Now Playing y la barra lateral en Windows quedaban atrapadas en un spinner infinito ("Cargando letra...") hasta cambiar de canción.
+  - **Deduplicación de peticiones concurrentes (`_inFlightRequests`)**: Las consultas simultáneas de la barra lateral, la pantalla completa y el precargador comparten el mismo `Future`, previniendo saturación de red y timeouts en arranque.
+  - **Caché negativo de letras no encontradas**: Si una pista no tiene letras disponibles, se registra el estado para evitar reintentos continuos innecesarios en cada ciclo de telemetría.
+  - **Normalización de duraciones en milisegundos**: Detección y conversión automática de duraciones superiores a 1800 segundos para asegurar coincidencias exactas en LRCLIB y Genius.
+  - **Bloqueo concurrente en `OfflineService.initialize()`**: Garantiza que múltiples llamadas simultáneas compartan una sola inicialización del almacenamiento local.
+
 ## [1.4.3] - 2026-09-23
 
 ### Fixed & Improved
