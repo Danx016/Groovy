@@ -988,6 +988,7 @@ class GroovyConnectService extends ChangeNotifier {
   /// Connects to a target Groovy device without immediately transferring a song.
   Future<bool> connectToDevice(GroovyRemoteDevice device) async {
     _connectedDevice = device;
+    _discoveredDevices[device.id] = device;
     _startStatusSyncTimer();
     notifyListeners();
     // Query remote device status immediately to ensure current track is visible

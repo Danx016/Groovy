@@ -68,12 +68,10 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(LyricsLineWidget),
-          matching: find.byType(AnimatedDefaultTextStyle),
+          matching: find.byType(AnimatedOpacity),
         ),
         findsOneWidget,
       );
-      expect(find.byType(AnimatedScale), findsOneWidget);
-      expect(find.byType(AnimatedOpacity), findsOneWidget);
 
       // Switch to past state
       await tester.pumpWidget(

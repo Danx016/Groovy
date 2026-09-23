@@ -2709,7 +2709,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_groovyConnectService?.isConnected == true) {
       final connected = _groovyConnectService!.connectedDevice;
-      if (connected == null || !_groovyConnectService!.discoveredDevices.any((d) => d.id == connected.id)) {
+      if (connected == null) {
         debugPrint('[PlayerProvider] Remote device is disconnected or unreachable. Falling back to local playback.');
         _groovyConnectService!.disconnect();
         disableGroovyConnectRemote();
@@ -2777,7 +2777,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_isRenderingRemotely || _groovyConnectService?.isConnected == true) {
       final connected = _groovyConnectService?.connectedDevice;
-      if (connected == null || !_groovyConnectService!.discoveredDevices.any((d) => d.id == connected.id)) {
+      if (connected == null) {
         debugPrint('[PlayerProvider] Remote device is disconnected or unreachable. Falling back to local playback.');
         _groovyConnectService?.disconnect();
         disableGroovyConnectRemote();
