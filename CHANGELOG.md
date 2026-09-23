@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-09-22
+
+### Fixed & Improved
+- **Corrección definitiva del indicador de carga infinito en letras (`NowPlayingScreen`, `RightSidebar`)**:
+  - **Eliminación del bucle continuo de reintento en reproducción**: Se removió el temporizador de reintento que se reactivaba en cada actualización de progreso del reproductor (`_onPlayerChanged`), el cual reiniciaba continuamente la búsqueda de letras mientras `_isLoadingLyrics` estaba activo, cancelando peticiones legítimas en curso.
+  - **Bloque `finally` incondicional**: Se garantizó el reinicio absoluto de `_isLoadingLyrics = false` y `_isFetchingLyrics = false` dentro del bloque `finally` ante cualquier excepción, timeout o respuesta vacía, evitando que la interfaz quede congelada en el indicador giratorio "Cargando letra...".
+  - **Protección de concurrencia y re-entradas (`_isFetchingLyrics`)**: Se añadió un guardia booleano para prevenir peticiones simultáneas sobre la misma pista musical.
+  - **Sanitización de identificadores en caché de disco local (`OfflineService`)**: Sanitización estricta de `songId` contra caracteres incompatibles con el sistema de archivos de Windows (`/`, `:`, `?`), previniendo errores silenciosos de I/O al consultar o guardar letras.
+
 ## [1.4.1] - 2026-09-22
 
 ### Fixed & Improved

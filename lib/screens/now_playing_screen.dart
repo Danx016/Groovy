@@ -99,6 +99,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   List<Color> _bgColors = [];
   List<LyricLine> _fetchedLyrics = [];
   bool _isLoadingLyrics = true;
+  bool _isFetchingLyrics = false;
   Song? _lastSong;
   ImageProvider? _currentImageProvider;
   bool _showLyricsInLandscape = true;
@@ -289,15 +290,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
         _lyricsDebounceTimer = Timer(const Duration(milliseconds: 220), () {
           if (mounted) _fetchLyrics();
         });
-      } else if (!isSongChange && _fetchedLyrics.isEmpty && !hasCachedLyrics) {
+      } else if (!isSongChange && _fetchedLyrics.isEmpty && !hasCachedLyrics && !_isFetchingLyrics) {
         _lyricsDebounceTimer ??= Timer(const Duration(milliseconds: 220), () {
-          if (mounted) _fetchLyrics();
-        });
-      }
-    } else {
-      // Safety: if stuck loading with no active timer, retry fetch
-      if (_isLoadingLyrics && _fetchedLyrics.isEmpty && _lyricsDebounceTimer == null) {
-        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 300), () {
           if (mounted) _fetchLyrics();
         });
       }
@@ -351,30 +345,38 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     return [];
   }
 
-  Future<void> _fetchLyrics() async {
-    if (_lastSong == null) return;
+  Future<void> _fetchLyrics({bool force = false}) async {
+    if (_lastSong == null) {
+      if (mounted) setState(() => _isLoadingLyrics = false);
+      return;
+    }
+    if (_isFetchingLyrics && !force) return;
+
     final songId = _lastSong!.id;
     final song = _lastSong!;
 
     // Instant cache check: if already fetched, show immediately without spinner
-    final cachedLyrics = NowPlayingScreen.getCachedLyrics(song);
-    if (cachedLyrics != null && cachedLyrics.isNotEmpty) {
-      if (mounted) {
-        setState(() {
-          _fetchedLyrics = cachedLyrics;
-          _isLoadingLyrics = false;
-        });
+    if (!force) {
+      final cachedLyrics = NowPlayingScreen.getCachedLyrics(song);
+      if (cachedLyrics != null && cachedLyrics.isNotEmpty) {
+        if (mounted) {
+          setState(() {
+            _fetchedLyrics = cachedLyrics;
+            _isLoadingLyrics = false;
+          });
+        }
+        return;
       }
-      return;
     }
-    
+
+    _isFetchingLyrics = true;
     if (mounted) {
       setState(() => _isLoadingLyrics = true);
     }
 
     try {
       final offlineService = OfflineService();
-      
+
       List<LyricLine> parsed = [];
 
       // 1. Instant disk cache lookup for any song
@@ -383,7 +385,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       if (raw != null) {
         parsed = _extractParsedLines(raw);
       }
-      
+
       // 2. Online fetch: Try LRCLIB, YouTube CC, and Genius with exact duration matching
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
         // Check if song changed before starting expensive network calls
@@ -405,7 +407,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           offlineService.saveLyrics(songId, lrcLibRes).catchError((_) {});
         }
       }
-      
+
       if (!mounted) return;
 
       if (parsed.isNotEmpty) {
@@ -426,15 +428,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       debugPrint('Error fetching lyrics: $e');
     } finally {
       // ALWAYS reset loading state if still mounted - prevents infinite spinner
-      // If the song changed, _onPlayerChanged already set the correct state for the new song
-      if (mounted && _isLoadingLyrics) {
-        final isStillSame = NowPlayingScreen.isSameTrack(_lastSong, song);
+      _isFetchingLyrics = false;
+      if (mounted) {
         setState(() {
-          if (isStillSame) {
-            _isLoadingLyrics = false;
-          }
-          // If song changed but no new fetch is running, also reset
-          // The new song's fetch will set it back to true if needed
+          _isLoadingLyrics = false;
         });
       }
     }

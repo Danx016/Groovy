@@ -310,7 +310,8 @@ class OfflineService {
   }
 
   String _getLyricsPath(String songId) {
-    return '$_offlineDir/$songId.lyrics.json';
+    final safeId = songId.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+    return '$_offlineDir/$safeId.lyrics.json';
   }
 
   String _getCoverArtPath(String songId) {

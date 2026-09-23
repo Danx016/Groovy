@@ -286,7 +286,8 @@ class LrcLibService {
     // 2. Persistent disk cache (OfflineService)
     if (songId != null) {
       try {
-        final localData = await OfflineService().getLocalLyrics(songId);
+        final localData = await OfflineService().getLocalLyrics(songId)
+            .timeout(const Duration(seconds: 3), onTimeout: () => null);
         if (localData != null && localData.isNotEmpty) {
           _cache[cacheKey] = localData;
           _cache[songId] = localData;

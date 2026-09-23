@@ -52,6 +52,7 @@ class _RightSidebarState extends State<RightSidebar> {
   Song? _lastSong;
   List<LyricLine> _lyrics = [];
   bool _isLoadingLyrics = false;
+  bool _isFetchingLyrics = false;
   Timer? _lyricsDebounceTimer;
   PlayerProvider? _playerProviderRef;
 
@@ -127,12 +128,6 @@ class _RightSidebarState extends State<RightSidebar> {
     final isSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
 
     if (isSameSong) {
-      // Safety: if stuck loading with no active timer, retry fetch
-      if (_isLoadingLyrics && _lyrics.isEmpty && _lyricsDebounceTimer == null) {
-        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 200), () {
-          if (mounted) _fetchLyrics(song);
-        });
-      }
       return;
     }
     _lastSong = song;
@@ -211,7 +206,9 @@ class _RightSidebarState extends State<RightSidebar> {
     return [];
   }
 
-  Future<void> _fetchLyrics(Song song) async {
+  Future<void> _fetchLyrics(Song song, {bool force = false}) async {
+    if (_isFetchingLyrics && !force) return;
+    _isFetchingLyrics = true;
     final songId = song.id;
     try {
       final offlineService = OfflineService();
@@ -267,13 +264,11 @@ class _RightSidebarState extends State<RightSidebar> {
     } catch (e) {
       debugPrint('Error fetching lyrics in sidebar: $e');
     } finally {
+      _isFetchingLyrics = false;
       // ALWAYS reset loading state if still mounted - prevents infinite spinner
-      if (mounted && _isLoadingLyrics) {
-        final isStillSame = NowPlayingScreen.isSameTrack(_lastSong, song);
+      if (mounted) {
         setState(() {
-          if (isStillSame) {
-            _isLoadingLyrics = false;
-          }
+          _isLoadingLyrics = false;
         });
       }
     }
