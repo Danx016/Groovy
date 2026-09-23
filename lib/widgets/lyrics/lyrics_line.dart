@@ -5,6 +5,10 @@ import '../../models/lyric_line.dart';
 
 enum LyricLineState { past, current, future }
 
+/// Whether we're running on a mobile (touch) platform where hover is irrelevant.
+final bool _isMobilePlatform =
+    !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
 class LyricsLineWidget extends StatefulWidget {
   final LyricLine line;
   final LyricLineState state;
@@ -74,6 +78,32 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
                     ? 0.40
                     : 0.36)));
 
+    // Core content: plain Opacity instead of AnimatedOpacity to avoid
+    // creating an implicit AnimationController per lyric line (~100 lines).
+    // The visual transition is driven by the parent ListView.builder rebuild
+    // which is already smooth since only visible items are built.
+    Widget content = RepaintBoundary(
+      child: Opacity(
+        opacity: targetOpacity,
+        child: Text(
+          widget.line.text,
+          style: _lyricTextStyle,
+        ),
+      ),
+    );
+
+    // On mobile (Android/iOS) skip MouseRegion entirely — no hover on touch
+    if (_isMobilePlatform) {
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+          child: content,
+        ),
+      );
+    }
+
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
@@ -83,15 +113,7 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
         behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-          child: AnimatedOpacity(
-            opacity: targetOpacity,
-            duration: const Duration(milliseconds: 320),
-            curve: Curves.easeInOutCubic,
-            child: Text(
-              widget.line.text,
-              style: _lyricTextStyle,
-            ),
-          ),
+          child: content,
         ),
       ),
     );

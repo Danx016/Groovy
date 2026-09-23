@@ -1,7 +1,6 @@
 import 'dart:async';
 import '../../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import '../../models/lyric_line.dart';
 import 'lyrics_line.dart';
@@ -49,15 +48,26 @@ class LyricsListView extends StatefulWidget {
 
 class _LyricsListViewState extends State<LyricsListView> {
   late ScrollController _scrollController;
-  late List<GlobalKey> _keys;
   late List<LyricsItem> _items;
   int _currentIndex = -1;
   int _currentLyricIndex = -1;
   bool _isManualScrolling = false;
   bool _isUnsynced = false;
+  bool _isAutoScrolling = false;
   Timer? _resumeAutoScrollTimer;
   StreamSubscription<Duration>? _posSub;
   Duration _currentPosition = Duration.zero;
+
+  // Throttle: avoid processing position events too frequently.
+  // Lyric lines change every ~2-4 seconds, so 200ms sampling is plenty.
+  static const _throttleInterval = Duration(milliseconds: 200);
+  DateTime _lastPositionUpdate = DateTime(2000);
+
+  // Estimated item height for scroll offset calculation (avoids GlobalKey).
+  // Lyric lines: ~32px font * 1.25 height + 26px vertical padding = ~66px
+  // Interlude dots: ~11px dot + 24px vertical padding = ~35px
+  static const double _estimatedLyricHeight = 66.0;
+  static const double _estimatedInterludeHeight = 55.0;
 
   @override
   void initState() {
@@ -65,8 +75,13 @@ class _LyricsListViewState extends State<LyricsListView> {
     _scrollController = ScrollController();
     _currentPosition = widget.initialPosition ?? widget.currentTime ?? Duration.zero;
     _buildItems();
-    _updateIndexForPosition(_currentPosition);
+    _updateIndexForPosition(_currentPosition, force: true);
     _subscribeToPosition();
+
+    // Initial scroll to the current line after first frame
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrentLine(animate: false);
+    });
   }
 
   void _subscribeToPosition() {
@@ -74,6 +89,14 @@ class _LyricsListViewState extends State<LyricsListView> {
     if (widget.positionStream != null) {
       _posSub = widget.positionStream!.listen((pos) {
         _currentPosition = pos;
+
+        // Throttle: skip processing if we updated too recently
+        final now = DateTime.now();
+        if (now.difference(_lastPositionUpdate) < _throttleInterval) {
+          return;
+        }
+        _lastPositionUpdate = now;
+
         _updateIndexForPosition(pos);
       });
     }
@@ -85,7 +108,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     
     if (oldWidget.lyrics != widget.lyrics) {
       _buildItems();
-      _updateIndexForPosition(_currentPosition);
+      _updateIndexForPosition(_currentPosition, force: true);
     }
     
     if (oldWidget.positionStream != widget.positionStream) {
@@ -108,7 +131,6 @@ class _LyricsListViewState extends State<LyricsListView> {
   void _buildItems() {
     _items = [];
     if (widget.lyrics.isEmpty) {
-      _keys = [];
       _isUnsynced = false;
       return;
     }
@@ -151,12 +173,11 @@ class _LyricsListViewState extends State<LyricsListView> {
       }
     }
 
-    _keys = List.generate(_items.length, (_) => GlobalKey());
     _isUnsynced = _items.length > 1 &&
         _items.every((item) => item.startTime == Duration.zero);
   }
 
-  void _updateIndexForPosition(Duration pos) {
+  void _updateIndexForPosition(Duration pos, {bool force = false}) {
     if (!mounted) return; // guard: stream may fire after dispose
     if (_items.isEmpty) return;
 
@@ -193,7 +214,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
 
     // ONLY rebuild when the active line actually changes!
-    if (newIndex != _currentIndex) {
+    if (newIndex != _currentIndex || force) {
       if (!widget.isActive) {
         // When screen is inactive, update state silently without rebuilds/animations
         _currentIndex = newIndex;
@@ -219,40 +240,62 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  void _scrollToCurrentLine({Duration? duration}) {
-    if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _keys.length) return;
+  /// Estimate the scroll offset for a given item index using pre-computed heights.
+  double _estimateOffsetForIndex(int index) {
+    double offset = 0;
+    for (int i = 0; i < index && i < _items.length; i++) {
+      offset += _items[i].type == ItemType.interlude
+          ? _estimatedInterludeHeight
+          : _estimatedLyricHeight;
+    }
+    return offset;
+  }
+
+  void _scrollToCurrentLine({Duration? duration, bool animate = true}) {
+    if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _items.length) return;
+
+    // Prevent overlapping scroll animations
+    if (_isAutoScrolling) return;
 
     try {
-      final key = _keys[_currentIndex];
-      final keyContext = key.currentContext;
-      if (keyContext != null) {
-        final renderObject = keyContext.findRenderObject();
-        if (renderObject is RenderBox && _scrollController.hasClients && renderObject.attached) {
-          final viewport = RenderAbstractViewport.maybeOf(renderObject);
-          if (viewport == null) return;
-          final size = MediaQuery.of(context).size;
-          final isLandscape = size.width > size.height;
-          // Align active line at ~34% on desktop/landscape (vertically level with album art), ~28% on portrait
-          final focalAlignment = isLandscape ? 0.34 : 0.28;
-          final targetOffset = viewport.getOffsetToReveal(renderObject, focalAlignment).offset;
-          final clamped = targetOffset.clamp(
-            _scrollController.position.minScrollExtent,
-            _scrollController.position.maxScrollExtent,
-          );
-          final scrollDelta = (_scrollController.offset - clamped).abs();
-          if (scrollDelta > 1.0) {
-            // Adaptive duration & smooth Apple-style ease-in-out curve:
-            // Stanza transitions glide gracefully without abrupt jerky snaps
-            final effectiveDuration = duration ?? (scrollDelta > 140
-                ? const Duration(milliseconds: 580)
-                : const Duration(milliseconds: 440));
-            _scrollController.animateTo(
-              clamped,
-              duration: effectiveDuration,
-              curve: Curves.easeInOutCubic,
-            );
-          }
+      final size = MediaQuery.of(context).size;
+      final isLandscape = size.width > size.height;
+      // Align active line at ~34% on desktop/landscape, ~28% on portrait
+      final focalFraction = isLandscape ? 0.34 : 0.28;
+      final viewportHeight = _scrollController.position.viewportDimension;
+
+      // Calculate target offset using estimated item heights
+      final itemOffset = _estimateOffsetForIndex(_currentIndex);
+      final targetOffset = itemOffset - (viewportHeight * focalFraction);
+
+      final clamped = targetOffset.clamp(
+        _scrollController.position.minScrollExtent,
+        _scrollController.position.maxScrollExtent,
+      );
+      final scrollDelta = (_scrollController.offset - clamped).abs();
+
+      if (scrollDelta > 1.0) {
+        if (!animate) {
+          _scrollController.jumpTo(clamped);
+          return;
         }
+
+        // Adaptive duration & smooth Apple-style ease-in-out curve:
+        // Stanza transitions glide gracefully without abrupt jerky snaps
+        final effectiveDuration = duration ?? (scrollDelta > 140
+            ? const Duration(milliseconds: 580)
+            : const Duration(milliseconds: 440));
+
+        _isAutoScrolling = true;
+        _scrollController.animateTo(
+          clamped,
+          duration: effectiveDuration,
+          curve: Curves.easeInOutCubic,
+        ).then((_) {
+          _isAutoScrolling = false;
+        }).catchError((_) {
+          _isAutoScrolling = false;
+        });
       }
     } catch (_) {}
   }
@@ -306,75 +349,75 @@ class _LyricsListViewState extends State<LyricsListView> {
           }
           return false;
         },
-        child: SingleChildScrollView(
+        // ListView.builder: only builds visible items + a small buffer.
+        // This is the primary performance win — previously ALL ~100 lines
+        // were built/laid-out every setState, even when off-screen.
+        child: ListView.builder(
           controller: _scrollController,
           physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
           padding: EdgeInsets.only(
             top: topPadding,
             bottom: bottomPadding,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: List.generate(_items.length, (index) {
-              final item = _items[index];
-              
-              if (item.type == ItemType.interlude) {
-                final isCurrentInterlude = _currentIndex == index && widget.isActive;
-                return KeyedSubtree(
-                  key: _keys[index],
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                    child: InterludeDotsWidget(
-                      isAnimating: isCurrentInterlude,
-                    ),
-                  ),
-                );
-              }
-
-              final line = item.line!;
-              final lyricIndex = item.lyricIndex!;
-              
-              LyricLineState state = LyricLineState.future;
-              if (_currentLyricIndex != -1) {
-                if (lyricIndex < _currentLyricIndex) {
-                  state = LyricLineState.past;
-                } else if (lyricIndex == _currentLyricIndex) {
-                  state = LyricLineState.current;
-                }
-              } else {
-                if (item.endTime <= _currentPosition) {
-                  state = LyricLineState.past;
-                }
-              }
-
-              // Clamping distance to 0, 1, or 2 stops rebuilds and animation tweens on the other 90+ lines
-              final distance = _currentLyricIndex != -1 
-                  ? (lyricIndex - _currentLyricIndex).abs().clamp(0, 2) 
-                  : 2;
-
-              return LyricsLineWidget(
-                key: _keys[index],
-                line: line,
-                state: state,
-                distance: distance,
-                isUnsynced: isUnsynced,
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  widget.onSeek(line.startTime);
-                  
-                  setState(() {
-                    _isManualScrolling = false;
-                    _currentIndex = index;
-                    _currentLyricIndex = lyricIndex;
-                  });
-                  _resumeAutoScrollTimer?.cancel();
-                  _scrollToCurrentLine();
-                },
+          itemCount: _items.length,
+          itemBuilder: (context, index) {
+            final item = _items[index];
+            
+            if (item.type == ItemType.interlude) {
+              final isCurrentInterlude = _currentIndex == index && widget.isActive;
+              return Padding(
+                key: ValueKey('interlude_$index'),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                child: InterludeDotsWidget(
+                  isAnimating: isCurrentInterlude,
+                ),
               );
-            }),
-          ),
+            }
+
+            final line = item.line!;
+            final lyricIndex = item.lyricIndex!;
+            
+            LyricLineState state = LyricLineState.future;
+            if (_currentLyricIndex != -1) {
+              if (lyricIndex < _currentLyricIndex) {
+                state = LyricLineState.past;
+              } else if (lyricIndex == _currentLyricIndex) {
+                state = LyricLineState.current;
+              }
+            } else {
+              if (item.endTime <= _currentPosition) {
+                state = LyricLineState.past;
+              }
+            }
+
+            // Clamping distance to 0, 1, or 2 stops rebuilds and animation tweens on the other 90+ lines
+            final distance = _currentLyricIndex != -1 
+                ? (lyricIndex - _currentLyricIndex).abs().clamp(0, 2) 
+                : 2;
+
+            return LyricsLineWidget(
+              key: ValueKey('lyric_$lyricIndex'),
+              line: line,
+              state: state,
+              distance: distance,
+              isUnsynced: isUnsynced,
+              onTap: () {
+                HapticFeedback.selectionClick();
+                widget.onSeek(line.startTime);
+                
+                setState(() {
+                  _isManualScrolling = false;
+                  _currentIndex = index;
+                  _currentLyricIndex = lyricIndex;
+                });
+                _resumeAutoScrollTimer?.cancel();
+                _scrollToCurrentLine();
+              },
+            );
+          },
         ),
       ),
     );
   }
 }
+
