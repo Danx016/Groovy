@@ -142,6 +142,23 @@ class GroovyConnectService extends ChangeNotifier {
   bool _isPollingCommands = false;
   bool _isSyncingStatus = false;
 
+  // Transfer deduplication state to prevent race conditions & duplicate playback resets
+  String? _lastReceivedTransferSongId;
+  DateTime? _lastReceivedTransferTime;
+
+  bool _isDuplicateTransfer(String songId) {
+    final now = DateTime.now();
+    if (_lastReceivedTransferSongId == songId &&
+        _lastReceivedTransferTime != null &&
+        now.difference(_lastReceivedTransferTime!) < const Duration(milliseconds: 2500)) {
+      debugPrint('[GroovyConnect] Deduplicating rapid repeat transfer for song: $songId');
+      return true;
+    }
+    _lastReceivedTransferSongId = songId;
+    _lastReceivedTransferTime = now;
+    return false;
+  }
+
   // Callbacks hooked to PlayerProvider
   Future<void> Function(
     Song song,
@@ -415,10 +432,20 @@ class GroovyConnectService extends ChangeNotifier {
           }
           final queueIndex = (data['queueIndex'] as num?)?.toInt();
 
-          await onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex);
+          // Immediately acknowledge 200 OK before kicking off async playback preparation
+          // to prevent sender HTTP client timeout and socket reset
           req.response.headers.contentType = ContentType.json;
           req.response.write(jsonEncode({'success': true, 'message': 'Playback transferred'}));
           await req.response.close();
+
+          if (!_isDuplicateTransfer(song.id)) {
+            unawaited(
+              onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex)
+                  .catchError((e) {
+                debugPrint('[GroovyConnect] Error executing onTransferReceived: $e');
+              }),
+            );
+          }
           return;
         }
       }
@@ -527,6 +554,10 @@ class GroovyConnectService extends ChangeNotifier {
 
   Future<void> _sendPresencePing() async {
     try {
+      if (_cachedAuthToken == null || _cachedAuthToken!.isEmpty) {
+        _cachedAuthToken = await StorageService().getUserToken();
+      }
+
       final status = onProvidePlayerStatus?.call() ?? {};
       final songMap = status['song'] as Map<String, dynamic>?;
       Song? song;
@@ -619,13 +650,15 @@ class GroovyConnectService extends ChangeNotifier {
               }
               final queueIndex = (payload['queueIndex'] as num?)?.toInt();
 
-              // Run asynchronously without blocking the command polling loop
-              unawaited(
-                onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex)
-                    .catchError((e) {
-                  debugPrint('[GroovyConnect] Error executing onTransferReceived: $e');
-                }),
-              );
+              if (!_isDuplicateTransfer(song.id)) {
+                // Run asynchronously without blocking the command polling loop
+                unawaited(
+                  onTransferReceived!(song, positionMs, isPlaying, fromDevice, queue, queueIndex)
+                      .catchError((e) {
+                    debugPrint('[GroovyConnect] Error executing onTransferReceived: $e');
+                  }),
+                );
+              }
             }
           } else if (action == 'control' || action == 'play' || action == 'pause' || action == 'skipNext' || action == 'skipPrevious' || action == 'seek' || action == 'volume' || action == 'togglePlayPause') {
             String controlAction = action;
@@ -728,7 +761,17 @@ class GroovyConnectService extends ChangeNotifier {
   /// Fetches active cloud devices from the Groovy backend.
   Future<void> _fetchCloudDevices(String? token) async {
     try {
-      final devicesList = await GroovyApiService().fetchUserDevices(token: token);
+      String? effectiveToken = token ?? _cachedAuthToken;
+      if (effectiveToken == null || effectiveToken.isEmpty) {
+        effectiveToken = await StorageService().getUserToken();
+        if (effectiveToken != null && effectiveToken.isNotEmpty) {
+          _cachedAuthToken = effectiveToken;
+        }
+      }
+      final devicesList = await GroovyApiService().fetchUserDevices(
+        token: effectiveToken,
+        callerDeviceId: _localDeviceId,
+      );
 
       for (final item in devicesList) {
         final remotePlatform = (item['platform']?.toString() ?? '').toLowerCase();
@@ -746,15 +789,14 @@ class GroovyConnectService extends ChangeNotifier {
         final remoteDeviceModel = item['device_model']?.toString() ?? '';
         final localIpCandidate = item['local_ip']?.toString() ?? item['localIp']?.toString() ?? item['ip_address']?.toString() ?? '';
 
-        // 3. Do not discover self: same physical machine (same platform and name/model, or same platform and local IP)
+        // 3. Do not discover self: only if identical platform + model + local IP
         final isSamePlatform = remotePlatform == _localPlatform.toLowerCase();
-        final isSameName = remoteDeviceName.toLowerCase() == _localDeviceName.toLowerCase() ||
-            remoteDeviceName.toLowerCase() == _localModel.toLowerCase() ||
-            (remoteDeviceModel.isNotEmpty && remoteDeviceModel.toLowerCase() == _localModel.toLowerCase());
+        final isSameName = remoteDeviceName.toLowerCase() == _localDeviceName.toLowerCase() &&
+            remoteDeviceModel.isNotEmpty && remoteDeviceModel.toLowerCase() == _localModel.toLowerCase();
         final isSameIp = _localIp.isNotEmpty && localIpCandidate.isNotEmpty &&
-            (localIpCandidate == _localIp || localIpCandidate == '127.0.0.1');
+            localIpCandidate != '127.0.0.1' && localIpCandidate == _localIp;
 
-        if (isSamePlatform && (isSameName || isSameIp)) continue;
+        if (isSamePlatform && isSameName && isSameIp) continue;
 
         final remoteDevicePlatform = item['platform']?.toString() ?? 'Dispositivo';
 
@@ -863,9 +905,9 @@ class GroovyConnectService extends ChangeNotifier {
     _startStatusSyncTimer();
     notifyListeners();
 
-    // 1. If device is available on local LAN, send directly over HTTP for instant transfer
+    // 1. If device is available on local LAN, attempt direct transfer over HTTP for instant transfer
     if (device.isLocalLan && device.host.isNotEmpty) {
-      unawaited(_sendLanTransfer(
+      final lanSuccess = await _sendLanTransfer(
         device.host,
         device.port,
         song,
@@ -873,7 +915,12 @@ class GroovyConnectService extends ChangeNotifier {
         isPlaying,
         conciseQueue,
         effectiveQueueIndex,
-      ));
+      );
+      if (lanSuccess) {
+        debugPrint('[GroovyConnect] Successfully transferred playback to ${device.name} via local LAN');
+        return true;
+      }
+      debugPrint('[GroovyConnect] Local LAN transfer failed/timed out, falling back to Groovy Cloud');
     }
 
     // 2. Route playback transfer through Groovy Cloud Server asynchronously
@@ -916,9 +963,9 @@ class GroovyConnectService extends ChangeNotifier {
   ) async {
     HttpClient? client;
     try {
-      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 1000);
+      client = HttpClient()..connectionTimeout = const Duration(milliseconds: 2500);
       final uri = Uri.parse('http://$host:$port/groovy/transfer');
-      final request = await client.postUrl(uri).timeout(const Duration(milliseconds: 1000));
+      final request = await client.postUrl(uri).timeout(const Duration(milliseconds: 2500));
       request.headers.contentType = ContentType.json;
       request.headers.set('X-Groovy-Sender', _localDeviceId);
       request.write(jsonEncode({
@@ -929,7 +976,7 @@ class GroovyConnectService extends ChangeNotifier {
         'queue': queue,
         'queueIndex': queueIndex,
       }));
-      final response = await request.close().timeout(const Duration(milliseconds: 1000));
+      final response = await request.close().timeout(const Duration(milliseconds: 2500));
       return response.statusCode == HttpStatus.ok;
     } catch (_) {
       return false;
@@ -1112,7 +1159,10 @@ class GroovyConnectService extends ChangeNotifier {
 
       if (_cachedAuthToken != null && _cachedAuthToken!.isNotEmpty) {
         try {
-          final devicesList = await GroovyApiService().fetchUserDevices(token: _cachedAuthToken);
+          final devicesList = await GroovyApiService().fetchUserDevices(
+            token: _cachedAuthToken,
+            callerDeviceId: _localDeviceId,
+          );
           final targetDev = devicesList.firstWhere(
             (d) =>
                 d['device_key']?.toString() == _connectedDevice!.id ||

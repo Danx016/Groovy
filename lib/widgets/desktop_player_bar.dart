@@ -97,6 +97,8 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
       imageProvider = const AssetImage('assets/default_cover.png');
     }
 
+    final cachedLyrics = NowPlayingScreen.getCachedLyrics(song) ?? const [];
+
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
         opaque: false,
@@ -109,6 +111,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
               '',
           heroTag: 'desktop_bar_fs_${song.id}',
           song: song,
+          lyrics: cachedLyrics,
         ),
         transitionsBuilder: (ctx, anim, secondaryAnim, child) {
           return FadeTransition(

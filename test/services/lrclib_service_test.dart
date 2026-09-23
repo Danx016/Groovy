@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/services/lrclib_service.dart';
 
 void main() {
@@ -44,6 +44,18 @@ void main() {
         LrcLibService.cleanTitle('Kendrick Lamar - HUMBLE.'),
         equals('HUMBLE.'),
       );
+      expect(
+        LrcLibService.cleanTitle('MONACO (Video Oficial)'),
+        equals('MONACO'),
+      );
+      expect(
+        LrcLibService.cleanTitle('Columbia [En Vivo]'),
+        equals('Columbia'),
+      );
+      expect(
+        LrcLibService.cleanTitle('Luna (Audio Oficial)'),
+        equals('Luna'),
+      );
     });
 
     test('cleans artist names from YouTube Music channels', () {
@@ -58,6 +70,21 @@ void main() {
       expect(
         LrcLibService.cleanArtist('Eminem ft. Rihanna'),
         equals('Eminem'),
+      );
+    });
+
+    test('extracts primary artist properly from collaboration strings', () {
+      expect(
+        LrcLibService.primaryArtist('Bad Bunny, Feid'),
+        equals('Bad Bunny'),
+      );
+      expect(
+        LrcLibService.primaryArtist('FloyyMenor & Cris Mj'),
+        equals('FloyyMenor'),
+      );
+      expect(
+        LrcLibService.primaryArtist('Eslabon Armado, Peso Pluma'),
+        equals('Eslabon Armado'),
       );
     });
 

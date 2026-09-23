@@ -70,6 +70,8 @@ class MiniPlayer extends StatelessWidget {
             }
             final topPadding = MediaQuery.of(context).padding.top;    
 
+            final cachedLyrics = NowPlayingScreen.getCachedLyrics(currentSong) ?? const [];
+
             showModalBottomSheet(
               context: context,
               isScrollControlled: true,
@@ -85,6 +87,7 @@ class MiniPlayer extends StatelessWidget {
                     : currentSong.artist) ?? '',
                 heroTag: 'cover_${currentSong.id}',
                 song: currentSong,
+                lyrics: cachedLyrics,
               ),
             );
           }

@@ -49,18 +49,16 @@ router.get('/playback', async (req, res) => {
       FROM user_live_playback
       WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
         AND LOWER(platform) NOT IN ('web', 'browser')
-        AND last_ping_at >= NOW() - INTERVAL 30 SECOND
+        AND last_ping_at >= NOW() - INTERVAL 60 SECOND
         AND (? = '' OR device_key != ?)
       ORDER BY last_ping_at DESC
     `, [userId, userId, client.ip, callerDeviceId, callerDeviceId]);
 
-    // Deduplicate by physical device (same platform and device name/model)
+    // Deduplicate by unique device_key to allow multiple devices of same platform/model
     const seen = new Set();
     const uniqueDevices = [];
     for (const row of rows) {
-      const p = (row.platform || '').trim().toLowerCase();
-      const d = (row.device_model || row.device_name || '').trim().toLowerCase();
-      const key = `${p}_${d}`;
+      const key = row.device_key || `${(row.platform || '').trim().toLowerCase()}_${(row.device_model || row.device_name || '').trim().toLowerCase()}`;
       if (!seen.has(key)) {
         seen.add(key);
         uniqueDevices.push(row);

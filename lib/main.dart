@@ -227,6 +227,11 @@ void main() async {
       debugPrint('Failed to initialize desktop system service: $e');
     });
   }
+  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+    YtDlpService().ensureBinaryAvailable().catchError((e) {
+      debugPrint('Failed to ensure yt-dlp binary: $e');
+    });
+  }
 
   // Parallel async initialization of core services to minimize startup time
   final initResults = await Future.wait([

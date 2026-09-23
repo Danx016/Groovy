@@ -561,6 +561,22 @@ class YtDlpService {
     return null;
   }
 
+  Completer<bool>? _ongoingUpdateCompleter;
+
+  /// Proactively ensures that yt-dlp binary is available on desktop platforms.
+  /// If not found, immediately starts background download without waiting for user action.
+  Future<void> ensureBinaryAvailable() async {
+    if (kIsWeb || Platform.isAndroid || Platform.isIOS) return;
+    await _detectBinaries();
+    if (_detectedYtDlpPath == null && _detectedPythonPath == null) {
+      debugPrint('[yt-dlp] No binary found on startup. Starting initial download...');
+      unawaited(updateYtDlp(force: true).catchError((e) {
+        debugPrint('[yt-dlp] Initial binary download failed: $e');
+        return false;
+      }));
+    }
+  }
+
   void _triggerAutoRecovery() {
     if (kIsWeb || Platform.isAndroid || Platform.isIOS || _isUpdating) return;
     final now = DateTime.now();
@@ -578,56 +594,68 @@ class YtDlpService {
   /// Checks and updates yt-dlp binary from official GitHub releases.
   /// Returns `true` if updated successfully, `false` otherwise.
   Future<bool> updateYtDlp({bool force = false}) async {
-    if (kIsWeb || _isUpdating) return false;
+    if (kIsWeb) return false;
     if (Platform.isAndroid || Platform.isIOS) return false;
+    if (_ongoingUpdateCompleter != null) {
+      return _ongoingUpdateCompleter!.future;
+    }
 
+    final completer = Completer<bool>();
+    _ongoingUpdateCompleter = completer;
     _isUpdating = true;
     try {
       final currentVersion = await getYtDlpVersion();
       debugPrint('[yt-dlp updater] Current local version: $currentVersion');
 
-      // 1. Check latest release on GitHub
-      final releaseUri = Uri.parse('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest');
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-      final request = await client.getUrl(releaseUri);
-      request.headers.add('User-Agent', 'GroovyMusicApp/1.0');
-      request.headers.add('Accept', 'application/vnd.github.v3+json');
-      final response = await request.close().timeout(const Duration(seconds: 10));
+      String downloadUrl = '';
+      String? latestTag;
 
-      if (response.statusCode != HttpStatus.ok) {
-        debugPrint('[yt-dlp updater] Failed to check GitHub releases: HTTP ${response.statusCode}');
-        client.close();
-        return false;
-      }
+      // 1. Try checking latest release on GitHub API (can be rate limited on clean IPs)
+      try {
+        final releaseUri = Uri.parse('https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest');
+        final client = HttpClient()..connectionTimeout = const Duration(seconds: 8);
+        final request = await client.getUrl(releaseUri);
+        request.headers.add('User-Agent', 'GroovyMusicApp/1.0');
+        request.headers.add('Accept', 'application/vnd.github.v3+json');
+        final response = await request.close().timeout(const Duration(seconds: 8));
 
-      final body = await utf8.decoder.bind(response).join();
-      client.close();
-      final releaseJson = jsonDecode(body) as Map<String, dynamic>;
-      final latestTag = (releaseJson['tag_name'] as String? ?? '').replaceFirst('v', '').trim();
-      debugPrint('[yt-dlp updater] Latest GitHub version: $latestTag');
+        if (response.statusCode == HttpStatus.ok) {
+          final body = await utf8.decoder.bind(response).join();
+          client.close();
+          final releaseJson = jsonDecode(body) as Map<String, dynamic>;
+          latestTag = (releaseJson['tag_name'] as String? ?? '').replaceFirst('v', '').trim();
+          debugPrint('[yt-dlp updater] Latest GitHub version: $latestTag');
 
-      if (!force && currentVersion != null && currentVersion == latestTag) {
-        debugPrint('[yt-dlp updater] Already on the latest version ($currentVersion).');
-        return true;
-      }
+          if (!force && currentVersion != null && currentVersion == latestTag) {
+            debugPrint('[yt-dlp updater] Already on the latest version ($currentVersion).');
+            completer.complete(true);
+            return true;
+          }
 
-      // 2. Identify the appropriate asset to download
-      final assets = releaseJson['assets'] as List<dynamic>? ?? [];
-      final targetAssetName = Platform.isWindows ? 'yt-dlp.exe' : (Platform.isMacOS ? 'yt-dlp_macos' : 'yt-dlp_linux');
-      
-      var downloadUrl = '';
-      for (final asset in assets) {
-        final name = asset['name'] as String? ?? '';
-        if (name == (Platform.isWindows ? 'yt-dlp.exe' : 'yt-dlp') || name == targetAssetName) {
-          downloadUrl = asset['browser_download_url'] as String? ?? '';
-          break;
+          final assets = releaseJson['assets'] as List<dynamic>? ?? [];
+          final targetAssetName = Platform.isWindows ? 'yt-dlp.exe' : (Platform.isMacOS ? 'yt-dlp_macos' : 'yt-dlp_linux');
+          for (final asset in assets) {
+            final name = asset['name'] as String? ?? '';
+            if (name == (Platform.isWindows ? 'yt-dlp.exe' : 'yt-dlp') || name == targetAssetName) {
+              downloadUrl = asset['browser_download_url'] as String? ?? '';
+              break;
+            }
+          }
+        } else {
+          client.close();
+          debugPrint('[yt-dlp updater] GitHub API returned HTTP ${response.statusCode}. Falling back to direct release download URL...');
         }
+      } catch (e) {
+        debugPrint('[yt-dlp updater] GitHub API check note: $e. Falling back to direct release download URL...');
       }
 
+      // If GitHub API check was rate-limited or didn't find asset, use official direct download URLs
       if (downloadUrl.isEmpty) {
         downloadUrl = Platform.isWindows
             ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
-            : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+            : (Platform.isMacOS
+                ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos'
+                : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp');
       }
 
       debugPrint('[yt-dlp updater] Downloading from: $downloadUrl');
@@ -649,6 +677,7 @@ class YtDlpService {
       if (dlRes.statusCode != HttpStatus.ok) {
         downloadClient.close();
         debugPrint('[yt-dlp updater] Download failed with status: ${dlRes.statusCode}');
+        completer.complete(false);
         return false;
       }
 
@@ -660,6 +689,7 @@ class YtDlpService {
       if (fileSize < 5 * 1024 * 1024) {
         debugPrint('[yt-dlp updater] Downloaded file is too small ($fileSize bytes). Aborting.');
         if (await tempFile.exists()) await tempFile.delete();
+        completer.complete(false);
         return false;
       }
 
@@ -684,22 +714,26 @@ class YtDlpService {
 
       // Verify the new binary works
       final testResult = await Process.run(targetFile.path, ['--version']).timeout(
-        const Duration(seconds: 4),
+        const Duration(seconds: 5),
       );
       if (testResult.exitCode == 0) {
         _detectedYtDlpPath = targetFile.path;
         _detectionDone = true;
-        debugPrint('[yt-dlp updater] ✅ Successfully updated yt-dlp to v${testResult.stdout.toString().trim()}');
+        debugPrint('[yt-dlp updater] ✅ Successfully updated/installed yt-dlp to v${testResult.stdout.toString().trim()} at ${targetFile.path}');
+        completer.complete(true);
         return true;
       } else {
         debugPrint('[yt-dlp updater] ❌ New binary failed verification.');
+        completer.complete(false);
         return false;
       }
     } catch (e, stack) {
       debugPrint('[yt-dlp updater] Error during update: $e\n$stack');
+      completer.complete(false);
       return false;
     } finally {
       _isUpdating = false;
+      _ongoingUpdateCompleter = null;
     }
   }
 
@@ -723,6 +757,12 @@ class YtDlpService {
       if (Platform.isWindows) ...[
         '$exeDir/yt-dlp.exe',
         '$exeDir/data/yt-dlp.exe',
+        if (Platform.environment['LOCALAPPDATA'] != null)
+          '${Platform.environment['LOCALAPPDATA']}\\Programs\\Groovy\\yt-dlp.exe',
+        if (Platform.environment['APPDATA'] != null)
+          '${Platform.environment['APPDATA']}\\Groovy\\yt-dlp.exe',
+        if (Platform.environment['USERPROFILE'] != null)
+          '${Platform.environment['USERPROFILE']}\\yt-dlp.exe',
         '$exeDir/../../../../yt-dlp.exe',
         '$exeDir/../../../yt-dlp.exe',
         '$exeDir/../../yt-dlp.exe',
@@ -804,6 +844,16 @@ class YtDlpService {
 
   Future<ProcessResult?> _runYtDlp(List<String> args, {Duration timeout = const Duration(seconds: 20)}) async {
     await _detectBinaries();
+
+    // If binary not detected yet, but an initial download or update is in progress, wait for it!
+    if (_detectedYtDlpPath == null && _detectedPythonPath == null && _ongoingUpdateCompleter != null) {
+      debugPrint('[yt-dlp] Binary not ready yet; awaiting active download before running...');
+      try {
+        await _ongoingUpdateCompleter!.future.timeout(const Duration(seconds: 20));
+      } catch (_) {}
+      _detectionDone = false;
+      await _detectBinaries();
+    }
 
     if (_detectedYtDlpPath != null) {
       try {

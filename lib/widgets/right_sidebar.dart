@@ -56,6 +56,13 @@ class _RightSidebarState extends State<RightSidebar> {
 
   static final Map<String, List<LyricLine>> _lyricsCache = {};
 
+  static List<LyricLine>? _getCachedLyrics(Song song) {
+    if (_lyricsCache.containsKey(song.id)) return _lyricsCache[song.id];
+    final key = NowPlayingScreen.getLyricsCacheKey(song);
+    if (_lyricsCache.containsKey(key)) return _lyricsCache[key];
+    return NowPlayingScreen.getCachedLyrics(song);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -83,28 +90,45 @@ class _RightSidebarState extends State<RightSidebar> {
 
   void _onSongChanged(Song? song) {
     if (song == null) {
-      setState(() {
-        _lastSong = null;
-        _lyrics = [];
-        _isLoadingLyrics = false;
-      });
+      if (_lastSong != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _lastSong = null;
+              _lyrics = [];
+              _isLoadingLyrics = false;
+            });
+          }
+        });
+      }
       return;
     }
 
-    if (_lastSong?.id == song.id) return;
+    final isSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
+
+    if (isSameSong) return;
     _lastSong = song;
 
     _lyricsDebounceTimer?.cancel();
 
-    if (_lyricsCache.containsKey(song.id)) {
-      setState(() {
-        _lyrics = _lyricsCache[song.id]!;
-        _isLoadingLyrics = false;
+    final cached = _getCachedLyrics(song);
+    if (cached != null && cached.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _lyrics = cached;
+            _isLoadingLyrics = false;
+          });
+        }
       });
     } else {
-      setState(() {
-        _lyrics = [];
-        _isLoadingLyrics = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {
+            _lyrics = [];
+            _isLoadingLyrics = true;
+          });
+        }
       });
       _lyricsDebounceTimer = Timer(const Duration(milliseconds: 180), () {
         if (mounted) _fetchLyrics(song);
@@ -166,15 +190,13 @@ class _RightSidebarState extends State<RightSidebar> {
       final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
       List<LyricLine> parsed = [];
 
-      // 1. Offline / Local check
-      if (offlineService.isOfflineMode || song.isLocal || offlineService.isSongDownloaded(songId)) {
-        final raw = await offlineService.getLocalLyrics(songId);
-        if (raw != null) {
-          parsed = _extractParsedLines(raw);
-        }
+      // 1. Instant disk cache lookup for any song
+      final raw = await offlineService.getLocalLyrics(songId);
+      if (raw != null) {
+        parsed = _extractParsedLines(raw);
       }
 
-      // 2. Online fetch via LRCLIB with exact duration matching
+      // 2. Online fetch via LRCLIB, YouTube CC, and Genius with exact duration matching
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
         final durSeconds = (song.duration != null && song.duration! > 0)
             ? song.duration!
@@ -183,22 +205,31 @@ class _RightSidebarState extends State<RightSidebar> {
           artist: song.artist,
           title: song.title,
           durationSeconds: durSeconds > 0 ? durSeconds : null,
+          songId: songId,
         ).catchError((_) => null);
 
         if (lrcLibRes != null) {
           parsed = _extractParsedLines(lrcLibRes);
+          await offlineService.saveLyrics(songId, lrcLibRes).catchError((_) {});
         }
       }
 
-      if (!mounted || _lastSong?.id != songId) return;
+      final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
+
+      if (!mounted || !isStillSameSong) return;
 
       _lyricsCache[songId] = parsed;
+      _lyricsCache[NowPlayingScreen.getLyricsCacheKey(song)] = parsed;
+      if (_lastSong != null) {
+        _lyricsCache[_lastSong!.id] = parsed;
+      }
       setState(() {
         _lyrics = parsed;
         _isLoadingLyrics = false;
       });
     } catch (_) {
-      if (mounted && _lastSong?.id == songId) {
+      final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
+      if (mounted && isStillSameSong) {
         setState(() {
           _lyrics = [];
           _isLoadingLyrics = false;
@@ -258,6 +289,10 @@ class _RightSidebarState extends State<RightSidebar> {
       imageProvider = const AssetImage('assets/default_cover.png');
     }
 
+    final lyricsToPass = _lyrics.isNotEmpty
+        ? _lyrics
+        : (_getCachedLyrics(song) ?? const <LyricLine>[]);
+
     Navigator.of(context, rootNavigator: true).push(
       PageRouteBuilder(
         opaque: false,
@@ -270,6 +305,7 @@ class _RightSidebarState extends State<RightSidebar> {
               '',
           heroTag: 'sidebar_fs_${song.id}',
           song: song,
+          lyrics: lyricsToPass,
         ),
         transitionsBuilder: (ctx, anim, secondaryAnim, child) {
           return FadeTransition(

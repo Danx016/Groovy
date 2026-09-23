@@ -54,6 +54,36 @@ class NowPlayingScreen extends StatefulWidget {
     this.topPadding = 0.0,
   });
 
+  static final Map<String, List<LyricLine>> _lyricsCache = {};
+
+  static String getLyricsCacheKey(Song song) {
+    final artist = song.artist?.trim().toLowerCase() ?? '';
+    final title = song.title.trim().toLowerCase();
+    return '$artist|$title';
+  }
+
+  static List<LyricLine>? getCachedLyrics(Song song) {
+    if (_lyricsCache.containsKey(song.id)) return _lyricsCache[song.id];
+    final key = getLyricsCacheKey(song);
+    if (_lyricsCache.containsKey(key)) return _lyricsCache[key];
+    return null;
+  }
+
+  static void setCachedLyrics(Song song, List<LyricLine> lyrics) {
+    _lyricsCache[song.id] = lyrics;
+    _lyricsCache[getLyricsCacheKey(song)] = lyrics;
+  }
+
+  static bool isSameTrack(Song? a, Song? b) {
+    if (a == null || b == null) return false;
+    if (a.id == b.id) return true;
+    final aTitle = a.title.trim().toLowerCase();
+    final bTitle = b.title.trim().toLowerCase();
+    final aArtist = a.artist?.trim().toLowerCase() ?? '';
+    final bArtist = b.artist?.trim().toLowerCase() ?? '';
+    return aTitle == bTitle && aArtist == bArtist;
+  }
+
   @override
   State<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
@@ -156,9 +186,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     }
 
     // 2. Instant lyrics cache check to prevent spinner flash
-    if (_fetchedLyrics.isEmpty && _lyricsCache.containsKey(songId)) {
-      _fetchedLyrics = _lyricsCache[songId]!;
-      _isLoadingLyrics = false;
+    if (_fetchedLyrics.isEmpty && widget.song != null) {
+      final cachedLyrics = NowPlayingScreen.getCachedLyrics(widget.song!);
+      if (cachedLyrics != null && cachedLyrics.isNotEmpty) {
+        _fetchedLyrics = cachedLyrics;
+        _isLoadingLyrics = false;
+      }
     }
 
     // 3. Defer palette extraction slightly until after the transition frame
@@ -203,7 +236,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     final newImageProvider = _resolveImageProvider(currentSong, youtubeService);
-    final isSongChange = _lastSong?.id != currentSong.id;
+
+    // Remote playback resilience: treat songs with the same title and artist as identical
+    // even if telemetry or cross-device resolution reports a different ID format (e.g. dz_... vs yt_...)
+    final isSameSong = NowPlayingScreen.isSameTrack(_lastSong, currentSong);
+
+    final isSongChange = !isSameSong;
     final isImageChange = _currentImageProvider != newImageProvider;
 
     if (isSongChange || isImageChange) {
@@ -212,9 +250,9 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       // 1. Instant cached color check
       final cachedColors = PaletteService.getCachedColors(currentSong.id);
       
-      // 2. Instant lyrics cache check
-      final hasCachedLyrics = _lyricsCache.containsKey(currentSong.id);
-      final cachedLyrics = hasCachedLyrics ? _lyricsCache[currentSong.id]! : <LyricLine>[];
+      // 2. Instant lyrics cache check across both ID and artist|title
+      final cachedLyrics = NowPlayingScreen.getCachedLyrics(currentSong);
+      final hasCachedLyrics = cachedLyrics != null && cachedLyrics.isNotEmpty;
 
       _colorDebounceTimer?.cancel();
       _lyricsDebounceTimer?.cancel();
@@ -226,7 +264,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           _bgColors = cachedColors;
         }
         if (isSongChange) {
-          _fetchedLyrics = cachedLyrics;
+          _fetchedLyrics = cachedLyrics ?? <LyricLine>[];
           _isLoadingLyrics = !hasCachedLyrics;
         }
       });
@@ -245,8 +283,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
     }
   }
-
-  static final Map<String, List<LyricLine>> _lyricsCache = {};
 
   List<LyricLine> _extractParsedLines(Map<String, dynamic> raw) {
     if (raw['structuredLyrics'] != null) {
@@ -301,10 +337,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     final song = _lastSong!;
 
     // Instant cache check: if already fetched, show immediately without spinner
-    if (_lyricsCache.containsKey(songId)) {
+    final cachedLyrics = NowPlayingScreen.getCachedLyrics(song);
+    if (cachedLyrics != null && cachedLyrics.isNotEmpty) {
       if (mounted) {
         setState(() {
-          _fetchedLyrics = _lyricsCache[songId]!;
+          _fetchedLyrics = cachedLyrics;
           _isLoadingLyrics = false;
         });
       }
@@ -320,15 +357,13 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       
       List<LyricLine> parsed = [];
 
-      // 1. Offline / Local check
-      if (offlineService.isOfflineMode || song.isLocal || offlineService.isSongDownloaded(songId)) {
-        final raw = await offlineService.getLocalLyrics(songId);
-        if (raw != null) {
-          parsed = _extractParsedLines(raw);
-        }
+      // 1. Instant disk cache lookup for any song
+      final raw = await offlineService.getLocalLyrics(songId);
+      if (raw != null) {
+        parsed = _extractParsedLines(raw);
       }
       
-      // 2. Online fetch: Try LRCLIB for synchronized lyrics with exact duration matching
+      // 2. Online fetch: Try LRCLIB, YouTube CC, and Genius with exact duration matching
       if (parsed.isEmpty && !offlineService.isOfflineMode) {
         final durSeconds = (song.duration != null && song.duration! > 0)
             ? song.duration!
@@ -337,19 +372,26 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           artist: song.artist,
           title: song.title,
           durationSeconds: durSeconds > 0 ? durSeconds : null,
+          songId: songId,
         ).catchError((_) => null);
 
         if (lrcLibRes != null) {
           parsed = _extractParsedLines(lrcLibRes);
+          await offlineService.saveLyrics(songId, lrcLibRes).catchError((_) {});
         }
       }
       
-      // If user switched songs while loading, discard this result
-      if (!mounted || _lastSong?.id != songId) return;
+      // If user switched songs while loading, check whether current song is still the same track
+      final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
 
-      _lyricsCache[songId] = parsed;
+      if (!mounted || !isStillSameSong) return;
 
-      if (mounted && _lastSong?.id == songId) {
+      NowPlayingScreen.setCachedLyrics(song, parsed);
+      if (_lastSong != null && _lastSong!.id != songId) {
+        NowPlayingScreen.setCachedLyrics(_lastSong!, parsed);
+      }
+
+      if (mounted && isStillSameSong) {
         setState(() {
           _fetchedLyrics = parsed;
           _isLoadingLyrics = false;
@@ -357,14 +399,16 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
     } catch (e) {
       debugPrint('Error fetching lyrics: $e');
-      if (mounted && _lastSong?.id == songId) {
+      final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
+      if (mounted && isStillSameSong) {
         setState(() {
           _fetchedLyrics = [];
           _isLoadingLyrics = false;
         });
       }
     } finally {
-      if (mounted && _lastSong?.id == songId) {
+      final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
+      if (mounted && isStillSameSong) {
         setState(() => _isLoadingLyrics = false);
       }
     }
@@ -971,14 +1015,45 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 )
               : Center(
                   child: _isLoadingLyrics
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text(
-                          "Letra no disponible",
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      ? const Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              'Cargando letra...',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text(
+                              "Letra no disponible",
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton.icon(
+                              onPressed: () => _fetchLyrics(),
+                              icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 18),
+                              label: const Text(
+                                'Buscar de nuevo',
+                                style: TextStyle(color: Colors.white70, fontSize: 14),
+                              ),
+                            ),
+                          ],
                         ),
                 ),
         ),
@@ -1095,8 +1170,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
             ? currentSong!.artistParticipants!.map((a) => a.name).join(', ')
             : currentSong?.artist) ?? widget.artist;
         final album = currentSong?.album ?? '';
-
-        final hasLyrics = _fetchedLyrics.isNotEmpty && _showLyricsInLandscape;
+        final hasLyrics = _showLyricsInLandscape;
 
         return Focus(
           autofocus: true,
@@ -1448,9 +1522,23 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
     if (_isLoadingLyrics) {
       return const Center(
-        child: CircularProgressIndicator(
-          color: Colors.white,
-          strokeWidth: 2.5,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              color: Colors.white,
+              strokeWidth: 2.5,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Cargando letra...',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -1482,6 +1570,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               fontSize: 22,
               fontWeight: FontWeight.w700,
               letterSpacing: -0.3,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed: () => _fetchLyrics(),
+            icon: const Icon(Icons.refresh_rounded, color: Colors.white70),
+            label: const Text(
+              'Buscar de nuevo',
+              style: TextStyle(color: Colors.white70, fontSize: 14),
             ),
           ),
         ],

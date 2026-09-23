@@ -1,7 +1,7 @@
 ; Groovy Inno Setup Script
 
 #define MyAppName "Groovy"
-#define MyAppVersion "1.3.8"
+#define MyAppVersion "1.3.9"
 #define MyAppPublisher "Danx016"
 #define MyAppURL "https://github.com/Danx016/Groovy"
 #define MyAppExeName "groovy.exe"
@@ -39,6 +39,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "yt-dlp.exe"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
@@ -46,3 +47,29 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+function IsVCRedistInstalled: Boolean;
+var
+  Installed: Cardinal;
+begin
+  Result := False;
+  if RegQueryDWordValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', Installed) then
+    Result := (Installed = 1)
+  else if RegQueryDWordValue(HKEY_LOCAL_MACHINE, 'SOFTWARE\WOW6432Node\Microsoft\VisualStudio\14.0\VC\Runtimes\x64', 'Installed', Installed) then
+    Result := (Installed = 1);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    if not IsVCRedistInstalled then
+    begin
+      // Silently download and install official Microsoft Visual C++ 2015-2022 x64 Redistributable
+      Exec('powershell.exe', '-NoProfile -NonInteractive -Command "try { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; (New-Object Net.WebClient).DownloadFile(''https://aka.ms/vs/17/release/vc_redist.x64.exe'', \"$env:TEMP\vc_redist.x64.exe\"); Start-Process -FilePath \"$env:TEMP\vc_redist.x64.exe\" -ArgumentList ''/passive'',''/norestart'' -Wait } catch {}"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    end;
+  end;
+end;

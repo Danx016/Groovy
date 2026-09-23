@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/song.dart';
 import 'device_info_service.dart';
+import 'storage_service.dart';
 
 class GroovyUser {
   final int id;
@@ -146,6 +147,11 @@ class GroovyApiService {
     int? localPort,
   }) async {
     try {
+      String? effectiveToken = token;
+      if (effectiveToken.isEmpty) {
+        effectiveToken = await StorageService().getUserToken();
+      }
+
       String? effectiveDeviceId = deviceId;
       if (effectiveDeviceId == null || effectiveDeviceId.isEmpty) {
         try {
@@ -158,7 +164,7 @@ class GroovyApiService {
       final uri = Uri.parse('$_baseUrl/telemetry/playback');
       await _client.post(
         uri,
-        headers: _headers(token),
+        headers: _headers(effectiveToken),
         body: jsonEncode({
           if (effectiveDeviceId != null && effectiveDeviceId.isNotEmpty) 'deviceId': effectiveDeviceId,
           'songId': song.id,
@@ -179,7 +185,7 @@ class GroovyApiService {
           if (localIp != null && localIp.isNotEmpty) 'localIp': localIp,
           if (localPort != null && localPort > 0) 'localPort': localPort,
         }),
-      ).timeout(const Duration(seconds: 3));
+      ).timeout(const Duration(seconds: 4));
     } catch (e) {
       debugPrint('[GroovyApiService] reportPlaybackState note: $e');
     }
@@ -193,19 +199,23 @@ class GroovyApiService {
     dynamic payload,
     String? token,
   }) async {
+    String? effectiveToken = token;
+    if (effectiveToken == null || effectiveToken.isEmpty) {
+      effectiveToken = await StorageService().getUserToken();
+    }
     for (int attempt = 0; attempt < 2; attempt++) {
       try {
         final uri = Uri.parse('$_baseUrl/telemetry/command');
         final res = await _client.post(
           uri,
-          headers: _headers(token),
+          headers: _headers(effectiveToken),
           body: jsonEncode({
             'targetDeviceId': targetDeviceId,
             'senderDeviceId': senderDeviceId,
             'action': action,
             'payload': payload,
           }),
-        ).timeout(const Duration(seconds: 3));
+        ).timeout(const Duration(seconds: 5));
         if (res.statusCode >= 200 && res.statusCode < 300) {
           final data = jsonDecode(res.body);
           if (data['success'] == true) return true;
@@ -224,11 +234,15 @@ class GroovyApiService {
     String? token,
   }) async {
     try {
+      String? effectiveToken = token;
+      if (effectiveToken == null || effectiveToken.isEmpty) {
+        effectiveToken = await StorageService().getUserToken();
+      }
       final dev = await _getDeviceInfo();
       final uri = Uri.parse('$_baseUrl/telemetry/command?deviceId=${Uri.encodeComponent(deviceId)}&platform=${Uri.encodeComponent(dev.platform)}&model=${Uri.encodeComponent(dev.deviceModel)}');
       final res = await _client.get(
         uri,
-        headers: _headers(token),
+        headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 12000));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -243,13 +257,32 @@ class GroovyApiService {
   }
 
   /// Fetches active devices for the authenticated user from Groovy Cloud.
-  Future<List<Map<String, dynamic>>> fetchUserDevices({String? token}) async {
+  Future<List<Map<String, dynamic>>> fetchUserDevices({String? token, String? callerDeviceId}) async {
     try {
-      final uri = Uri.parse('$_baseUrl/telemetry/playback');
+      String? effectiveToken = token;
+      if (effectiveToken == null || effectiveToken.isEmpty) {
+        effectiveToken = await StorageService().getUserToken();
+      }
+
+      String? effectiveDeviceId = callerDeviceId;
+      if (effectiveDeviceId == null || effectiveDeviceId.isEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          effectiveDeviceId = prefs.getString('groovy_cloud_device_id_v2');
+        } catch (_) {}
+      }
+
+      final queryParams = <String, String>{};
+      if (effectiveDeviceId != null && effectiveDeviceId.isNotEmpty) {
+        queryParams['deviceId'] = effectiveDeviceId;
+      }
+      final uri = Uri.parse('$_baseUrl/telemetry/playback').replace(
+        queryParameters: queryParams.isNotEmpty ? queryParams : null,
+      );
       final res = await _client.get(
         uri,
-        headers: _headers(token),
-      ).timeout(const Duration(milliseconds: 1800));
+        headers: _headers(effectiveToken),
+      ).timeout(const Duration(milliseconds: 6000));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['devices'] is List) {
@@ -265,6 +298,11 @@ class GroovyApiService {
 
   Future<void> pingSession(String token, {String? localIp, int? localPort}) async {
     try {
+      String? effectiveToken = token;
+      if (effectiveToken.isEmpty) {
+        effectiveToken = await StorageService().getUserToken();
+      }
+
       String? deviceId;
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -275,7 +313,7 @@ class GroovyApiService {
       final uri = Uri.parse('$_baseUrl/telemetry/ping');
       await _client.post(
         uri,
-        headers: _headers(token),
+        headers: _headers(effectiveToken),
         body: jsonEncode({
           if (deviceId != null && deviceId.isNotEmpty) 'deviceId': deviceId,
           'platform': dev.platform,

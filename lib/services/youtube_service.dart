@@ -347,6 +347,19 @@ class YoutubeService {
         }
       } catch (e) {
         debugPrint('[YouTube] Desktop stream resolve error for $videoId: $e');
+        // In case initial yt-dlp setup was just finishing in the background, retry once
+        try {
+          await Future.delayed(const Duration(milliseconds: 600));
+          final retryInfo = await _ytdlp.resolveStreamInfo(videoId, forceRefresh: true);
+          if (retryInfo.url.isNotEmpty) {
+            debugPrint('[YouTube] Desktop: resolved on retry for $videoId');
+            return AudioSource.uri(
+              Uri.parse(retryInfo.url),
+              headers: retryInfo.headers,
+              tag: song.id,
+            );
+          }
+        } catch (_) {}
       }
       return null;
     }

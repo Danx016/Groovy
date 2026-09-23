@@ -469,25 +469,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // If we recently initiated an optimistic song change, ignore stale reports of the old song
     if (_optimisticRemoteSongUntil != null && DateTime.now().isBefore(_optimisticRemoteSongUntil!)) {
-      if (song != null && song.id == _optimisticRemoteSongId) {
+      final isExactMatch = song != null && song.id == _optimisticRemoteSongId;
+      final isTitleMatch = song != null && _currentSong != null &&
+          song.title.trim().toLowerCase() == _currentSong!.title.trim().toLowerCase();
+      final remoteActuallyPlaying = isPlaying;
+      final remoteLoadedButPaused = !isPlaying &&
+          DateTime.now().isAfter(_optimisticRemoteSongUntil!.subtract(const Duration(seconds: 4)));
+      final remoteConfirmedPlayback = remoteActuallyPlaying && (position.inMilliseconds > 0 || isExactMatch || isTitleMatch);
+
+      if (isExactMatch || isTitleMatch || remoteConfirmedPlayback || remoteLoadedButPaused) {
         // The remote device acknowledged the new song — clear optimistic window
         // whenever the remote confirms it is playing, or once position has moved, or loaded paused.
-        final remoteActuallyPlaying = isPlaying;
-        final remoteLoadedButPaused = !isPlaying &&
-            DateTime.now().isAfter(_optimisticRemoteSongUntil!.subtract(const Duration(seconds: 4)));
-        if (remoteActuallyPlaying || remoteLoadedButPaused) {
-          _optimisticRemoteSongUntil = null;
-          _optimisticRemoteSongId = null;
-          _isLoading = false;
-          _isPlaying = isPlaying;
-          _remoteAnchorPosition = position;
-          _remoteAnchorTime = isPlaying ? DateTime.now() : null;
-          _position = position;
-          _positionController.add(position);
-        } else {
-          // Remote is still buffering before starting playback; keep current optimistic state
-          return;
-        }
+        _optimisticRemoteSongUntil = null;
+        _optimisticRemoteSongId = null;
+        _isLoading = false;
+        _isPlaying = isPlaying;
+        _remoteAnchorPosition = position;
+        _remoteAnchorTime = isPlaying ? DateTime.now() : null;
+        _position = position;
+        _positionController.add(position);
       } else {
         // Remote device is still transitioning; ignore stale song to prevent flickering/reverting
         return;
@@ -495,6 +495,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     bool changed = false;
+
+    // Ensure loading spinner on controller is dismissed as soon as remote device reports active playback
+    if (_isLoading && (isPlaying || position.inMilliseconds > 0)) {
+      _isLoading = false;
+      changed = true;
+    }
     if (song != null && _currentSong?.id != song.id) {
       _currentSong = song;
       // Sync queue index if this song exists in our local queue
@@ -1410,6 +1416,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             artist: nextSong.artist,
             title: nextSong.title,
             durationSeconds: nextSong.duration,
+            songId: nextSong.id,
           )
           .catchError((_) => null);
     }
@@ -2207,13 +2214,26 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       _updateAndroidAuto();
       _updateAllServices();
-      _refreshArtworkUrl().catchError((_) {});
-      unawaited(_groovyConnectService!.sendPlaySong(
-        song,
-        positionMs: initialPosition?.inMilliseconds ?? 0,
-        queue: _queue,
-        queueIndex: _currentIndex,
-      ));
+      unawaited(() async {
+        Song songToSend = song;
+        if (song.isLocal != true && (song.id.startsWith('dz_') || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '')))) {
+          try {
+            final resolvedYtId = await _youtubeService.resolveVideoIdForSong(song);
+            if (resolvedYtId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(resolvedYtId)) {
+              songToSend = song.copyWith(
+                id: resolvedYtId,
+                coverArt: (song.coverArt == null || song.coverArt!.isEmpty) ? resolvedYtId : song.coverArt,
+              );
+            }
+          } catch (_) {}
+        }
+        await _groovyConnectService!.sendPlaySong(
+          songToSend,
+          positionMs: initialPosition?.inMilliseconds ?? 0,
+          queue: _queue,
+          queueIndex: _currentIndex,
+        );
+      }());
       return;
     }
 
@@ -2371,9 +2391,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else {
         _isRenderingRemotely = false;
 
-        final youtubeSource = song.isLocal != true
+        var youtubeSource = song.isLocal != true
             ? await _youtubeService.getYoutubeAudioSource(song)
             : null;
+
+        if (youtubeSource == null && !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS) && song.isLocal != true) {
+          // If initial desktop resolution was null (e.g. yt-dlp binary was just completing download), retry
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (currentGen != _playGeneration) return;
+          youtubeSource = await _youtubeService.getYoutubeAudioSource(song);
+        }
 
         if (currentGen != _playGeneration) {
           debugPrint('[Player] Aborting superseded play request for "${song.title}"');
@@ -2402,6 +2429,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             if (offlinePath != null) {
               playUrl = 'file://$offlinePath';
             } else {
+              if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+                throw Exception('No playable audio stream available with authentication headers for "${song.title}"');
+              }
               playUrl = await _youtubeService.resolveStreamUrlAsync(song);
             }
           }

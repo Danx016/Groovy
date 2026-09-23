@@ -57,7 +57,7 @@ const getClientHeaders = () => {
     'X-Client-Platform': 'Web',
     'X-Device-Model': device,
     'X-OS-Version': osVersion,
-    'X-App-Version': '1.3.8',
+    'X-App-Version': '1.3.9',
   };
 };
 

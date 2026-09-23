@@ -423,12 +423,12 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
       if (dev.platform.toLowerCase() == 'web' || dev.platform.toLowerCase() == 'browser') continue;
 
       final isSamePlatform = dev.platform.toLowerCase() == groovyConnect.localPlatform.toLowerCase();
-      final isSameName = dev.name.toLowerCase() == groovyConnect.localDeviceName.toLowerCase() ||
-          dev.name.toLowerCase() == groovyConnect.localModel.toLowerCase();
+      final isSameName = dev.name.toLowerCase() == groovyConnect.localDeviceName.toLowerCase() &&
+          dev.model.toLowerCase() == groovyConnect.localModel.toLowerCase();
       final isSameIp = groovyConnect.localIp.isNotEmpty && dev.host.isNotEmpty &&
-          (dev.host == groovyConnect.localIp || dev.host == '127.0.0.1');
+          dev.host != '127.0.0.1' && dev.host == groovyConnect.localIp;
 
-      if (isSamePlatform && (isSameName || isSameIp)) continue;
+      if (isSamePlatform && isSameName && isSameIp) continue;
 
       uniqueDevices[dev.id] = dev;
     }
