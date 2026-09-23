@@ -5,6 +5,13 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.3] - 2026-09-23
+
+### Fixed & Improved
+- **Groovy Connect entre redes**: el descubrimiento, la transferencia y los controles remotos ahora usan correctamente el relay cloud autenticado cuando los dispositivos no comparten la misma red.
+- **Respuesta del relay**: se mantienen las transferencias LAN de baja latencia y se detectan las sesiones autenticadas expiradas en lugar de ocultarlas como una lista vacía.
+- **Carátulas**: se evita reutilizar la carátula de la canción anterior durante cambios rápidos desde la búsqueda.
+
 ## [1.4.2] - 2026-09-22
 
 ### Fixed & Improved

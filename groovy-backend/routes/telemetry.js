@@ -34,7 +34,7 @@ router.use(optionalAuth);
  * GET /api/telemetry/playback
  * Returns active live sessions and devices for Groovy Connect synchronization
  */
-router.get('/playback', async (req, res) => {
+router.get('/playback', authenticateToken, async (req, res) => {
   try {
     const client = parseFullClientInfo(req);
     const userId = req.user?.id || 0;
@@ -198,7 +198,7 @@ router.post('/command', authenticateToken, async (req, res) => {
  * GET /api/telemetry/command
  * Long-polls pending commands for the calling device and delivers in real time
  */
-router.get('/command', async (req, res) => {
+router.get('/command', authenticateToken, async (req, res) => {
   try {
     const deviceId = req.query.deviceId;
     const platform = req.query.platform || '';

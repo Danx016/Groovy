@@ -244,6 +244,7 @@ class GroovyApiService {
         uri,
         headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 12000));
+      checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['commands'] is List) {
@@ -283,6 +284,7 @@ class GroovyApiService {
         uri,
         headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 6000));
+      checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (data is Map && data['devices'] is List) {

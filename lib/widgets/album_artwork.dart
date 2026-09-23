@@ -200,7 +200,8 @@ class AlbumArtwork extends StatelessWidget {
     }
 
     if (OfflineService().downloadedSongIds.value.isNotEmpty) {
-      final offlinePath = OfflineService().getLocalCoverArtPathByCoverArtId(coverArt);
+      final offlinePath =
+          OfflineService().getLocalCoverArtPathByCoverArtId(coverArt);
       if (offlinePath != null) {
         return Image.file(
           File(offlinePath),
@@ -233,7 +234,7 @@ class AlbumArtwork extends StatelessWidget {
           filterQuality: FilterQuality.medium,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
-          useOldImageOnUrlChange: true,
+          useOldImageOnUrlChange: false,
           placeholder: (ctx, url) => _buildPlaceholder(isDark),
           errorWidget: (ctx, err, stack) {
             debugPrint('AlbumArtwork error (natural): $err');
@@ -268,7 +269,8 @@ class AlbumArtwork extends StatelessWidget {
     }
 
     if (OfflineService().downloadedSongIds.value.isNotEmpty) {
-      final offlinePath = OfflineService().getLocalCoverArtPathByCoverArtId(coverArt);
+      final offlinePath =
+          OfflineService().getLocalCoverArtPathByCoverArtId(coverArt);
       if (offlinePath != null) {
         return Image.file(
           File(offlinePath),
@@ -301,7 +303,7 @@ class AlbumArtwork extends StatelessWidget {
           filterQuality: FilterQuality.medium,
           fadeInDuration: Duration.zero,
           fadeOutDuration: Duration.zero,
-          useOldImageOnUrlChange: true,
+          useOldImageOnUrlChange: false,
           placeholder: (ctx, url) => _buildPlaceholder(isDark),
           errorWidget: (ctx, err, stack) {
             debugPrint('AlbumArtwork error: $err');
@@ -315,7 +317,8 @@ class AlbumArtwork extends StatelessWidget {
   Widget _buildNetworkImageFallback(String url, bool isDark, BoxFit fit) {
     String fallbackUrl = url;
     if (url.contains('/sddefault.jpg') || url.contains('/mqdefault.jpg')) {
-      fallbackUrl = url.replaceAll(RegExp(r'/(sd|mq)default\.jpg'), '/hqdefault.jpg');
+      fallbackUrl =
+          url.replaceAll(RegExp(r'/(sd|mq)default\.jpg'), '/hqdefault.jpg');
     } else if (url.contains('=w800-h800') || url.contains('=w1200-h1200')) {
       fallbackUrl = url.replaceAll(RegExp(r'=w\d+-h\d+[^/]*'), '=w544-h544');
     }
@@ -327,7 +330,9 @@ class AlbumArtwork extends StatelessWidget {
         debugPrint('Network image fallback error: $err');
         final match = RegExp(r'([a-zA-Z0-9_-]{11})').firstMatch(url);
         final vid = match?.group(1);
-        if (vid != null && vid.isNotEmpty && !fallbackUrl.contains('/vi/$vid/')) {
+        if (vid != null &&
+            vid.isNotEmpty &&
+            !fallbackUrl.contains('/vi/$vid/')) {
           return Image.network(
             'https://i.ytimg.com/vi/$vid/hqdefault.jpg',
             fit: fit,
@@ -342,7 +347,8 @@ class AlbumArtwork extends StatelessWidget {
 
   Widget _buildPlaceholder(bool isDark) {
     final iconSize = size.isFinite ? (size / 2.8).clamp(16.0, 60.0) : 48.0;
-    final defaultIcon = (borderRadius != null && borderRadius! >= (size.isFinite ? size / 2 - 2 : 20))
+    final defaultIcon = (borderRadius != null &&
+            borderRadius! >= (size.isFinite ? size / 2 - 2 : 20))
         ? Icons.person_rounded
         : Icons.music_note_rounded;
     final effectiveIcon = placeholderIcon ?? defaultIcon;
