@@ -75,6 +75,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [userToToggleBan, setUserToToggleBan] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
 
