@@ -1,26 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './context/AuthContext';
-import { PlayerProvider, usePlayer } from './context/PlayerContext';
-import { LibraryProvider } from './context/LibraryContext';
-import { Sidebar } from './components/layout/Sidebar';
-import { Header } from './components/layout/Header';
-import { BottomMiniPlayer } from './components/player/BottomMiniPlayer';
-import { BottomNav } from './components/layout/BottomNav';
-import { FullPlayerModal } from './components/player/FullPlayerModal';
-import { AuthModal } from './components/auth/AuthModal';
-import { CreatePlaylistModal } from './components/ui/CreatePlaylistModal';
-import { HomeView } from './components/views/HomeView';
-import { LibraryView } from './components/views/LibraryView';
-import { SearchView } from './components/views/SearchView';
-import { RadioView } from './components/views/RadioView';
-import { HistoryView } from './components/views/HistoryView';
-import { PlaylistDetailView } from './components/views/PlaylistDetailView';
-import { ArtistDetailView } from './components/views/ArtistDetailView';
-import { AlbumDetailView } from './components/views/AlbumDetailView';
-import { AccountView } from './components/views/AccountView';
-import { SettingsView } from './components/views/SettingsView';
 import { AdminPortal } from './components/admin/AdminPortal';
 import { LandingDownloadPage } from './components/views/LandingDownloadPage';
+import { PublicSite } from './components/views/PublicSite';
 
 /* Global layout + responsive styles */
 const layoutStyles = `
@@ -56,15 +38,6 @@ const layoutStyles = `
 `;
 
 function MainApp() {
-  const [activeTab, setActiveTab] = useState('home');
-  const [selectedPlaylist, setSelectedPlaylist] = useState(null);
-  const [isCreatePlaylistOpen, setIsCreatePlaylistOpen] = useState(false);
-
-  const {
-    selectedArtist, setSelectedArtist,
-    selectedAlbum, setSelectedAlbum,
-  } = usePlayer();
-
   const isDownloadRoute = (h, p, s) => {
     if (p.startsWith('/download') || s.includes('download=true')) return true;
     const downloadHashes = ['#download', '#descargas', '#interfaz', '#funciones', '#preguntas', '#faq', '#caracteristicas', '#capturas'];
@@ -77,7 +50,7 @@ function MainApp() {
     const s = window.location.search;
     if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) return 'admin';
     if (isDownloadRoute(h, p, s)) return 'download';
-    return 'player';
+    return 'public';
   });
 
   useEffect(() => {
@@ -90,7 +63,7 @@ function MainApp() {
       } else if (isDownloadRoute(h, p, s)) {
         setCurrentRoute('download');
       } else {
-        setCurrentRoute('player');
+        setCurrentRoute('public');
       }
     };
 
@@ -102,27 +75,6 @@ function MainApp() {
     };
   }, []);
 
-  const switchTab = (tab) => {
-    if (tab === 'admin') {
-      window.location.hash = 'admin';
-      setCurrentRoute('admin');
-      return;
-    }
-    if (tab === 'download') {
-      window.location.hash = 'download';
-      setCurrentRoute('download');
-      return;
-    }
-    setSelectedPlaylist(null);
-    setSelectedArtist(null);
-    setSelectedAlbum(null);
-    setActiveTab(tab);
-    if (currentRoute !== 'player') {
-      window.location.hash = '';
-      setCurrentRoute('player');
-    }
-  };
-
   // 1. If visiting Admin Portal:
   if (currentRoute === 'admin') {
     return (
@@ -130,8 +82,7 @@ function MainApp() {
         onBackToPlayer={() => {
           window.location.hash = '';
           window.history.pushState({}, '', '/');
-          setCurrentRoute('player');
-          setActiveTab('home');
+          setCurrentRoute('public');
         }}
       />
     );
@@ -144,8 +95,7 @@ function MainApp() {
         onOpenPlayer={() => {
           window.location.hash = '';
           window.history.pushState({}, '', '/');
-          setCurrentRoute('player');
-          setActiveTab('home');
+          setCurrentRoute('public');
         }}
         onOpenAdmin={() => {
           window.location.hash = 'admin';
@@ -155,70 +105,13 @@ function MainApp() {
     );
   }
 
-  return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#000', color: '#fff' }}>
-      {/* Desktop Sidebar */}
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={switchTab}
-        onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)}
-      />
-
-      {/* Main content column */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        <Header activeTab={activeTab} setActiveTab={switchTab} />
-
-        <main style={{ flex: 1, overflowY: 'auto', padding: '20px 20px 0' }}>
-          {selectedArtist ? (
-            <ArtistDetailView
-              artistName={selectedArtist}
-              onBack={() => setSelectedArtist(null)}
-              onSelectAlbum={(alb) => {
-                setSelectedAlbum(alb);
-                setSelectedArtist(null);
-              }}
-            />
-          ) : selectedAlbum ? (
-            <AlbumDetailView
-              album={selectedAlbum}
-              onBack={() => setSelectedAlbum(null)}
-              onSelectArtist={(art) => {
-                setSelectedArtist(art);
-                setSelectedAlbum(null);
-              }}
-            />
-          ) : selectedPlaylist ? (
-            <PlaylistDetailView playlist={selectedPlaylist} onBack={() => setSelectedPlaylist(null)} />
-          ) : (
-            <>
-              {activeTab === 'home'    && <HomeView setActiveTab={switchTab} onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} />}
-              {activeTab === 'search'  && <SearchView onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} />}
-              {activeTab === 'library' && <LibraryView onSelectPlaylist={setSelectedPlaylist} onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} onOpenCreatePlaylist={() => setIsCreatePlaylistOpen(true)} />}
-              {activeTab === 'history' && <HistoryView onBack={() => switchTab('home')} onSelectArtist={setSelectedArtist} onSelectAlbum={setSelectedAlbum} />}
-              {activeTab === 'radio'   && <RadioView />}
-              {activeTab === 'account' && <AccountView setActiveTab={switchTab} />}
-              {activeTab === 'settings' && <SettingsView />}
-            </>
-          )}
-        </main>
-      </div>
-
-      {/* Mini Player (above bottom nav) */}
-      <BottomMiniPlayer />
-
-      {/* Mobile bottom navigation */}
-      <BottomNav activeTab={activeTab} setActiveTab={switchTab} />
-
-      {/* Fullscreen Player */}
-      <FullPlayerModal />
-
-      {/* Auth Modal */}
-      <AuthModal />
-
-      {/* Create Playlist Modal */}
-      <CreatePlaylistModal isOpen={isCreatePlaylistOpen} onClose={() => setIsCreatePlaylistOpen(false)} />
-    </div>
-  );
+  return <PublicSite onOpenDownloads={() => {
+    window.location.hash = 'download';
+    setCurrentRoute('download');
+  }} onOpenAdmin={() => {
+    window.location.hash = 'admin';
+    setCurrentRoute('admin');
+  }} />;
 }
 
 export default function App() {
@@ -226,11 +119,7 @@ export default function App() {
     <>
       <style>{layoutStyles}</style>
       <AuthProvider>
-        <LibraryProvider>
-          <PlayerProvider>
-            <MainApp />
-          </PlayerProvider>
-        </LibraryProvider>
+        <MainApp />
       </AuthProvider>
     </>
   );
