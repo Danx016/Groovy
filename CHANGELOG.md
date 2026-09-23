@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.6] - 2026-09-23
+
+### Fixed
+- **Corrección de retroceso en reproducción remota (`Groovy Connect` / `skipPrevious`)**:
+  - **Ventana de guardia contra rebotes**: Se implementó un filtro de descarte para paquetes de estado tardíos/desactualizados que reportaban la canción que el usuario acababa de saltar, evitando que la app vuelva a la canción anterior en el controlador.
+  - **Resolución previa de IDs de audio**: Al retroceder o avanzar en modo remoto, ahora se resuelven los identificadores no-YouTube (Deezer, etc.) a IDs de YouTube válidos antes de enviar la orden al dispositivo remoto, previniendo excepciones y auto-avances no deseados en el dispositivo receptor.
+  - **Ventana de gracia en estado optimista**: Se retiene un período de gracia de 1.5s tras la confirmación de la nueva canción para tragar paquetes de red en tránsito.
+  - **Soporte de historial de aleatorio y repetición en remoto**: `skipPrevious` en Groovy Connect ahora respeta el historial de reproducción aleatoria (`shuffleHistory`) y el modo de repetición (`RepeatMode.all`).
+  - **Ajuste de deduplicación de transferencia**: Se redujo la ventana de deduplicación de 2.5s a 400ms para no bloquear saltos intencionales rápidos del usuario, y se ampliaron las canciones previas enviadas al receptor a 15 elementos.
+
 ## [1.4.5] - 2026-09-23
 
 ### Performance

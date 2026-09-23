@@ -150,7 +150,7 @@ class GroovyConnectService extends ChangeNotifier {
     final now = DateTime.now();
     if (_lastReceivedTransferSongId == songId &&
         _lastReceivedTransferTime != null &&
-        now.difference(_lastReceivedTransferTime!) < const Duration(milliseconds: 2500)) {
+        now.difference(_lastReceivedTransferTime!) < const Duration(milliseconds: 400)) {
       debugPrint('[GroovyConnect] Deduplicating rapid repeat transfer for song: $songId');
       return true;
     }
@@ -886,8 +886,8 @@ class GroovyConnectService extends ChangeNotifier {
     int? effectiveQueueIndex = queueIndex;
     if (queue != null && queue.isNotEmpty) {
       final qIndex = queueIndex ?? queue.indexWhere((s) => s.id == song.id);
-      final startIndex = qIndex > 0 ? (qIndex - 2).clamp(0, queue.length - 1) : 0;
-      final endIndex = (startIndex + 25).clamp(0, queue.length);
+      final startIndex = qIndex > 0 ? (qIndex - 15).clamp(0, queue.length - 1) : 0;
+      final endIndex = (qIndex + 35).clamp(0, queue.length);
       final sub = queue.sublist(startIndex, endIndex);
       conciseQueue = sub.map((s) => s.toJson()).toList();
       effectiveQueueIndex = (qIndex - startIndex).clamp(0, sub.length - 1);
