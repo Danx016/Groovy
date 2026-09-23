@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.5] - 2026-09-23
+
+### Performance
+- **Optimización de rendimiento en letras (Android)**:
+  - **Virtualización con `ListView.builder`**: Se reemplazó `SingleChildScrollView` + `Column` que renderizaba las ~100 líneas de letra simultáneamente, por un `ListView.builder` que solo construye las líneas visibles en pantalla.
+  - **Eliminación de `AnimatedOpacity` por línea**: Se eliminaron ~100 controladores de animación implícitos que competían por frames GPU. Ahora usa `Opacity` directo con `RepaintBoundary` para aislar cada línea como capa independiente del compositor.
+  - **Throttle del position stream**: Se redujo la frecuencia de procesamiento de posición de ~15-20 evaluaciones/seg (cada 50-80ms) a ~5/seg (cada 200ms), suficiente ya que las líneas cambian cada 2-4 segundos.
+  - **Eliminación de `GlobalKey` por item**: Se reemplazaron por `ValueKey` ligeros y cálculo de scroll por alturas estimadas, permitiendo reutilización de widgets.
+  - **Skip de `MouseRegion` en Android/iOS**: Se elimina el overhead de hover tracking en plataformas touch.
+  - **Deduplicación de scroll animations**: Se previenen animaciones `animateTo` superpuestas que causaban jank visual.
+
 ## [1.4.4] - 2026-09-23
 
 ### Fixed & Improved
