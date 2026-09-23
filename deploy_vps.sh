@@ -17,6 +17,11 @@ npm install
 npm run build
 cd ..
 
+# Nginx serves the website from /var/www/groovy-web.
+echo "🌐 Publicando la compilación web en Nginx..."
+sudo mkdir -p /var/www/groovy-web
+sudo cp -a react-website/dist/. /var/www/groovy-web/
+
 # 3. Instalar dependencias del Backend de Node.js
 echo "📦 3/4 Instalando dependencias del backend..."
 cd groovy-backend
