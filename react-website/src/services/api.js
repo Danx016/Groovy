@@ -102,6 +102,11 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ name, email, password }),
     }),
+  googleLogin: (idToken) =>
+    authFetch('/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ idToken }),
+    }),
 
   getProfile: () => authFetch('/auth/me'),
   updateProfile: (data) =>

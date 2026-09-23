@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  ArrowRight, Check, Download, Globe2, Heart, ImagePlus, LogIn, LogOut,
-  Menu, ShieldCheck, Sparkles, UserRound, X, Zap,
+  ArrowRight, Check, Download, Globe2, Heart, ImagePlus, Laptop, LogIn, LogOut,
+  Menu, ShieldCheck, Smartphone, Sparkles, UserRound, X, Zap,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/api';
@@ -14,7 +14,7 @@ const featureGroups = [
 ];
 
 export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
-  const { user, isAuthenticated, isAdmin, login, register, logout, setUser } = useAuth();
+  const { user, isAuthenticated, isAdmin, login, register, googleLogin, logout, setUser } = useAuth();
   const [mobileMenu, setMobileMenu] = useState(false);
   const [authMode, setAuthMode] = useState('login');
   const [showAuth, setShowAuth] = useState(false);
@@ -25,6 +25,55 @@ export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
   const [profileAvatar, setProfileAvatar] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+
+  useEffect(() => {
+    if (!showAuth || !googleClientId || document.querySelector('script[data-google-identity]')) return;
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.dataset.googleIdentity = 'true';
+    document.head.appendChild(script);
+  }, [showAuth, googleClientId]);
+
+  useEffect(() => {
+    if (!showAuth || !googleClientId || authMode !== 'login') return;
+    const renderGoogleButton = () => {
+      if (!window.google?.accounts?.id) return false;
+      const container = document.getElementById('google-sign-in');
+      if (!container) return false;
+      container.innerHTML = '';
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: async ({ credential }) => {
+          setBusy(true);
+          setError('');
+          try {
+            await googleLogin(credential);
+            setShowAuth(false);
+          } catch (err) {
+            setError(err.message || 'No se pudo iniciar sesión con Google.');
+          } finally {
+            setBusy(false);
+          }
+        },
+      });
+      window.google.accounts.id.renderButton(container, {
+        theme: 'outline',
+        size: 'large',
+        width: 360,
+        text: 'signin_with',
+        shape: 'rectangular',
+      });
+      return true;
+    };
+    if (renderGoogleButton()) return undefined;
+    const timer = window.setInterval(() => {
+      if (renderGoogleButton()) window.clearInterval(timer);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [showAuth, authMode, googleClientId, googleLogin]);
 
   const openAuth = (mode = 'login') => {
     setAuthMode(mode);
@@ -138,7 +187,7 @@ export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
             <div className="panel-glow" />
             <div className="hero-card">
               <div className="hero-card-top"><span className="status-dot" /> Groovy Cloud <span>En línea</span></div>
-              <div className="hero-card-icon"><Sparkles size={38} /></div>
+              <div className="hero-card-icon"><img src="/logo.png" alt="" /></div>
               <h3>Tu experiencia,<br /><strong>siempre sincronizada.</strong></h3>
               <p>Inicia sesión para administrar tu cuenta y mantener todo bajo control.</p>
               <button onClick={() => isAuthenticated ? openAccount() : openAuth('register')}>{isAuthenticated ? 'Ver mi cuenta' : 'Crear una cuenta'} <ArrowRight size={16} /></button>
@@ -156,12 +205,22 @@ export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
           <div className="info-list"><div><span>01</span><strong>Crea tu cuenta</strong><p>Regístrate en segundos y protege tu acceso.</p></div><div><span>02</span><strong>Personaliza tus datos</strong><p>Actualiza tu información desde cualquier dispositivo.</p></div><div><span>03</span><strong>Gestiona Groovy</strong><p>Los administradores pueden supervisar toda la plataforma.</p></div></div>
         </section>
 
+        <section className="platform-section" id="plataformas">
+          <div className="section-heading"><p className="eyebrow">Donde quieras</p><h2>Una misma cuenta en todos tus equipos.</h2><p>Empieza en un dispositivo y continúa en otro. Groovy mantiene tu cuenta lista para cuando la necesites.</p></div>
+          <div className="platform-grid">
+            <article><Laptop size={22} /><div><h3>Windows y escritorio</h3><p>La experiencia completa para organizar tu biblioteca y tus sesiones.</p></div></article>
+            <article><Smartphone size={22} /><div><h3>Android y móvil</h3><p>Lleva tus preferencias contigo sin volver a configurar todo.</p></div></article>
+            <article><Globe2 size={22} /><div><h3>Groovy Connect</h3><p>Tu cuenta centralizada para mantener tus datos sincronizados.</p></div></article>
+          </div>
+          <button className="primary-action platform-download" onClick={onOpenDownloads}>Ver descargas <Download size={17} /></button>
+        </section>
+
         <section className="security-section" id="seguridad"><ShieldCheck size={28} /><div><h2>Diseñado pensando en tu privacidad.</h2><p>Tus credenciales se procesan mediante el backend seguro de Groovy y las funciones administrativas están protegidas por permisos.</p></div></section>
       </main>
 
       <footer className="public-footer"><div className="brand"><img className="brand-mark" src="/logo.png" alt="Groovy" /><span>Groovy</span></div><p>Tu música. Tu cuenta. Tu experiencia.</p><button onClick={onOpenDownloads}>Descargas</button></footer>
 
-      {showAuth && <Modal onClose={() => setShowAuth(false)} title={authMode === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta'} subtitle={authMode === 'login' ? 'Accede a tu cuenta Groovy.' : 'Empieza a gestionar tu experiencia Groovy.'}><form className="site-form" onSubmit={submitAuth}>{authMode === 'register' && <label>Nombre<input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tu nombre" /></label>}<label>Correo electrónico<input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="tu@correo.com" /></label><label>Contraseña<input required minLength={6} type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action full" disabled={busy}>{busy ? 'Procesando...' : authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'} <ArrowRight size={17} /></button><button type="button" className="form-switch" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); }}>{authMode === 'login' ? '¿No tienes cuenta? Regístrate' : 'Ya tengo una cuenta'}</button></form></Modal>}
+      {showAuth && <Modal onClose={() => setShowAuth(false)} title={authMode === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta'} subtitle={authMode === 'login' ? 'Accede a tu cuenta Groovy.' : 'Empieza a gestionar tu experiencia Groovy.'}><form className="site-form" onSubmit={submitAuth}>{authMode === 'login' && googleClientId && <><div id="google-sign-in" className="google-sign-in" /><div className="auth-divider"><span>o continúa con tu correo</span></div></>}{authMode === 'register' && <label>Nombre<input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tu nombre" /></label>}<label>Correo electrónico<input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="tu@correo.com" /></label><label>Contraseña<input required minLength={6} type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action full" disabled={busy}>{busy ? 'Procesando...' : authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'} <ArrowRight size={17} /></button><button type="button" className="form-switch" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); }}>{authMode === 'login' ? '¿No tienes cuenta? Regístrate' : 'Ya tengo una cuenta'}</button></form></Modal>}
       {showAccount && <div className="account-backdrop"><section className="account-page">{showEditProfile ? <EditProfilePage profileName={profileName} setProfileName={setProfileName} profileAvatar={profileAvatar} selectAvatar={selectAvatar} error={error} busy={busy} saveProfile={saveProfile} onBack={() => setShowEditProfile(false)} /> : <><button className="account-back" onClick={() => setShowAccount(false)}><ArrowRight size={24} /> <span>Cuenta</span></button><div className="account-profile-row"><div className="avatar-preview account-avatar-large">{profileAvatar ? <img src={profileAvatar} alt="Foto de perfil" /> : <UserRound size={34} />}</div><div><h2>{profileName}</h2><p>Tu nombre y foto serán visibles para los colaboradores de las playlists y de las sesiones de escucha conjunta.</p></div><button type="button" className="account-edit" onClick={() => setShowEditProfile(true)}>Editar</button></div><button type="button" className="account-config-row" onClick={() => setShowEditProfile(true)}><span><strong>Configura tu perfil</strong><small>Configura tu perfil para compartir tu música y ver lo que están escuchando tus amigos.</small></span><ArrowRight size={19} /></button><div className="account-logout"><button type="button" className="account-link accent" onClick={() => { logout(); setShowAccount(false); }}><LogOut size={16} /> Cerrar sesión</button><p>{user.email}</p></div></>}</section></div>}
     </div>
   );

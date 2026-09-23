@@ -192,7 +192,8 @@ input, textarea, select {
 .hero-card-top { display: flex; align-items: center; gap: 8px; color: #eee; font-size: 12px; }
 .hero-card-top span:last-child { margin-left: auto; color: #8d8d96; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #35ca76; }
-.hero-card-icon { display: grid; place-items: center; width: 74px; height: 74px; margin: 58px 0 25px; border-radius: 20px; background: #fa243c; box-shadow: 0 12px 35px rgba(250,36,60,.3); }
+.hero-card-icon { display: grid; place-items: center; width: 74px; height: 74px; margin: 58px 0 25px; border-radius: 20px; background: #fa243c; box-shadow: 0 12px 35px rgba(250,36,60,.3); overflow: hidden; }
+.hero-card-icon img { width: 100%; height: 100%; object-fit: cover; }
 .hero-card h3 { font-size: 27px; line-height: 1.1; }
 .hero-card h3 strong { color: #fa5265; }
 .hero-card p { color: #9999a2; margin: 13px 0 24px; font-size: 13px; }
@@ -216,6 +217,16 @@ input, textarea, select {
 .security-section { display: flex; gap: 18px; align-items: flex-start; margin-top: 20px; margin-bottom: 90px; padding-top: 28px; padding-bottom: 28px; border: 1px solid rgba(250,36,60,.24); border-radius: 15px; background: rgba(250,36,60,.05); }
 .security-section > svg { flex: 0 0 auto; color: #fa5265; }
 .security-section h2 { font-size: 24px; margin-bottom: 7px; }
+.platform-section { max-width: 1180px; margin: auto; padding: 95px 28px; border-top: 1px solid rgba(255,255,255,.07); }
+.platform-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin: 35px 0 25px; }
+.platform-grid article { display: flex; gap: 15px; padding: 22px; border: 1px solid rgba(255,255,255,.09); border-radius: 15px; background: #111114; }
+.platform-grid svg { flex: 0 0 auto; color: #fa5265; }
+.platform-grid h3 { font-size: 16px; margin-bottom: 8px; }
+.platform-grid p { color: #898993; font-size: 13px; line-height: 1.6; }
+.platform-download { margin-top: 5px; }
+.google-sign-in { display: flex; justify-content: center; min-height: 40px; }
+.auth-divider { display: flex; align-items: center; gap: 10px; color: #777780; font-size: 11px; }
+.auth-divider::before, .auth-divider::after { content: ''; height: 1px; flex: 1; background: rgba(255,255,255,.1); }
 .public-footer { max-width: 1180px; margin: auto; padding: 25px 28px 35px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid rgba(255,255,255,.07); color: #777780; font-size: 12px; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0,0,0,.78); backdrop-filter: blur(10px); }
 .site-modal { position: relative; width: min(100%, 430px); padding: 30px; border: 1px solid rgba(255,255,255,.13); border-radius: 18px; background: #17171b; box-shadow: 0 25px 80px rgba(0,0,0,.6); }
@@ -294,9 +305,10 @@ input, textarea, select {
   .hero-panel { min-height: 300px; }
   .feature-grid { grid-template-columns: repeat(2, 1fr); }
   .split-section { grid-template-columns: 1fr; gap: 35px; }
+  .platform-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 520px) {
-  .public-header, .hero-section, .feature-section, .split-section, .security-section { padding-left: 18px; padding-right: 18px; }
+  .public-header, .hero-section, .feature-section, .split-section, .platform-section, .security-section { padding-left: 18px; padding-right: 18px; }
   .hero-copy h1 { font-size: 48px; letter-spacing: -2.5px; }
   .feature-grid { grid-template-columns: 1fr; }
   .public-footer { padding-left: 18px; padding-right: 18px; gap: 12px; flex-wrap: wrap; }

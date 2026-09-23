@@ -92,6 +92,21 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const googleLogin = async (idToken) => {
+    setAuthError(null);
+    try {
+      const data = await authApi.googleLogin(idToken);
+      setAuthToken(data.token);
+      setToken(data.token);
+      setUser(data.user);
+      setIsAuthModalOpen(false);
+      return data;
+    } catch (err) {
+      setAuthError(err.message);
+      throw err;
+    }
+  };
+
   const logout = () => {
     telemetryApi.leave();
     setAuthToken(null);
@@ -111,6 +126,7 @@ export const AuthProvider = ({ children }) => {
         setAuthError,
         login,
         register,
+        googleLogin,
         logout,
         setUser,
         isAuthModalOpen,
