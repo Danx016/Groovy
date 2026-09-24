@@ -5,6 +5,24 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.8] - 2026-09-23
+
+### Fixed & Enhanced
+- **Comportamiento estándar de repetición/rebobinar en `skipPrevious` (estilo Spotify/Apple Music)**:
+  - Si la canción actual lleva más de 3 segundos reproduciéndose, pulsar "Anterior" (⏮) reinicia la canción a `00:00` en lugar de saltar a la canción previa.
+  - Al pulsar "Anterior" nuevamente dentro de los 3 segundos (doble pulsación), cambia a la canción anterior de la cola o del historial aleatorio.
+  - El botón "Anterior" ahora permanece habilitado al reproducir la primera canción de la lista, permitiendo reiniciarla desde el principio.
+  - Compatible en local, auriculares Bluetooth, notificaciones de Android y reproducción remota con **GroovyConnect**.
+- **Solución a letras en carga infinita al iniciar en frío (`NowPlayingScreen`, `RightSidebar`, `PlayerProvider`)**:
+  - Precalentamiento automático de letras en background al restaurar la cola persistente en inicio en frío.
+  - Búsqueda concurrente en paralelo en `LrclibService` (`Future.wait`), acelerando los tiempos de respuesta.
+  - Corrección de verificaciones de misma canción cuando las letras aún no se habían cargado.
+- **Corrección de alineación y auto-scroll de letras (`LyricsListView`)**:
+  - Cálculo adaptativo al ancho real de la ventana (`LayoutBuilder`) para estimar líneas largas en Windows y pantallas horizontales, eliminando sobrestimaciones de altura.
+  - Se incorporó `topPadding` en la fórmula del scroll target para evitar que la línea activa se desplace contra el borde superior.
+- **Identidad visual completa de Groovy**:
+  - Reemplazo y limpieza de todos los iconos y logos de plantillas residuales ("Musly") por los iconos oficiales de Groovy en Android (adaptive icons y mipmaps), iOS, macOS, Windows y Web.
+
 ## [1.4.7] - 2026-09-23
 
 ### Fixed & Enhanced

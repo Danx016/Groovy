@@ -337,6 +337,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       notifyListeners();
       debugPrint(
           'Restored persistent queue: ${restoredSongs.length} songs, index $targetIndex, position $_position');
+
+      // Pre-warm lyrics cache immediately on cold start so opening Fullscreen or Lyrics has a 0ms instant cache hit
+      if (_currentSong != null && _currentSong!.title.isNotEmpty) {
+        LrcLibService()
+            .searchLyrics(
+              artist: _currentSong!.artist,
+              title: _currentSong!.title,
+              durationSeconds: _currentSong!.duration,
+              songId: _currentSong!.id,
+            )
+            .catchError((_) => null);
+      }
+
       _prepareCurrentSong().catchError((e) {
         debugPrint('Error preparing restored song: $e');
       });
@@ -1356,7 +1369,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _queue.isNotEmpty &&
       (_currentIndex > 0 ||
           _repeatMode == RepeatMode.all ||
-          (_shuffleEnabled && _shuffleHistory.isNotEmpty));
+          (_shuffleEnabled && _shuffleHistory.isNotEmpty) ||
+          _currentSong != null);
   double get volume => _volume;
 
   RadioStation? get currentRadioStation => _currentRadioStation;
@@ -2019,8 +2033,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   /// on headphone disconnect (becoming noisy), resume on headphone reconnect,
   /// audio interruption handling (calls/alarms), and headset media controls.
   Future<void> _configureAudioSession() async {
-    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS))
+    if (kIsWeb || (!Platform.isAndroid && !Platform.isIOS && !Platform.isMacOS)) {
       return;
+    }
     try {
       final session = await AudioSession.instance;
       await session.configure(const AudioSessionConfiguration.music());
@@ -3221,8 +3236,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_autoDjService.shouldAddSongs(_currentIndex, _queue.length)) {
       await _addAutoDjSongs();
-      if (skipGen != _skipGeneration)
+      if (skipGen != _skipGeneration) {
         return; // another skip came in while fetching
+      }
     }
 
     _activeAudioSongId = null;
@@ -3375,6 +3391,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition
     final skipGen = ++_skipGeneration; // capture before any await
+
+    if (_queue.isEmpty || _currentSong == null) return;
+
+    // Standard player behavior: if song has been playing for more than 3 seconds,
+    // rewinding restarts the current song from the beginning.
+    // A subsequent press within 3 seconds navigates to the previous song.
+    if (_position > const Duration(seconds: 3)) {
+      await seek(Duration.zero);
+      return;
+    }
 
     if (_groovyConnectService?.isConnected == true) {
       if (_currentSong != null) {

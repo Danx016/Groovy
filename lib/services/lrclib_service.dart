@@ -288,10 +288,14 @@ class LrcLibService {
     final cleanedArtist = (artist != null && artist.isNotEmpty) ? cleanArtist(artist) : null;
     final durKey = effectiveDuration != null && effectiveDuration > 0 ? '|$effectiveDuration' : '';
     final cacheKey = '${cleanedArtist?.toLowerCase() ?? ''}|${cleanedTitle.toLowerCase()}$durKey';
+    final fallbackCacheKey = '${cleanedArtist?.toLowerCase() ?? ''}|${cleanedTitle.toLowerCase()}';
 
     // 1. In-memory cache
     if (_cache.containsKey(cacheKey)) {
       return Future.value(_cache[cacheKey]);
+    }
+    if (_cache.containsKey(fallbackCacheKey)) {
+      return Future.value(_cache[fallbackCacheKey]);
     }
     if (songId != null && _cache.containsKey(songId)) {
       return Future.value(_cache[songId]);
@@ -337,14 +341,16 @@ class LrcLibService {
     required String cacheKey,
     required String rawTitle,
   }) async {
+    final fallbackCacheKey = '${cleanedArtist?.toLowerCase() ?? ''}|${cleanedTitle.toLowerCase()}';
 
-    // 2. Persistent disk cache (OfflineService)
+    // 1. Persistent disk cache (OfflineService)
     if (songId != null) {
       try {
         final localData = await OfflineService().getLocalLyrics(songId)
             .timeout(const Duration(seconds: 3), onTimeout: () => null);
         if (localData != null && localData.isNotEmpty) {
           _cache[cacheKey] = localData;
+          _cache[fallbackCacheKey] = localData;
           _cache[songId] = localData;
           debugPrint('[Lyrics] ⚡ Instant disk cache hit for "$rawTitle" ($songId)');
           return localData;
@@ -365,6 +371,7 @@ class LrcLibService {
 
     void persistResult(Map<String, dynamic> res) {
       _cache[cacheKey] = res;
+      _cache[fallbackCacheKey] = res;
       if (songId != null) {
         _cache[songId] = res;
         OfflineService().saveLyrics(songId, res).catchError((_) {});
@@ -372,7 +379,7 @@ class LrcLibService {
     }
 
     // ==========================================
-    // 1. SOURCE: LRCLIB (Exact match with duration)
+    // 1. PREPARE CANDIDATE PAIRS & SEARCH QUERIES
     // ==========================================
     final getPairs = <MapEntry<String, String>>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
@@ -393,55 +400,6 @@ class LrcLibService {
       }
     }
 
-    for (final pair in getPairs) {
-      try {
-        final queryParams = <String, dynamic>{
-          'artist_name': pair.key,
-          'track_name': pair.value,
-        };
-        if (durationSeconds != null && durationSeconds > 0) {
-          queryParams['duration'] = durationSeconds;
-        }
-
-        var response = await _dio.get(
-          '/get',
-          queryParameters: queryParams,
-        );
-
-        // If not found with duration, try without duration parameter as fallback
-        if ((response.statusCode != 200 || response.data == null) && queryParams.containsKey('duration')) {
-          try {
-            response = await _dio.get(
-              '/get',
-              queryParameters: {
-                'artist_name': pair.key,
-                'track_name': pair.value,
-              },
-            );
-          } catch (_) {}
-        }
-
-        if (response.statusCode == 200 && response.data != null && response.data is Map) {
-          final resMap = response.data as Map<String, dynamic>;
-          final rTrack = resMap['trackName'] as String? ?? '';
-          final rArtist = resMap['artistName'] as String? ?? '';
-          final rDur = (resMap['duration'] as num?)?.toInt();
-
-          if (_isCandidateValid(rTrack, rArtist, pair.value, pair.key, rDur, durationSeconds)) {
-            final result = _parseLrcLibResponse(resMap);
-            if (result != null) {
-              persistResult(result);
-              debugPrint('[LRCLIB] Exact verified match found for "${pair.key} - ${pair.value}" (dur: $rDur s)');
-              return result;
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    // ==========================================
-    // 2. SOURCE: LRCLIB (Search query with duration-scored candidate validation)
-    // ==========================================
     final searchQueries = <String>[];
     if (extractedArtist != null && extractedTrack != null && extractedArtist.isNotEmpty && extractedTrack.isNotEmpty) {
       searchQueries.add('$extractedArtist $extractedTrack'.trim());
@@ -452,14 +410,6 @@ class LrcLibService {
       if (pArtist != cleanedArtist && !searchQueries.contains('$pArtist $cleanedTitle')) {
         searchQueries.add('$pArtist $cleanedTitle'.trim());
       }
-      final subArtists = cleanedArtist.split(RegExp(r'[,&/]|(?:\s+y\s+)'));
-      for (final sub in subArtists) {
-        final sTrim = cleanArtist(sub.trim());
-        final q = '$sTrim $cleanedTitle'.trim();
-        if (sTrim.isNotEmpty && !searchQueries.contains(q)) {
-          searchQueries.add(q);
-        }
-      }
     }
     if (cleanedTitle.isNotEmpty && !searchQueries.contains(cleanedTitle)) {
       searchQueries.add(cleanedTitle);
@@ -467,64 +417,146 @@ class LrcLibService {
 
     Map<String, dynamic>? fallbackPlainCandidate;
 
-    for (final query in searchQueries) {
-      if (query.isEmpty) continue;
+    Future<Map<String, dynamic>?> tryGet(String artist, String track) async {
+      try {
+        final queryParams = <String, dynamic>{
+          'artist_name': artist,
+          'track_name': track,
+        };
+        if (durationSeconds != null && durationSeconds > 0) {
+          queryParams['duration'] = durationSeconds;
+        }
+
+        var response = await _dio.get(
+          '/get',
+          queryParameters: queryParams,
+        ).timeout(const Duration(seconds: 4));
+
+        if ((response.statusCode != 200 || response.data == null) && queryParams.containsKey('duration')) {
+          try {
+            response = await _dio.get(
+              '/get',
+              queryParameters: {
+                'artist_name': artist,
+                'track_name': track,
+              },
+            ).timeout(const Duration(seconds: 3));
+          } catch (_) {}
+        }
+
+        if (response.statusCode == 200 && response.data is Map) {
+          final resMap = response.data as Map<String, dynamic>;
+          final rTrack = resMap['trackName'] as String? ?? '';
+          final rArtist = resMap['artistName'] as String? ?? '';
+          final rDur = (resMap['duration'] as num?)?.toInt();
+
+          if (_isCandidateValid(rTrack, rArtist, track, artist, rDur, durationSeconds)) {
+            final result = _parseLrcLibResponse(resMap);
+            if (result != null) return result;
+          }
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    Future<Map<String, dynamic>?> trySearch(String query) async {
+      if (query.isEmpty) return null;
       try {
         final searchResp = await _dio.get(
           '/search',
           queryParameters: {'q': query},
-        );
+        ).timeout(const Duration(seconds: 4));
 
         if (searchResp.statusCode == 200 && searchResp.data is List) {
           final list = searchResp.data as List;
-          if (list.isNotEmpty) {
-            Map<String, dynamic>? bestMatch;
-            int? bestDiff;
+          Map<String, dynamic>? bestMatch;
+          int? bestDiff;
 
-            for (final item in list) {
-              if (item is Map<String, dynamic>) {
-                final rTrack = item['trackName'] as String? ?? '';
-                final rArtist = item['artistName'] as String? ?? '';
-                final rDur = (item['duration'] as num?)?.toInt();
+          for (final item in list) {
+            if (item is Map<String, dynamic>) {
+              final rTrack = item['trackName'] as String? ?? '';
+              final rArtist = item['artistName'] as String? ?? '';
+              final rDur = (item['duration'] as num?)?.toInt();
 
-                final isValidCleaned = _isCandidateValid(rTrack, rArtist, cleanedTitle, cleanedArtist, rDur, durationSeconds);
-                final isValidExtracted = (extractedTrack != null && extractedTrack.isNotEmpty)
-                    ? _isCandidateValid(rTrack, rArtist, extractedTrack, extractedArtist, rDur, durationSeconds)
-                    : false;
+              final isValidCleaned = _isCandidateValid(rTrack, rArtist, cleanedTitle, cleanedArtist, rDur, durationSeconds);
+              final isValidExtracted = (extractedTrack != null && extractedTrack.isNotEmpty)
+                  ? _isCandidateValid(rTrack, rArtist, extractedTrack, extractedArtist, rDur, durationSeconds)
+                  : false;
 
-                if (!isValidCleaned && !isValidExtracted) {
-                  continue;
+              if (!isValidCleaned && !isValidExtracted) continue;
+
+              final synced = item['syncedLyrics'] as String?;
+              final plain = item['plainLyrics'] as String?;
+              if (synced != null && synced.trim().isNotEmpty) {
+                final diff = (durationSeconds != null && rDur != null)
+                    ? (rDur - durationSeconds).abs()
+                    : 0;
+
+                if (bestDiff == null || diff < bestDiff) {
+                  bestMatch = item;
+                  bestDiff = diff;
+                  if (diff <= 3) break;
                 }
-
-                final synced = item['syncedLyrics'] as String?;
-                final plain = item['plainLyrics'] as String?;
-                if (synced != null && synced.trim().isNotEmpty) {
-                  final diff = (durationSeconds != null && rDur != null)
-                      ? (rDur - durationSeconds).abs()
-                      : 0;
-
-                  if (bestDiff == null || diff < bestDiff) {
-                    bestMatch = item;
-                    bestDiff = diff;
-                    if (diff <= 3) break; // Great duration match found!
-                  }
-                } else if (plain != null && plain.trim().isNotEmpty) {
-                  fallbackPlainCandidate ??= item;
-                }
-              }
-            }
-
-            if (bestMatch != null) {
-              final result = _parseLrcLibResponse(bestMatch);
-              if (result != null) {
-                persistResult(result);
-                debugPrint('[LRCLIB] Best query candidate matched for "$query" (diff: ${bestDiff ?? 0} s)');
-                return result;
+              } else if (plain != null && plain.trim().isNotEmpty) {
+                fallbackPlainCandidate ??= item;
               }
             }
           }
+
+          if (bestMatch != null) {
+            return _parseLrcLibResponse(bestMatch);
+          }
         }
       } catch (_) {}
+      return null;
+    }
+
+    // ==========================================
+    // FAST TRACK: Run top /get and top /search in parallel
+    // ==========================================
+    final topPair = getPairs.isNotEmpty ? getPairs.first : null;
+    final topQuery = searchQueries.isNotEmpty ? searchQueries.first : null;
+
+    if (topPair != null && topQuery != null) {
+      final parallelResults = await Future.wait([
+        tryGet(topPair.key, topPair.value),
+        trySearch(topQuery),
+      ]);
+      for (final res in parallelResults) {
+        if (res != null) {
+          persistResult(res);
+          debugPrint('[LRCLIB] ⚡ Fast-track hit for "${topPair.key} - ${topPair.value}"');
+          return res;
+        }
+      }
+    } else if (topPair != null) {
+      final res = await tryGet(topPair.key, topPair.value);
+      if (res != null) {
+        persistResult(res);
+        return res;
+      }
+    } else if (topQuery != null) {
+      final res = await trySearch(topQuery);
+      if (res != null) {
+        persistResult(res);
+        return res;
+      }
+    }
+
+    // Secondary fallback: Try other pairs / queries if fast-track didn't find it
+    for (int i = 1; i < getPairs.length && i < 3; i++) {
+      final res = await tryGet(getPairs[i].key, getPairs[i].value);
+      if (res != null) {
+        persistResult(res);
+        return res;
+      }
+    }
+    for (int i = 1; i < searchQueries.length && i < 3; i++) {
+      final res = await trySearch(searchQueries[i]);
+      if (res != null) {
+        persistResult(res);
+        return res;
+      }
     }
 
     // ==========================================
@@ -546,7 +578,7 @@ class LrcLibService {
 
     // If plain lyrics were found on LRCLIB and no synced found yet, return plain
     if (fallbackPlainCandidate != null) {
-      final plainRes = _parseLrcLibResponse(fallbackPlainCandidate);
+      final plainRes = _parseLrcLibResponse(fallbackPlainCandidate!);
       if (plainRes != null) {
         persistResult(plainRes);
         debugPrint('[LRCLIB] Plain lyrics matched for "$cleanedTitle"');

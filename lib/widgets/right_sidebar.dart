@@ -135,7 +135,7 @@ class _RightSidebarState extends State<RightSidebar> {
 
     final isSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);
 
-    if (isSameSong) {
+    if (isSameSong && _lyrics.isNotEmpty) {
       return;
     }
     _lastSong = song;
@@ -285,16 +285,18 @@ class _RightSidebarState extends State<RightSidebar> {
 
       if (!mounted) return;
 
-      _lyricsCache[songId] = parsed;
-      final key = NowPlayingScreen.getLyricsCacheKey(song);
-      _lyricsCache[key] = parsed;
-      _checkedSongKeys.add(songId);
-      _checkedSongKeys.add(key);
-      NowPlayingScreen.setCachedLyrics(song, parsed);
+      if (parsed.isNotEmpty) {
+        _lyricsCache[songId] = parsed;
+        final key = NowPlayingScreen.getLyricsCacheKey(song);
+        _lyricsCache[key] = parsed;
+        _checkedSongKeys.add(songId);
+        _checkedSongKeys.add(key);
+        NowPlayingScreen.setCachedLyrics(song, parsed);
 
-      if (_lastSong != null) {
-        _lyricsCache[_lastSong!.id] = parsed;
-        _checkedSongKeys.add(_lastSong!.id);
+        if (_lastSong != null) {
+          _lyricsCache[_lastSong!.id] = parsed;
+          _checkedSongKeys.add(_lastSong!.id);
+        }
       }
 
       final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);

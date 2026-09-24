@@ -226,9 +226,12 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       });
     }
 
-    // 4. Defer network lyrics fetch slightly (200ms) to ensure smooth entry
+    // 4. Defer network lyrics fetch (fast 30ms on desktop, 180ms on mobile)
     if (_fetchedLyrics.isEmpty && (widget.song == null || !NowPlayingScreen.hasCheckedLyrics(widget.song!))) {
-      _lyricsDebounceTimer = Timer(const Duration(milliseconds: 200), () {
+      final delay = (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
+          ? const Duration(milliseconds: 30)
+          : const Duration(milliseconds: 180);
+      _lyricsDebounceTimer = Timer(delay, () {
         if (mounted) _fetchLyrics();
       });
     }
@@ -297,6 +300,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
           _isLoadingLyrics = false;
         } else if (alreadyChecked) {
           _isLoadingLyrics = false;
+        } else if (_fetchedLyrics.isNotEmpty) {
+          _isLoadingLyrics = false;
         }
       });
 
@@ -308,11 +313,17 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       }
 
       if (isSongChange && !hasCachedLyrics && !alreadyChecked) {
-        _lyricsDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        final delay = (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
+            ? const Duration(milliseconds: 40)
+            : const Duration(milliseconds: 200);
+        _lyricsDebounceTimer = Timer(delay, () {
           if (mounted) _fetchLyrics();
         });
-      } else if (!isSongChange && _fetchedLyrics.isEmpty && !hasCachedLyrics && !alreadyChecked && !_isFetchingLyrics) {
-        _lyricsDebounceTimer ??= Timer(const Duration(milliseconds: 220), () {
+      } else if (!isSongChange && _fetchedLyrics.isEmpty && !hasCachedLyrics && !_isFetchingLyrics) {
+        final delay = (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS))
+            ? const Duration(milliseconds: 30)
+            : const Duration(milliseconds: 150);
+        _lyricsDebounceTimer ??= Timer(delay, () {
           if (mounted) _fetchLyrics();
         });
       }
@@ -439,9 +450,11 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
 
       if (!mounted) return;
 
-      NowPlayingScreen.setCachedLyrics(song, parsed);
-      if (_lastSong != null && _lastSong!.id != songId) {
-        NowPlayingScreen.setCachedLyrics(_lastSong!, parsed);
+      if (parsed.isNotEmpty) {
+        NowPlayingScreen.setCachedLyrics(song, parsed);
+        if (_lastSong != null && _lastSong!.id != songId) {
+          NowPlayingScreen.setCachedLyrics(_lastSong!, parsed);
+        }
       }
 
       final isStillSameSong = NowPlayingScreen.isSameTrack(_lastSong, song);

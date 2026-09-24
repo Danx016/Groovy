@@ -226,9 +226,16 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
+  double _lastViewportWidth = 0;
+
   /// Estimate the scroll offset for a given item index using pre-computed heights,
-  /// adjusting for multi-line wrapped lyrics on narrower mobile screens.
-  double _estimateOffsetForIndex(int index) {
+  /// dynamically adjusting for multi-line wrapped lyrics based on available viewport width.
+  double _estimateOffsetForIndex(int index, double maxWidth) {
+    // 28.0 horizontal padding on left and right = 56.0
+    final availableWidth = (maxWidth - 56.0).clamp(180.0, 3000.0);
+    // Average 32px bold character takes ~17.5px width in typography
+    final charsPerLine = (availableWidth / 17.5).floor().clamp(14, 120);
+
     double offset = 0;
     for (int i = 0; i < index && i < _items.length; i++) {
       final item = _items[i];
@@ -236,13 +243,10 @@ class _LyricsListViewState extends State<LyricsListView> {
         offset += _estimatedInterludeHeight;
       } else {
         final textLen = item.line?.text.length ?? 0;
-        if (textLen > 50) {
-          offset += _estimatedLyricHeight + 70.0;
-        } else if (textLen > 24) {
-          offset += _estimatedLyricHeight + 36.0;
-        } else {
-          offset += _estimatedLyricHeight;
-        }
+        final linesCount = (textLen / charsPerLine).ceil().clamp(1, 4);
+        // Base line height is 66px (40px font line-height + 26px vertical padding).
+        // Each wrapped line adds 40px (font size 32 * line height 1.25).
+        offset += _estimatedLyricHeight + (linesCount - 1) * 40.0;
       }
     }
     return offset;
@@ -257,10 +261,12 @@ class _LyricsListViewState extends State<LyricsListView> {
       // Align active line at ~34% on desktop/landscape, ~28% on portrait
       final focalFraction = isLandscape ? 0.34 : 0.28;
       final viewportHeight = _scrollController.position.viewportDimension;
+      final topPadding = isLandscape ? (viewportHeight * 0.20) : 32.0;
 
-      // Calculate target offset using estimated item heights
-      final itemOffset = _estimateOffsetForIndex(_currentIndex);
-      final targetOffset = itemOffset - (viewportHeight * focalFraction);
+      // Calculate target offset using estimated item heights and account for topPadding
+      final width = _lastViewportWidth > 0 ? _lastViewportWidth : size.width;
+      final itemOffset = _estimateOffsetForIndex(_currentIndex, width);
+      final targetOffset = topPadding + itemOffset - (viewportHeight * focalFraction);
 
       final clamped = targetOffset.clamp(
         _scrollController.position.minScrollExtent,
@@ -325,31 +331,32 @@ class _LyricsListViewState extends State<LyricsListView> {
 
     final isUnsynced = _isUnsynced;
 
-    final size = MediaQuery.of(context).size;
-    final isLandscape = size.width > size.height;
-    final topPadding = isLandscape ? (size.height * 0.20) : 32.0;
-    final bottomPadding = isLandscape ? (size.height * 0.55) : (size.height * 0.50);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        _lastViewportWidth = constraints.maxWidth;
 
-    return RepaintBoundary(
-      child: NotificationListener<ScrollNotification>(
-        onNotification: (scrollNotification) {
-          if (scrollNotification is UserScrollNotification) {
-            _onUserScroll();
-          }
-          return false;
-        },
-        // ListView.builder: only builds visible items + a small buffer.
-        // This is the primary performance win — previously ALL ~100 lines
-        // were built/laid-out every setState, even when off-screen.
-        child: ListView.builder(
-          controller: _scrollController,
-          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
-          padding: EdgeInsets.only(
-            top: topPadding,
-            bottom: bottomPadding,
-          ),
-          itemCount: _items.length,
-          itemBuilder: (context, index) {
+        final isLandscape = constraints.maxWidth > constraints.maxHeight;
+        final topPadding = isLandscape ? (constraints.maxHeight * 0.20) : 32.0;
+        final bottomPadding = isLandscape ? (constraints.maxHeight * 0.55) : (constraints.maxHeight * 0.50);
+
+        return RepaintBoundary(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (scrollNotification) {
+              if (scrollNotification is UserScrollNotification) {
+                _onUserScroll();
+              }
+              return false;
+            },
+            // ListView.builder: only builds visible items + a small buffer.
+            child: ListView.builder(
+              controller: _scrollController,
+              physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+              padding: EdgeInsets.only(
+                top: topPadding,
+                bottom: bottomPadding,
+              ),
+              itemCount: _items.length,
+              itemBuilder: (context, index) {
             final item = _items[index];
             
             if (item.type == ItemType.interlude) {
@@ -406,6 +413,8 @@ class _LyricsListViewState extends State<LyricsListView> {
           },
         ),
       ),
+    );
+      },
     );
   }
 }
