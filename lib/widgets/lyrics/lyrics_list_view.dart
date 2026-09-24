@@ -53,15 +53,9 @@ class _LyricsListViewState extends State<LyricsListView> {
   int _currentLyricIndex = -1;
   bool _isManualScrolling = false;
   bool _isUnsynced = false;
-  bool _isAutoScrolling = false;
   Timer? _resumeAutoScrollTimer;
   StreamSubscription<Duration>? _posSub;
   Duration _currentPosition = Duration.zero;
-
-  // Throttle: avoid processing position events too frequently.
-  // Lyric lines change every ~2-4 seconds, so 200ms sampling is plenty.
-  static const _throttleInterval = Duration(milliseconds: 200);
-  DateTime _lastPositionUpdate = DateTime(2000);
 
   // Estimated item height for scroll offset calculation (avoids GlobalKey).
   // Lyric lines: ~32px font * 1.25 height + 26px vertical padding = ~66px
@@ -89,14 +83,6 @@ class _LyricsListViewState extends State<LyricsListView> {
     if (widget.positionStream != null) {
       _posSub = widget.positionStream!.listen((pos) {
         _currentPosition = pos;
-
-        // Throttle: skip processing if we updated too recently
-        final now = DateTime.now();
-        if (now.difference(_lastPositionUpdate) < _throttleInterval) {
-          return;
-        }
-        _lastPositionUpdate = now;
-
         _updateIndexForPosition(pos);
       });
     }
@@ -240,22 +226,30 @@ class _LyricsListViewState extends State<LyricsListView> {
     }
   }
 
-  /// Estimate the scroll offset for a given item index using pre-computed heights.
+  /// Estimate the scroll offset for a given item index using pre-computed heights,
+  /// adjusting for multi-line wrapped lyrics on narrower mobile screens.
   double _estimateOffsetForIndex(int index) {
     double offset = 0;
     for (int i = 0; i < index && i < _items.length; i++) {
-      offset += _items[i].type == ItemType.interlude
-          ? _estimatedInterludeHeight
-          : _estimatedLyricHeight;
+      final item = _items[i];
+      if (item.type == ItemType.interlude) {
+        offset += _estimatedInterludeHeight;
+      } else {
+        final textLen = item.line?.text.length ?? 0;
+        if (textLen > 50) {
+          offset += _estimatedLyricHeight + 70.0;
+        } else if (textLen > 24) {
+          offset += _estimatedLyricHeight + 36.0;
+        } else {
+          offset += _estimatedLyricHeight;
+        }
+      }
     }
     return offset;
   }
 
   void _scrollToCurrentLine({Duration? duration, bool animate = true}) {
     if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _items.length) return;
-
-    // Prevent overlapping scroll animations
-    if (_isAutoScrolling) return;
 
     try {
       final size = MediaQuery.of(context).size;
@@ -283,19 +277,14 @@ class _LyricsListViewState extends State<LyricsListView> {
         // Adaptive duration & smooth Apple-style ease-in-out curve:
         // Stanza transitions glide gracefully without abrupt jerky snaps
         final effectiveDuration = duration ?? (scrollDelta > 140
-            ? const Duration(milliseconds: 580)
-            : const Duration(milliseconds: 440));
+            ? const Duration(milliseconds: 520)
+            : const Duration(milliseconds: 380));
 
-        _isAutoScrolling = true;
         _scrollController.animateTo(
           clamped,
           duration: effectiveDuration,
           curve: Curves.easeInOutCubic,
-        ).then((_) {
-          _isAutoScrolling = false;
-        }).catchError((_) {
-          _isAutoScrolling = false;
-        });
+        );
       }
     } catch (_) {}
   }

@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.7] - 2026-09-23
+
+### Fixed & Enhanced
+- **Restauración de animación fluida al pasar de letra (`LyricsLineWidget`, `LyricsListView`)**:
+  - **Animación estilo Apple Music**: Se restauró la transición suave con `AnimatedScale` (escala suave a 1.025x) y `AnimatedOpacity` (fading suave a 1.0) con curva `Curves.easeOutCubic` de 350ms al pasar a cada línea de la letra.
+  - **Aislamiento en GPU (`RepaintBoundary`)**: El texto estático permanece aislado en su propia capa de rasterizado GPU, logrando animaciones a 120Hz sin sobrecargar el renderizado en Android ni en Windows.
+  - **Sincronización instantánea y auto-scroll continuo**: Se eliminó el throttle artificial de 200ms para que la letra cambie en el milisegundo exacto de la voz, y se eliminó el bloqueo de scroll permitiendo desplazamientos continuos y naturales.
+  - **Cálculo de altura para líneas largas**: `_estimateOffsetForIndex` ahora tiene en cuenta las líneas con salto de renglón en pantallas móviles para un encuadre visual preciso.
+
 ## [1.4.6] - 2026-09-23
 
 ### Fixed

@@ -78,16 +78,23 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
                     ? 0.40
                     : 0.36)));
 
-    // Core content: plain Opacity instead of AnimatedOpacity to avoid
-    // creating an implicit AnimationController per lyric line (~100 lines).
-    // The visual transition is driven by the parent ListView.builder rebuild
-    // which is already smooth since only visible items are built.
-    Widget content = RepaintBoundary(
-      child: Opacity(
+    // Fluid Apple Music style animation: smooth scale up on active line
+    // and smooth opacity cross-fade between active and dimmed lines.
+    // RepaintBoundary isolates the static text layout on the GPU layer.
+    Widget content = AnimatedScale(
+      scale: isCurrent ? 1.025 : 1.0,
+      alignment: Alignment.centerLeft,
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeOutCubic,
+      child: AnimatedOpacity(
         opacity: targetOpacity,
-        child: Text(
-          widget.line.text,
-          style: _lyricTextStyle,
+        duration: const Duration(milliseconds: 350),
+        curve: Curves.easeOutCubic,
+        child: RepaintBoundary(
+          child: Text(
+            widget.line.text,
+            style: _lyricTextStyle,
+          ),
         ),
       ),
     );
