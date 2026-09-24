@@ -116,6 +116,11 @@ class LrcLibService {
     return cleaned;
   }
 
+  static const Set<String> _stopWords = {
+    'the', 'los', 'las', 'les', 'el', 'la', 'del', 'de', 'and', 'y',
+    'von', 'san', 'der', 'die', 'das', 'und', 'un', 'una', 'of', 'in',
+  };
+
   /// Validates that a candidate result strictly matches the expected artist & title,
   /// ignoring accents, casing, and channel noise.
   static bool _isCandidateValid(
@@ -135,21 +140,25 @@ class LrcLibService {
     final fullExpected = '$eArtist $eTitle';
 
     // 1. Title verification
-    bool titleMatches = rTitle.contains(eTitle) || eTitle.contains(rTitle) || fullResult.contains(eTitle);
-    if (!titleMatches) {
-      final titleWords = eTitle
+    bool titleMatches = false;
+    if (rTitle == eTitle || rTitle.contains(eTitle) || eTitle.contains(rTitle)) {
+      titleMatches = true;
+    } else {
+      final eTokens = eTitle
           .split(RegExp(r'[\s,&/+\-_]+'))
-          .where((w) => w.length >= 2)
+          .where((w) => w.length >= 2 && !_stopWords.contains(w))
           .toList();
 
-      if (titleWords.isNotEmpty) {
-        int matchedWords = 0;
-        for (final w in titleWords) {
-          if (fullResult.contains(w)) {
-            matchedWords++;
+      if (eTokens.isNotEmpty) {
+        int matched = 0;
+        for (final token in eTokens) {
+          final regex = RegExp(r'\b' + RegExp.escape(token) + r'\b');
+          if (regex.hasMatch(rTitle) || regex.hasMatch(fullResult)) {
+            matched++;
           }
         }
-        titleMatches = matchedWords == titleWords.length || (matchedWords >= 1 && fullResult.contains(eTitle));
+        titleMatches = (matched == eTokens.length) ||
+            (eTokens.length >= 3 && matched / eTokens.length >= 0.75);
       }
     }
 
@@ -159,21 +168,35 @@ class LrcLibService {
 
     // 2. Artist verification
     if (eArtist.isNotEmpty) {
-      bool artistMatches = rArtist.contains(eArtist) ||
-          eArtist.contains(rArtist) ||
-          fullResult.contains(eArtist) ||
-          fullExpected.contains(rArtist);
+      final ePrimary = normalizeForMatching(primaryArtist(expectedArtist ?? ''));
+      final rPrimary = normalizeForMatching(primaryArtist(resultArtist ?? ''));
 
-      if (!artistMatches) {
-        final words = eArtist
+      bool artistMatches = false;
+      if (rArtist.contains(eArtist) ||
+          eArtist.contains(rArtist) ||
+          (ePrimary.isNotEmpty && (rArtist.contains(ePrimary) || rPrimary.contains(ePrimary))) ||
+          (ePrimary.isNotEmpty && fullResult.contains(ePrimary))) {
+        artistMatches = true;
+      } else {
+        // Compare significant artist tokens (excluding stop words like 'the', 'los', 'de')
+        final eTokens = eArtist
             .split(RegExp(r'[\s,&/+\-]+'))
-            .where((w) => w.length >= 3)
+            .where((w) => w.length >= 3 && !_stopWords.contains(w))
             .toList();
 
-        for (final word in words) {
-          if (fullResult.contains(word)) {
-            artistMatches = true;
-            break;
+        if (eTokens.isNotEmpty) {
+          int matched = 0;
+          for (final token in eTokens) {
+            final regex = RegExp(r'\b' + RegExp.escape(token) + r'\b');
+            if (regex.hasMatch(rArtist) || regex.hasMatch(fullResult)) {
+              matched++;
+            }
+          }
+          if (eTokens.length == 1) {
+            artistMatches = matched == 1;
+          } else {
+            artistMatches = matched >= (eTokens.length >= 3 ? 2 : 1) &&
+                (matched / eTokens.length >= 0.5);
           }
         }
       }
@@ -183,7 +206,7 @@ class LrcLibService {
       }
     }
 
-    // 3. Duration verification if both are present (tolerance: up to 25s for music videos)
+    // 3. Duration verification if both are present (tolerance: up to 12s for music videos)
     var expDur = expectedDuration;
     if (expDur != null && expDur > 1800) expDur ~/= 1000;
     var resDur = resultDuration;
@@ -191,7 +214,7 @@ class LrcLibService {
 
     if (expDur != null && expDur > 10 && resDur != null && resDur > 10) {
       final diff = (resDur - expDur).abs();
-      if (diff > 25) {
+      if (diff > 12) {
         return false;
       }
     }
@@ -200,7 +223,10 @@ class LrcLibService {
   }
 
   /// Extracts synchronized lyrics directly from YouTube Closed Captions (CC).
-  Future<Map<String, dynamic>?> getYouTubeClosedCaptions(String videoId) async {
+  Future<Map<String, dynamic>?> getYouTubeClosedCaptions(
+    String videoId, {
+    bool officialOnly = false,
+  }) async {
     final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
     if (!RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) return null;
 
@@ -209,18 +235,24 @@ class LrcLibService {
       final manifest = await yt.videos.closedCaptions.getManifest(cleanId).timeout(const Duration(seconds: 4));
       if (manifest.tracks.isEmpty) return null;
 
+      final tracksToConsider = officialOnly
+          ? manifest.tracks.where((t) => !t.isAutoGenerated).toList()
+          : manifest.tracks;
+
+      if (tracksToConsider.isEmpty) return null;
+
       // Prefer Spanish, English, or non-auto-generated track
       ClosedCaptionTrackInfo? selectedTrack;
-      for (final t in manifest.tracks) {
+      for (final t in tracksToConsider) {
         final lang = t.language.code.toLowerCase();
         if (!t.isAutoGenerated && (lang.startsWith('es') || lang.startsWith('en'))) {
           selectedTrack = t;
           break;
         }
       }
-      selectedTrack ??= manifest.tracks.firstWhere(
+      selectedTrack ??= tracksToConsider.firstWhere(
         (t) => !t.isAutoGenerated,
-        orElse: () => manifest.tracks.first,
+        orElse: () => tracksToConsider.first,
       );
 
       final track = await yt.videos.closedCaptions.get(selectedTrack).timeout(const Duration(seconds: 4));
@@ -375,6 +407,25 @@ class LrcLibService {
       if (songId != null) {
         _cache[songId] = res;
         OfflineService().saveLyrics(songId, res).catchError((_) {});
+      }
+    }
+
+    // ==========================================
+    // 0. PRIORITY SOURCE: Official YouTube Closed Captions (CC)
+    // If the video has official (non-auto-generated) captions, they are 100%
+    // synchronized to the exact video timeline playing (including intros & pauses).
+    // ==========================================
+    if (songId != null) {
+      final cleanVideoId = songId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+      if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanVideoId)) {
+        try {
+          final officialCc = await getYouTubeClosedCaptions(cleanVideoId, officialOnly: true);
+          if (officialCc != null) {
+            persistResult(officialCc);
+            debugPrint('[YouTube CC] ⚡ High-priority official captions found for "$cleanVideoId"');
+            return officialCc;
+          }
+        } catch (_) {}
       }
     }
 
@@ -668,15 +719,23 @@ class LrcLibService {
         if (hits != null && hits.isNotEmpty) {
           for (final h in hits) {
             final r = h['result'];
-            final t = (r?['title'] as String? ?? '').toLowerCase();
-            final a = (r?['artist_names'] as String? ?? '').toLowerCase();
+            final t = r?['title'] as String? ?? '';
+            final a = r?['artist_names'] as String? ?? '';
+
+            // Strictly validate candidate before selecting
+            if (!_isCandidateValid(t, a, title, artist, null, null)) {
+              continue;
+            }
+
+            final tLower = t.toLowerCase();
+            final aLower = a.toLowerCase();
             // Prefer original over translations
-            if (!t.contains('translation') && !t.contains('traducci') && !a.contains('genius translations')) {
+            if (!tLower.contains('translation') && !tLower.contains('traducci') && !aLower.contains('genius translations')) {
               songUrl = r['url'] as String?;
               break;
             }
           }
-          songUrl ??= hits[0]['result']?['url'] as String?;
+          if (songUrl != null) break;
         }
       }
     }

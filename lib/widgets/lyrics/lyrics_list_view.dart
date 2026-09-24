@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import '../../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -297,10 +299,21 @@ class _LyricsListViewState extends State<LyricsListView> {
           ? _itemOffsets[_currentIndex]
           : 0.0;
 
-      // Because topPadding == focalOffset in ListView.builder,
-      // setting scroll offset directly to itemOffset positions the active
-      // lyric line exactly at the focal center of the screen without drifting.
-      final targetOffset = itemOffset;
+      final bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+      final double targetOffset;
+
+      if (isMobile) {
+        // On Android/mobile: start naturally from top (32px padding).
+        // The 3 dots and first lines sit at the top without empty space,
+        // and as the song plays it scrolls up smoothly keeping the active line at ~28%.
+        final viewportHeight = _scrollController.position.viewportDimension;
+        const topPadding = 32.0;
+        const focalFraction = 0.28;
+        targetOffset = topPadding + itemOffset - (viewportHeight * focalFraction);
+      } else {
+        // On Windows/Desktop: keep the centered alignment matching the desktop layout
+        targetOffset = itemOffset;
+      }
 
       final clamped = targetOffset.clamp(
         _scrollController.position.minScrollExtent,
@@ -372,10 +385,21 @@ class _LyricsListViewState extends State<LyricsListView> {
         _recomputeItemHeights(constraints.maxWidth);
 
         final isLandscape = constraints.maxWidth > constraints.maxHeight;
-        // Vertically center the active line (46% on landscape aligned with cover art, 44% on portrait)
-        final focalFraction = isLandscape ? 0.46 : 0.44;
-        final topPadding = constraints.maxHeight * focalFraction;
-        final bottomPadding = constraints.maxHeight * 0.55;
+        final bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
+        final double topPadding;
+        final double bottomPadding;
+
+        if (isMobile) {
+          // Android / Mobile: 32px top padding so the intro/3 dots and initial lines start at the top
+          topPadding = 32.0;
+          bottomPadding = constraints.maxHeight * 0.50;
+        } else {
+          // Windows / Desktop: vertically centered with album art
+          final focalFraction = isLandscape ? 0.46 : 0.44;
+          topPadding = constraints.maxHeight * focalFraction;
+          bottomPadding = constraints.maxHeight * 0.55;
+        }
 
         return RepaintBoundary(
           child: NotificationListener<ScrollNotification>(
