@@ -57,11 +57,6 @@ class _LyricsListViewState extends State<LyricsListView> {
   StreamSubscription<Duration>? _posSub;
   Duration _currentPosition = Duration.zero;
 
-  // Estimated item height for scroll offset calculation (avoids GlobalKey).
-  // Lyric lines: ~32px font * 1.25 height + 26px vertical padding = ~66px
-  // Interlude dots: ~11px dot + 24px vertical padding = ~35px
-  static const double _estimatedLyricHeight = 66.0;
-  static const double _estimatedInterludeHeight = 55.0;
 
   @override
   void initState() {
@@ -227,46 +222,85 @@ class _LyricsListViewState extends State<LyricsListView> {
   }
 
   double _lastViewportWidth = 0;
+  List<double> _itemOffsets = [];
+  List<double> _itemHeights = [];
+  double _computedForWidth = 0;
 
-  /// Estimate the scroll offset for a given item index using pre-computed heights,
-  /// dynamically adjusting for multi-line wrapped lyrics based on available viewport width.
-  double _estimateOffsetForIndex(int index, double maxWidth) {
-    // 28.0 horizontal padding on left and right = 56.0
-    final availableWidth = (maxWidth - 56.0).clamp(180.0, 3000.0);
-    // Average 32px bold character takes ~17.5px width in typography
-    final charsPerLine = (availableWidth / 17.5).floor().clamp(14, 120);
-
-    double offset = 0;
-    for (int i = 0; i < index && i < _items.length; i++) {
-      final item = _items[i];
-      if (item.type == ItemType.interlude) {
-        offset += _estimatedInterludeHeight;
-      } else {
-        final textLen = item.line?.text.length ?? 0;
-        final linesCount = (textLen / charsPerLine).ceil().clamp(1, 4);
-        // Base line height is 66px (40px font line-height + 26px vertical padding).
-        // Each wrapped line adds 40px (font size 32 * line height 1.25).
-        offset += _estimatedLyricHeight + (linesCount - 1) * 40.0;
-      }
+  /// Accurately compute prefix-sum offsets and item heights using Flutter's TextPainter engine.
+  /// This eliminates all guesswork, preventing cumulative drift on all screen sizes.
+  void _recomputeItemHeights(double maxWidth) {
+    if ((maxWidth - _computedForWidth).abs() < 2.0 &&
+        _itemOffsets.length == _items.length &&
+        _itemHeights.length == _items.length) {
+      return;
     }
-    return offset;
+
+    _computedForWidth = maxWidth;
+    _itemOffsets = List.filled(_items.length, 0.0);
+    _itemHeights = List.filled(_items.length, 0.0);
+
+    // 28.0 horizontal padding on left + 28.0 on right = 56.0
+    final availableTextWidth = (maxWidth - 56.0).clamp(80.0, 3000.0);
+    double accumulated = 0.0;
+
+    for (int i = 0; i < _items.length; i++) {
+      _itemOffsets[i] = accumulated;
+      final item = _items[i];
+      double h = 66.0;
+
+      if (item.type == ItemType.interlude) {
+        h = 51.0;
+      } else if (item.line != null) {
+        final text = item.line!.text;
+        if (text.isEmpty) {
+          h = 40.0;
+        } else {
+          final tp = TextPainter(
+            text: TextSpan(
+              text: text,
+              style: const TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+                height: 1.25,
+              ),
+            ),
+            textDirection: TextDirection.ltr,
+            maxLines: 8,
+          )..layout(maxWidth: availableTextWidth);
+          // 26.0 is vertical padding (13.0 top + 13.0 bottom)
+          h = tp.height + 26.0;
+          tp.dispose();
+        }
+      }
+      _itemHeights[i] = h;
+      accumulated += h;
+    }
   }
 
   void _scrollToCurrentLine({Duration? duration, bool animate = true}) {
-    if (!mounted || !widget.isActive || _isManualScrolling || !_scrollController.hasClients || _currentIndex < 0 || _currentIndex >= _items.length) return;
+    if (!mounted ||
+        !widget.isActive ||
+        _isManualScrolling ||
+        !_scrollController.hasClients ||
+        _currentIndex < 0 ||
+        _currentIndex >= _items.length) {
+      return;
+    }
 
     try {
-      final size = MediaQuery.of(context).size;
-      final isLandscape = size.width > size.height;
-      // Align active line at ~34% on desktop/landscape, ~28% on portrait
-      final focalFraction = isLandscape ? 0.34 : 0.28;
-      final viewportHeight = _scrollController.position.viewportDimension;
-      final topPadding = isLandscape ? (viewportHeight * 0.20) : 32.0;
+      if (_itemOffsets.isEmpty && _lastViewportWidth > 0) {
+        _recomputeItemHeights(_lastViewportWidth);
+      }
 
-      // Calculate target offset using estimated item heights and account for topPadding
-      final width = _lastViewportWidth > 0 ? _lastViewportWidth : size.width;
-      final itemOffset = _estimateOffsetForIndex(_currentIndex, width);
-      final targetOffset = topPadding + itemOffset - (viewportHeight * focalFraction);
+      final itemOffset = (_currentIndex < _itemOffsets.length)
+          ? _itemOffsets[_currentIndex]
+          : 0.0;
+
+      // Because topPadding == focalOffset in ListView.builder,
+      // setting scroll offset directly to itemOffset positions the active
+      // lyric line exactly at the focal center of the screen without drifting.
+      final targetOffset = itemOffset;
 
       final clamped = targetOffset.clamp(
         _scrollController.position.minScrollExtent,
@@ -282,9 +316,10 @@ class _LyricsListViewState extends State<LyricsListView> {
 
         // Adaptive duration & smooth Apple-style ease-in-out curve:
         // Stanza transitions glide gracefully without abrupt jerky snaps
-        final effectiveDuration = duration ?? (scrollDelta > 140
-            ? const Duration(milliseconds: 520)
-            : const Duration(milliseconds: 380));
+        final effectiveDuration = duration ??
+            (scrollDelta > 140
+                ? const Duration(milliseconds: 520)
+                : const Duration(milliseconds: 380));
 
         _scrollController.animateTo(
           clamped,
@@ -334,10 +369,13 @@ class _LyricsListViewState extends State<LyricsListView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _lastViewportWidth = constraints.maxWidth;
+        _recomputeItemHeights(constraints.maxWidth);
 
         final isLandscape = constraints.maxWidth > constraints.maxHeight;
-        final topPadding = isLandscape ? (constraints.maxHeight * 0.20) : 32.0;
-        final bottomPadding = isLandscape ? (constraints.maxHeight * 0.55) : (constraints.maxHeight * 0.50);
+        // Vertically center the active line (46% on landscape aligned with cover art, 44% on portrait)
+        final focalFraction = isLandscape ? 0.46 : 0.44;
+        final topPadding = constraints.maxHeight * focalFraction;
+        final bottomPadding = constraints.maxHeight * 0.55;
 
         return RepaintBoundary(
           child: NotificationListener<ScrollNotification>(

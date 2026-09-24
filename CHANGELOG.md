@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.9] - 2026-09-23
+
+### Fixed
+- **Centrado vertical perfecto y cálculo exacto de alturas en letras (`LyricsListView`)**:
+  - **Medición exacta con `TextPainter`**: Se eliminó toda estimación de caracteres por línea. Cada línea de letra se mide con el motor de renderizado de texto real de Flutter (`TextPainter`), almacenando la altura exacta y prefijo acumulado para eliminar desfasajes acumulativos en cualquier ancho de pantalla.
+  - **Centrado vertical al 46%**: Se configuró el punto focal de scroll y el `topPadding` al 46% de la altura visible, manteniendo la línea activa exactamente centrada en el eje vertical (alineada a la altura de la portada en pantallas panorámicas de Windows y en la zona central en Android).
+  - La línea activa ahora se mantiene fija en el centro a medida que avanza la canción, sin desplazarse ni subirse hacia la parte superior.
+
 ## [1.4.8] - 2026-09-23
 
 ### Fixed & Enhanced
