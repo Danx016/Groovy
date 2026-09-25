@@ -4,6 +4,8 @@ import { AdminPortal } from './components/admin/AdminPortal';
 import { LandingDownloadPage } from './components/views/LandingDownloadPage';
 import { PublicSite } from './components/views/PublicSite';
 
+import { DownloaderView } from './components/views/DownloaderView';
+
 /* Global layout + responsive styles */
 const layoutStyles = `
   /* Desktop: show sidebar, hide mobile elements */
@@ -38,6 +40,14 @@ const layoutStyles = `
 `;
 
 function MainApp() {
+  const isDownloaderRoute = (h, p, s) => {
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('groovydescarga') || host.includes('descarga')) return true;
+    if (p.startsWith('/downloader') || p.startsWith('/convert') || p.startsWith('/descargar-musica') || s.includes('downloader=true')) return true;
+    const downloaderHashes = ['#downloader', '#convertir', '#descargar-musica', '#musica', '#mp3', '#mp4'];
+    return downloaderHashes.some(dh => h.toLowerCase().startsWith(dh));
+  };
+
   const isDownloadRoute = (h, p, s) => {
     if (p.startsWith('/download') || s.includes('download=true')) return true;
     const downloadHashes = ['#download', '#descargas', '#interfaz', '#funciones', '#preguntas', '#faq', '#caracteristicas', '#capturas'];
@@ -49,6 +59,7 @@ function MainApp() {
     const h = window.location.hash;
     const s = window.location.search;
     if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) return 'admin';
+    if (isDownloaderRoute(h, p, s)) return 'downloader';
     if (isDownloadRoute(h, p, s)) return 'download';
     return 'public';
   });
@@ -60,6 +71,8 @@ function MainApp() {
       const s = window.location.search;
       if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) {
         setCurrentRoute('admin');
+      } else if (isDownloaderRoute(h, p, s)) {
+        setCurrentRoute('downloader');
       } else if (isDownloadRoute(h, p, s)) {
         setCurrentRoute('download');
       } else {
@@ -88,7 +101,20 @@ function MainApp() {
     );
   }
 
-  // 2. If visiting Landing & Download Page:
+  // 2. If visiting Media Downloader (MP3 & MP4 in multiple qualities):
+  if (currentRoute === 'downloader') {
+    return (
+      <DownloaderView
+        onBack={() => {
+          window.location.hash = '';
+          window.history.pushState({}, '', '/');
+          setCurrentRoute('public');
+        }}
+      />
+    );
+  }
+
+  // 3. If visiting Landing & App Download Page:
   if (currentRoute === 'download') {
     return (
       <LandingDownloadPage
@@ -96,6 +122,10 @@ function MainApp() {
           window.location.hash = '';
           window.history.pushState({}, '', '/');
           setCurrentRoute('public');
+        }}
+        onOpenDownloader={() => {
+          window.location.hash = 'downloader';
+          setCurrentRoute('downloader');
         }}
         onOpenAdmin={() => {
           window.location.hash = 'admin';
@@ -105,13 +135,22 @@ function MainApp() {
     );
   }
 
-  return <PublicSite onOpenDownloads={() => {
-    window.location.hash = 'download';
-    setCurrentRoute('download');
-  }} onOpenAdmin={() => {
-    window.location.hash = 'admin';
-    setCurrentRoute('admin');
-  }} />;
+  return (
+    <PublicSite
+      onOpenDownloads={() => {
+        window.location.hash = 'download';
+        setCurrentRoute('download');
+      }}
+      onOpenDownloader={() => {
+        window.location.hash = 'downloader';
+        setCurrentRoute('downloader');
+      }}
+      onOpenAdmin={() => {
+        window.location.hash = 'admin';
+        setCurrentRoute('admin');
+      }}
+    />
+  );
 }
 
 export default function App() {

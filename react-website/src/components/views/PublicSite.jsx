@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   ArrowRight, Check, Download, Globe2, Heart, ImagePlus, Laptop, LogIn, LogOut,
-  Menu, ShieldCheck, Smartphone, Sparkles, UserRound, X, Zap,
+  Menu, ShieldCheck, Smartphone, Sparkles, UserRound, X, Zap, Music,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/api';
@@ -13,7 +13,7 @@ const featureGroups = [
   { icon: ShieldCheck, title: 'Cuenta protegida', text: 'Autenticación segura, control de sesiones y herramientas para administradores.' },
 ];
 
-export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
+export function PublicSite({ onOpenDownloads, onOpenDownloader, onOpenAdmin }) {
   const { user, isAuthenticated, isAdmin, login, register, googleLogin, logout, setUser } = useAuth();
   const [mobileMenu, setMobileMenu] = useState(false);
   const [authMode, setAuthMode] = useState('login');
@@ -161,7 +161,26 @@ export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
           <a href="#caracteristicas" onClick={() => setMobileMenu(false)}>Características</a>
           <a href="#como-funciona" onClick={() => setMobileMenu(false)}>Cómo funciona</a>
           <a href="#seguridad" onClick={() => setMobileMenu(false)}>Seguridad</a>
-          <button className="nav-download" onClick={onOpenDownloads}><Download size={16} /> Descargas</button>
+          <button
+            className="nav-music-download"
+            onClick={() => { setMobileMenu(false); onOpenDownloader?.(); }}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: 'linear-gradient(135deg, rgba(0, 230, 118, 0.18), rgba(0, 176, 255, 0.12))',
+              border: '1px solid rgba(0, 230, 118, 0.4)',
+              color: '#00E676',
+              borderRadius: '20px',
+              padding: '6px 14px',
+              fontSize: '13px',
+              fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            <Music size={14} /> Descargar MP3/MP4
+          </button>
+          <button className="nav-download" onClick={onOpenDownloads}><Download size={16} /> App Groovy</button>
           {isAuthenticated ? (
             <>
               {isAdmin && <button className="nav-admin" onClick={onOpenAdmin}><ShieldCheck size={16} /> Panel admin</button>}
@@ -178,8 +197,21 @@ export function PublicSite({ onOpenDownloads, onOpenAdmin }) {
             <h1>Todo Groovy.<br /><span>En un solo lugar.</span></h1>
             <p className="hero-text">Descubre una plataforma pensada para disfrutar, organizar y sincronizar tu experiencia musical en todos tus dispositivos.</p>
             <div className="hero-actions">
-              <button className="primary-action" onClick={onOpenDownloads}>Descargar Groovy <ArrowRight size={18} /></button>
-              <button className="secondary-action" onClick={() => document.getElementById('caracteristicas')?.scrollIntoView({ behavior: 'smooth' })}>Conocer características</button>
+              <button
+                className="primary-action"
+                onClick={onOpenDownloader}
+                style={{
+                  background: 'linear-gradient(135deg, #00E676 0%, #00C853 100%)',
+                  color: '#051b11',
+                  fontWeight: 800,
+                  boxShadow: '0 6px 24px rgba(0, 230, 118, 0.35)',
+                }}
+              >
+                <Music size={18} /> Descargar Música & Video <ArrowRight size={18} />
+              </button>
+              <button className="secondary-action" onClick={onOpenDownloads}>
+                <Download size={18} /> Instalar App Groovy
+              </button>
             </div>
             <div className="trust-row"><Check size={16} /> Gratis para empezar <Check size={16} /> Sin anuncios invasivos <Check size={16} /> Multiplataforma</div>
           </div>

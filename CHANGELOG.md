@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.1] - 2026-09-24
+
+### Fixed & Enhanced
+- **Menú de opciones de canciones (`SongTile`, `NowPlayingMoreMenu`)**:
+  - Se unificó el menú de opciones (3 puntos) en los resultados de búsqueda y listas de canciones para usar el menú nativo en español con diseño Apple Music.
+  - Opciones completas: Agregar/Eliminar de biblioteca, Reproducir a continuación, Añadir a la cola, Descargar canción (offline con progreso), Agregar a playlist, Ver créditos, Ir al álbum, Ir al artista (con soporte multi-artista) y Favoritos.
+  - Eliminación de 750 líneas de código duplicado y cadenas en inglés obsoletas.
+- **Protección contra saturación y fallos al pasar canciones rápido (`PlayerProvider`, `YtDlpService`)**:
+  - Debounce optimizado a 350 ms: interfaz y metadatos responden a 0 ms, mientras que la consulta de stream a YouTube solo se realiza una vez que el usuario se detiene en la canción deseada.
+  - Cierre inmediato del stream de audio anterior con `_audioPlayer.stop()` y timeout de seguridad de 500 ms para liberar sockets de red al instante.
+  - Eliminación de precalentamiento innecesario en saltos intermedios y límite de concurrencia en `warmUpStreamCache` (máximo 2 peticiones en vuelo) para prevenir bloqueos HTTP 429/403 de YouTube.
+  - Protección contra cascada de errores: ya no se disparan saltos automáticos en cadena cuando una canción falla durante el paso manual de pistas.
+
 ## [1.5.0] - 2026-09-23
 
 ### Fixed & Enhanced

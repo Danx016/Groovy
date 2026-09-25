@@ -72,3 +72,6 @@ key.properties
 *_BASE64*
 *codesign*
 groovy_music_cache/
+cookies.txt
+*.tar.gz
+*_b64.txt

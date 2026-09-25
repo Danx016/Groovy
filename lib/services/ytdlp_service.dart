@@ -114,6 +114,7 @@ class YtDlpService {
     final cleanId = songId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');
     if (!RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) return;
     if (_streamInfoCache.containsKey(cleanId)) return;
+    if (_inFlightResolutions.length >= 2) return; // Prevent spawning multiple heavy background subprocesses
     unawaited(resolveStreamInfo(cleanId).catchError((_) => YtStreamInfo(url: '', headers: {})));
   }
 

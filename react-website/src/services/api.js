@@ -246,3 +246,29 @@ export const telemetryApi = {
       body: JSON.stringify({}),
     }).catch(() => {}),
 };
+
+// Downloader API Endpoints
+export const downloadApi = {
+  search: (q) =>
+    authFetch(`/download/search?q=${encodeURIComponent(q)}`),
+
+  getInfo: (payload) =>
+    authFetch('/download/info', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  getDownloadUrl: ({ id, url, format, quality, title, artist, query, thumbnail }) => {
+    const params = new URLSearchParams();
+    if (id) params.append('id', id);
+    if (url) params.append('url', url);
+    if (format) params.append('format', format);
+    if (quality) params.append('quality', quality);
+    if (title) params.append('title', title);
+    if (artist) params.append('artist', artist);
+    if (query) params.append('query', query);
+    if (thumbnail) params.append('thumbnail', thumbnail);
+    return `${API_BASE}/download/file?${params.toString()}`;
+  },
+};
+

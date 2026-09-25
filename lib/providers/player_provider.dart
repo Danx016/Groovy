@@ -114,6 +114,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final bool _reactivatingSession = false;
   DateTime? _lastUserPauseTime;
   String? _lastCompletedSongId;
+  DateTime? _lastManualSkipTime;
+  static const Duration _skipDebounceDuration = Duration(milliseconds: 350);
 
   /// Last playback error message, set when a song fails to load after all retries.
   /// Cleared automatically when a new song starts successfully.
@@ -2479,7 +2481,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Ensure any previously active audio or faulted stream is completely stopped and detached
     try {
-      await _audioPlayer.stop();
+      await _audioPlayer.stop().timeout(const Duration(milliseconds: 500));
     } catch (_) {}
     if (currentGen != _playGeneration) return;
 
@@ -2813,8 +2815,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
 
       // Graceful queue auto-recovery: if there are subsequent tracks in the queue,
-      // advance automatically instead of getting stuck on an unplayable track.
-      if (_queue.isNotEmpty && _currentIndex < _queue.length - 1) {
+      // advance automatically ONLY if the user was NOT skipping manually (to avoid runaway skips).
+      final wasRecentlySkippedManually = _lastManualSkipTime != null &&
+          DateTime.now().difference(_lastManualSkipTime!) < const Duration(seconds: 4);
+
+      if (!wasRecentlySkippedManually &&
+          _queue.isNotEmpty &&
+          _currentIndex < _queue.length - 1) {
         debugPrint(
             '[Player] Song "${song.title}" unplayable. Auto-skipping to next track...');
         Future.delayed(const Duration(milliseconds: 600), () {
@@ -3242,7 +3249,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _activeAudioSongId = null;
-    _audioPlayer.pause().catchError((_) {});
+    _lastManualSkipTime = DateTime.now();
+    _audioPlayer.stop().catchError((_) {});
 
     if (_shuffleEnabled && _queue.length > 1) {
       _shuffleHistory.add(_currentSong?.id ?? '');
@@ -3253,15 +3261,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       } while (next == _currentIndex);
       _currentIndex = next;
       _currentSong = _queue[next];
-      if (_currentSong != null && _currentSong!.isLocal != true) {
-        final cleanId = _currentSong!.id
-            .replaceFirst('ytmusic://', '')
-            .replaceFirst('yt_', '')
-            .trim();
-        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
-          YtDlpService().warmUpStreamCache(cleanId);
-        }
-      }
       _position = Duration.zero;
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
@@ -3273,7 +3272,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
 
       _skipDebounceTimer?.cancel();
-      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+      _skipDebounceTimer = Timer(_skipDebounceDuration, () {
         if (skipGen != _skipGeneration) return;
         skipToIndex(next, skipGen: skipGen);
       });
@@ -3281,15 +3280,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final nextIndex = _currentIndex + 1;
       _currentIndex = nextIndex;
       _currentSong = _queue[nextIndex];
-      if (_currentSong != null && _currentSong!.isLocal != true) {
-        final cleanId = _currentSong!.id
-            .replaceFirst('ytmusic://', '')
-            .replaceFirst('yt_', '')
-            .trim();
-        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
-          YtDlpService().warmUpStreamCache(cleanId);
-        }
-      }
       _position = Duration.zero;
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
@@ -3306,7 +3296,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _fetchAndQueueRadioTracks(_currentSong!).catchError((_) {});
       }
       _skipDebounceTimer?.cancel();
-      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+      _skipDebounceTimer = Timer(_skipDebounceDuration, () {
         if (skipGen != _skipGeneration) return;
         skipToIndex(nextIndex, skipGen: skipGen);
       });
@@ -3334,7 +3324,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _updateAndroidAuto();
 
         _skipDebounceTimer?.cancel();
-        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        _skipDebounceTimer = Timer(_skipDebounceDuration, () {
           if (skipGen != _skipGeneration) return;
           skipToIndex(nextIndex, skipGen: skipGen);
         });
@@ -3357,7 +3347,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _updateAndroidAuto();
 
         _skipDebounceTimer?.cancel();
-        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        _skipDebounceTimer = Timer(_skipDebounceDuration, () {
           if (skipGen != _skipGeneration) return;
           skipToIndex(0, skipGen: skipGen);
         });
@@ -3478,7 +3468,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_queue.isEmpty) return;
 
     _activeAudioSongId = null;
-    _audioPlayer.pause().catchError((_) {});
+    _lastManualSkipTime = DateTime.now();
+    _audioPlayer.stop().catchError((_) {});
 
     if (_shuffleEnabled && _shuffleHistory.isNotEmpty) {
       final prevId = _shuffleHistory.removeLast();
@@ -3486,15 +3477,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (prev != -1) {
         _currentIndex = prev;
         _currentSong = _queue[prev];
-        if (_currentSong != null && _currentSong!.isLocal != true) {
-          final cleanId = _currentSong!.id
-              .replaceFirst('ytmusic://', '')
-              .replaceFirst('yt_', '')
-              .trim();
-          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
-            YtDlpService().warmUpStreamCache(cleanId);
-          }
-        }
         _position = Duration.zero;
         _duration = _currentSong!.duration != null
             ? Duration(seconds: _currentSong!.duration!)
@@ -3506,7 +3488,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _updateAndroidAuto();
 
         _skipDebounceTimer?.cancel();
-        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        _skipDebounceTimer = Timer(_skipDebounceDuration, () {
           if (skipGen != _skipGeneration) return;
           skipToIndex(prev, skipGen: skipGen);
         });
@@ -3517,15 +3499,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final prevIndex = _currentIndex - 1;
       _currentIndex = prevIndex;
       _currentSong = _queue[prevIndex];
-      if (_currentSong != null && _currentSong!.isLocal != true) {
-        final cleanId = _currentSong!.id
-            .replaceFirst('ytmusic://', '')
-            .replaceFirst('yt_', '')
-            .trim();
-        if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
-          YtDlpService().warmUpStreamCache(cleanId);
-        }
-      }
       _position = Duration.zero;
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
@@ -3537,7 +3510,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
 
       _skipDebounceTimer?.cancel();
-      _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+      _skipDebounceTimer = Timer(_skipDebounceDuration, () {
         if (skipGen != _skipGeneration) return;
         skipToIndex(prevIndex, skipGen: skipGen);
       });
@@ -3560,7 +3533,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _updateAndroidAuto();
 
         _skipDebounceTimer?.cancel();
-        _skipDebounceTimer = Timer(const Duration(milliseconds: 220), () {
+        _skipDebounceTimer = Timer(_skipDebounceDuration, () {
           if (skipGen != _skipGeneration) return;
           skipToIndex(lastIndex, skipGen: skipGen);
         });

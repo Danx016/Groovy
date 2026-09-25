@@ -11,6 +11,7 @@ const libraryRoutes = require('./routes/library');
 const adminRoutes = require('./routes/admin');
 const telemetryRoutes = require('./routes/telemetry');
 const musicRoutes = require('./routes/music');
+const downloadRoutes = require('./routes/download');
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -89,6 +90,7 @@ app.use('/api/library', libraryRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/music', musicRoutes);
+app.use('/api/download', downloadRoutes);
 
 // SPA fallback: Return index.html for all frontend routes (excluding /api)
 app.get('*', (req, res) => {

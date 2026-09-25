@@ -14,6 +14,8 @@ import '../../services/youtube_service.dart';
 import '../../services/offline_service.dart';
 import '../../services/theme_service.dart';
 import '../../utils/album_sanitizer.dart';
+import '../../utils/navigation_helper.dart';
+import '../multi_artist_widget.dart';
 import 'add_to_menu.dart';
 import '../groovy_confirm_dialog.dart';
 
@@ -416,10 +418,41 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: 'Ir al artista',
               textColor: textColor,
               onTap: () {
-                Navigator.of(context).pop();
+                final nav = Navigator.of(context);
+                nav.pop();
+                final participants = currentSong.artistParticipants;
+                if (participants != null && participants.length > 1) {
+                  final ctx = NavigationHelper.navigatorKey.currentContext;
+                  if (ctx != null) {
+                    showModalBottomSheet(
+                      context: ctx,
+                      backgroundColor: Colors.transparent,
+                      builder: (sheetCtx) => ArtistsBottomSheet(
+                        artists: participants,
+                        onArtistTap: (artist) {
+                          Navigator.pop(sheetCtx);
+                          final effectiveId = artist.id.isNotEmpty ? artist.id : 'artist_${artist.name}';
+                          nav.push(
+                            CupertinoPageRoute(
+                              builder: (_) => ArtistScreen(
+                                artistId: effectiveId,
+                                artist: Artist(
+                                  id: effectiveId,
+                                  name: artist.name.isNotEmpty ? artist.name : effectiveId,
+                                  coverArt: artist.effectiveCoverArt,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    );
+                    return;
+                  }
+                }
                 final artistId = currentSong.artistId ?? currentSong.artist ?? '';
                 if (artistId.isNotEmpty) {
-                  Navigator.of(context).push(
+                  nav.push(
                     CupertinoPageRoute(
                       builder: (ctx) => ArtistScreen(
                         artistId: artistId,
