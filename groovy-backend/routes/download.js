@@ -602,6 +602,9 @@ router.get('/file', async (req, res) => {
     '--ffmpeg-location', ffmpegPath,
     '--no-playlist',
     '--no-warnings',
+    '--extractor-args', 'youtube:player_client=tv_embedded,web',
+    '--retries', '3',
+    '--fragment-retries', '3',
     '-o', `${tempOutputBase}.%(ext)s`,
   ];
 
