@@ -197,18 +197,6 @@ export function PublicSite({ onOpenDownloads, onOpenDownloader, onOpenAdmin }) {
             <h1>Todo Groovy.<br /><span>En un solo lugar.</span></h1>
             <p className="hero-text">Descubre una plataforma pensada para disfrutar, organizar y sincronizar tu experiencia musical en todos tus dispositivos.</p>
             <div className="hero-actions">
-              <button
-                className="primary-action"
-                onClick={onOpenDownloader}
-                style={{
-                  background: 'linear-gradient(135deg, #00E676 0%, #00C853 100%)',
-                  color: '#051b11',
-                  fontWeight: 800,
-                  boxShadow: '0 6px 24px rgba(0, 230, 118, 0.35)',
-                }}
-              >
-                <Music size={18} /> Descargar Música & Video <ArrowRight size={18} />
-              </button>
               <button className="secondary-action" onClick={onOpenDownloads}>
                 <Download size={18} /> Instalar App Groovy
               </button>
