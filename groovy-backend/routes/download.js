@@ -153,7 +153,47 @@ function extractYouTubeId(urlOrId) {
 // Fast YouTube search resolver to find video ID from query
 async function resolveYouTubeSearch(query) {
   if (!query) return null;
-  // 1. YouTube Music Innertube search
+
+  // 1. YouTube Web Innertube search (Finds songs, live, lyric videos, etc.)
+  try {
+    const ytReq = await fetch('https://www.youtube.com/youtubei/v1/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB',
+            clientVersion: '2.20240101.01.00',
+            hl: 'es',
+            gl: 'US',
+          },
+        },
+        query,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (ytReq.ok) {
+      const d = await ytReq.json();
+      const sections = d.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+      for (const s of sections) {
+        const items = s.itemSectionRenderer?.contents || [];
+        for (const it of items) {
+          if (it.videoRenderer?.videoId) {
+            console.log(`[Downloader] Resolved via YT Web: https://www.youtube.com/watch?v=${it.videoRenderer.videoId}`);
+            return `https://www.youtube.com/watch?v=${it.videoRenderer.videoId}`;
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Downloader] YT Web search warning:', err.message);
+  }
+
+  // 2. YouTube Music Innertube search fallback
   try {
     const ytReq = await fetch('https://music.youtube.com/youtubei/v1/search?prettyPrint=false', {
       method: 'POST',
@@ -172,8 +212,8 @@ async function resolveYouTubeSearch(query) {
           },
         },
         query,
-        params: 'EgWKAQIIAWoKEAUQAxAEEAkQBQ==',
       }),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (ytReq.ok) {
@@ -194,26 +234,6 @@ async function resolveYouTubeSearch(query) {
     }
   } catch (err) {
     console.warn('[Downloader] YT Music search warning:', err.message);
-  }
-
-  // 2. YouTube HTML search scraper fallback
-  try {
-    const sRes = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-      },
-    });
-    if (sRes.ok) {
-      const html = await sRes.text();
-      const match = html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);
-      if (match && match[1]) {
-        console.log(`[Downloader] Resolved via YT HTML: https://www.youtube.com/watch?v=${match[1]}`);
-        return `https://www.youtube.com/watch?v=${match[1]}`;
-      }
-    }
-  } catch (err) {
-    console.warn('[Downloader] YT HTML search warning:', err.message);
   }
 
   // 3. Fallback for yt-dlp search query
@@ -693,9 +713,26 @@ router.get('/file', async (req, res) => {
       });
 
       if (upstream.ok) {
+        const asciiFilename = finalFilename.replace(/[^\x20-\x7E]/g, '_');
+        const { Readable } = require('stream');
+
+        // For video (MP4), stream directly to browser immediately — 0 latency, no buffering delay
+        if (!isMp3) {
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
+          res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
+          res.setHeader('Content-Type', 'video/mp4');
+          const cl = upstream.headers.get('content-length');
+          if (cl) res.setHeader('Content-Length', cl);
+          res.setHeader('Cache-Control', 'no-cache');
+
+          const nodeStream = Readable.fromWeb(upstream.body);
+          nodeStream.pipe(res);
+          return;
+        }
+
+        // For audio (MP3), buffer and tag ID3 metadata with cover art
         const tempRawPath = path.join(TEMP_DIR, `raw_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${outExt}`);
         const fileStream = fs.createWriteStream(tempRawPath);
-        const { Readable } = require('stream');
         const nodeStream = Readable.fromWeb(upstream.body);
 
         await new Promise((resolve, reject) => {
@@ -707,7 +744,7 @@ router.get('/file', async (req, res) => {
 
         let finalSendPath = tempRawPath;
 
-        if (isMp3 && (thumbnail || title || artist)) {
+        if (thumbnail || title || artist) {
           console.log(`[Downloader] Injecting cover art & ID3 metadata for "${finalFilename}"...`);
           const tempTaggedPath = path.join(TEMP_DIR, `tagged_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.mp3`);
           const songTitle = title || query || 'Música';
@@ -720,8 +757,8 @@ router.get('/file', async (req, res) => {
 
         const stat = fs.statSync(finalSendPath);
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
-        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(finalFilename)}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
-        res.setHeader('Content-Type', isMp3 ? 'audio/mpeg' : 'video/mp4');
+        res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
+        res.setHeader('Content-Type', 'audio/mpeg');
         res.setHeader('Content-Length', stat.size);
         res.setHeader('Cache-Control', 'no-cache');
 
