@@ -220,48 +220,122 @@ async function resolveYouTubeSearch(query) {
   return `ytsearch1:${query}`;
 }
 
-// Cobalt.tools resolver — works for both MP3 and MP4 without YouTube cookies
+// Fast YouTube Innertube metadata fetcher for exact duration and details
+async function fetchYouTubeMetadata(ytId) {
+  if (!ytId) return null;
+  try {
+    const res = await fetch('https://www.youtube.com/youtubei/v1/player', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'com.google.android.youtube/19.09.37 (Linux; U; Android 11; en_US; Pixel 5)',
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'ANDROID',
+            clientVersion: '19.09.37',
+            androidSdkVersion: 30,
+            hl: 'es',
+            gl: 'US',
+          },
+        },
+        videoId: ytId,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      const details = data.videoDetails;
+      if (details) {
+        const lengthSec = parseInt(details.lengthSeconds, 10) || null;
+        const thumbs = details.thumbnail?.thumbnails || [];
+        const bestThumb = thumbs.length > 0 ? thumbs[thumbs.length - 1].url : `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+        return {
+          title: details.title,
+          artist: details.author,
+          durationSec: lengthSec,
+          duration: formatDuration(lengthSec),
+          thumbnail: bestThumb,
+          views: details.viewCount ? `${parseInt(details.viewCount, 10).toLocaleString()} vistas` : null,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[YouTube Innertube Player error]:', err.message);
+  }
+  return null;
+}
+
+// Cobalt resolver — uses local container on port 9000 first, then fallback
 async function resolveCobalt(targetUrl, format, quality) {
   if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
   try {
     const isMp3 = format.toLowerCase() === 'mp3';
+    
+    // Cobalt v10 valid bitrates: 320, 256, 128, 96, 64, 8
+    let audioBitrate = '320';
+    if (['320', '256', '128', '96', '64'].includes(String(quality))) {
+      audioBitrate = String(quality);
+    } else if (String(quality) === '192') {
+      audioBitrate = '256';
+    }
+
+    // Cobalt v10 valid video qualities: max, 4320, 2160, 1440, 1080, 720, 480, 360, 240, 144
+    let videoQuality = '1080';
+    if (['1080', '720', '480', '360', '240', '144'].includes(String(quality))) {
+      videoQuality = String(quality);
+    }
+
     const body = {
       url: targetUrl,
       downloadMode: isMp3 ? 'audio' : 'auto',
     };
     if (isMp3) {
       body.audioFormat = 'mp3';
-      body.audioBitrate = String(quality); // '320','256','192','128'
+      body.audioBitrate = audioBitrate;
     } else {
-      body.videoQuality = String(quality); // '1080','720','480','360'
+      body.videoQuality = videoQuality;
     }
 
-    console.log(`[Cobalt] Requesting ${isMp3 ? 'audio' : 'video'} (${quality}) from cobalt.tools...`);
-    const res = await fetch('https://api.cobalt.tools/', {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(20000),
-    });
+    const endpoints = [
+      'http://localhost:9000/',
+      'https://api.cobalt.tools/'
+    ];
 
-    if (!res.ok) {
-      console.warn(`[Cobalt] HTTP ${res.status}`);
-      return null;
-    }
+    for (const endpoint of endpoints) {
+      try {
+        console.log(`[Cobalt] Requesting ${isMp3 ? 'audio' : 'video'} (${quality}) from ${endpoint}...`);
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+          signal: AbortSignal.timeout(20000),
+        });
 
-    const data = await res.json();
-    console.log(`[Cobalt] Response status: ${data.status}`);
+        if (!res.ok) {
+          console.warn(`[Cobalt] ${endpoint} returned HTTP ${res.status}`);
+          continue;
+        }
 
-    // status can be: redirect, tunnel, stream, picker, error
-    if ((data.status === 'redirect' || data.status === 'tunnel' || data.status === 'stream') && data.url) {
-      return data.url;
-    }
-    // picker = multiple streams (e.g. video+audio separate), pick first
-    if (data.status === 'picker' && Array.isArray(data.picker) && data.picker[0]?.url) {
-      return data.picker[0].url;
+        const data = await res.json();
+        console.log(`[Cobalt] Response from ${endpoint}: status=${data.status}`);
+
+        // status can be: redirect, tunnel, stream, picker, error
+        if ((data.status === 'redirect' || data.status === 'tunnel' || data.status === 'stream') && data.url) {
+          return data.url;
+        }
+        // picker = multiple streams (e.g. video+audio separate), pick first
+        if (data.status === 'picker' && Array.isArray(data.picker) && data.picker[0]?.url) {
+          return data.picker[0].url;
+        }
+      } catch (endpointErr) {
+        console.warn(`[Cobalt] Endpoint ${endpoint} failed:`, endpointErr.message);
+      }
     }
   } catch (err) {
     console.warn('[Cobalt Resolver Error]:', err.message);
@@ -357,8 +431,22 @@ router.get('/search', async (req, res) => {
           if (!title || !videoId) continue;
 
           const runs = mrr.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.title?.runs || [];
-          const artist = runs[0]?.text || 'Artista Desconocido';
-          const duration = runs.length > 2 ? runs[runs.length - 1]?.text : '';
+          let artist = 'Artista Desconocido';
+          let duration = '';
+          let durationSec = 210;
+
+          for (let i = 0; i < runs.length; i++) {
+            const txt = (runs[i]?.text || '').trim();
+            if (!txt || txt === '•') continue;
+            if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(txt)) {
+              duration = txt;
+              const parts = txt.split(':').map(Number);
+              if (parts.length === 2) durationSec = parts[0] * 60 + parts[1];
+              else if (parts.length === 3) durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+            } else if (artist === 'Artista Desconocido' && !txt.toLowerCase().includes('canción') && !txt.toLowerCase().includes('video')) {
+              artist = txt;
+            }
+          }
 
           const thumb = mrr.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.slice(-1)[0]?.url ||
             `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
@@ -369,7 +457,8 @@ router.get('/search', async (req, res) => {
             url: `https://www.youtube.com/watch?v=${videoId}`,
             title,
             artist,
-            duration,
+            duration: duration || formatDuration(durationSec),
+            durationSec,
             thumbnail: thumb,
             query: `${title} ${artist}`,
           });
@@ -414,6 +503,96 @@ router.get('/search', async (req, res) => {
 router.post('/info', async (req, res) => {
   const { url, videoId, query, title, artist, durationSec: reqDur, thumbnail: reqThumb } = req.body;
 
+  // 1. If YouTube URL or YouTube Video ID, fetch real metadata including exact duration
+  const ytId = extractYouTubeId(url || videoId || query);
+  if (ytId) {
+    try {
+      // Primary: Innertube Android player API for exact duration & details
+      const ytMeta = await fetchYouTubeMetadata(ytId);
+
+      let finalTitle = ytMeta?.title || 'Video de YouTube';
+      let finalArtist = ytMeta?.artist || 'YouTube';
+      let finalDurationSec = ytMeta?.durationSec;
+      let finalThumb = ytMeta?.thumbnail || `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+      let finalViews = ytMeta?.views || '1.2M+';
+
+      // If Innertube was incomplete, try oEmbed and page scrape fallback
+      if (!ytMeta?.durationSec) {
+        const [oembedRes, ytPageRes] = await Promise.allSettled([
+          fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`),
+          fetch(`https://www.youtube.com/watch?v=${ytId}`, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept-Language': 'en-US,en;q=0.9',
+            },
+          }),
+        ]);
+
+        if (oembedRes.status === 'fulfilled' && oembedRes.value.ok) {
+          const oembed = await oembedRes.value.json();
+          if (!ytMeta?.title) finalTitle = oembed.title || finalTitle;
+          if (!ytMeta?.artist) finalArtist = oembed.author_name || finalArtist;
+        }
+
+        if (ytPageRes.status === 'fulfilled' && ytPageRes.value.ok) {
+          try {
+            const html = await ytPageRes.value.text();
+            const lenMatch = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
+            if (lenMatch) {
+              finalDurationSec = parseInt(lenMatch[1], 10);
+            } else {
+              const isoMatch = html.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
+              if (isoMatch) {
+                const h = parseInt(isoMatch[1] || '0', 10);
+                const m = parseInt(isoMatch[2] || '0', 10);
+                const s = parseInt(isoMatch[3] || '0', 10);
+                finalDurationSec = h * 3600 + m * 60 + s;
+              }
+            }
+          } catch (scrapeErr) {
+            console.warn('[Duration scrape error]:', scrapeErr.message);
+          }
+        }
+      }
+
+      const durSec = finalDurationSec || parseInt(reqDur, 10) || 210;
+      const calcAudioMb = (kbps) => ((kbps * durSec) / 8 / 1024).toFixed(1);
+      const calcVideoMb = (mbps) => ((mbps * 1024 * durSec) / 8 / 1024).toFixed(1);
+
+      const defaultAudioQualities = [
+        { quality: '320', label: '320 kbps (Ultra HQ)', note: 'Máxima fidelidad de estudio', ext: 'mp3', size: `~${calcAudioMb(320)} MB`, recommended: true },
+        { quality: '256', label: '256 kbps (Alta)', note: 'Excelente equilibrio y nitidez', ext: 'mp3', size: `~${calcAudioMb(256)} MB` },
+        { quality: '192', label: '192 kbps (Estándar)', note: 'Calidad estándar recomendada', ext: 'mp3', size: `~${calcAudioMb(192)} MB` },
+        { quality: '128', label: '128 kbps (Ligero)', note: 'Ahorro máximo de espacio', ext: 'mp3', size: `~${calcAudioMb(128)} MB` },
+      ];
+
+      const defaultVideoQualities = [
+        { quality: '1080', label: '1080p (Full HD)', note: 'Resolución cinematográfica 60/30fps', ext: 'mp4', size: `~${calcVideoMb(3.5)} MB`, recommended: true },
+        { quality: '720', label: '720p (HD)', note: 'Alta definición rápida', ext: 'mp4', size: `~${calcVideoMb(1.8)} MB` },
+        { quality: '480', label: '480p (SD)', note: 'Calidad estándar equilibrada', ext: 'mp4', size: `~${calcVideoMb(1.0)} MB` },
+        { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` },
+      ];
+
+      return res.json({
+        success: true,
+        id: ytId,
+        videoId: ytId,
+        url: `https://www.youtube.com/watch?v=${ytId}`,
+        title: finalTitle,
+        artist: finalArtist,
+        duration: formatDuration(durSec),
+        durationSec: durSec,
+        thumbnail: finalThumb,
+        views: finalViews,
+        previewAudioUrl: null,
+        audioQualities: defaultAudioQualities,
+        videoQualities: defaultVideoQualities,
+      });
+    } catch (oeErr) {
+      console.warn('[Metadata fetch error]:', oeErr.message);
+    }
+  }
+
   const durationSec = parseInt(reqDur, 10) || 210;
   const calcAudioMb = (kbps) => ((kbps * durationSec) / 8 / 1024).toFixed(1);
   const calcVideoMb = (mbps) => ((mbps * 1024 * durationSec) / 8 / 1024).toFixed(1);
@@ -431,75 +610,6 @@ router.post('/info', async (req, res) => {
     { quality: '480', label: '480p (SD)', note: 'Calidad estándar equilibrada', ext: 'mp4', size: `~${calcVideoMb(1.0)} MB` },
     { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` },
   ];
-
-  // 1. If YouTube URL or YouTube Video ID, fetch real metadata including duration
-  const ytId = extractYouTubeId(url || videoId || query);
-  if (ytId) {
-    try {
-      // Fetch oEmbed (title/artist) AND scrape YouTube page for real duration — in parallel
-      const [oembedRes, ytPageRes] = await Promise.allSettled([
-        fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`),
-        fetch(`https://www.youtube.com/watch?v=${ytId}`, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-        }),
-      ]);
-
-      let title = 'Video de YouTube';
-      let artist = 'YouTube';
-      let realDurationSec = null;
-
-      if (oembedRes.status === 'fulfilled' && oembedRes.value.ok) {
-        const oembed = await oembedRes.value.json();
-        title = oembed.title || title;
-        artist = oembed.author_name || artist;
-      }
-
-      // Scrape real duration from YouTube page — "lengthSeconds":"225" is always present
-      if (ytPageRes.status === 'fulfilled' && ytPageRes.value.ok) {
-        try {
-          const html = await ytPageRes.value.text();
-          // Primary: lengthSeconds in ytInitialPlayerResponse
-          const lenMatch = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
-          if (lenMatch) {
-            realDurationSec = parseInt(lenMatch[1], 10);
-          } else {
-            // Fallback: ISO 8601 duration in JSON-LD  e.g. "duration":"PT3M45S"
-            const isoMatch = html.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
-            if (isoMatch) {
-              const h = parseInt(isoMatch[1] || '0', 10);
-              const m = parseInt(isoMatch[2] || '0', 10);
-              const s = parseInt(isoMatch[3] || '0', 10);
-              realDurationSec = h * 3600 + m * 60 + s;
-            }
-          }
-        } catch (scrapeErr) {
-          console.warn('[Duration scrape error]:', scrapeErr.message);
-        }
-      }
-
-      const finalDurationSec = realDurationSec || durationSec || 210;
-      return res.json({
-        success: true,
-        id: ytId,
-        videoId: ytId,
-        url: `https://www.youtube.com/watch?v=${ytId}`,
-        title,
-        artist,
-        duration: formatDuration(finalDurationSec),
-        durationSec: finalDurationSec,
-        thumbnail: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
-        views: '1.2M+',
-        previewAudioUrl: null,
-        audioQualities: defaultAudioQualities,
-        videoQualities: defaultVideoQualities,
-      });
-    } catch (oeErr) {
-      console.warn('[oEmbed fetch error]:', oeErr.message);
-    }
-  }
 
   // 2. If given song metadata directly from search, immediately return clean object
   if (title || (videoId && String(videoId).startsWith('dz_')) || query) {
