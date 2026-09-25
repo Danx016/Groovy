@@ -220,22 +220,61 @@ async function resolveYouTubeSearch(query) {
   return `ytsearch1:${query}`;
 }
 
-// Fast cloud downloader resolver (loader.to)
-async function resolveCloudStreamUrl(targetUrl, format, quality) {
+// Cobalt.tools resolver — works for both MP3 and MP4 without YouTube cookies
+async function resolveCobalt(targetUrl, format, quality) {
   if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
   try {
-    let ltoFormat = 'mp3';
-    if (format.toLowerCase() === 'mp3') {
-      ltoFormat = 'mp3';
+    const isMp3 = format.toLowerCase() === 'mp3';
+    const body = {
+      url: targetUrl,
+      downloadMode: isMp3 ? 'audio' : 'auto',
+    };
+    if (isMp3) {
+      body.audioFormat = 'mp3';
+      body.audioBitrate = String(quality); // '320','256','192','128'
     } else {
-      const q = parseInt(quality, 10);
-      if (q >= 1080) ltoFormat = '1080';
-      else if (q >= 720) ltoFormat = '720';
-      else if (q >= 480) ltoFormat = '480';
-      else ltoFormat = '360';
+      body.videoQuality = String(quality); // '1080','720','480','360'
     }
 
-    const initRes = await fetch(`https://loader.to/ajax/download.php?format=${ltoFormat}&url=${encodeURIComponent(targetUrl)}`, {
+    console.log(`[Cobalt] Requesting ${isMp3 ? 'audio' : 'video'} (${quality}) from cobalt.tools...`);
+    const res = await fetch('https://api.cobalt.tools/', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (!res.ok) {
+      console.warn(`[Cobalt] HTTP ${res.status}`);
+      return null;
+    }
+
+    const data = await res.json();
+    console.log(`[Cobalt] Response status: ${data.status}`);
+
+    // status can be: redirect, tunnel, stream, picker, error
+    if ((data.status === 'redirect' || data.status === 'tunnel' || data.status === 'stream') && data.url) {
+      return data.url;
+    }
+    // picker = multiple streams (e.g. video+audio separate), pick first
+    if (data.status === 'picker' && Array.isArray(data.picker) && data.picker[0]?.url) {
+      return data.picker[0].url;
+    }
+  } catch (err) {
+    console.warn('[Cobalt Resolver Error]:', err.message);
+  }
+  return null;
+}
+
+// loader.to fallback resolver (MP3 only)
+async function resolveCloudStreamUrl(targetUrl, format, quality) {
+  if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
+  if (format.toLowerCase() !== 'mp3') return null;
+  try {
+    const initRes = await fetch(`https://loader.to/ajax/download.php?format=mp3&url=${encodeURIComponent(targetUrl)}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
@@ -245,23 +284,22 @@ async function resolveCloudStreamUrl(targetUrl, format, quality) {
       const init = await initRes.json();
       if (init.download_url) return init.download_url;
       if (init.progress_url) {
-        for (let i = 0; i < 25; i++) {
+        for (let i = 0; i < 15; i++) {
           await new Promise(r => setTimeout(r, 1000));
           const pRes = await fetch(init.progress_url);
           if (pRes.ok) {
             const pData = await pRes.json();
-            if (pData.download_url) {
-              return pData.download_url;
-            }
+            if (pData.download_url) return pData.download_url;
           }
         }
       }
     }
   } catch (err) {
-    console.warn('[Cloud Resolver Error]:', err.message);
+    console.warn('[loader.to Resolver Error]:', err.message);
   }
   return null;
 }
+
 
 // 1. FAST SEARCH (Autocomplete / Suggestions)
 router.get('/search', async (req, res) => {
@@ -532,8 +570,9 @@ router.get('/file', async (req, res) => {
 
   console.log(`[Downloader] Target URL: "${targetUrl}"`);
 
-  // 2. High-speed direct Cloud Stream Resolver (only for MP3 — loader.to is unreliable for video)
-  const streamUrl = isMp3 ? await resolveCloudStreamUrl(targetUrl, format, quality) : null;
+  // 2. Primary: cobalt.tools — no YouTube cookies needed, supports MP3 + MP4
+  const cobaltUrl = await resolveCobalt(targetUrl, format, quality);
+  const streamUrl = cobaltUrl || (isMp3 ? await resolveCloudStreamUrl(targetUrl, format, quality) : null);
   if (streamUrl) {
     try {
       console.log(`[Downloader] Streaming direct cloud media from: ${streamUrl.slice(0, 70)}...`);
