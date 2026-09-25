@@ -394,29 +394,69 @@ router.post('/info', async (req, res) => {
     { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` },
   ];
 
-  // 1. If YouTube URL or YouTube Video ID, fetch direct oEmbed metadata
+  // 1. If YouTube URL or YouTube Video ID, fetch real metadata including duration
   const ytId = extractYouTubeId(url || videoId || query);
   if (ytId) {
     try {
-      const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`);
-      if (oembedRes.ok) {
-        const oembed = await oembedRes.json();
-        return res.json({
-          success: true,
-          id: ytId,
-          videoId: ytId,
-          url: `https://www.youtube.com/watch?v=${ytId}`,
-          title: oembed.title || 'Video de YouTube',
-          artist: oembed.author_name || 'YouTube',
-          duration: '3:45',
-          durationSec: 225,
-          thumbnail: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
-          views: '1.2M+',
-          previewAudioUrl: null,
-          audioQualities: defaultAudioQualities,
-          videoQualities: defaultVideoQualities,
-        });
+      // noembed.com includes duration unlike youtube's own oembed
+      const [oembedRes, noembedRes] = await Promise.allSettled([
+        fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`),
+        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${ytId}`),
+      ]);
+
+      let title = 'Video de YouTube';
+      let artist = 'YouTube';
+      let realDurationSec = null;
+
+      if (oembedRes.status === 'fulfilled' && oembedRes.value.ok) {
+        const oembed = await oembedRes.value.json();
+        title = oembed.title || title;
+        artist = oembed.author_name || artist;
       }
+
+      if (noembedRes.status === 'fulfilled' && noembedRes.value.ok) {
+        const noembed = await noembedRes.value.json();
+        if (noembed.duration) realDurationSec = parseInt(noembed.duration, 10);
+        if (!title || title === 'Video de YouTube') title = noembed.title || title;
+        if (!artist || artist === 'YouTube') artist = noembed.author_name || artist;
+      }
+
+      // If noembed didn't give duration, try getting it from yt-dlp --print duration
+      if (!realDurationSec) {
+        try {
+          const ytdlpPath = getYtDlpPath();
+          const durationStr = await new Promise((resolve) => {
+            const p = spawn(ytdlpPath, ['--print', 'duration', '--no-playlist', '--no-warnings', `https://www.youtube.com/watch?v=${ytId}`]);
+            let out = '';
+            p.stdout.on('data', d => { out += d; });
+            p.on('close', () => resolve(out.trim()));
+            p.on('error', () => resolve(''));
+            setTimeout(() => { try { p.kill(); } catch(e){} resolve(''); }, 8000);
+          });
+          if (durationStr && !isNaN(parseInt(durationStr, 10))) {
+            realDurationSec = parseInt(durationStr, 10);
+          }
+        } catch (ytErr) {
+          console.warn('[Duration yt-dlp fallback error]:', ytErr.message);
+        }
+      }
+
+      const finalDurationSec = realDurationSec || durationSec || 210;
+      return res.json({
+        success: true,
+        id: ytId,
+        videoId: ytId,
+        url: `https://www.youtube.com/watch?v=${ytId}`,
+        title,
+        artist,
+        duration: formatDuration(finalDurationSec),
+        durationSec: finalDurationSec,
+        thumbnail: `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`,
+        views: '1.2M+',
+        previewAudioUrl: null,
+        audioQualities: defaultAudioQualities,
+        videoQualities: defaultVideoQualities,
+      });
     } catch (oeErr) {
       console.warn('[oEmbed fetch error]:', oeErr.message);
     }
@@ -491,8 +531,8 @@ router.get('/file', async (req, res) => {
 
   console.log(`[Downloader] Target URL: "${targetUrl}"`);
 
-  // 2. High-speed direct Cloud Stream Resolver
-  const streamUrl = await resolveCloudStreamUrl(targetUrl, format, quality);
+  // 2. High-speed direct Cloud Stream Resolver (only for MP3 — loader.to is unreliable for video)
+  const streamUrl = isMp3 ? await resolveCloudStreamUrl(targetUrl, format, quality) : null;
   if (streamUrl) {
     try {
       console.log(`[Downloader] Streaming direct cloud media from: ${streamUrl.slice(0, 70)}...`);
