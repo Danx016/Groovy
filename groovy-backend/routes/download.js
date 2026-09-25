@@ -398,10 +398,15 @@ router.post('/info', async (req, res) => {
   const ytId = extractYouTubeId(url || videoId || query);
   if (ytId) {
     try {
-      // noembed.com includes duration unlike youtube's own oembed
-      const [oembedRes, noembedRes] = await Promise.allSettled([
+      // Fetch oEmbed (title/artist) AND scrape YouTube page for real duration — in parallel
+      const [oembedRes, ytPageRes] = await Promise.allSettled([
         fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`),
-        fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${ytId}`),
+        fetch(`https://www.youtube.com/watch?v=${ytId}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        }),
       ]);
 
       let title = 'Video de YouTube';
@@ -414,30 +419,26 @@ router.post('/info', async (req, res) => {
         artist = oembed.author_name || artist;
       }
 
-      if (noembedRes.status === 'fulfilled' && noembedRes.value.ok) {
-        const noembed = await noembedRes.value.json();
-        if (noembed.duration) realDurationSec = parseInt(noembed.duration, 10);
-        if (!title || title === 'Video de YouTube') title = noembed.title || title;
-        if (!artist || artist === 'YouTube') artist = noembed.author_name || artist;
-      }
-
-      // If noembed didn't give duration, try getting it from yt-dlp --print duration
-      if (!realDurationSec) {
+      // Scrape real duration from YouTube page — "lengthSeconds":"225" is always present
+      if (ytPageRes.status === 'fulfilled' && ytPageRes.value.ok) {
         try {
-          const ytdlpPath = getYtDlpPath();
-          const durationStr = await new Promise((resolve) => {
-            const p = spawn(ytdlpPath, ['--print', 'duration', '--no-playlist', '--no-warnings', `https://www.youtube.com/watch?v=${ytId}`]);
-            let out = '';
-            p.stdout.on('data', d => { out += d; });
-            p.on('close', () => resolve(out.trim()));
-            p.on('error', () => resolve(''));
-            setTimeout(() => { try { p.kill(); } catch(e){} resolve(''); }, 8000);
-          });
-          if (durationStr && !isNaN(parseInt(durationStr, 10))) {
-            realDurationSec = parseInt(durationStr, 10);
+          const html = await ytPageRes.value.text();
+          // Primary: lengthSeconds in ytInitialPlayerResponse
+          const lenMatch = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
+          if (lenMatch) {
+            realDurationSec = parseInt(lenMatch[1], 10);
+          } else {
+            // Fallback: ISO 8601 duration in JSON-LD  e.g. "duration":"PT3M45S"
+            const isoMatch = html.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
+            if (isoMatch) {
+              const h = parseInt(isoMatch[1] || '0', 10);
+              const m = parseInt(isoMatch[2] || '0', 10);
+              const s = parseInt(isoMatch[3] || '0', 10);
+              realDurationSec = h * 3600 + m * 60 + s;
+            }
           }
-        } catch (ytErr) {
-          console.warn('[Duration yt-dlp fallback error]:', ytErr.message);
+        } catch (scrapeErr) {
+          console.warn('[Duration scrape error]:', scrapeErr.message);
         }
       }
 
