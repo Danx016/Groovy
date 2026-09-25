@@ -363,12 +363,15 @@ async function resolveCobalt(targetUrl, format, quality) {
   return null;
 }
 
-// loader.to fallback resolver (MP3 only)
+// Loader.to cloud resolver (High reliability fallback for MP3 & MP4)
 async function resolveCloudStreamUrl(targetUrl, format, quality) {
   if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
-  if (format.toLowerCase() !== 'mp3') return null;
+  const isMp3 = format.toLowerCase() === 'mp3';
+  const loaderFormat = isMp3 ? (quality === '320' ? '320' : 'mp3') : (quality || '720');
+
   try {
-    const initRes = await fetch(`https://loader.to/ajax/download.php?format=mp3&url=${encodeURIComponent(targetUrl)}`, {
+    console.log(`[Loader.to] Resolving ${isMp3 ? 'audio' : 'video'} (${loaderFormat}) for: ${targetUrl}`);
+    const initRes = await fetch(`https://loader.to/ajax/download.php?format=${encodeURIComponent(loaderFormat)}&url=${encodeURIComponent(targetUrl)}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       },
@@ -378,18 +381,21 @@ async function resolveCloudStreamUrl(targetUrl, format, quality) {
       const init = await initRes.json();
       if (init.download_url) return init.download_url;
       if (init.progress_url) {
-        for (let i = 0; i < 15; i++) {
+        for (let i = 0; i < 25; i++) {
           await new Promise(r => setTimeout(r, 1000));
           const pRes = await fetch(init.progress_url);
           if (pRes.ok) {
             const pData = await pRes.json();
-            if (pData.download_url) return pData.download_url;
+            if (pData.download_url) {
+              console.log(`[Loader.to] Successfully resolved direct stream URL!`);
+              return pData.download_url;
+            }
           }
         }
       }
     }
   } catch (err) {
-    console.warn('[loader.to Resolver Error]:', err.message);
+    console.warn('[Loader.to Resolver Error]:', err.message);
   }
   return null;
 }
@@ -700,9 +706,9 @@ router.get('/file', async (req, res) => {
 
   console.log(`[Downloader] Target URL: "${targetUrl}"`);
 
-  // 2. Primary: cobalt.tools — no YouTube cookies needed, supports MP3 + MP4
+  // 2. Primary: cobalt.tools, Secondary: loader.to — no YouTube cookies needed, supports MP3 + MP4
   const cobaltUrl = await resolveCobalt(targetUrl, format, quality);
-  const streamUrl = cobaltUrl || (isMp3 ? await resolveCloudStreamUrl(targetUrl, format, quality) : null);
+  const streamUrl = cobaltUrl || await resolveCloudStreamUrl(targetUrl, format, quality);
   if (streamUrl) {
     try {
       console.log(`[Downloader] Streaming direct cloud media from: ${streamUrl.slice(0, 70)}...`);
