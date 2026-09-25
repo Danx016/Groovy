@@ -256,7 +256,12 @@ export function DownloaderView({ onBack }) {
 
             <div className="dl-card-top">
               <div className="dl-card-thumb">
-                <img src={media.thumbnail} alt={media.title} style={{ width:"100%", height:"122px", objectFit:"cover", display:"block" }} />
+                <img src={media.thumbnail} alt={media.title} style={{ width:"100%", height:"122px", objectFit:"cover", display:"block" }}
+                  onError={e => {
+                    const src = e.target.src;
+                    if (src.includes('maxresdefault')) { e.target.src = src.replace('maxresdefault', 'hqdefault'); }
+                    else if (src.includes('hqdefault')) { e.target.src = src.replace('hqdefault', 'mqdefault'); }
+                  }} />
                 {media.previewAudioUrl && (
                   <>
                     <audio ref={audioRef} src={media.previewAudioUrl} preload="none" />

@@ -451,7 +451,7 @@ router.post('/info', async (req, res) => {
         artist,
         duration: formatDuration(finalDurationSec),
         durationSec: finalDurationSec,
-        thumbnail: `https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`,
+        thumbnail: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
         views: '1.2M+',
         previewAudioUrl: null,
         audioQualities: defaultAudioQualities,
