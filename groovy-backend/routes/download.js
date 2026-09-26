@@ -429,7 +429,14 @@ async function resolveCobalt(targetUrl, format, quality) {
 async function resolveCloudStreamUrl(targetUrl, format, quality) {
   if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
   const isMp3 = format.toLowerCase() === 'mp3';
-  const loaderFormat = isMp3 ? (quality === '320' ? '320' : 'mp3') : (quality || '720');
+  let loaderFormat = 'mp3';
+  if (!isMp3) {
+    const qStr = String(quality || '720');
+    if (qStr === '4320') loaderFormat = '8k';
+    else if (qStr === '2160') loaderFormat = '4k';
+    else if (['1440', '1080', '720', '480', '360'].includes(qStr)) loaderFormat = qStr;
+    else loaderFormat = '720';
+  }
 
   try {
     console.log(`[Loader.to] Resolving ${isMp3 ? 'audio' : 'video'} (${loaderFormat}) for: ${targetUrl}`);
@@ -745,9 +752,8 @@ router.get('/file', async (req, res) => {
 
   console.log(`[Downloader] Target URL: "${targetUrl}"`);
 
-  // 2. Primary: cobalt.tools, Secondary: loader.to — no YouTube cookies needed, supports MP3 + MP4
-  const cobaltUrl = await resolveCobalt(targetUrl, format, quality);
-  const streamUrl = cobaltUrl || await resolveCloudStreamUrl(targetUrl, format, quality);
+  // 2. Primary: Loader.to cloud resolver (fast & reliable without YouTube bot blocks), Secondary: Cobalt
+  const streamUrl = (await resolveCloudStreamUrl(targetUrl, format, quality)) || (await resolveCobalt(targetUrl, format, quality));
   if (streamUrl) {
     try {
       console.log(`[Downloader] Streaming direct cloud media from: ${streamUrl.slice(0, 70)}...`);
