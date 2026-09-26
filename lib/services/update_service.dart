@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '1.5.1';
+  static String currentVersion = '1.5.3';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -380,14 +380,41 @@ class UpdateService {
       }
     } else if (!kIsWeb && Platform.isLinux) {
       if (filePath.endsWith('.deb')) {
+        // 1st attempt: open with the system's package installer (GUI)
+        bool opened = false;
         try {
-          await Process.start('xdg-open', [filePath], mode: ProcessStartMode.detached);
+          final result = await Process.start(
+            'xdg-open', [filePath],
+            mode: ProcessStartMode.detached,
+          );
+          await result.exitCode; // wait briefly to catch immediate errors
+          opened = true;
           await Future.delayed(const Duration(milliseconds: 1500));
           exit(0);
         } catch (err) {
-          debugPrint('Failed to open deb installer with xdg-open: $err');
-          await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
+          debugPrint('[Desktop] xdg-open failed for .deb: $err');
         }
+
+        // 2nd attempt: pkexec apt-get (works in headless/non-GNOME environments)
+        if (!opened) {
+          try {
+            final result = await Process.run('which', ['apt-get']);
+            if (result.exitCode == 0) {
+              await Process.start(
+                'pkexec', ['apt-get', 'install', '-y', filePath],
+                mode: ProcessStartMode.detached,
+              );
+              await Future.delayed(const Duration(milliseconds: 1500));
+              exit(0);
+            }
+          } catch (err) {
+            debugPrint('[Desktop] pkexec apt-get failed: $err');
+          }
+        }
+
+        // Last resort: open download page in browser
+        debugPrint('[Desktop] Could not install .deb automatically — opening browser.');
+        await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
         return;
       }
 
@@ -404,7 +431,7 @@ class UpdateService {
           await Future.delayed(const Duration(milliseconds: 500));
           exit(0);
         } catch (e) {
-          debugPrint('Linux AppImage self-update failed: $e');
+          debugPrint('[Desktop] AppImage self-update failed: $e');
           await Process.start('xdg-open', [release.htmlUrl], mode: ProcessStartMode.detached);
         }
       } else {

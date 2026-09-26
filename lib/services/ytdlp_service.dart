@@ -788,7 +788,8 @@ class YtDlpService {
       if (Platform.isLinux) ...[
         '/usr/bin/yt-dlp',
         '/usr/local/bin/yt-dlp',
-        '~/.local/bin/yt-dlp',
+        if (Platform.environment['HOME'] != null)
+          '${Platform.environment['HOME']}/.local/bin/yt-dlp',
       ],
     ];
 

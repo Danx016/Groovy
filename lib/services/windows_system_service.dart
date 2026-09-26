@@ -117,7 +117,7 @@ class WindowsSystemService {
 
       _isInitialized = true;
       debugPrint(
-          'WindowsSystemService initialized (Taskbar, Media Keys & Lyrics Notification)');
+          '[Desktop] WindowsSystemService initialized (Taskbar, Media Keys & Lyrics Notifications)');
     }
   }
 
@@ -170,9 +170,9 @@ class WindowsSystemService {
         );
 
         await _lyricsNotification?.show();
-        debugPrint('[Windows] Lyrics notification updated: $lyricsLine');
+        debugPrint('[Desktop] Lyrics notification updated: $lyricsLine');
       } catch (e) {
-        debugPrint('[Windows] Failed to update lyrics notification: $e');
+        debugPrint('[Desktop] Failed to update lyrics notification: $e');
       }
     }
   }
@@ -183,9 +183,9 @@ class WindowsSystemService {
       try {
         await _lyricsNotification?.close();
         _lyricsNotification = null;
-        debugPrint('[Windows] Lyrics notification cleared');
+        debugPrint('[Desktop] Lyrics notification cleared');
       } catch (e) {
-        debugPrint('[Windows] Failed to clear lyrics notification: $e');
+        debugPrint('[Desktop] Failed to clear lyrics notification: $e');
       }
     }
   }
@@ -196,7 +196,7 @@ class WindowsSystemService {
     if (!enabled) {
       await clearLyrics();
     }
-    debugPrint('[Windows] Lyrics notifications enabled: $enabled');
+    debugPrint('[Desktop] Lyrics notifications enabled: $enabled');
   }
 
   /// Get lyrics enabled state

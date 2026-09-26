@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.3] - 2026-09-26
+
+### Fixed
+- **Linux (CRLF → LF)**: Todos los archivos del directorio `linux/` (`CMakeLists.txt`, `.cc`, `.h`, `.gitignore`) y `install-linux.sh` convertidos a terminaciones de línea Unix (LF). Esto corregía errores de compilación y ejecución del script instalador en Linux.
+- **Linux (yt-dlp path)**: La ruta `~/.local/bin/yt-dlp` usaba tilde literal que Dart no expande. Corregido a `${Platform.environment['HOME']}/.local/bin/yt-dlp`.
+- **Linux (instalador .deb)**: El auto-instalador ahora intenta `xdg-open` primero, luego `pkexec apt-get install` como fallback para entornos sin GUI, y solo como último recurso abre el browser.
+- **Versión sincronizada**: `UpdateService.currentVersion` y `installer.iss` estaban en `1.5.1`/`1.5.2` mientras que `pubspec.yaml` indicaba `1.5.2`. Ahora todos los archivos apuntan a `1.5.3`.
+- **Logs de plataforma**: Los mensajes de depuración en `WindowsSystemService` que usaban el prefijo `[Windows]` ahora usan `[Desktop]` ya que el servicio también se ejecuta en Linux.
+
 ## [1.5.2] - 2026-09-25
 
 ### Fixed & Enhanced

@@ -1,6 +1,6 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # =============================================================
-# Groovy – Linux Easy Installer
+# Groovy â€“ Linux Easy Installer
 # Double-click this script in your file manager to install.
 # =============================================================
 set -e
@@ -9,7 +9,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEB_FILE=$(find "$SCRIPT_DIR" -maxdepth 1 -name "*.deb" | head -1)
 APPIMAGE=$(find "$SCRIPT_DIR" -maxdepth 1 -name "*.AppImage" | head -1)
 
-# ── Helpers ────────────────────────────────────────────────────
+# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 show_msg() {
   if command -v zenity &>/dev/null; then
     zenity --info --no-wrap --title="Groovy Installer" --text="$1" 2>/dev/null || true
@@ -30,32 +30,32 @@ show_error() {
   fi
 }
 
-# ── If .deb exists, install it natively ─────────────────────────
+# â”€â”€ If .deb exists, install it natively â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if [ -n "$DEB_FILE" ]; then
   echo "Encontrado paquete Debian: $DEB_FILE"
   if command -v xdg-open &>/dev/null; then
     xdg-open "$DEB_FILE" &
-    show_msg "Abriendo el Instalador de Paquetes del sistema...\n\nPresiona 'Instalar' en la ventana que aparecerá."
+    show_msg "Abriendo el Instalador de Paquetes del sistema...\n\nPresiona 'Instalar' en la ventana que aparecerÃ¡."
     exit 0
   elif command -v pkexec &>/dev/null && command -v apt-get &>/dev/null; then
     pkexec apt-get install -y "$DEB_FILE"
-    show_msg "✅ ¡Groovy se ha instalado correctamente!"
+    show_msg "âœ… Â¡Groovy se ha instalado correctamente!"
     exit 0
   fi
 fi
 
-# ── Check AppImage exists ──────────────────────────────────────
+# â”€â”€ Check AppImage exists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if [ -z "$APPIMAGE" ]; then
-  show_error "No se encontró ningún instalador (.deb o .AppImage) en esta carpeta.\n\nDescarga Groovy-Linux.deb o Groovy-*-linux-x86_64.AppImage en la misma carpeta."
+  show_error "No se encontrÃ³ ningÃºn instalador (.deb o .AppImage) en esta carpeta.\n\nDescarga Groovy-Linux.deb o Groovy-*-linux-x86_64.AppImage en la misma carpeta."
   exit 1
 fi
 
 APPIMAGE_NAME="$(basename "$APPIMAGE")"
 
-# ── Mark AppImage as executable ────────────────────────────────
+# â”€â”€ Mark AppImage as executable â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 chmod +x "$APPIMAGE"
 
-# ── Ask where to install ───────────────────────────────────────
+# â”€â”€ Ask where to install â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 INSTALL_DIR="$HOME/.local/bin"
 ICONS_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
 APPS_DIR="$HOME/.local/share/applications"
@@ -67,7 +67,7 @@ DEST="$INSTALL_DIR/Groovy.AppImage"
 cp -f "$APPIMAGE" "$DEST"
 chmod +x "$DEST"
 
-# ── Create .desktop entry (enables app menu + double-click) ───
+# â”€â”€ Create .desktop entry (enables app menu + double-click) â”€â”€â”€
 ICON_PATH="$ICONS_DIR/groovy.png"
 
 # Try to extract icon from AppImage
@@ -106,4 +106,4 @@ if command -v gtk-update-icon-cache &>/dev/null; then
   gtk-update-icon-cache -f -t "$HOME/.local/share/icons/hicolor" &>/dev/null || true
 fi
 
-show_msg "✅ Groovy was installed successfully!\n\nYou can now:\n• Find it in your Applications menu (under Music)\n• Launch it by double-clicking the AppImage directly\n\nInstalled to: $DEST"
+show_msg "âœ… Groovy was installed successfully!\n\nYou can now:\nâ€¢ Find it in your Applications menu (under Music)\nâ€¢ Launch it by double-clicking the AppImage directly\n\nInstalled to: $DEST"

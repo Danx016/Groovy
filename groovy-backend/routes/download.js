@@ -287,6 +287,11 @@ async function fetchYouTubeMetadata(ytId) {
             const artist = vr.ownerText?.runs?.[0]?.text || vr.shortBylineText?.runs?.[0]?.text || 'YouTube';
             const views = vr.viewCountText?.simpleText || '1.2M+ vistas';
 
+            const badges = (vr.badges || []).map(b => b.metadataBadgeRenderer?.label || '').filter(Boolean);
+            const is8K = badges.some(b => /8K/i.test(b));
+            const is4K = is8K || badges.some(b => /4K|UHD|2160/i.test(b));
+            const is1440p = is4K || badges.some(b => /1440|2K/i.test(b));
+
             return {
               title,
               artist,
@@ -294,6 +299,10 @@ async function fetchYouTubeMetadata(ytId) {
               durationSec: durationSec || 210,
               thumbnail: bestThumb,
               views,
+              badges,
+              is8K,
+              is4K,
+              is1440p,
             };
           }
         }
@@ -315,6 +324,10 @@ async function fetchYouTubeMetadata(ytId) {
         durationSec: 0,
         thumbnail: `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`,
         views: '1.2M+',
+        badges: [],
+        is8K: false,
+        is4K: false,
+        is1440p: false,
       };
     }
   } catch (oeErr) {
@@ -340,7 +353,7 @@ async function resolveCobalt(targetUrl, format, quality) {
 
     // Cobalt v10 valid video qualities: max, 4320, 2160, 1440, 1080, 720, 480, 360, 240, 144
     let videoQuality = '1080';
-    if (['1080', '720', '480', '360', '240', '144'].includes(String(quality))) {
+    if (['4320', '2160', '1440', '1080', '720', '480', '360', '240', '144'].includes(String(quality))) {
       videoQuality = String(quality);
     }
 
@@ -569,7 +582,6 @@ router.post('/info', async (req, res) => {
   const ytId = extractYouTubeId(url || videoId || query);
   if (ytId) {
     try {
-      // Primary: Innertube Android player API for exact duration & details
       const ytMeta = await fetchYouTubeMetadata(ytId);
 
       let finalTitle = ytMeta?.title || 'Video de YouTube';
@@ -577,45 +589,9 @@ router.post('/info', async (req, res) => {
       let finalDurationSec = ytMeta?.durationSec;
       let finalThumb = ytMeta?.thumbnail || `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
       let finalViews = ytMeta?.views || '1.2M+';
-
-      // If Innertube was incomplete, try oEmbed and page scrape fallback
-      if (!ytMeta?.durationSec) {
-        const [oembedRes, ytPageRes] = await Promise.allSettled([
-          fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${ytId}&format=json`),
-          fetch(`https://www.youtube.com/watch?v=${ytId}`, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Accept-Language': 'en-US,en;q=0.9',
-            },
-          }),
-        ]);
-
-        if (oembedRes.status === 'fulfilled' && oembedRes.value.ok) {
-          const oembed = await oembedRes.value.json();
-          if (!ytMeta?.title) finalTitle = oembed.title || finalTitle;
-          if (!ytMeta?.artist) finalArtist = oembed.author_name || finalArtist;
-        }
-
-        if (ytPageRes.status === 'fulfilled' && ytPageRes.value.ok) {
-          try {
-            const html = await ytPageRes.value.text();
-            const lenMatch = html.match(/"lengthSeconds"\s*:\s*"(\d+)"/);
-            if (lenMatch) {
-              finalDurationSec = parseInt(lenMatch[1], 10);
-            } else {
-              const isoMatch = html.match(/"duration"\s*:\s*"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
-              if (isoMatch) {
-                const h = parseInt(isoMatch[1] || '0', 10);
-                const m = parseInt(isoMatch[2] || '0', 10);
-                const s = parseInt(isoMatch[3] || '0', 10);
-                finalDurationSec = h * 3600 + m * 60 + s;
-              }
-            }
-          } catch (scrapeErr) {
-            console.warn('[Duration scrape error]:', scrapeErr.message);
-          }
-        }
-      }
+      let is8K = ytMeta?.is8K || false;
+      let is4K = ytMeta?.is4K || false;
+      let is1440p = ytMeta?.is1440p || false;
 
       const durSec = finalDurationSec || parseInt(reqDur, 10) || 210;
       const calcAudioMb = (kbps) => ((kbps * durSec) / 8 / 1024).toFixed(1);
@@ -628,12 +604,46 @@ router.post('/info', async (req, res) => {
         { quality: '128', label: '128 kbps (Ligero)', note: 'Ahorro máximo de espacio', ext: 'mp3', size: `~${calcAudioMb(128)} MB` },
       ];
 
-      const defaultVideoQualities = [
-        { quality: '1080', label: '1080p (Full HD)', note: 'Resolución cinematográfica 60/30fps', ext: 'mp4', size: `~${calcVideoMb(3.5)} MB`, recommended: true },
+      const defaultVideoQualities = [];
+      if (is8K) {
+        defaultVideoQualities.push({ quality: '4320', label: '4320p (8K Ultra HD)', note: 'Máxima resolución 8K de ultra definición', ext: 'mp4', size: `~${calcVideoMb(18.0)} MB`, recommended: true });
+      }
+      if (is4K) {
+        defaultVideoQualities.push({ quality: '2160', label: '2160p (4K Ultra HD)', note: 'Resolución cinematográfica 4K 60fps', ext: 'mp4', size: `~${calcVideoMb(9.5)} MB`, recommended: !is8K });
+      }
+      if (is1440p) {
+        defaultVideoQualities.push({ quality: '1440', label: '1440p (2K Quad HD)', note: 'Resolución ultra nítida QHD 2K', ext: 'mp4', size: `~${calcVideoMb(5.5)} MB`, recommended: !is4K && !is8K });
+      }
+      defaultVideoQualities.push(
+        { quality: '1080', label: '1080p (Full HD)', note: 'Resolución Full HD de alta nitidez', ext: 'mp4', size: `~${calcVideoMb(3.2)} MB`, recommended: !is4K && !is1440p && !is8K },
         { quality: '720', label: '720p (HD)', note: 'Alta definición rápida', ext: 'mp4', size: `~${calcVideoMb(1.8)} MB` },
-        { quality: '480', label: '480p (SD)', note: 'Calidad estándar equilibrada', ext: 'mp4', size: `~${calcVideoMb(1.0)} MB` },
-        { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` },
-      ];
+        { quality: '480', label: '480p (SD)', note: 'Calidad estándar equilibrada', ext: 'mp4', size: `~${calcVideoMb(0.9)} MB` },
+        { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` }
+      );
+
+      return res.json({
+        success: true,
+        id: ytId,
+        videoId: ytId,
+        url: `https://www.youtube.com/watch?v=${ytId}`,
+        title: finalTitle,
+        artist: finalArtist,
+        duration: formatDuration(durSec),
+        durationSec: durSec,
+        thumbnail: finalThumb,
+        views: finalViews,
+        badges: ytMeta?.badges || [],
+        is4K,
+        is8K,
+        is1440p,
+        previewAudioUrl: null,
+        audioQualities: defaultAudioQualities,
+        videoQualities: defaultVideoQualities,
+      });
+    } catch (oeErr) {
+      console.warn('[Metadata fetch error]:', oeErr.message);
+    }
+  }
 
       return res.json({
         success: true,
