@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.4] - 2026-09-26
+
+### Fixed & Added
+- **Linux en CI/CD habilitado**: Se eliminó la condición `if: ${{ false }}` que deshabilitaba el job `build-linux` en GitHub Actions. Linux ahora compila, genera AppImage + .deb y los sube automáticamente a cada GitHub Release.
+- **Release incluye Linux**: El job `release` ahora espera también a `build-linux` y adjunta `*.AppImage`, `*.deb` y el script `Groovy-linux-install.sh` a cada release.
+- **Fix crítico descarga web (groovydescarga.duckdns.org)**: Bloque de código JavaScript huérfano en `download.js` causaba `SyntaxError` al cargar el módulo, rompiendo todas las descargas MP3/MP4. Corregido.
+- **yt-dlp Linux server path**: El backend buscaba solo `yt-dlp.exe` en el servidor Linux. Ahora busca primero en `/usr/bin`, `/usr/local/bin` y `$HOME/.local/bin`.
+
 ## [1.5.3] - 2026-09-26
 
 ### Fixed

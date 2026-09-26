@@ -226,7 +226,6 @@ jobs:
 
   # Linux Build
   build-linux:
-    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: check-secrets
@@ -434,10 +433,10 @@ jobs:
             *.deb
 
 
-  # Create Release with Android and Windows artifacts
+  # Create Release with Android, Windows and Linux artifacts
   release:
     runs-on: ubuntu-latest
-    needs: [build-android, build-windows]
+    needs: [build-android, build-windows, build-linux]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -451,7 +450,7 @@ jobs:
             VER="${GITHUB_REF_NAME#v}"
             VER="${VER%-windows}"
           else
-            VER="1.0.59"
+            VER="1.5.4"
           fi
           echo "VERSION=$VER" >> $GITHUB_OUTPUT
           echo "TAG=v$VER" >> $GITHUB_OUTPUT
@@ -475,6 +474,12 @@ jobs:
         with:
           name: windows-build
           path: artifacts/windows/
+
+      - name: Download Linux Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-build
+          path: artifacts/linux/
 
       - name: Package Windows
         run: |
@@ -521,11 +526,16 @@ jobs:
           ### 📦 Descargas Disponibles:
 
           **📱 Android:**
-          - \`Groovy.apk\` — APK universal para cualquier dispositivo Android (también disponible como \`app-release.apk\`)
+          - \`Groovy.apk\` — APK universal para cualquier dispositivo Android
 
           **🪟 Windows:**
           - \`Groovy-Setup.exe\` — Instalador con asistente para Windows
           - \`Groovy-Windows-Portable.zip\` — Versión portable, descomprimir y usar
+
+          **🐧 Linux:**
+          - \`Groovy-{ver}-linux-x86_64.AppImage\` — Portable, doble clic para ejecutar
+          - \`Groovy-Linux.deb\` — Paquete Debian/Ubuntu, instala con doble clic
+          - \`Groovy-linux-install.sh\` — Script instalador fácil
 
           ### 📝 Registro Completo de Cambios
           Consulta [CHANGELOG.md](https://github.com/Danx016/Groovy/blob/master/CHANGELOG.md) para el historial completo.
@@ -548,5 +558,8 @@ jobs:
             artifacts/windows/Groovy-Setup.exe
             artifacts/windows/Groovy-Windows-Portable.zip
             Groovy-Windows-Portable.zip
+            artifacts/linux/*.AppImage
+            artifacts/linux/*.deb
+            artifacts/linux/Groovy-linux-install.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
