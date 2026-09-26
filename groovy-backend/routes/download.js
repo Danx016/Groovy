@@ -236,7 +236,10 @@ async function resolveYouTubeSearch(query) {
         const items = sec.musicShelfRenderer?.contents || [];
         for (const it of items) {
           const mrr = it.musicResponsiveListItemRenderer;
-          const foundId = mrr?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+          const col1 = mrr?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer;
+          const foundId = (col1?.title?.runs || col1?.text?.runs || [])[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+            col1?.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+            col1?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
             mrr?.playlistItemData?.videoId;
           if (foundId) {
             console.log(`[Downloader] Resolved via YT Music: https://www.youtube.com/watch?v=${foundId}`);
@@ -253,9 +256,102 @@ async function resolveYouTubeSearch(query) {
   return `ytsearch1:${query}`;
 }
 
+// Helper: Extract real video formats/resolutions from YouTube watch page or thumbnail
+async function fetchYouTubeVideoHeights(ytId) {
+  if (!ytId) return [];
+  // 1. Try watch page ytInitialPlayerResponse
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(4500),
+    });
+    if (res.ok) {
+      const html = await res.text();
+      const m = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
+      if (m) {
+        const d = JSON.parse(m[1]);
+        const fmts = (d.streamingData?.formats || []).concat(d.streamingData?.adaptiveFormats || []);
+        const heights = [...new Set(fmts.map(f => f.height).filter(Boolean))].sort((a, b) => b - a);
+        if (heights.length > 0) {
+          return heights;
+        }
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 2. Fallback: check maxresdefault.jpg for HD presence
+  try {
+    const res = await fetch(`https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(2000),
+    });
+    if (res.ok) {
+      return [1080, 720, 480, 360];
+    } else {
+      // No maxresdefault means video max resolution is 480p or 360p (SD only)
+      return [480, 360];
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  return [1080, 720, 480, 360];
+}
+
+// Helper: Build dynamic video quality options based on REAL detected heights
+function buildVideoQualities(heights, durationSec) {
+  const dur = durationSec || 210;
+  const calcVideoMb = (mbps) => ((mbps * 1024 * dur) / 8 / 1024).toFixed(1);
+  const maxH = (heights && heights.length > 0) ? Math.max(...heights) : 1080;
+
+  const allDefinitions = [
+    { quality: '4320', minH: 4320, label: '4320p (8K Ultra HD)', sub: '8K Ultra HD', note: 'Resolución cinematográfica extrema 8K', badge: '8K', mbps: 18.0 },
+    { quality: '2160', minH: 2160, label: '2160p (4K Ultra HD)', sub: '4K Ultra HD', note: 'Resolución ultra nítida 4K 60fps', badge: '4K', mbps: 9.5 },
+    { quality: '1440', minH: 1440, label: '1440p (2K Quad HD)',  sub: '2K Quad HD',  note: 'Resolución de alta nitidez QHD 2K', badge: '2K', mbps: 5.5 },
+    { quality: '1080', minH: 1080, label: '1080p (Full HD)',     sub: 'Full HD',     note: 'Resolución Full HD 1080p recomendada', badge: '1080p', mbps: 3.2 },
+    { quality: '720',  minH: 720,  label: '720p (HD)',           sub: 'HD',          note: 'Alta definición estándar rápida', badge: '720p', mbps: 1.8 },
+    { quality: '480',  minH: 480,  label: '480p (SD)',           sub: 'SD',          note: 'Calidad estándar equilibrada', badge: 'SD', mbps: 0.9 },
+    { quality: '360',  minH: 360,  label: '360p (Móvil)',        sub: 'Móvil SD',    note: 'Bajo consumo para celulares', badge: 'SD', mbps: 0.5 },
+  ];
+
+  // Filter ONLY qualities where minH <= maxH
+  let available = allDefinitions.filter(d => d.minH <= maxH);
+
+  if (available.length === 0) {
+    available = [{
+      quality: String(maxH || 360),
+      label: `${maxH || 360}p (SD)`,
+      sub: 'SD',
+      note: 'Resolución estándar máxima del video',
+      badge: 'SD',
+      mbps: 0.5
+    }];
+  }
+
+  return available.map((d, index) => ({
+    quality: d.quality,
+    label: d.label,
+    sub: d.sub,
+    note: d.note,
+    badge: d.badge,
+    ext: 'mp4',
+    size: `~${calcVideoMb(d.mbps)} MB`,
+    top: index === 0,
+    isRealResolution: true,
+  }));
+}
+
 // Fast YouTube metadata fetcher for exact duration and details (No bot-check, 100% reliable)
 async function fetchYouTubeMetadata(ytId) {
   if (!ytId) return null;
+
+  // Run heights detection in parallel with metadata fetch
+  const heightsPromise = fetchYouTubeVideoHeights(ytId);
 
   // 1. YouTube Web Innertube Search by Video ID (Returns exact lengthText, title, channel without bot-check)
   try {
@@ -301,9 +397,14 @@ async function fetchYouTubeMetadata(ytId) {
             const views = vr.viewCountText?.simpleText || '1.2M+ vistas';
 
             const badges = (vr.badges || []).map(b => b.metadataBadgeRenderer?.label || '').filter(Boolean);
-            const is8K = badges.some(b => /8K/i.test(b));
-            const is4K = is8K || badges.some(b => /4K|UHD|2160/i.test(b));
-            const is1440p = is4K || badges.some(b => /1440|2K/i.test(b));
+            const realHeights = await heightsPromise;
+            const maxH = (realHeights && realHeights.length > 0) ? Math.max(...realHeights) : (badges.some(b => /8K/i.test(b)) ? 4320 : badges.some(b => /4K|UHD|2160/i.test(b)) ? 2160 : badges.some(b => /1440|2K/i.test(b)) ? 1440 : 1080);
+            const is8K = maxH >= 4320;
+            const is4K = maxH >= 2160;
+            const is1440p = maxH >= 1440;
+            const isFullHD = maxH >= 1080;
+            const isHD = maxH >= 720;
+            const isSDOnly = maxH < 720;
 
             return {
               title,
@@ -313,9 +414,14 @@ async function fetchYouTubeMetadata(ytId) {
               thumbnail: bestThumb,
               views,
               badges,
+              heights: realHeights,
+              maxHeight: maxH,
               is8K,
               is4K,
               is1440p,
+              isFullHD,
+              isHD,
+              isSDOnly,
             };
           }
         }
@@ -519,13 +625,18 @@ router.get('/search', async (req, res) => {
           const mrr = it.musicResponsiveListItemRenderer;
           if (!mrr) continue;
 
-          const title = mrr.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.title?.runs?.[0]?.text;
-          const videoId = mrr.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
-            mrr.playlistItemData?.videoId;
+          const col1 = mrr.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer;
+          const runs1 = col1?.title?.runs || col1?.text?.runs || [];
+          const title = runs1[0]?.text;
+          const videoId = runs1[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+            col1?.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+            col1?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+            mrr?.playlistItemData?.videoId;
 
           if (!title || !videoId) continue;
 
-          const runs = mrr.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.title?.runs || [];
+          const col2 = mrr.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer;
+          const runs = col2?.title?.runs || col2?.text?.runs || [];
           let artist = 'Artista Desconocido';
           let duration = '';
           let durationSec = 210;
@@ -598,14 +709,23 @@ router.get('/search', async (req, res) => {
 router.post('/info', async (req, res) => {
   const { url, videoId, query, title, artist, durationSec: reqDur, thumbnail: reqThumb } = req.body;
 
-  // 1. If YouTube URL or YouTube Video ID, fetch real metadata including exact duration
-  const ytId = extractYouTubeId(url || videoId || query);
+  // 1. Determine YouTube Video ID
+  let ytId = extractYouTubeId(url || videoId || query);
+  if (!ytId && (query || (title && artist))) {
+    try {
+      const resolvedUrl = await resolveYouTubeSearch(query || `${title} ${artist}`);
+      ytId = extractYouTubeId(resolvedUrl);
+    } catch (e) {
+      // ignore
+    }
+  }
+
   if (ytId) {
     try {
       const ytMeta = await fetchYouTubeMetadata(ytId);
 
-      let finalTitle = ytMeta?.title || 'Video de YouTube';
-      let finalArtist = ytMeta?.artist || 'YouTube';
+      let finalTitle = ytMeta?.title || title || 'Video de YouTube';
+      let finalArtist = ytMeta?.artist || artist || 'YouTube';
       let finalDurationSec = ytMeta?.durationSec;
       let finalThumb = ytMeta?.thumbnail || `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
       let finalViews = ytMeta?.views || '1.2M+';
@@ -615,7 +735,6 @@ router.post('/info', async (req, res) => {
 
       const durSec = finalDurationSec || parseInt(reqDur, 10) || 210;
       const calcAudioMb = (kbps) => ((kbps * durSec) / 8 / 1024).toFixed(1);
-      const calcVideoMb = (mbps) => ((mbps * 1024 * durSec) / 8 / 1024).toFixed(1);
 
       const defaultAudioQualities = [
         { quality: '320', label: '320 kbps (Ultra HQ)', note: 'Máxima fidelidad de estudio', ext: 'mp3', size: `~${calcAudioMb(320)} MB`, recommended: true },
@@ -624,22 +743,14 @@ router.post('/info', async (req, res) => {
         { quality: '128', label: '128 kbps (Ligero)', note: 'Ahorro máximo de espacio', ext: 'mp3', size: `~${calcAudioMb(128)} MB` },
       ];
 
-      const defaultVideoQualities = [];
-      if (is8K) {
-        defaultVideoQualities.push({ quality: '4320', label: '4320p (8K Ultra HD)', note: 'Máxima resolución 8K de ultra definición', ext: 'mp4', size: `~${calcVideoMb(18.0)} MB`, recommended: true });
-      }
-      if (is4K) {
-        defaultVideoQualities.push({ quality: '2160', label: '2160p (4K Ultra HD)', note: 'Resolución cinematográfica 4K 60fps', ext: 'mp4', size: `~${calcVideoMb(9.5)} MB`, recommended: !is8K });
-      }
-      if (is1440p) {
-        defaultVideoQualities.push({ quality: '1440', label: '1440p (2K Quad HD)', note: 'Resolución ultra nítida QHD 2K', ext: 'mp4', size: `~${calcVideoMb(5.5)} MB`, recommended: !is4K && !is8K });
-      }
-      defaultVideoQualities.push(
-        { quality: '1080', label: '1080p (Full HD)', note: 'Resolución Full HD de alta nitidez', ext: 'mp4', size: `~${calcVideoMb(3.2)} MB`, recommended: !is4K && !is1440p && !is8K },
-        { quality: '720', label: '720p (HD)', note: 'Alta definición rápida', ext: 'mp4', size: `~${calcVideoMb(1.8)} MB` },
-        { quality: '480', label: '480p (SD)', note: 'Calidad estándar equilibrada', ext: 'mp4', size: `~${calcVideoMb(0.9)} MB` },
-        { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` }
-      );
+      const heights = (ytMeta?.heights && ytMeta.heights.length > 0)
+        ? ytMeta.heights
+        : (is8K ? [4320, 2160, 1440, 1080, 720, 480, 360] : is4K ? [2160, 1440, 1080, 720, 480, 360] : is1440p ? [1440, 1080, 720, 480, 360] : [1080, 720, 480, 360]);
+
+      const defaultVideoQualities = buildVideoQualities(heights, durSec);
+      const maxH = Math.max(...heights);
+      const maxResolution = maxH >= 4320 ? '8K' : maxH >= 2160 ? '4K' : maxH >= 1440 ? '2K' : maxH >= 1080 ? 'Full HD' : maxH >= 720 ? 'HD' : 'SD';
+      const isSDOnly = maxH < 720;
 
       return res.json({
         success: true,
@@ -653,9 +764,14 @@ router.post('/info', async (req, res) => {
         thumbnail: finalThumb,
         views: finalViews,
         badges: ytMeta?.badges || [],
-        is4K,
-        is8K,
-        is1440p,
+        maxHeight: maxH,
+        maxResolution,
+        isSDOnly,
+        isHD: maxH >= 720,
+        isFullHD: maxH >= 1080,
+        is2K: maxH >= 1440,
+        is4K: maxH >= 2160,
+        is8K: maxH >= 4320,
         previewAudioUrl: null,
         audioQualities: defaultAudioQualities,
         videoQualities: defaultVideoQualities,
@@ -667,24 +783,16 @@ router.post('/info', async (req, res) => {
 
   const durationSec = parseInt(reqDur, 10) || 210;
   const calcAudioMb = (kbps) => ((kbps * durationSec) / 8 / 1024).toFixed(1);
-  const calcVideoMb = (mbps) => ((mbps * 1024 * durationSec) / 8 / 1024).toFixed(1);
-
   const defaultAudioQualities = [
     { quality: '320', label: '320 kbps (Ultra HQ)', note: 'Máxima fidelidad de estudio', ext: 'mp3', size: `~${calcAudioMb(320)} MB`, recommended: true },
     { quality: '256', label: '256 kbps (Alta)', note: 'Excelente equilibrio y nitidez', ext: 'mp3', size: `~${calcAudioMb(256)} MB` },
     { quality: '192', label: '192 kbps (Estándar)', note: 'Calidad estándar recomendada', ext: 'mp3', size: `~${calcAudioMb(192)} MB` },
     { quality: '128', label: '128 kbps (Ligero)', note: 'Ahorro máximo de espacio', ext: 'mp3', size: `~${calcAudioMb(128)} MB` },
   ];
+  const defaultVideoQualities = buildVideoQualities([1080, 720, 480, 360], durationSec);
 
-  const defaultVideoQualities = [
-    { quality: '1080', label: '1080p (Full HD)', note: 'Resolución cinematográfica 60/30fps', ext: 'mp4', size: `~${calcVideoMb(3.5)} MB`, recommended: true },
-    { quality: '720', label: '720p (HD)', note: 'Alta definición rápida', ext: 'mp4', size: `~${calcVideoMb(1.8)} MB` },
-    { quality: '480', label: '480p (SD)', note: 'Calidad estándar equilibrada', ext: 'mp4', size: `~${calcVideoMb(1.0)} MB` },
-    { quality: '360', label: '360p (Móvil)', note: 'Bajo consumo para celulares', ext: 'mp4', size: `~${calcVideoMb(0.5)} MB` },
-  ];
-
-  // 2. If given song metadata directly from search, immediately return clean object
-  if (title || (videoId && String(videoId).startsWith('dz_')) || query) {
+  // 2. If given song metadata directly from search, return clean object
+  if (title || query) {
     const songTitle = title || query || 'Música';
     const songArtist = artist || 'Artista';
 
@@ -699,6 +807,9 @@ router.post('/info', async (req, res) => {
       durationSec,
       thumbnail: reqThumb || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&auto=format&fit=crop&q=80',
       views: '1.5M+',
+      maxHeight: 1080,
+      maxResolution: 'Full HD',
+      isSDOnly: false,
       previewAudioUrl: null,
       audioQualities: defaultAudioQualities,
       videoQualities: defaultVideoQualities,
@@ -720,6 +831,37 @@ router.post('/info', async (req, res) => {
     audioQualities: defaultAudioQualities,
     videoQualities: defaultVideoQualities,
   });
+});
+
+// 2.5 RESOLVE DIRECT DOWNLOAD URL (For frontend instant download trigger)
+router.get('/url', async (req, res) => {
+  const { id, url, format = 'mp3', quality = '320', title = 'groovy_download', artist = '', query = '' } = req.query;
+
+  const isMp3 = format.toLowerCase() === 'mp3';
+  const outExt = isMp3 ? 'mp3' : 'mp4';
+  const finalFilename = sanitizeFilename(title || `${artist} - ${query || 'musica'}`, outExt);
+
+  let targetUrl = url;
+  const ytId = extractYouTubeId(url || id);
+  if (ytId) {
+    targetUrl = `https://www.youtube.com/watch?v=${ytId}`;
+  } else {
+    const searchQuery = (query || `${title} ${artist}`).trim();
+    if (searchQuery) {
+      targetUrl = await resolveYouTubeSearch(searchQuery);
+    }
+  }
+
+  if (!targetUrl) {
+    targetUrl = `https://www.youtube.com/watch?v=k2qgadSvNyU`;
+  }
+
+  const streamUrl = (await resolveCloudStreamUrl(targetUrl, format, quality)) || (await resolveCobalt(targetUrl, format, quality));
+  if (streamUrl) {
+    return res.json({ success: true, downloadUrl: streamUrl, filename: finalFilename });
+  }
+
+  return res.status(404).json({ success: false, error: 'No se pudo generar el enlace directo' });
 });
 
 // 3. EXECUTE DOWNLOAD AND STREAM TO USER BROWSER
@@ -756,7 +898,12 @@ router.get('/file', async (req, res) => {
   const streamUrl = (await resolveCloudStreamUrl(targetUrl, format, quality)) || (await resolveCobalt(targetUrl, format, quality));
   if (streamUrl) {
     try {
-      console.log(`[Downloader] Streaming direct cloud media from: ${streamUrl.slice(0, 70)}...`);
+      console.log(`[Downloader] Serving cloud media: ${streamUrl.slice(0, 70)}...`);
+      // Fast 302 redirect for instantaneous CDN download with zero server bottleneck
+      if (req.query.stream !== 'true') {
+        return res.redirect(streamUrl);
+      }
+
       const upstream = await fetch(streamUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -767,60 +914,15 @@ router.get('/file', async (req, res) => {
         const asciiFilename = finalFilename.replace(/[^\x20-\x7E]/g, '_');
         const { Readable } = require('stream');
 
-        // For video (MP4), stream directly to browser immediately — 0 latency, no buffering delay
-        if (!isMp3) {
-          res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
-          res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
-          res.setHeader('Content-Type', 'video/mp4');
-          const cl = upstream.headers.get('content-length');
-          if (cl) res.setHeader('Content-Length', cl);
-          res.setHeader('Cache-Control', 'no-cache');
-
-          const nodeStream = Readable.fromWeb(upstream.body);
-          nodeStream.pipe(res);
-          return;
-        }
-
-        // For audio (MP3), buffer and tag ID3 metadata with cover art
-        const tempRawPath = path.join(TEMP_DIR, `raw_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${outExt}`);
-        const fileStream = fs.createWriteStream(tempRawPath);
-        const nodeStream = Readable.fromWeb(upstream.body);
-
-        await new Promise((resolve, reject) => {
-          nodeStream.pipe(fileStream);
-          fileStream.on('finish', resolve);
-          fileStream.on('error', reject);
-          nodeStream.on('error', reject);
-        });
-
-        let finalSendPath = tempRawPath;
-
-        if (thumbnail || title || artist) {
-          console.log(`[Downloader] Injecting cover art & ID3 metadata for "${finalFilename}"...`);
-          const tempTaggedPath = path.join(TEMP_DIR, `tagged_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.mp3`);
-          const songTitle = title || query || 'Música';
-          const songArtist = artist || 'Groovy Music';
-          const tagged = await embedMetadataAndCover(tempRawPath, tempTaggedPath, { title: songTitle, artist: songArtist, thumbnail });
-          if (tagged && fs.existsSync(tempTaggedPath)) {
-            finalSendPath = tempTaggedPath;
-          }
-        }
-
-        const stat = fs.statSync(finalSendPath);
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
         res.setHeader('Content-Disposition', `attachment; filename="${asciiFilename}"; filename*=UTF-8''${encodeURIComponent(finalFilename)}`);
-        res.setHeader('Content-Type', 'audio/mpeg');
-        res.setHeader('Content-Length', stat.size);
+        res.setHeader('Content-Type', isMp3 ? 'audio/mpeg' : 'video/mp4');
+        const cl = upstream.headers.get('content-length');
+        if (cl) res.setHeader('Content-Length', cl);
         res.setHeader('Cache-Control', 'no-cache');
 
-        const outStream = fs.createReadStream(finalSendPath);
-        outStream.pipe(res);
-        outStream.on('end', () => {
-          try { if (fs.existsSync(tempRawPath)) fs.unlinkSync(tempRawPath); } catch (e) {}
-          if (finalSendPath !== tempRawPath) {
-            try { if (fs.existsSync(finalSendPath)) fs.unlinkSync(finalSendPath); } catch (e) {}
-          }
-        });
+        const nodeStream = Readable.fromWeb(upstream.body);
+        nodeStream.pipe(res);
         return;
       }
     } catch (streamErr) {

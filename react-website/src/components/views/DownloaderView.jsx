@@ -34,7 +34,15 @@ export function DownloaderView({ onBack }) {
   });
   const audioRef = useRef(null);
 
-  useEffect(() => { setQual(fmt === "mp3" ? "320" : "1080"); }, [fmt]);
+  useEffect(() => {
+    if (fmt === "mp3") {
+      setQual("320");
+    } else {
+      const topV = media?.vQ?.[0]?.q || "1080";
+      setQual(topV);
+    }
+  }, [fmt, media?.id]);
+
   useEffect(() => {
     const a = audioRef.current; if (!a) return;
     const stop = () => setPrevOn(false);
@@ -56,25 +64,62 @@ export function DownloaderView({ onBack }) {
     setErr(""); setDlState("idle"); setProgress(0); setDlText("");
     if (audioRef.current) { audioRef.current.pause(); setPrevOn(false); }
     const d = item.durationSec || 210;
+
+    const vQ = (item.videoQualities && item.videoQualities.length > 0)
+      ? item.videoQualities.map((vq, idx) => {
+          const numQ = parseInt(vq.quality, 10) || 0;
+          return {
+            q: String(vq.quality),
+            label: vq.label,
+            sub: vq.sub || (numQ >= 2160 ? "4K Ultra HD" : numQ >= 1440 ? "2K Quad HD" : numQ >= 1080 ? "Full HD" : numQ >= 720 ? "HD" : "SD"),
+            desc: vq.size ? `${vq.note || ''} · ${vq.size}` : (vq.note || ''),
+            top: idx === 0,
+            badge: vq.badge || (numQ >= 2160 ? "4K" : numQ >= 1440 ? "2K" : numQ >= 1080 ? "1080p" : numQ >= 720 ? "720p" : "SD"),
+          };
+        })
+      : [
+          { q:"1080", label:"1080p (Full HD)", sub:"Full HD", desc:"Máxima resolución", top:true, badge:"1080p" },
+          { q:"720",  label:"720p (HD)",       sub:"HD",      desc:"Alta definición", badge:"720p" },
+          { q:"480",  label:"480p (SD)",       sub:"SD",      desc:"Calidad estándar", badge:"SD" },
+          { q:"360",  label:"360p (Móvil)",    sub:"Móvil SD", desc:"Bajo consumo", badge:"SD" },
+        ];
+
+    const maxH = item.maxHeight || (vQ.length > 0 ? Math.max(...vQ.map(v => parseInt(v.q, 10) || 0)) : 1080);
+    const maxRes = item.maxResolution || (maxH >= 4320 ? "8K" : maxH >= 2160 ? "4K" : maxH >= 1440 ? "2K" : maxH >= 1080 ? "Full HD" : maxH >= 720 ? "HD" : "SD");
+    const isSDOnly = item.isSDOnly ?? (maxH < 720);
+
+    const aQ = item.audioQualities || [
+      { q:"320", label:"320 kbps", sub:"Ultra HQ",  desc:"Máxima fidelidad", top:true },
+      { q:"256", label:"256 kbps", sub:"Alta calidad", desc:"Excelente nitidez" },
+      { q:"192", label:"192 kbps", sub:"Estándar",   desc:"Recomendado" },
+      { q:"128", label:"128 kbps", sub:"Ligero",     desc:"Ahorro de espacio" },
+    ];
+
     setMedia({
-      id: item.id || item.videoId || "x", videoId: item.videoId,
+      id: item.id || item.videoId || "x",
+      videoId: item.videoId || item.id,
       url: item.url || (item.videoId ? `https://www.youtube.com/watch?v=${item.videoId}` : null),
       query: item.query || `${item.title} ${item.artist}`,
-      title: item.title, artist: item.artist, duration: item.duration || "3:30", durationSec: d,
-      thumbnail: item.thumbnail, previewAudioUrl: item.previewAudioUrl || item.preview || null,
-      aQ: [
-        { q:"320", label:"320 kbps", sub:"Ultra HQ",  desc:"Máxima fidelidad", top:true },
-        { q:"256", label:"256 kbps", sub:"Alta calidad", desc:"Excelente nitidez" },
-        { q:"192", label:"192 kbps", sub:"Estándar",   desc:"Recomendado" },
-        { q:"128", label:"128 kbps", sub:"Ligero",     desc:"Ahorro de espacio" },
-      ],
-      vQ: [
-        { q:"1080", label:"1080p", sub:"Full HD",  desc:"Máxima resolución", top:true },
-        { q:"720",  label:"720p",  sub:"HD",       desc:"Alta definición" },
-        { q:"480",  label:"480p",  sub:"SD",       desc:"Calidad estándar" },
-        { q:"360",  label:"360p",  sub:"Móvil",    desc:"Bajo consumo" },
-      ],
+      title: item.title,
+      artist: item.artist,
+      duration: item.duration || "3:30",
+      durationSec: d,
+      thumbnail: item.thumbnail,
+      previewAudioUrl: item.previewAudioUrl || item.preview || null,
+      maxHeight: maxH,
+      maxResolution: maxRes,
+      isSDOnly,
+      is4K: item.is4K ?? (maxH >= 2160),
+      is2K: item.is2K ?? (maxH >= 1440 && maxH < 2160),
+      isFullHD: item.isFullHD ?? (maxH >= 1080 && maxH < 1440),
+      isHD: item.isHD ?? (maxH >= 720 && maxH < 1080),
+      aQ,
+      vQ,
     });
+
+    if (fmt === "mp4" && vQ.length > 0) {
+      setQual(vQ[0].q);
+    }
   };
 
   const analyze = async (target) => {
@@ -94,21 +139,47 @@ export function DownloaderView({ onBack }) {
       setSearching(true);
       try {
         const d = await downloadApi.search(t);
-        if (d.success && d.results?.length > 0) { setResults(d.results); buildMedia(d.results[0]); }
-        else setErr("Sin resultados. Prueba con el link directo de YouTube.");
+        if (d.success && d.results?.length > 0) {
+          setResults(d.results);
+          buildMedia(d.results[0]);
+
+          // Fetch exact resolutions for the first item in background
+          const targetYt = d.results[0].videoId || d.results[0].id;
+          downloadApi.getInfo({ videoId: targetYt, url: d.results[0].url, query: t, title: d.results[0].title, artist: d.results[0].artist })
+            .then(info => { if (info && info.success) buildMedia(info); })
+            .catch(() => {});
+        } else {
+          setErr("Sin resultados. Prueba con el link directo de YouTube.");
+        }
       } catch (e) { setErr(e.message || "Error al buscar."); }
       finally { setSearching(false); }
     }
   };
 
-  const startDownload = () => {
+  const startDownload = async () => {
     if (!media || dlState === "downloading") return;
     setDlState("downloading");
-    setProgress(25);
-    setDlText("Preparando archivo en el servidor...");
+    setProgress(15);
+    setDlText("Conectando con el motor de descarga...");
     setErr("");
 
-    const url = downloadApi.getDownloadUrl({
+    const filename = `${media.artist ? `${media.artist} - ` : ""}${media.title || "groovy_media"}.${fmt}`;
+
+    let p = 15;
+    const progressTimer = setInterval(() => {
+      p += Math.max(2, Math.floor((92 - p) * 0.2));
+      if (p > 92) p = 92;
+      setProgress(p);
+      if (p < 40) {
+        setDlText("Buscando fuentes de audio en alta fidelidad...");
+      } else if (p < 75) {
+        setDlText(`Generando stream ${fmt.toUpperCase()} (${qual}${fmt === "mp3" ? " kbps" : "p"})...`);
+      } else {
+        setDlText("Finalizando enlace y transfiriendo...");
+      }
+    }, 800);
+
+    const payload = {
       id: media.id,
       url: media.url,
       format: fmt,
@@ -117,56 +188,57 @@ export function DownloaderView({ onBack }) {
       artist: media.artist,
       query: media.query || `${media.title} ${media.artist}`,
       thumbnail: media.thumbnail,
-    });
-
-    const filename = `${media.artist ? `${media.artist} - ` : ""}${media.title || "groovy_media"}.${fmt}`;
-
-    // Realistic progress animation while server converts/compiles
-    let p = 10;
-    const progressTimer = setInterval(() => {
-      p += Math.max(2, Math.floor((95 - p) * 0.15));
-      if (p > 95) p = 95;
-      setProgress(p);
-      if (p < 35) {
-        setDlText("Conectando con el motor de conversión...");
-      } else if (p < 70) {
-        setDlText(`Compilando archivo ${fmt.toUpperCase()} (${qual}${fmt === "mp3" ? " kbps" : "p"})...`);
-      } else {
-        setDlText("Finalizando y enviando al gestor de descargas...");
-      }
-    }, 1000);
-
-    // Trigger direct native browser download
-    const a = document.createElement("a");
-    a.href = url;
-    a.setAttribute("download", filename);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-
-    // Save to download history
-    const hi = {
-      id: media.id,
-      title: media.title,
-      artist: media.artist,
-      thumbnail: media.thumbnail,
-      format: fmt.toUpperCase(),
-      quality: fmt === "mp3" ? `${qual} kbps` : `${qual}p`,
-      date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     };
-    setHistory(prev => {
-      const u = [hi, ...prev.filter(i => i.id !== hi.id)].slice(0, 8);
-      localStorage.setItem("groovy_dl_h", JSON.stringify(u));
-      return u;
-    });
 
-    // After server begins transmitting (~14-16s)
-    setTimeout(() => {
+    try {
+      // 1. Try to get direct download URL first (fastest, direct CDN speed)
+      let directUrl = null;
+      try {
+        const urlPromise = downloadApi.getUrl(payload);
+        const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 8000));
+        const res = await Promise.race([urlPromise, timeoutPromise]);
+        if (res && res.success && res.downloadUrl) {
+          directUrl = res.downloadUrl;
+        }
+      } catch (e) {
+        // Fallback silently if direct URL resolution times out
+      }
+
+      const finalUrl = directUrl || downloadApi.getDownloadUrl(payload);
+
       clearInterval(progressTimer);
       setProgress(100);
       setDlState("success");
       setDlText("¡Descarga iniciada en tu navegador!");
-    }, 15000);
+
+      // Trigger direct native browser download
+      const a = document.createElement("a");
+      a.href = finalUrl;
+      a.setAttribute("download", filename);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      // Save to download history
+      const hi = {
+        id: media.id,
+        title: media.title,
+        artist: media.artist,
+        thumbnail: media.thumbnail,
+        format: fmt.toUpperCase(),
+        quality: fmt === "mp3" ? `${qual} kbps` : `${qual}p`,
+        date: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      };
+      setHistory(prev => {
+        const u = [hi, ...prev.filter(i => i.id !== hi.id)].slice(0, 8);
+        localStorage.setItem("groovy_dl_h", JSON.stringify(u));
+        return u;
+      });
+    } catch (e) {
+      clearInterval(progressTimer);
+      setDlState("error");
+      setErr("Error al iniciar la descarga. Por favor intenta nuevamente.");
+    }
   };
 
   const qs = media ? (fmt === "mp3" ? media.aQ : media.vQ) : [];
@@ -234,7 +306,13 @@ export function DownloaderView({ onBack }) {
               {results.map(item => {
                 const sel = media && (media.id === item.id || media.id === item.videoId);
                 return (
-                  <div key={item.id} onClick={() => buildMedia(item)} style={{ display:"flex", alignItems:"center", gap:"12px", padding:"10px 14px", background: sel ? RL : WH, border:`1.5px solid ${sel ? R : BOR}`, borderRadius:"10px", cursor:"pointer", transition:"all 0.15s", boxShadow: sel ? `0 0 0 3px rgba(250,36,60,0.08)` : "0 1px 3px rgba(0,0,0,0.04)" }}
+                  <div key={item.id} onClick={() => {
+                    buildMedia(item);
+                    const targetId = item.videoId || item.id;
+                    downloadApi.getInfo({ videoId: targetId, url: item.url, query: item.query, title: item.title, artist: item.artist })
+                      .then(info => { if (info && info.success) buildMedia(info); })
+                      .catch(() => {});
+                  }} style={{ display:"flex", alignItems:"center", gap:"12px", padding:"10px 14px", background: sel ? RL : WH, border:`1.5px solid ${sel ? R : BOR}`, borderRadius:"10px", cursor:"pointer", transition:"all 0.15s", boxShadow: sel ? `0 0 0 3px rgba(250,36,60,0.08)` : "0 1px 3px rgba(0,0,0,0.04)" }}
                     onMouseEnter={e => { if (!sel) { e.currentTarget.style.borderColor = "#c4c9d4"; }}}
                     onMouseLeave={e => { if (!sel) { e.currentTarget.style.borderColor = BOR; }}}>
                     <img src={item.thumbnail} alt="" style={{ width:"54px", height:"38px", borderRadius:"6px", objectFit:"cover", flexShrink:0 }} />
@@ -273,8 +351,35 @@ export function DownloaderView({ onBack }) {
                 <span style={{ position:"absolute", bottom:"5px", right:"5px", background:"rgba(0,0,0,0.72)", color:WH, fontSize:"11px", padding:"2px 6px", borderRadius:"4px", fontWeight:600 }}>{media.duration}</span>
               </div>
               <div className="dl-card-info">
-                <div style={{ fontSize:"10px", fontWeight:700, color:R, textTransform:"uppercase", letterSpacing:"0.6px", marginBottom:"7px", display:"flex", alignItems:"center", gap:"4px" }}>
-                  <Disc3 size={11} /> Listo para descargar
+                <div style={{ display:"flex", alignItems:"center", gap:"8px", marginBottom:"7px", flexWrap:"wrap" }}>
+                  <div style={{ fontSize:"10px", fontWeight:700, color:R, textTransform:"uppercase", letterSpacing:"0.6px", display:"flex", alignItems:"center", gap:"4px" }}>
+                    <Disc3 size={11} /> Listo para descargar
+                  </div>
+                  {media.is4K && (
+                    <span style={{ background:"linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px", boxShadow:"0 1px 4px rgba(124,58,237,0.3)" }}>
+                      ✨ 4K ULTRA HD
+                    </span>
+                  )}
+                  {media.is2K && (
+                    <span style={{ background:"linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px", boxShadow:"0 1px 4px rgba(79,70,229,0.3)" }}>
+                      ✨ 2K QUAD HD
+                    </span>
+                  )}
+                  {media.isFullHD && (
+                    <span style={{ background:"#10b981", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px" }}>
+                      FULL HD (1080p)
+                    </span>
+                  )}
+                  {media.isHD && (
+                    <span style={{ background:"#0284c7", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px" }}>
+                      HD (720p)
+                    </span>
+                  )}
+                  {media.isSDOnly && (
+                    <span style={{ background:"#f59e0b", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px" }}>
+                      RESOLUCIÓN ORIGINAL: SD ({media.maxHeight || 480}p)
+                    </span>
+                  )}
                 </div>
                 <h2 style={{ fontSize:"16px", fontWeight:700, color:TX, margin:"0 0 8px", lineHeight:1.3, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{media.title}</h2>
                 <div style={{ fontSize:"12px", color:TX2, display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
@@ -288,7 +393,7 @@ export function DownloaderView({ onBack }) {
             <div style={{ padding:"20px" }}>
 
               {/* Format tabs */}
-              <div style={{ display:"flex", gap:"7px", marginBottom:"16px" }}>
+              <div style={{ display:"flex", gap:"7px", marginBottom:"14px" }}>
                 {[["mp3", <Music2 size={13} />, "MP3 Audio"], ["mp4", <Film size={13} />, "MP4 Video"]].map(([f, icon, lbl]) => (
                   <button key={f} onClick={() => setFmt(f)} style={{ display:"flex", alignItems:"center", gap:"6px", padding:"8px 18px", borderRadius:"8px", border:`1.5px solid ${fmt===f ? R : BOR}`, background: fmt===f ? RL : "transparent", color: fmt===f ? R : TX2, fontSize:"13px", fontWeight: fmt===f ? 600 : 400, cursor:"pointer", transition:"all 0.15s" }}>
                     {icon}{lbl}
@@ -296,17 +401,56 @@ export function DownloaderView({ onBack }) {
                 ))}
               </div>
 
+              {/* Informative resolution notice for Video */}
+              {fmt === "mp4" && media.isSDOnly && (
+                <div style={{ background:"#fffbeb", border:"1.5px solid #fde68a", borderRadius:"10px", padding:"10px 14px", marginBottom:"16px", display:"flex", alignItems:"flex-start", gap:"9px", fontSize:"12px", color:"#92400e", lineHeight:1.45 }}>
+                  <AlertCircle size={16} style={{ color:"#d97706", flexShrink:0, marginTop:"1px" }} />
+                  <div>
+                    <strong>Calidad original SD ({media.maxHeight || 480}p):</strong> Este video no está disponible en Full HD ni 4K porque fue grabado o publicado originalmente en definición estándar. Las opciones abajo corresponden a la resolución real del video.
+                  </div>
+                </div>
+              )}
+
+              {fmt === "mp4" && (media.is4K || media.is2K) && (
+                <div style={{ background:"#f5f3ff", border:"1.5px solid #ddd6fe", borderRadius:"10px", padding:"10px 14px", marginBottom:"16px", display:"flex", alignItems:"flex-start", gap:"9px", fontSize:"12px", color:"#5b21b6", lineHeight:1.45 }}>
+                  <CheckCircle2 size={16} style={{ color:"#7c3aed", flexShrink:0, marginTop:"1px" }} />
+                  <div>
+                    <strong>¡Resolución cinematográfica detectada!</strong> Puedes descargar este video en <strong>{media.is4K ? "4K Ultra HD (2160p)" : "2K Quad HD (1440p)"}</strong> o en la resolución que prefieras.
+                  </div>
+                </div>
+              )}
+
               {/* Quality grid */}
               <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(165px, 1fr))", gap:"8px", marginBottom:"22px" }}>
                 {qs.map(q => {
                   const on = qual === q.q;
+                  const isBadge4K = q.badge === '4K' || q.badge === '8K';
+                  const isBadge2K = q.badge === '2K';
+                  const isBadgeFHD = q.badge === '1080p';
+                  const isBadgeHD = q.badge === '720p';
+
+                  const badgeStyle = isBadge4K
+                    ? { background:"#f5f3ff", color:"#7c3aed", border:"1px solid #ddd6fe" }
+                    : isBadge2K
+                    ? { background:"#eef2ff", color:"#4f46e5", border:"1px solid #c7d2fe" }
+                    : isBadgeFHD
+                    ? { background:"#ecfdf5", color:"#059669", border:"1px solid #a7f3d0" }
+                    : isBadgeHD
+                    ? { background:"#f0f9ff", color:"#0284c7", border:"1px solid #bae6fd" }
+                    : { background:"#fffbeb", color:"#b45309", border:"1px solid #fde68a" };
+
                   return (
                     <div key={q.q} onClick={() => setQual(q.q)} style={{ padding:"12px 14px", border:`1.5px solid ${on ? R : BOR}`, borderRadius:"10px", background: on ? RL : BG, cursor:"pointer", transition:"all 0.15s", boxShadow: on ? `0 0 0 3px rgba(250,36,60,0.08)` : "none" }}
                       onMouseEnter={e => !on && (e.currentTarget.style.borderColor = "#c4c9d4")}
                       onMouseLeave={e => !on && (e.currentTarget.style.borderColor = BOR)}>
-                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"3px" }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:"4px" }}>
                         <span style={{ fontWeight:700, fontSize:"14px", color: on ? R : TX }}>{q.label}</span>
-                        {q.top && <span style={{ fontSize:"9px", fontWeight:700, color:R, border:`1px solid ${R}`, padding:"1px 5px", borderRadius:"3px" }}>TOP</span>}
+                        <div style={{ display:"flex", gap:"4px", alignItems:"center" }}>
+                          {fmt === "mp4" && q.badge && (
+                            <span style={{ fontSize:"10px", fontWeight:800, padding:"1px 6px", borderRadius:"4px", ...badgeStyle }}>{q.badge}</span>
+                          )}
+                          {q.top && <span style={{ fontSize:"9px", fontWeight:700, color:R, border:`1px solid ${R}`, padding:"1px 5px", borderRadius:"3px" }}>MÁXIMA</span>}
+                        </div>
                       </div>
                       <div style={{ fontSize:"12px", color:TX3 }}>{q.sub} · {q.desc}</div>
                     </div>
