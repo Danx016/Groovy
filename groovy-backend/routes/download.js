@@ -7,19 +7,32 @@ const { spawn } = require('child_process');
 
 // Determine yt-dlp executable path
 function getYtDlpPath() {
-  const rootYtDlp = path.resolve(__dirname, '../../yt-dlp.exe');
-  if (fs.existsSync(rootYtDlp)) return rootYtDlp;
+  // Linux/Mac binary candidates first (server is Linux)
+  const linuxCandidates = [
+    '/usr/local/bin/yt-dlp',
+    '/usr/bin/yt-dlp',
+    process.env.HOME ? `${process.env.HOME}/.local/bin/yt-dlp` : null,
+    path.resolve(__dirname, '../../yt-dlp'),
+    path.resolve(__dirname, '../yt-dlp'),
+    path.resolve(__dirname, './yt-dlp'),
+  ].filter(Boolean);
 
-  const parentYtDlp = path.resolve(__dirname, '../yt-dlp.exe');
-  if (fs.existsSync(parentYtDlp)) return parentYtDlp;
+  for (const p of linuxCandidates) {
+    if (fs.existsSync(p)) return p;
+  }
 
-  const localYtDlp = path.resolve(__dirname, './yt-dlp.exe');
-  if (fs.existsSync(localYtDlp)) return localYtDlp;
+  // Windows binary candidates (dev environment)
+  const winCandidates = [
+    path.resolve(__dirname, '../../yt-dlp.exe'),
+    path.resolve(__dirname, '../yt-dlp.exe'),
+    path.resolve(__dirname, './yt-dlp.exe'),
+  ];
 
-  const linuxYtDlp = '/usr/local/bin/yt-dlp';
-  if (fs.existsSync(linuxYtDlp)) return linuxYtDlp;
+  for (const p of winCandidates) {
+    if (fs.existsSync(p)) return p;
+  }
 
-  return 'yt-dlp';
+  return 'yt-dlp'; // fallback: assume it's in PATH
 }
 
 // Determine ffmpeg path
@@ -636,26 +649,6 @@ router.post('/info', async (req, res) => {
         is4K,
         is8K,
         is1440p,
-        previewAudioUrl: null,
-        audioQualities: defaultAudioQualities,
-        videoQualities: defaultVideoQualities,
-      });
-    } catch (oeErr) {
-      console.warn('[Metadata fetch error]:', oeErr.message);
-    }
-  }
-
-      return res.json({
-        success: true,
-        id: ytId,
-        videoId: ytId,
-        url: `https://www.youtube.com/watch?v=${ytId}`,
-        title: finalTitle,
-        artist: finalArtist,
-        duration: formatDuration(durSec),
-        durationSec: durSec,
-        thumbnail: finalThumb,
-        views: finalViews,
         previewAudioUrl: null,
         audioQualities: defaultAudioQualities,
         videoQualities: defaultVideoQualities,
