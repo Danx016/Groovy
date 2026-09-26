@@ -256,44 +256,85 @@ async function resolveYouTubeSearch(query) {
   return `ytsearch1:${query}`;
 }
 
-// Helper: Extract real video formats/resolutions from YouTube watch page or thumbnail
+// Helper: Extract real video formats/resolutions via YouTube InnerTube /player API
 async function fetchYouTubeVideoHeights(ytId) {
   if (!ytId) return [];
-  // 1. Try watch page ytInitialPlayerResponse
-  try {
-    const res = await fetch(`https://www.youtube.com/watch?v=${ytId}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      signal: AbortSignal.timeout(4500),
-    });
-    if (res.ok) {
-      const html = await res.text();
-      const m = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
-      if (m) {
-        const d = JSON.parse(m[1]);
-        const fmts = (d.streamingData?.formats || []).concat(d.streamingData?.adaptiveFormats || []);
-        const heights = [...new Set(fmts.map(f => f.height).filter(Boolean))].sort((a, b) => b - a);
-        if (heights.length > 0) {
-          return heights;
+
+  // 1. YouTube InnerTube /player API — most reliable, returns full format list including 4K/8K
+  const innertubeClients = [
+    {
+      clientName: 'ANDROID',
+      clientVersion: '19.09.37',
+      androidSdkVersion: 30,
+      userAgent: 'com.google.android.youtube/19.09.37 (Linux; U; Android 11) gzip',
+    },
+    {
+      clientName: 'TVHTML5_SIMPLY_EMBEDDED_PLAYER',
+      clientVersion: '2.0',
+      userAgent: 'Mozilla/5.0 (PlayStation 4 3.11) AppleWebKit/537.73 (KHTML, like Gecko)',
+    },
+    {
+      clientName: 'WEB_EMBEDDED_PLAYER',
+      clientVersion: '2.20240101.01.00',
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+  ];
+
+  for (const client of innertubeClients) {
+    try {
+      const res = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': client.userAgent,
+          'X-YouTube-Client-Name': '1',
+          'X-YouTube-Client-Version': client.clientVersion,
+          'Origin': 'https://www.youtube.com',
+        },
+        body: JSON.stringify({
+          videoId: ytId,
+          context: {
+            client: {
+              clientName: client.clientName,
+              clientVersion: client.clientVersion,
+              ...(client.androidSdkVersion ? { androidSdkVersion: client.androidSdkVersion } : {}),
+              hl: 'en',
+              gl: 'US',
+            },
+          },
+        }),
+        signal: AbortSignal.timeout(6000),
+      });
+
+      if (res.ok) {
+        const d = await res.json();
+        // Check if playback is allowed (not age-restricted / unavailable)
+        const status = d.playabilityStatus?.status;
+        if (status === 'OK' || status === 'CONTENT_CHECK_REQUIRED') {
+          const fmts = (d.streamingData?.formats || []).concat(d.streamingData?.adaptiveFormats || []);
+          const heights = [...new Set(fmts.map(f => f.height).filter(h => h && h > 0))].sort((a, b) => b - a);
+          if (heights.length > 0) {
+            console.log(`[ResDetect] ${ytId} via ${client.clientName}: heights=${heights.join(',')}`);
+            return heights;
+          }
         }
       }
+    } catch (e) {
+      console.warn(`[ResDetect] ${client.clientName} failed:`, e.message);
     }
-  } catch (e) {
-    // ignore
   }
 
-  // 2. Fallback: check maxresdefault.jpg for HD presence
+  // 2. Fallback: check maxresdefault.jpg — if it exists the video has at least 1080p
   try {
     const res = await fetch(`https://i.ytimg.com/vi/${ytId}/maxresdefault.jpg`, {
       method: 'HEAD',
       signal: AbortSignal.timeout(2000),
     });
     if (res.ok) {
+      console.log(`[ResDetect] ${ytId} thumbnail fallback → 1080p assumed`);
       return [1080, 720, 480, 360];
     } else {
-      // No maxresdefault means video max resolution is 480p or 360p (SD only)
+      console.log(`[ResDetect] ${ytId} no maxresdefault → SD only`);
       return [480, 360];
     }
   } catch (e) {
@@ -535,43 +576,68 @@ async function resolveCobalt(targetUrl, format, quality) {
 async function resolveCloudStreamUrl(targetUrl, format, quality) {
   if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
   const isMp3 = format.toLowerCase() === 'mp3';
-  let loaderFormat = 'mp3';
-  if (!isMp3) {
-    const qStr = String(quality || '720');
-    if (qStr === '4320') loaderFormat = '8k';
-    else if (qStr === '2160') loaderFormat = '4k';
-    else if (['1440', '1080', '720', '480', '360'].includes(qStr)) loaderFormat = qStr;
-    else loaderFormat = '720';
+
+  // Build ordered list of formats to try (fallback chain for video)
+  let formatsToTry = [];
+  if (isMp3) {
+    formatsToTry = ['mp3'];
+  } else {
+    const qStr = String(quality || '1080');
+    // Map requested quality to loader.to format, then add fallbacks
+    const qualityFallbackMap = {
+      '4320': ['4k', '1080', '720'],
+      '2160': ['4k', '1080', '720'],
+      '1440': ['1080', '720'],
+      '1080': ['1080', '720'],
+      '720':  ['720', '480'],
+      '480':  ['480', '360'],
+      '360':  ['360'],
+    };
+    formatsToTry = qualityFallbackMap[qStr] || ['1080', '720'];
   }
 
-  try {
-    console.log(`[Loader.to] Resolving ${isMp3 ? 'audio' : 'video'} (${loaderFormat}) for: ${targetUrl}`);
-    const initRes = await fetch(`https://loader.to/ajax/download.php?format=${encodeURIComponent(loaderFormat)}&url=${encodeURIComponent(targetUrl)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
+  for (const loaderFormat of formatsToTry) {
+    try {
+      console.log(`[Loader.to] Trying format=${loaderFormat} for: ${targetUrl}`);
+      const initRes = await fetch(`https://loader.to/ajax/download.php?format=${encodeURIComponent(loaderFormat)}&url=${encodeURIComponent(targetUrl)}`, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(10000),
+      });
 
-    if (initRes.ok) {
+      if (!initRes.ok) continue;
+
       const init = await initRes.json();
-      if (init.download_url) return init.download_url;
+      if (init.download_url) {
+        console.log(`[Loader.to] Got direct URL at format=${loaderFormat}`);
+        return init.download_url;
+      }
       if (init.progress_url) {
+        let found = null;
         for (let i = 0; i < 25; i++) {
           await new Promise(r => setTimeout(r, 1000));
-          const pRes = await fetch(init.progress_url);
-          if (pRes.ok) {
-            const pData = await pRes.json();
-            if (pData.download_url) {
-              console.log(`[Loader.to] Successfully resolved direct stream URL!`);
-              return pData.download_url;
+          try {
+            const pRes = await fetch(init.progress_url, { signal: AbortSignal.timeout(5000) });
+            if (pRes.ok) {
+              const pData = await pRes.json();
+              if (pData.download_url) {
+                console.log(`[Loader.to] Resolved stream URL at format=${loaderFormat}`);
+                found = pData.download_url;
+                break;
+              }
+              // If progress shows error/failed, break early and try next format
+              if (pData.status === 'error' || pData.error) break;
             }
-          }
+          } catch (e) { /* continue polling */ }
         }
+        if (found) return found;
       }
+    } catch (err) {
+      console.warn(`[Loader.to] format=${loaderFormat} error:`, err.message);
     }
-  } catch (err) {
-    console.warn('[Loader.to Resolver Error]:', err.message);
   }
+
   return null;
 }
 
