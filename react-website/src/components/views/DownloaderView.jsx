@@ -88,12 +88,20 @@ export function DownloaderView({ onBack }) {
     const maxRes = item.maxResolution || (maxH >= 4320 ? "8K" : maxH >= 2160 ? "4K" : maxH >= 1440 ? "2K" : maxH >= 1080 ? "Full HD" : maxH >= 720 ? "HD" : "SD");
     const isSDOnly = item.isSDOnly ?? (maxH < 720);
 
-    const aQ = item.audioQualities || [
-      { q:"320", label:"320 kbps", sub:"Ultra HQ",  desc:"Máxima fidelidad", top:true },
-      { q:"256", label:"256 kbps", sub:"Alta calidad", desc:"Excelente nitidez" },
-      { q:"192", label:"192 kbps", sub:"Estándar",   desc:"Recomendado" },
-      { q:"128", label:"128 kbps", sub:"Ligero",     desc:"Ahorro de espacio" },
-    ];
+    const aQ = (item.audioQualities && item.audioQualities.length > 0)
+      ? item.audioQualities.map((aq, idx) => ({
+          q:    String(aq.quality || aq.q || '320'),
+          label: aq.label || `${aq.quality || aq.q} kbps`,
+          sub:  aq.sub   || aq.note || '',
+          desc: aq.size  ? `${aq.note || ''} · ${aq.size}` : (aq.note || ''),
+          top:  aq.recommended || idx === 0,
+        }))
+      : [
+          { q:"320", label:"320 kbps (Ultra HQ)", sub:"Ultra HQ",    desc:"Máxima fidelidad", top:true },
+          { q:"256", label:"256 kbps (Alta)",      sub:"Alta calidad", desc:"Excelente nitidez" },
+          { q:"192", label:"192 kbps (Estándar)",  sub:"Estándar",    desc:"Recomendado" },
+          { q:"128", label:"128 kbps (Ligero)",    sub:"Ligero",      desc:"Ahorro de espacio" },
+        ];
 
     setMedia({
       id: item.id || item.videoId || "x",
@@ -355,31 +363,6 @@ export function DownloaderView({ onBack }) {
                   <div style={{ fontSize:"10px", fontWeight:700, color:R, textTransform:"uppercase", letterSpacing:"0.6px", display:"flex", alignItems:"center", gap:"4px" }}>
                     <Disc3 size={11} /> Listo para descargar
                   </div>
-                  {media.is4K && (
-                    <span style={{ background:"linear-gradient(135deg, #7c3aed 0%, #a855f7 100%)", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px", boxShadow:"0 1px 4px rgba(124,58,237,0.3)" }}>
-                      ✨ 4K ULTRA HD
-                    </span>
-                  )}
-                  {media.is2K && (
-                    <span style={{ background:"linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px", boxShadow:"0 1px 4px rgba(79,70,229,0.3)" }}>
-                      ✨ 2K QUAD HD
-                    </span>
-                  )}
-                  {media.isFullHD && (
-                    <span style={{ background:"#10b981", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px" }}>
-                      FULL HD (1080p)
-                    </span>
-                  )}
-                  {media.isHD && (
-                    <span style={{ background:"#0284c7", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px" }}>
-                      HD (720p)
-                    </span>
-                  )}
-                  {media.isSDOnly && (
-                    <span style={{ background:"#f59e0b", color:WH, fontSize:"10px", fontWeight:800, padding:"2px 8px", borderRadius:"6px", letterSpacing:"0.5px" }}>
-                      RESOLUCIÓN ORIGINAL: SD ({media.maxHeight || 480}p)
-                    </span>
-                  )}
                 </div>
                 <h2 style={{ fontSize:"16px", fontWeight:700, color:TX, margin:"0 0 8px", lineHeight:1.3, overflow:"hidden", display:"-webkit-box", WebkitLineClamp:2, WebkitBoxOrient:"vertical" }}>{media.title}</h2>
                 <div style={{ fontSize:"12px", color:TX2, display:"flex", alignItems:"center", gap:"12px", flexWrap:"wrap" }}>
