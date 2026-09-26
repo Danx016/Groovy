@@ -5,6 +5,12 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.5] - 2026-09-26
+
+### Fixed
+- **CI/CD Release Asset Conflict**: Eliminado archivo duplicado `Groovy-Windows-Portable.zip` en la lista de uploads del workflow de GitHub Actions que provocaba un fallo de carrera de la API de GitHub al publicar la release.
+- **Web Downloader Format Resolver**: Corregida la resolución de formatos de audio en `Loader.to` para que use el identificador nativo `mp3`, y priorización del stream directo para descargas ultra rápidas.
+
 ## [1.5.4] - 2026-09-26
 
 ### Fixed & Added

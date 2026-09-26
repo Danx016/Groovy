@@ -484,9 +484,7 @@ jobs:
       - name: Package Windows
         run: |
           if [ ! -f artifacts/windows/Groovy-Windows-Portable.zip ]; then
-            cd artifacts/windows && zip -r ../../Groovy-Windows-Portable.zip . && cd ../..
-          else
-            cp artifacts/windows/Groovy-Windows-Portable.zip ./Groovy-Windows-Portable.zip
+            cd artifacts/windows && zip -r Groovy-Windows-Portable.zip . && cd ../..
           fi
 
       - name: Generate Dynamic Release Notes from CHANGELOG
@@ -557,7 +555,6 @@ jobs:
             artifacts/android/*.apk
             artifacts/windows/Groovy-Setup.exe
             artifacts/windows/Groovy-Windows-Portable.zip
-            Groovy-Windows-Portable.zip
             artifacts/linux/*.AppImage
             artifacts/linux/*.deb
             artifacts/linux/Groovy-linux-install.sh
