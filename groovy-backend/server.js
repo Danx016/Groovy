@@ -14,6 +14,7 @@ const musicRoutes = require('./routes/music');
 const downloadRoutes = require('./routes/download');
 
 const app = express();
+app.set('trust proxy', 1); // Trust nginx X-Forwarded-For header for correct rate limiting and IP logging
 const PORT = process.env.PORT || 4000;
 const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '')
   .split(',')

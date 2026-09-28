@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'update_service.dart';
 
 class ClientDeviceInfo {
   final String platform;
@@ -51,11 +52,15 @@ class DeviceInfoService {
     String platform = 'Unknown';
     String deviceModel = 'Groovy Device';
     String osVersion = 'Unknown OS';
-    String appVersion = '1.2.0';
+    String appVersion = UpdateService.currentVersion;
 
     try {
       final packageInfo = await PackageInfo.fromPlatform();
-      appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+      if (packageInfo.version.isNotEmpty) {
+        appVersion = packageInfo.buildNumber.isNotEmpty
+            ? '${packageInfo.version}+${packageInfo.buildNumber}'
+            : packageInfo.version;
+      }
     } catch (_) {
       // Fallback
     }

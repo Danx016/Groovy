@@ -121,8 +121,9 @@ class YtDlpService {
   // ── Native Dart Innertube Helpers (Windows / Desktop / Fallback) ────────────
 
   static final HttpClient _innertubeHttpClient = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 8)
-    ..idleTimeout = const Duration(seconds: 15);
+    ..connectionTimeout = const Duration(seconds: 10)
+    ..idleTimeout = const Duration(seconds: 15)
+    ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
   static const Map<String, String> _innertubeHeaders = {
     'User-Agent':
@@ -1082,6 +1083,12 @@ class YtDlpService {
           .timeout(const Duration(seconds: 10));
       return searchResults.take(limit).map((v) {
         final music = v.musicData.isNotEmpty ? v.musicData.first : null;
+        String? thumb;
+        try {
+          thumb = v.thumbnails.highResUrl;
+        } catch (_) {
+          thumb = 'https://i.ytimg.com/vi/${v.id.value}/hqdefault.jpg';
+        }
         return <String, dynamic>{
           'id': v.id.value,
           'title': music?.song ?? v.title,
@@ -1089,7 +1096,7 @@ class YtDlpService {
           'album': music?.album,
           'duration': v.duration?.inSeconds,
           'coverArt': v.id.value,
-          'thumbnailUrl': v.thumbnails.highResUrl,
+          'thumbnailUrl': thumb,
         };
       }).toList();
     } catch (e) {

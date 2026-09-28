@@ -1,4 +1,4 @@
-﻿#include "my_application.h"
+#include "my_application.h"
 
 #include <flutter_linux/flutter_linux.h>
 #ifdef GDK_WINDOWING_X11
@@ -51,6 +51,17 @@ static void my_application_activate(GApplication* application) {
   } else {
     gtk_window_set_title(window, "Groovy");
   }
+
+  // Load and set application icon directly from assets or icon theme
+  g_autofree gchar* exe_path = g_file_read_link("/proc/self/exe", nullptr);
+  if (exe_path != nullptr) {
+    g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
+    g_autofree gchar* icon_path = g_build_filename(exe_dir, "data", "flutter_assets", "assets", "app_icon.png", nullptr);
+    if (g_file_test(icon_path, G_FILE_TEST_EXISTS)) {
+      gtk_window_set_icon_from_file(window, icon_path, nullptr);
+    }
+  }
+  gtk_window_set_default_icon_name("com.groovy.music");
 
   gtk_window_set_default_size(window, 1280, 720);
 

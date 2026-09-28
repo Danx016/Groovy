@@ -130,6 +130,8 @@ class GroovyConnectService extends ChangeNotifier {
   String _localModel = '';
   String _localIp = '';
   String? _cachedAuthToken;
+  int? _cachedUserId;
+  String? _cachedUserEmail;
 
   final Map<String, GroovyRemoteDevice> _discoveredDevices = {};
   GroovyRemoteDevice? _connectedDevice;
@@ -316,6 +318,13 @@ class GroovyConnectService extends ChangeNotifier {
       final storedToken = await StorageService().getUserToken();
       if (storedToken != null && storedToken.isNotEmpty) {
         _cachedAuthToken = storedToken;
+      }
+
+      final storedProfile = await StorageService().getUserProfile();
+      if (storedProfile != null) {
+        final rawId = storedProfile['id'];
+        _cachedUserId = rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+        _cachedUserEmail = storedProfile['email']?.toString();
       }
 
       await _detectLocalIp();
@@ -513,6 +522,26 @@ class GroovyConnectService extends ChangeNotifier {
 
       if (senderId == _localDeviceId) return; // Ignore self
 
+      final senderUserId = (json['user_id'] as num?)?.toInt();
+      final senderEmail = (json['user_email'] as String?)?.toLowerCase().trim();
+
+      // Account Isolation Check:
+      // A device should only be discovered if both devices belong to the same authenticated account.
+      final bool hasLocalAuth = (_cachedUserId != null && _cachedUserId! > 0) || (_cachedUserEmail != null && _cachedUserEmail!.isNotEmpty);
+      final bool hasRemoteAuth = (senderUserId != null && senderUserId > 0) || (senderEmail != null && senderEmail.isNotEmpty);
+
+      if (hasLocalAuth && hasRemoteAuth) {
+        final bool userIdMatches = _cachedUserId != null && senderUserId != null && _cachedUserId == senderUserId;
+        final bool userEmailMatches = _cachedUserEmail != null && senderEmail != null && _cachedUserEmail!.toLowerCase().trim() == senderEmail;
+        if (!userIdMatches && !userEmailMatches) {
+          // Belongs to a different account! Ignore packet.
+          return;
+        }
+      } else {
+        // One or both devices are not logged in with an account, do not discover across network
+        return;
+      }
+
       final senderHost = dg.address.address;
       final senderPort = (json['port'] as num?)?.toInt() ?? _defaultHttpPort;
 
@@ -528,6 +557,8 @@ class GroovyConnectService extends ChangeNotifier {
           'port': _actualHttpPort,
           'isPlaying': status['isPlaying'] ?? false,
           'song': status['song'],
+          'user_id': _cachedUserId,
+          'user_email': _cachedUserEmail?.toLowerCase().trim(),
         });
         _udpSocket?.send(utf8.encode(reply), dg.address, dg.port);
       }
@@ -585,12 +616,29 @@ class GroovyConnectService extends ChangeNotifier {
     } catch (_) {}
   }
 
-  /// Updates cached auth token to fetch user-specific devices and receive private commands.
-  void updateAuthToken(String? token) {
+  /// Updates cached auth token and user info to fetch user-specific devices and isolate discovery.
+  void updateAuth({String? token, int? userId, String? userEmail}) {
+    final bool authChanged = _cachedAuthToken != token || _cachedUserId != userId || _cachedUserEmail != userEmail;
     _cachedAuthToken = token;
+    _cachedUserId = userId;
+    _cachedUserEmail = userEmail;
+
+    if (authChanged) {
+      _discoveredDevices.clear();
+      if (_connectedDevice != null) {
+        disconnect();
+      }
+      notifyListeners();
+    }
+
     if (token != null && token.isNotEmpty) {
       discover(authToken: token);
     }
+  }
+
+  /// Updates cached auth token to fetch user-specific devices and receive private commands.
+  void updateAuthToken(String? token) {
+    updateAuth(token: token, userId: _cachedUserId, userEmail: _cachedUserEmail);
   }
 
   bool _isListeningCloudCommands = false;
@@ -708,6 +756,8 @@ class GroovyConnectService extends ChangeNotifier {
           'port': _actualHttpPort,
           'isPlaying': status['isPlaying'] ?? false,
           'song': status['song'],
+          'user_id': _cachedUserId,
+          'user_email': _cachedUserEmail?.toLowerCase().trim(),
         });
         final bytes = utf8.encode(discoverPacket);
 
@@ -768,6 +818,12 @@ class GroovyConnectService extends ChangeNotifier {
           _cachedAuthToken = effectiveToken;
         }
       }
+
+      if (effectiveToken == null || effectiveToken.isEmpty) {
+        // User not logged into an account — cannot discover cloud devices
+        return;
+      }
+
       final devicesList = await GroovyApiService().fetchUserDevices(
         token: effectiveToken,
         callerDeviceId: _localDeviceId,

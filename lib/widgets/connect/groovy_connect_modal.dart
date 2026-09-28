@@ -87,7 +87,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
 
     // 1. Groovy Connect P2P Discovery (LAN & Cloud)
     try {
-      groovyConnect.discover(authToken: auth.token);
+      groovyConnect.updateAuth(
+        token: auth.token,
+        userId: auth.currentUser?.id,
+        userEmail: auth.currentUser?.email,
+      );
     } catch (e) {
       debugPrint('[GroovyConnect] Discovery error: $e');
     }
@@ -122,7 +126,11 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
     _discoveryPeriodicTimer = Timer.periodic(const Duration(seconds: 3), (_) {
       if (mounted) {
         final currentAuth = Provider.of<AuthProvider>(context, listen: false);
-        groovyConnect.discover(authToken: currentAuth.token);
+        groovyConnect.updateAuth(
+          token: currentAuth.token,
+          userId: currentAuth.currentUser?.id,
+          userEmail: currentAuth.currentUser?.email,
+        );
       }
     });
 

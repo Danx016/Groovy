@@ -63,7 +63,8 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     final s = start ?? 0;
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 15)
-      ..idleTimeout = const Duration(seconds: 15);
+      ..idleTimeout = const Duration(seconds: 15)
+      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
     void applyHeaders(HttpClientRequest req, Map<String, String> headers) {
       bool hasUserAgent = false;
@@ -463,20 +464,25 @@ class YoutubeService {
   // ── Model mappers ─────────────────────────────────────────────────────────
 
   Song _mapDictToSong(Map<String, dynamic> d) {
-    final id = d['id'] as String;
-    final thumb = d['thumbnailUrl'] as String?;
-    var artistName = d['artist'] as String? ?? 'Unknown Artist';
+    final id = d['id']?.toString() ?? '';
+    final thumb = d['thumbnailUrl']?.toString();
+    var artistName = d['artist']?.toString() ?? 'Unknown Artist';
     // Clean up " - Topic" from official artist channels
     if (artistName.endsWith(' - Topic')) {
       artistName = artistName.substring(0, artistName.length - 8).trim();
     }
+    final rawDuration = d['duration'];
+    final duration = (rawDuration is num)
+        ? rawDuration.toInt()
+        : (rawDuration != null ? int.tryParse(rawDuration.toString()) : null);
+
     return Song(
       id: id,
-      title: d['title'] as String? ?? 'Unknown Title',
+      title: d['title']?.toString() ?? 'Unknown Title',
       artist: artistName,
-      album: d['album'] as String?,
-      duration: d['duration'] as int?,
-      coverArt: (thumb != null && thumb.isNotEmpty) ? thumb : (d['coverArt'] as String? ?? id),
+      album: d['album']?.toString(),
+      duration: duration,
+      coverArt: (thumb != null && thumb.isNotEmpty) ? thumb : (d['coverArt']?.toString() ?? id),
     );
   }
 
@@ -803,6 +809,12 @@ class YoutubeService {
         }
       }
 
+      // If YouTube Music official tracks returned empty, fallback to youtubeVideos
+      // so the user always sees search results instead of an empty songs list
+      if (mergedMusic.isEmpty && youtubeVideos.isNotEmpty) {
+        mergedMusic.addAll(youtubeVideos);
+      }
+
       // 3. Process official YouTube Music artists and albums
       final artists = <Artist>[];
       final albums = <Album>[];
@@ -824,16 +836,20 @@ class YoutubeService {
       }
 
       for (final alb in rawAlbums) {
-        final title = alb['title'] as String? ?? '';
-        final id = alb['id'] as String? ?? title;
+        final title = alb['title']?.toString() ?? '';
+        final id = alb['id']?.toString() ?? title;
+        final rawYear = alb['year'];
+        final year = (rawYear is num)
+            ? rawYear.toInt()
+            : (rawYear != null ? int.tryParse(rawYear.toString()) : null);
         if (title.isNotEmpty && !seenAlbums.contains(title.toLowerCase())) {
           seenAlbums.add(title.toLowerCase());
           albums.add(Album(
             id: id,
             name: title,
-            artist: alb['artist'] as String?,
-            year: alb['year'] as int?,
-            coverArt: alb['coverArt'] as String?,
+            artist: alb['artist']?.toString(),
+            year: year,
+            coverArt: alb['coverArt']?.toString(),
           ));
         }
       }

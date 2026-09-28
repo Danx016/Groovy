@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env bash
+#!/usr/bin/env bash
 # =============================================================
 # Groovy â€“ Linux Easy Installer
 # Double-click this script in your file manager to install.
@@ -67,23 +67,28 @@ DEST="$INSTALL_DIR/Groovy.AppImage"
 cp -f "$APPIMAGE" "$DEST"
 chmod +x "$DEST"
 
-# â”€â”€ Create .desktop entry (enables app menu + double-click) â”€â”€â”€
-ICON_PATH="$ICONS_DIR/groovy.png"
+# ── Create .desktop entry (enables app menu + dock icon) ───
+ICON_PATH="$ICONS_DIR/com.groovy.music.png"
 
-# Try to extract icon from AppImage
-if [ -f "$SCRIPT_DIR/groovy.png" ]; then
+# Try to extract icon from AppImage or copy
+if [ -f "$SCRIPT_DIR/com.groovy.music.png" ]; then
+  cp "$SCRIPT_DIR/com.groovy.music.png" "$ICON_PATH"
+  cp "$SCRIPT_DIR/com.groovy.music.png" "$ICONS_DIR/groovy.png"
+elif [ -f "$SCRIPT_DIR/groovy.png" ]; then
   cp "$SCRIPT_DIR/groovy.png" "$ICON_PATH"
+  cp "$SCRIPT_DIR/groovy.png" "$ICONS_DIR/groovy.png"
 else
   # Extract from AppImage if possible
-  "$DEST" --appimage-extract usr/share/icons/hicolor/256x256/apps/groovy.png &>/dev/null && \
-    mv squashfs-root/usr/share/icons/hicolor/256x256/apps/groovy.png "$ICON_PATH" && \
+  "$DEST" --appimage-extract usr/share/icons/hicolor/256x256/apps/com.groovy.music.png &>/dev/null && \
+    mv squashfs-root/usr/share/icons/hicolor/256x256/apps/com.groovy.music.png "$ICON_PATH" && \
+    cp "$ICON_PATH" "$ICONS_DIR/groovy.png" && \
     rm -rf squashfs-root || true
 fi
 
 ICON_ARG="$ICON_PATH"
 [ ! -f "$ICON_PATH" ] && ICON_ARG="application-x-executable"
 
-cat > "$APPS_DIR/groovy.desktop" << EOF
+cat > "$APPS_DIR/com.groovy.music.desktop" << EOF
 [Desktop Entry]
 Name=Groovy
 Comment=Stream music from YouTube Music
@@ -93,10 +98,11 @@ Terminal=false
 Type=Application
 Categories=Audio;Music;Player;AudioVideo;
 Keywords=music;streaming;youtube;
-StartupWMClass=groovy
+StartupWMClass=com.groovy.music
 EOF
 
-chmod +x "$APPS_DIR/groovy.desktop"
+chmod +x "$APPS_DIR/com.groovy.music.desktop"
+cp "$APPS_DIR/com.groovy.music.desktop" "$APPS_DIR/groovy.desktop"
 
 # Refresh desktop database
 if command -v update-desktop-database &>/dev/null; then

@@ -497,149 +497,130 @@ async function fetchYouTubeMetadata(ytId) {
   return null;
 }
 
-// Cobalt resolver — uses local container on port 9000 first, then fallback
-async function resolveCobalt(targetUrl, format, quality) {
+// Alternative YouTube stream resolver using multiple services
+async function resolveYouTubeStream(targetUrl, format, quality) {
   if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
-  try {
-    const isMp3 = format.toLowerCase() === 'mp3';
-    
-    // Cobalt v10 valid bitrates: 320, 256, 128, 96, 64, 8
-    let audioBitrate = '320';
-    if (['320', '256', '128', '96', '64'].includes(String(quality))) {
-      audioBitrate = String(quality);
-    } else if (String(quality) === '192') {
-      audioBitrate = '256';
-    }
+  
+  const ytId = extractYouTubeId(targetUrl);
+  if (!ytId) return null;
 
-    // Cobalt v10 valid video qualities: max, 4320, 2160, 1440, 1080, 720, 480, 360, 240, 144
-    let videoQuality = '1080';
-    if (['4320', '2160', '1440', '1080', '720', '480', '360', '240', '144'].includes(String(quality))) {
-      videoQuality = String(quality);
-    }
-
-    const body = {
-      url: targetUrl,
-      downloadMode: isMp3 ? 'audio' : 'auto',
-    };
-    if (isMp3) {
-      body.audioFormat = 'mp3';
-      body.audioBitrate = audioBitrate;
-    } else {
-      body.videoQuality = videoQuality;
-    }
-
-    const endpoints = [
-      'http://localhost:9000/',
-      'https://api.cobalt.tools/'
-    ];
-
-    for (const endpoint of endpoints) {
+  const isMp3 = format.toLowerCase() === 'mp3';
+  
+  // Try multiple services that don't require cookies
+  const services = [
+    // Service 1: Cobalt local (primary choice)
+    async () => {
       try {
-        console.log(`[Cobalt] Requesting ${isMp3 ? 'audio' : 'video'} (${quality}) from ${endpoint}...`);
-        const res = await fetch(endpoint, {
+        const audioBitrate = ['320', '256', '128', '96', '64'].includes(String(quality)) ? String(quality) : '320';
+        const videoQuality = ['4320', '2160', '1440', '1080', '720', '480', '360', '240', '144'].includes(String(quality)) ? String(quality) : '1080';
+        
+        const body = {
+          url: targetUrl,
+          downloadMode: isMp3 ? 'audio' : 'auto',
+        };
+        if (isMp3) {
+          body.audioFormat = 'mp3';
+          body.audioBitrate = audioBitrate;
+        } else {
+          body.videoQuality = videoQuality;
+        }
+
+        const res = await fetch('http://localhost:9000/', {
           method: 'POST',
-          headers: {
+          headers: { 
             'Accept': 'application/json',
             'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
           },
           body: JSON.stringify(body),
           signal: AbortSignal.timeout(20000),
         });
 
-        if (!res.ok) {
-          console.warn(`[Cobalt] ${endpoint} returned HTTP ${res.status}`);
-          continue;
+        if (res.ok) {
+          const data = await res.json();
+          if ((data.status === 'redirect' || data.status === 'tunnel' || data.status === 'stream') && data.url) {
+            return data.url;
+          }
+          if (data.status === 'picker' && Array.isArray(data.picker) && data.picker[0]?.url) {
+            return data.picker[0].url;
+          }
         }
-
-        const data = await res.json();
-        console.log(`[Cobalt] Response from ${endpoint}: status=${data.status}`);
-
-        // status can be: redirect, tunnel, stream, picker, error
-        if ((data.status === 'redirect' || data.status === 'tunnel' || data.status === 'stream') && data.url) {
-          return data.url;
-        }
-        // picker = multiple streams (e.g. video+audio separate), pick first
-        if (data.status === 'picker' && Array.isArray(data.picker) && data.picker[0]?.url) {
-          return data.picker[0].url;
-        }
-      } catch (endpointErr) {
-        console.warn(`[Cobalt] Endpoint ${endpoint} failed:`, endpointErr.message);
+      } catch (e) {
+        console.warn('[Cobalt Local Error]:', e.message);
       }
-    }
-  } catch (err) {
-    console.warn('[Cobalt Resolver Error]:', err.message);
-  }
-  return null;
-}
+      return null;
+    },
+    
+    // Service 2: YouTube direct stream URL extraction
+    async () => {
+      try {
+        // Try to get direct stream URL from YouTube
+        const res = await fetch(`https://www.youtube.com/youtubei/v1/player?prettyPrint=false`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          body: JSON.stringify({
+            videoId: ytId,
+            context: {
+              client: {
+                clientName: 'ANDROID',
+                clientVersion: '19.09.37',
+                androidSdkVersion: 30,
+              },
+            },
+          }),
+          signal: AbortSignal.timeout(10000),
+        });
 
-// Loader.to cloud resolver (High reliability fallback for MP3 & MP4)
-async function resolveCloudStreamUrl(targetUrl, format, quality) {
-  if (!targetUrl || targetUrl.startsWith('ytsearch1:')) return null;
-  const isMp3 = format.toLowerCase() === 'mp3';
-
-  // Build ordered list of formats to try (fallback chain for video)
-  let formatsToTry = [];
-  if (isMp3) {
-    formatsToTry = ['mp3'];
-  } else {
-    const qStr = String(quality || '1080');
-    // Map requested quality to loader.to format, then add fallbacks
-    const qualityFallbackMap = {
-      '4320': ['4k', '1080', '720'],
-      '2160': ['4k', '1080', '720'],
-      '1440': ['1080', '720'],
-      '1080': ['1080', '720'],
-      '720':  ['720', '480'],
-      '480':  ['480', '360'],
-      '360':  ['360'],
-    };
-    formatsToTry = qualityFallbackMap[qStr] || ['1080', '720'];
-  }
-
-  for (const loaderFormat of formatsToTry) {
-    try {
-      console.log(`[Loader.to] Trying format=${loaderFormat} for: ${targetUrl}`);
-      const initRes = await fetch(`https://loader.to/ajax/download.php?format=${encodeURIComponent(loaderFormat)}&url=${encodeURIComponent(targetUrl)}`, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        signal: AbortSignal.timeout(10000),
-      });
-
-      if (!initRes.ok) continue;
-
-      const init = await initRes.json();
-      if (init.download_url) {
-        console.log(`[Loader.to] Got direct URL at format=${loaderFormat}`);
-        return init.download_url;
-      }
-      if (init.progress_url) {
-        let found = null;
-        for (let i = 0; i < 25; i++) {
-          await new Promise(r => setTimeout(r, 1000));
-          try {
-            const pRes = await fetch(init.progress_url, { signal: AbortSignal.timeout(5000) });
-            if (pRes.ok) {
-              const pData = await pRes.json();
-              if (pData.download_url) {
-                console.log(`[Loader.to] Resolved stream URL at format=${loaderFormat}`);
-                found = pData.download_url;
-                break;
+        if (res.ok) {
+          const data = await res.json();
+          if (data.playabilityStatus?.status === 'OK') {
+            const formats = data.streamingData?.adaptiveFormats || [];
+            // Find audio-only format for MP3
+            if (isMp3) {
+              const audioFormat = formats.find(f => f.mimeType?.includes('audio/mp4') && f.audioQuality);
+              if (audioFormat?.url) {
+                return audioFormat.url;
               }
-              // If progress shows error/failed, break early and try next format
-              if (pData.status === 'error' || pData.error) break;
             }
-          } catch (e) { /* continue polling */ }
+            // Find video format for MP4
+            else {
+              const videoFormat = formats.find(f => f.mimeType?.includes('video/mp4') && f.height);
+              if (videoFormat?.url) {
+                return videoFormat.url;
+              }
+            }
+          }
         }
-        if (found) return found;
+      } catch (e) {
+        console.warn('[YouTube Direct Stream Error]:', e.message);
       }
-    } catch (err) {
-      console.warn(`[Loader.to] format=${loaderFormat} error:`, err.message);
+      return null;
+    },
+  ];
+
+  for (const service of services) {
+    try {
+      const url = await service();
+      if (url) {
+        console.log(`[Stream Resolver] Successfully resolved URL via service`);
+        return url;
+      }
+    } catch (e) {
+      console.warn('[Stream Resolver Service Error]:', e.message);
     }
   }
 
   return null;
 }
+
+// Legacy Cobalt resolver for compatibility
+async function resolveCobalt(targetUrl, format, quality) {
+  return resolveYouTubeStream(targetUrl, format, quality);
+}
+
 
 
 // 1. FAST SEARCH (Autocomplete / Suggestions)
@@ -678,6 +659,7 @@ router.get('/search', async (req, res) => {
         query,
         params: 'EgWKAQIIAWoKEAUQAxAEEAkQBQ==',
       }),
+      signal: AbortSignal.timeout(8000),
     });
 
     if (ytReq.ok) {
@@ -907,27 +889,14 @@ router.get('/url', async (req, res) => {
   const outExt = isMp3 ? 'mp3' : 'mp4';
   const finalFilename = sanitizeFilename(title || `${artist} - ${query || 'musica'}`, outExt);
 
-  let targetUrl = url;
-  const ytId = extractYouTubeId(url || id);
-  if (ytId) {
-    targetUrl = `https://www.youtube.com/watch?v=${ytId}`;
-  } else {
-    const searchQuery = (query || `${title} ${artist}`).trim();
-    if (searchQuery) {
-      targetUrl = await resolveYouTubeSearch(searchQuery);
-    }
-  }
-
-  if (!targetUrl) {
-    targetUrl = `https://www.youtube.com/watch?v=k2qgadSvNyU`;
-  }
-
-  const streamUrl = (await resolveCloudStreamUrl(targetUrl, format, quality)) || (await resolveCobalt(targetUrl, format, quality));
-  if (streamUrl) {
-    return res.json({ success: true, downloadUrl: streamUrl, filename: finalFilename });
-  }
-
-  return res.status(404).json({ success: false, error: 'No se pudo generar el enlace directo' });
+  // Always return the internal /file endpoint — it handles Cobalt + yt-dlp fallback.
+  // This avoids the 8s frontend timeout killing valid downloads that take slightly longer.
+  const params = new URLSearchParams(req.query);
+  return res.json({
+    success: true,
+    downloadUrl: `/api/download/file?${params.toString()}`,
+    filename: finalFilename
+  });
 });
 
 // 3. EXECUTE DOWNLOAD AND STREAM TO USER BROWSER
@@ -960,15 +929,11 @@ router.get('/file', async (req, res) => {
 
   console.log(`[Downloader] Target URL: "${targetUrl}"`);
 
-  // 2. Primary: Loader.to cloud resolver (fast & reliable without YouTube bot blocks), Secondary: Cobalt
-  const streamUrl = (await resolveCloudStreamUrl(targetUrl, format, quality)) || (await resolveCobalt(targetUrl, format, quality));
+  // 2. Primary: Local Cobalt container (Clean, high-speed, zero ads)
+  const streamUrl = await resolveCobalt(targetUrl, format, quality);
   if (streamUrl) {
     try {
-      console.log(`[Downloader] Serving cloud media: ${streamUrl.slice(0, 70)}...`);
-      // Fast 302 redirect for instantaneous CDN download with zero server bottleneck
-      if (req.query.stream !== 'true') {
-        return res.redirect(streamUrl);
-      }
+      console.log(`[Downloader] Serving clean Cobalt media: ${streamUrl.slice(0, 70)}...`);
 
       const upstream = await fetch(streamUrl, {
         headers: {
@@ -992,7 +957,7 @@ router.get('/file', async (req, res) => {
         return;
       }
     } catch (streamErr) {
-      console.warn('[Cloud Stream fetch failed, attempting local fallback]:', streamErr.message);
+      console.warn('[Cobalt Stream fetch failed, attempting local fallback]:', streamErr.message);
     }
   }
 
@@ -1007,9 +972,16 @@ router.get('/file', async (req, res) => {
     '--ffmpeg-location', ffmpegPath,
     '--no-playlist',
     '--no-warnings',
-    '--extractor-args', 'youtube:player_client=tv_embedded,web',
-    '--retries', '3',
-    '--fragment-retries', '3',
+    // Use YouTube cookies to bypass blocking
+    '--cookies', path.join(__dirname, 'cookies.txt'),
+    // Try multiple advanced techniques to bypass YouTube blocking
+    '--extractor-args', 'youtube:player_client=android,ios,mweb',
+    '--sleep-interval', '2',
+    '--max-sleep-interval', '5',
+    '--retries', '10',
+    '--fragment-retries', '10',
+    '--retry-sleep', 'linear=2::5',
+    '--geo-bypass',
     '-o', `${tempOutputBase}.%(ext)s`,
   ];
 
@@ -1036,6 +1008,15 @@ router.get('/file', async (req, res) => {
   req.on('close', () => {
     if (!proc.killed) {
       try { proc.kill('SIGTERM'); } catch (e) {}
+      // Clean up any partial file written by yt-dlp if client disconnected early
+      setTimeout(() => {
+        try {
+          const partials = fs.readdirSync(TEMP_DIR).filter(f => f.startsWith(path.basename(tempOutputBase)));
+          for (const f of partials) {
+            try { fs.unlinkSync(path.join(TEMP_DIR, f)); } catch (e) {}
+          }
+        } catch (e) {}
+      }, 2000); // 2s grace period for yt-dlp to exit cleanly
     }
   });
 

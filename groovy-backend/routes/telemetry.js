@@ -36,10 +36,13 @@ router.use(optionalAuth);
  */
 router.get('/playback', authenticateToken, async (req, res) => {
   try {
-    const client = parseFullClientInfo(req);
     const userId = req.user?.id || 0;
     const callerDeviceId = req.query.deviceId || '';
     const pool = getPool();
+
+    if (!userId || userId <= 0) {
+      return res.json({ success: true, devices: [] });
+    }
 
     const [rows] = await pool.query(`
       SELECT 
@@ -47,12 +50,12 @@ router.get('/playback', authenticateToken, async (req, res) => {
         song_id, title, artist, album, cover_art, duration, position, is_playing, volume, last_ping_at,
         device_key, COALESCE(device_key, CONCAT(platform, '_', device_name)) as device_id
       FROM user_live_playback
-      WHERE ((? > 0 AND user_id = ?) OR ip_address = ?)
+      WHERE user_id = ?
         AND LOWER(platform) NOT IN ('web', 'browser')
         AND last_ping_at >= NOW() - INTERVAL 60 SECOND
         AND (? = '' OR device_key != ?)
       ORDER BY last_ping_at DESC
-    `, [userId, userId, client.ip, callerDeviceId, callerDeviceId]);
+    `, [userId, callerDeviceId, callerDeviceId]);
 
     // Deduplicate by unique device_key to allow multiple devices of same platform/model
     const seen = new Set();
@@ -372,7 +375,7 @@ router.post('/playback', async (req, res) => {
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
-        user_id = COALESCE(VALUES(user_id), user_id),
+        user_id = VALUES(user_id),
         song_id = CASE WHEN VALUES(song_id) != '' THEN VALUES(song_id) ELSE song_id END,
         title = CASE WHEN VALUES(title) != '' THEN VALUES(title) ELSE title END,
         artist = CASE WHEN VALUES(title) != '' THEN VALUES(artist) ELSE artist END,
@@ -556,7 +559,7 @@ router.post('/ping', async (req, res) => {
       )
       VALUES (?, '', '', '', '', '', 0, 0, 0, 1.0, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
-        user_id = COALESCE(VALUES(user_id), user_id),
+        user_id = VALUES(user_id),
         platform = VALUES(platform),
         device_name = VALUES(device_name),
         ip_address = VALUES(ip_address),

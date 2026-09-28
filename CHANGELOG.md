@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.6] - 2026-09-28
+
+### Added & Changed
+- **Nuevo Logo de la App**: Actualizado el branding e íconos en todas las plataformas (Android, iOS, macOS, Windows, Linux y Web PWA).
+- **Aislamiento de Cuentas en Groovy Connect**: Corregido problema donde aparecían dispositivos ajenos que compartían la misma red o IP. Ahora el descubrimiento y control remoto están estrictamente aislados por la cuenta de usuario autenticada tanto en Cloud como en red local (LAN/UDP).
+- **Ícono y Ventana en Linux**: Corregido el icono de la ventana GTK (`my_application.cc`), mapeo de `StartupWMClass=com.groovy.music` e instalación de iconos en AppImage y paquete Debian para que el logo aparezca correctamente en el Dock y menú de aplicaciones.
+- **Búsqueda y Detección de Versión en Linux**: Solucionada la visualización de versión mediante `version.json` y corrección en la búsqueda de canciones con fallback dual de YouTube Music / yt-dlp.
+
 ## [1.5.5] - 2026-09-26
 
 ### Fixed

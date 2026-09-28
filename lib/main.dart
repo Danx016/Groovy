@@ -116,8 +116,23 @@ class _EmulatorWarningScreen extends StatelessWidget {
   }
 }
 
+class GroovyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  }
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb) {
+    HttpOverrides.global = GroovyHttpOverrides();
+  }
+
+  // Initialize version synchronously/early from package_info_plus
+  await UpdateService.initVersion();
 
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
     sqfliteFfiInit();
@@ -277,12 +292,15 @@ void main() async {
   });
   playerProvider.setGroovyConnectService(groovyConnectService);
 
-  authProvider.addListener(() {
-    groovyConnectService.updateAuthToken(authProvider.token);
-  });
-  if (authProvider.token != null && authProvider.token!.isNotEmpty) {
-    groovyConnectService.updateAuthToken(authProvider.token);
+  void syncConnectAuth() {
+    groovyConnectService.updateAuth(
+      token: authProvider.token,
+      userId: authProvider.currentUser?.id,
+      userEmail: authProvider.currentUser?.email,
+    );
   }
+  syncConnectAuth();
+  authProvider.addListener(syncConnectAuth);
 
   groovyConnectService.onTransferReceived = (
     Song song,

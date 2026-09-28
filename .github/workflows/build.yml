@@ -263,7 +263,22 @@ jobs:
           else
             flutter build linux --release
           fi
-      
+
+      - name: Generate version.json for package_info_plus on Linux
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)
+          BUILD_NUMBER=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f2)
+          mkdir -p build/linux/x64/release/bundle/data/flutter_assets
+          cat > build/linux/x64/release/bundle/data/flutter_assets/version.json << JSON
+          {
+            "app_name": "Groovy",
+            "version": "${VERSION}",
+            "build_number": "${BUILD_NUMBER}",
+            "package_name": "com.groovy.music"
+          }
+          JSON
+          echo "✅ Generated version.json (${VERSION}+${BUILD_NUMBER})"
+
       - name: Download bundled yt-dlp for Linux
         timeout-minutes: 5
         run: |
@@ -295,23 +310,34 @@ jobs:
           WRAP
           chmod +x "${APPDIR}/usr/bin/groovy"
 
-          cat > "${APPDIR}/usr/share/applications/groovy.desktop" << 'DESK'
+          cat > "${APPDIR}/usr/share/applications/com.groovy.music.desktop" << 'DESK'
           [Desktop Entry]
           Name=Groovy
           Comment=Stream music from YouTube Music
           Exec=groovy
-          Icon=groovy
+          Icon=com.groovy.music
           Terminal=false
           Type=Application
           Categories=Audio;Music;Player;AudioVideo;
           Keywords=music;streaming;youtube;
-          StartupWMClass=groovy
+          StartupWMClass=com.groovy.music
           DESK
+          cp "${APPDIR}/usr/share/applications/com.groovy.music.desktop" "${APPDIR}/usr/share/applications/groovy.desktop"
+
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/128x128/apps"
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+          mkdir -p "${APPDIR}/usr/share/icons/hicolor/512x512/apps"
 
           cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/groovy.png"
+          cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.groovy.music.png"
+          cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/128x128/apps/groovy.png"
+          cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/128x128/apps/com.groovy.music.png"
           cp assets/app_icon_1024.png "${APPDIR}/usr/share/icons/hicolor/512x512/apps/groovy.png"
+          cp assets/app_icon_1024.png "${APPDIR}/usr/share/icons/hicolor/512x512/apps/com.groovy.music.png"
 
-          cp "${APPDIR}/usr/share/applications/groovy.desktop" "${APPDIR}/groovy.desktop"
+          cp "${APPDIR}/usr/share/applications/com.groovy.music.desktop" "${APPDIR}/com.groovy.music.desktop"
+          cp "${APPDIR}/usr/share/applications/com.groovy.music.desktop" "${APPDIR}/groovy.desktop"
+          cp "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.groovy.music.png" "${APPDIR}/com.groovy.music.png"
           cp "${APPDIR}/usr/share/icons/hicolor/256x256/apps/groovy.png" "${APPDIR}/groovy.png"
           ln -sf groovy.png "${APPDIR}/.DirIcon"
 
@@ -347,6 +373,7 @@ jobs:
           mkdir -p "${DEBDIR}/opt/groovy"
           mkdir -p "${DEBDIR}/usr/bin"
           mkdir -p "${DEBDIR}/usr/share/applications"
+          mkdir -p "${DEBDIR}/usr/share/icons/hicolor/128x128/apps"
           mkdir -p "${DEBDIR}/usr/share/icons/hicolor/256x256/apps"
           mkdir -p "${DEBDIR}/usr/share/icons/hicolor/512x512/apps"
           mkdir -p "${DEBDIR}/DEBIAN"
@@ -361,23 +388,28 @@ jobs:
           LAUNCHER
           chmod +x "${DEBDIR}/usr/bin/groovy"
 
-          cat > "${DEBDIR}/usr/share/applications/groovy.desktop" << 'DESK'
+          cat > "${DEBDIR}/usr/share/applications/com.groovy.music.desktop" << 'DESK'
           [Desktop Entry]
           Name=Groovy
           Comment=Stream music from YouTube Music
           Exec=/usr/bin/groovy %U
-          Icon=groovy
+          Icon=com.groovy.music
           Terminal=false
           Type=Application
           Categories=Audio;Music;Player;AudioVideo;
           Keywords=music;streaming;youtube;
-          StartupWMClass=groovy
+          StartupWMClass=com.groovy.music
           MimeType=x-scheme-handler/groovy;
           DESK
-          chmod 644 "${DEBDIR}/usr/share/applications/groovy.desktop"
+          chmod 644 "${DEBDIR}/usr/share/applications/com.groovy.music.desktop"
+          cp "${DEBDIR}/usr/share/applications/com.groovy.music.desktop" "${DEBDIR}/usr/share/applications/groovy.desktop"
 
           cp assets/app_icon.png "${DEBDIR}/usr/share/icons/hicolor/256x256/apps/groovy.png"
+          cp assets/app_icon.png "${DEBDIR}/usr/share/icons/hicolor/256x256/apps/com.groovy.music.png"
+          cp assets/app_icon.png "${DEBDIR}/usr/share/icons/hicolor/128x128/apps/groovy.png"
+          cp assets/app_icon.png "${DEBDIR}/usr/share/icons/hicolor/128x128/apps/com.groovy.music.png"
           cp assets/app_icon_1024.png "${DEBDIR}/usr/share/icons/hicolor/512x512/apps/groovy.png"
+          cp assets/app_icon_1024.png "${DEBDIR}/usr/share/icons/hicolor/512x512/apps/com.groovy.music.png"
 
           cat > "${DEBDIR}/DEBIAN/control" << CONTROL
           Package: groovy

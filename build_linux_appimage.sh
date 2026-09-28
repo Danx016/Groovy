@@ -30,6 +30,19 @@ echo "🎵 Building ${APP_NAME} ${VERSION} AppImage..."
 echo "⚙️  Running flutter build linux..."
 flutter build linux --release
 
+# ── 1.1 Generate version.json for package_info_plus ─────────
+echo "📝 Generating version.json for package_info_plus..."
+BUILD_NUMBER="$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f2)"
+mkdir -p "${BUNDLE_DIR}/data/flutter_assets"
+cat > "${BUNDLE_DIR}/data/flutter_assets/version.json" << JSON
+{
+  "app_name": "${APP_NAME}",
+  "version": "${VERSION}",
+  "build_number": "${BUILD_NUMBER}",
+  "package_name": "com.groovy.music"
+}
+JSON
+
 # ── 2. Download yt-dlp binary ───────────────────────────────
 echo "📥 Downloading yt-dlp..."
 if [ ! -f "${BUNDLE_DIR}/yt-dlp" ]; then
@@ -63,29 +76,40 @@ EOF
 chmod +x "${APPDIR}/usr/bin/${EXEC_NAME}"
 
 # Desktop entry
-cat > "${APPDIR}/usr/share/applications/${EXEC_NAME}.desktop" << EOF
+cat > "${APPDIR}/usr/share/applications/com.groovy.music.desktop" << EOF
 [Desktop Entry]
 Name=${APP_NAME}
 Comment=Stream music from YouTube Music
 Exec=${EXEC_NAME}
-Icon=${EXEC_NAME}
+Icon=com.groovy.music
 Terminal=false
 Type=Application
 Categories=Audio;Music;Player;AudioVideo;
 Keywords=music;streaming;youtube;
-StartupWMClass=groovy
+StartupWMClass=com.groovy.music
 EOF
+cp "${APPDIR}/usr/share/applications/com.groovy.music.desktop" "${APPDIR}/usr/share/applications/${EXEC_NAME}.desktop"
 
-# Copy icons
+# Copy icons in multiple sizes and aliases (com.groovy.music and groovy)
+mkdir -p "${APPDIR}/usr/share/icons/hicolor/128x128/apps"
+mkdir -p "${APPDIR}/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "${APPDIR}/usr/share/icons/hicolor/512x512/apps"
+
 if [ -f "assets/app_icon.png" ]; then
   cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${EXEC_NAME}.png"
+  cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.groovy.music.png"
+  cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/128x128/apps/${EXEC_NAME}.png"
+  cp assets/app_icon.png "${APPDIR}/usr/share/icons/hicolor/128x128/apps/com.groovy.music.png"
 fi
 if [ -f "assets/app_icon_1024.png" ]; then
   cp assets/app_icon_1024.png "${APPDIR}/usr/share/icons/hicolor/512x512/apps/${EXEC_NAME}.png"
+  cp assets/app_icon_1024.png "${APPDIR}/usr/share/icons/hicolor/512x512/apps/com.groovy.music.png"
 fi
 
 # AppDir root symlinks required by AppImage spec
-cp "${APPDIR}/usr/share/applications/${EXEC_NAME}.desktop" "${APPDIR}/${EXEC_NAME}.desktop"
+cp "${APPDIR}/usr/share/applications/com.groovy.music.desktop" "${APPDIR}/com.groovy.music.desktop"
+cp "${APPDIR}/usr/share/applications/com.groovy.music.desktop" "${APPDIR}/${EXEC_NAME}.desktop"
+cp "${APPDIR}/usr/share/icons/hicolor/256x256/apps/com.groovy.music.png" "${APPDIR}/com.groovy.music.png"
 cp "${APPDIR}/usr/share/icons/hicolor/256x256/apps/${EXEC_NAME}.png" "${APPDIR}/${EXEC_NAME}.png"
 ln -sf "${EXEC_NAME}.png" "${APPDIR}/.DirIcon"
 
