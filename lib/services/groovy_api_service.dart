@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -217,7 +217,7 @@ class GroovyApiService {
           }),
         ).timeout(const Duration(seconds: 5));
         if (res.statusCode >= 200 && res.statusCode < 300) {
-          final data = jsonDecode(res.body);
+          final data = jsonDecode(utf8.decode(res.bodyBytes));
           if (data['success'] == true) return true;
         }
       } catch (e) {
@@ -246,7 +246,7 @@ class GroovyApiService {
       ).timeout(const Duration(milliseconds: 12000));
       checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['commands'] is List) {
           return (data['commands'] as List).cast<Map<String, dynamic>>();
         }
@@ -286,7 +286,7 @@ class GroovyApiService {
       ).timeout(const Duration(milliseconds: 6000));
       checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
+        final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['devices'] is List) {
           return (data['devices'] as List).cast<Map<String, dynamic>>();
         }
@@ -384,7 +384,7 @@ class GroovyApiService {
         }),
       ).timeout(const Duration(seconds: 12));
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
         return AuthResponse(
           success: true,
@@ -401,7 +401,7 @@ class GroovyApiService {
       debugPrint('[GroovyApiService] register error: $e');
       return AuthResponse(
         success: false,
-        error: 'No se pudo conectar con el servidor Groovy. Verifica tu conexión.',
+        error: 'No se pudo conectar con el servidor Groovy. Verifica tu conexiÃ³n.',
       );
     }
   }
@@ -425,7 +425,7 @@ class GroovyApiService {
         }),
       ).timeout(const Duration(seconds: 12));
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
         return AuthResponse(
           success: true,
@@ -435,14 +435,14 @@ class GroovyApiService {
       } else {
         return AuthResponse(
           success: false,
-          error: data['error'] as String? ?? 'Correo o contraseña incorrectos.',
+          error: data['error'] as String? ?? 'Correo o contraseÃ±a incorrectos.',
         );
       }
     } catch (e) {
       debugPrint('[GroovyApiService] login error: $e');
       return AuthResponse(
         success: false,
-        error: 'No se pudo conectar con el servidor Groovy. Verifica tu conexión.',
+        error: 'No se pudo conectar con el servidor Groovy. Verifica tu conexiÃ³n.',
       );
     }
   }
@@ -473,7 +473,7 @@ class GroovyApiService {
       ).timeout(const Duration(seconds: 10));
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         if (data['success'] == true) {
           return AuthResponse(
             success: true,
@@ -542,7 +542,7 @@ class GroovyApiService {
       ).timeout(const Duration(seconds: 8));
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         // If the server explicitly says exists is false, return false
         if (data.containsKey('exists')) {
           return data['exists'] == true;
@@ -585,11 +585,11 @@ class GroovyApiService {
       if (res.statusCode == 404) {
         return AuthResponse(
           success: false,
-          error: 'El servidor en la nube aún no tiene habilitada la ruta de cambio de contraseña (/api/auth/reset-password).',
+          error: 'El servidor en la nube aÃºn no tiene habilitada la ruta de cambio de contraseÃ±a (/api/auth/reset-password).',
         );
       }
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       if (res.statusCode >= 200 && res.statusCode < 300 && (data['success'] == true || data['message'] != null)) {
         return AuthResponse(
           success: true,
@@ -599,7 +599,7 @@ class GroovyApiService {
       } else {
         return AuthResponse(
           success: false,
-          error: data['error'] as String? ?? 'No se pudo restablecer la contraseña (${res.statusCode})',
+          error: data['error'] as String? ?? 'No se pudo restablecer la contraseÃ±a (${res.statusCode})',
         );
       }
     } catch (e) {
@@ -617,7 +617,7 @@ class GroovyApiService {
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 8));
       checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         if (data['user'] != null) {
           return GroovyUser.fromJson(data['user'] as Map<String, dynamic>);
         }
@@ -644,7 +644,7 @@ class GroovyApiService {
         }),
       ).timeout(const Duration(seconds: 12));
 
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+      final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       checkUnauthorized(res.statusCode);
       if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
         return AuthResponse(
@@ -676,13 +676,13 @@ class GroovyApiService {
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
       checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         final list = (data['favorites'] as List<dynamic>?) ?? [];
         return list.map((item) {
           final m = item as Map<String, dynamic>;
           return Song(
             id: m['id']?.toString() ?? '',
-            title: m['title']?.toString() ?? 'Sin título',
+            title: m['title']?.toString() ?? 'Sin tÃ­tulo',
             artist: m['artist']?.toString(),
             album: m['album']?.toString(),
             coverArt: m['coverArt']?.toString(),
@@ -740,7 +740,7 @@ class GroovyApiService {
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
       checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['playlists'] ?? []);
       }
     } catch (e) {
@@ -762,7 +762,7 @@ class GroovyApiService {
         }),
       ).timeout(const Duration(seconds: 8));
       if (res.statusCode == 201) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         return data['playlist'] as Map<String, dynamic>?;
       }
     } catch (e) {
@@ -825,13 +825,13 @@ class GroovyApiService {
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
       checkUnauthorized(res.statusCode);
       if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         final list = (data['history'] as List<dynamic>?) ?? [];
         return list.map((item) {
           final m = item as Map<String, dynamic>;
           return Song(
             id: m['id']?.toString() ?? '',
-            title: m['title']?.toString() ?? 'Sin título',
+            title: m['title']?.toString() ?? 'Sin tÃ­tulo',
             artist: m['artist']?.toString(),
             album: m['album']?.toString(),
             coverArt: m['coverArt']?.toString(),
@@ -847,3 +847,4 @@ class GroovyApiService {
     return [];
   }
 }
+

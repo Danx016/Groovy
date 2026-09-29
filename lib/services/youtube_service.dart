@@ -779,7 +779,7 @@ class YoutubeService {
     String query, {
     int artistCount = 20,
     int albumCount = 20,
-    int songCount = 20,
+    int songCount = 50,
   }) async {
     try {
       // 1. Concurrently query songs, official albums, and official artists via YouTube Music Innertube

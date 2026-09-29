@@ -9,6 +9,27 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../models/models.dart';
 import '../utils/album_sanitizer.dart';
 
+/// Repairs text that was stored with incorrect Latin-1 decoding instead of
+/// UTF-8. For example, converts "â€¢" back to "•" and "Ã±" back to "ñ".
+/// Only applies the fix when the text contains the characteristic broken-
+/// encoding markers so that correctly-encoded text is never touched.
+String _fixEncoding(String? s) {
+  if (s == null || s.isEmpty) return s ?? '';
+  // Fast path: only attempt repair if string contains typical mojibake markers.
+  if (!s.contains('â') && !s.contains('Ã') && !s.contains('Â')) return s;
+  try {
+    return utf8.decode(latin1.encode(s), allowMalformed: true);
+  } catch (_) {
+    return s;
+  }
+}
+
+/// Same as [_fixEncoding] but returns null instead of an empty string.
+String? _fixEncodingNullable(String? s) {
+  final fixed = _fixEncoding(s);
+  return fixed.isEmpty ? null : fixed;
+}
+
 /// SQLite-based persistent storage for the music library.
 ///
 /// Replaces the previous SharedPreferences + single-blob JSON approach
@@ -738,14 +759,14 @@ class LibraryDatabaseService {
     final participantsJson = m['artistParticipants'] as String?;
     return Song(
       id: m['id'] as String,
-      title: m['title'] as String,
-      album: m['album'] as String?,
+      title: _fixEncoding(m['title'] as String? ?? 'Unknown Title'),
+      album: _fixEncodingNullable(m['album'] as String?),
       albumId: m['albumId'] as String?,
-      artist: m['artist'] as String?,
+      artist: _fixEncodingNullable(m['artist'] as String?),
       artistId: m['artistId'] as String?,
       track: m['track'] as int?,
       year: m['year'] as int?,
-      genre: m['genre'] as String?,
+      genre: _fixEncodingNullable(m['genre'] as String?),
       coverArt: m['coverArt'] as String?,
       duration: m['duration'] as int?,
       bitRate: m['bitRate'] as int?,
@@ -794,18 +815,18 @@ class LibraryDatabaseService {
 
   Album _albumFromMap(Map<String, dynamic> m) {
     final participantsJson = m['artistParticipants'] as String?;
-    final rawName = m['name'] as String;
+    final rawName = _fixEncoding(m['name'] as String? ?? '');
     final cleanName = AlbumSanitizer.cleanTitle(rawName);
     return Album(
       id: m['id'] as String,
       name: cleanName.isNotEmpty ? cleanName : rawName,
-      artist: m['artist'] as String?,
+      artist: _fixEncodingNullable(m['artist'] as String?),
       artistId: m['artistId'] as String?,
       coverArt: m['coverArt'] as String?,
       songCount: m['songCount'] as int?,
       duration: m['duration'] as int?,
       year: m['year'] as int?,
-      genre: m['genre'] as String?,
+      genre: _fixEncodingNullable(m['genre'] as String?),
       created: m['created'] != null
           ? DateTime.tryParse(m['created'] as String)
           : null,
@@ -832,7 +853,7 @@ class LibraryDatabaseService {
   Artist _artistFromMap(Map<String, dynamic> m) {
     return Artist(
       id: m['id'] as String,
-      name: m['name'] as String,
+      name: _fixEncoding(m['name'] as String? ?? ''),
       coverArt: m['coverArt'] as String?,
       albumCount: m['albumCount'] as int?,
       artistImageUrl: m['artistImageUrl'] as String?,

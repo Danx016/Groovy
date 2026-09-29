@@ -805,7 +805,6 @@ class _AlbumScreenState extends State<AlbumScreen> {
                               coverArt: _resolvedCoverArt,
                               size: ScreenHelper.isSmallScreen(context) ? 200 : 280,
                               borderRadius: 10,
-                              preserveAspectRatio: true,
                             ),
                           ),
                           if (allDownloaded)

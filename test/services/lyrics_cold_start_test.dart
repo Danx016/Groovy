@@ -53,8 +53,8 @@ void main() {
       expect(identical(call1, call2), isTrue);
 
       final res = await call1;
-      // Result may be null since this is a mock title/artist, but future completes without error
-      expect(res == null || res is Map<String, dynamic>, isTrue);
+      // Result may be null or Map<String, dynamic>
+      expect(res, anyOf(isNull, isA<Map<String, dynamic>>()));
     });
 
     test('LrcLibService normalizes duration passed in milliseconds', () async {
@@ -69,7 +69,7 @@ void main() {
       );
 
       final res = await call;
-      expect(res == null || res is Map<String, dynamic>, isTrue);
+      expect(res, anyOf(isNull, isA<Map<String, dynamic>>()));
     });
   });
 }

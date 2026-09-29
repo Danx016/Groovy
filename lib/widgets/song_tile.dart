@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/song.dart';
@@ -108,7 +108,7 @@ class SongTile extends StatelessWidget {
                 ? song.coverArt
                 : song.id,
             size: 50,
-            preserveAspectRatio: true,
+            borderRadius: radius,
           ),
           if (isCurrentSong)
             Positioned.fill(
@@ -162,7 +162,7 @@ class SongTile extends StatelessWidget {
     if (showArtist) {
       if (showAlbum && song.album != null && song.album!.trim().isNotEmpty) {
         return Text(
-          '${song.artist ?? ""}${song.album != null && song.album!.trim().isNotEmpty ? " â€¢ ${song.album}" : ""}',
+          '${song.artist ?? ""}${song.album != null && song.album!.trim().isNotEmpty ? " • ${song.album}" : ""}',
           style: theme.textTheme.bodySmall,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,

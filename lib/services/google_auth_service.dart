@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -98,7 +98,7 @@ class GoogleAuthService {
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort);
     } catch (e) {
       debugPrint('[GoogleAuth] Could not bind port $loopbackPort: $e');
-      throw Exception('El puerto local de autenticación está ocupado. Intenta de nuevo.');
+      throw Exception('El puerto local de autenticaciÃ³n estÃ¡ ocupado. Intenta de nuevo.');
     }
 
     final completer = Completer<String?>();
@@ -110,10 +110,10 @@ class GoogleAuthService {
         final error = uri.queryParameters['error'];
 
         final isSuccess = error == null;
-        final title = isSuccess ? '¡Autenticación Exitosa!' : 'Error de Autenticación';
+        final title = isSuccess ? 'Â¡AutenticaciÃ³n Exitosa!' : 'Error de AutenticaciÃ³n';
         final message = isSuccess
-            ? 'Has iniciado sesión con Google en <strong style="color: #FA243C;">Groovy</strong>.<br>Ya puedes cerrar esta ventana y regresar a la aplicación.'
-            : 'No se pudo completar el inicio de sesión.<br>Código de error: <code>$error</code>';
+            ? 'Has iniciado sesiÃ³n con Google en <strong style="color: #FA243C;">Groovy</strong>.<br>Ya puedes cerrar esta ventana y regresar a la aplicaciÃ³n.'
+            : 'No se pudo completar el inicio de sesiÃ³n.<br>CÃ³digo de error: <code>$error</code>';
 
         req.response.headers.contentType = ContentType.html;
         req.response.write('''
@@ -122,7 +122,7 @@ class GoogleAuthService {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Groovy · $title</title>
+  <title>Groovy Â· $title</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
@@ -255,8 +255,8 @@ class GoogleAuthService {
     </div>
     <h1>$title</h1>
     <p>$message</p>
-    <a href="javascript:window.close();" class="btn">Cerrar pestaña</a>
-    <div class="footer" id="countdown">Cerrando automáticamente en <span id="sec">3</span>s...</div>
+    <a href="javascript:window.close();" class="btn">Cerrar pestaÃ±a</a>
+    <div class="footer" id="countdown">Cerrando automÃ¡ticamente en <span id="sec">3</span>s...</div>
   </div>
   <script>
     var remaining = 3;
@@ -301,7 +301,7 @@ class GoogleAuthService {
     if (!launched) {
       await sub.cancel();
       await server.close(force: true);
-      throw Exception('No se pudo abrir el navegador web para iniciar sesión.');
+      throw Exception('No se pudo abrir el navegador web para iniciar sesiÃ³n.');
     }
 
     try {
@@ -327,14 +327,14 @@ class GoogleAuthService {
 
       if (tokenRes.statusCode != 200) {
         debugPrint('[GoogleAuth] Token exchange failed: ${tokenRes.body}');
-        throw Exception('Error al canjear código de Google (${tokenRes.statusCode})');
+        throw Exception('Error al canjear cÃ³digo de Google (${tokenRes.statusCode})');
       }
 
-      final tokenData = jsonDecode(tokenRes.body) as Map<String, dynamic>;
+      final tokenData = jsonDecode(utf8.decode(tokenRes.bodyBytes)) as Map<String, dynamic>;
       final accessToken = tokenData['access_token'] as String?;
       final idToken = tokenData['id_token'] as String?;
 
-      if (accessToken == null) throw Exception('No se recibió token de acceso');
+      if (accessToken == null) throw Exception('No se recibiÃ³ token de acceso');
 
       // Fetch user profile
       final userRes = await http.get(
@@ -346,7 +346,7 @@ class GoogleAuthService {
         throw Exception('Error al obtener perfil de Google');
       }
 
-      final userData = jsonDecode(userRes.body) as Map<String, dynamic>;
+      final userData = jsonDecode(utf8.decode(userRes.bodyBytes)) as Map<String, dynamic>;
       final email = userData['email'] as String? ?? '';
       final name = userData['name'] as String? ?? email.split('@').first;
       final picture = userData['picture'] as String?;
@@ -375,3 +375,4 @@ class GoogleAuthService {
     } catch (_) {}
   }
 }
+

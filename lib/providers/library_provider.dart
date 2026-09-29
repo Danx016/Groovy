@@ -1006,7 +1006,7 @@ class LibraryProvider extends ChangeNotifier {
     }
 
     try {
-      final ytResults = await _youtubeService.search(query, songCount: 20);
+      final ytResults = await _youtubeService.search(query, songCount: 50);
 
       final existingIds = localResult.songs.map((s) => s.id).toSet();
       final extraSongs = ytResults.songs

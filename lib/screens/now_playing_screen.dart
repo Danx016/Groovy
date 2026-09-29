@@ -663,6 +663,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                             coverArt: currentSong.coverArt,
                           )
                         : null;
+                    _exitFullScreen();
                     NavigationHelper.push(
                       context,
                       AlbumScreen(
@@ -841,6 +842,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                     builder: (context) => NowPlayingMoreMenu(
                       song: currentSong,
                       imageProvider: _currentImageProvider ?? widget.image,
+                      onCloseNowPlaying: _exitFullScreen,
                       onNavigateToLyrics: () => _pageController.animateToPage(
                         1,
                         duration: const Duration(milliseconds: 300),
@@ -1033,6 +1035,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                         builder: (context) => NowPlayingMoreMenu(
                           song: currentSong,
                           imageProvider: _currentImageProvider ?? widget.image,
+                          onCloseNowPlaying: _exitFullScreen,
                           onNavigateToLyrics: () => _pageController.animateToPage(
                             1,
                             duration: const Duration(milliseconds: 300),
@@ -1681,6 +1684,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   builder: (ctx) => NowPlayingMoreMenu(
                     song: currentSong,
                     imageProvider: _currentImageProvider ?? widget.image,
+                    onCloseNowPlaying: _exitFullScreen,
                     onNavigateToLyrics: () {
                       setState(() {
                         _showLyricsInLandscape = true;

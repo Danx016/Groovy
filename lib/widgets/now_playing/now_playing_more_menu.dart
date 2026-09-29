@@ -23,12 +23,14 @@ class NowPlayingMoreMenu extends StatefulWidget {
   final Song? song;
   final ImageProvider? imageProvider;
   final VoidCallback? onNavigateToLyrics;
+  final VoidCallback? onCloseNowPlaying;
 
   const NowPlayingMoreMenu({
     super.key,
     this.song,
     this.imageProvider,
     this.onNavigateToLyrics,
+    this.onCloseNowPlaying,
   });
 
   @override
@@ -37,18 +39,6 @@ class NowPlayingMoreMenu extends StatefulWidget {
 
 class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
   static const Color _appleRed = Color(0xFFFA2D48);
-  bool _isDownloading = false;
-  double _downloadProgress = 0.0;
-
-  void _openPlaylistPicker(BuildContext context, Song song) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      useRootNavigator: true,
-      builder: (context) => PlaylistSelectionBottomSheet(song: song),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -207,8 +197,8 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: isInLibrary ? 'Eliminar de la biblioteca' : 'Agregar a la biblioteca',
               textColor: textColor,
               onTap: () async {
-                Navigator.of(context).pop();
                 final messenger = ScaffoldMessenger.of(context);
+                Navigator.of(context).pop();
                 if (isInLibrary) {
                   await libraryProvider.removeSongFromLibrary(currentSong);
                   messenger.showSnackBar(
@@ -236,9 +226,10 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 title: 'Reproducir a continuación',
                 textColor: textColor,
                 onTap: () {
+                  final messenger = ScaffoldMessenger.of(context);
                   Navigator.of(context).pop();
                   playerProvider.addToQueueNext(currentSong);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text('Se reproducirá a continuación'),
                       duration: Duration(seconds: 2),
@@ -251,9 +242,10 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 title: 'Añadir a la cola',
                 textColor: textColor,
                 onTap: () {
+                  final messenger = ScaffoldMessenger.of(context);
                   Navigator.of(context).pop();
                   playerProvider.addAllToQueue([currentSong]);
-                  ScaffoldMessenger.of(context).showSnackBar(
+                  messenger.showSnackBar(
                     const SnackBar(
                       content: Text('Añadida a la cola'),
                       duration: Duration(seconds: 2),
@@ -263,23 +255,7 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               ),
             ],
 
-            // 2. Descargar canción para modo offline
-            if (_isDownloading)
-              _buildMenuItem(
-                iconWidget: SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    value: _downloadProgress > 0 ? _downloadProgress : null,
-                    strokeWidth: 2.2,
-                    color: _appleRed,
-                  ),
-                ),
-                title: 'Descargando... ${(_downloadProgress * 100).toInt()}%',
-                textColor: textColor,
-                onTap: () {},
-              )
-            else if (isDownloaded)
+            if (isDownloaded)
               _buildMenuItem(
                 icon: CupertinoIcons.arrow_down_circle_fill,
                 iconColor: Colors.green,
@@ -299,16 +275,16 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                     icon: CupertinoIcons.trash_fill,
                   );
                   if (confirm == true) {
-                    await offlineService.deleteSong(currentSong.id);
                     if (mounted) {
                       nav.pop();
-                      messenger.showSnackBar(
-                        const SnackBar(
-                          content: Text('Descarga eliminada'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
                     }
+                    await offlineService.deleteSong(currentSong.id);
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Descarga eliminada'),
+                        duration: Duration(seconds: 2),
+                      ),
+                    );
                   }
                 },
               )
@@ -317,36 +293,30 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 icon: CupertinoIcons.arrow_down_circle,
                 title: 'Descargar canción',
                 textColor: textColor,
-                onTap: () async {
-                  setState(() {
-                    _isDownloading = true;
-                    _downloadProgress = 0.0;
-                  });
-                  final nav = Navigator.of(context);
+                onTap: () {
                   final messenger = ScaffoldMessenger.of(context);
-                  final success = await offlineService.downloadSong(
+                  Navigator.of(context).pop();
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Descargando "${currentSong.title}"...'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  offlineService.downloadSong(
                     currentSong,
                     youtubeService,
-                    onProgress: (p) {
-                      if (mounted) {
-                        setState(() => _downloadProgress = p);
-                      }
-                    },
-                  );
-                  if (mounted) {
-                    setState(() => _isDownloading = false);
-                    nav.pop();
+                  ).then((success) {
                     messenger.showSnackBar(
                       SnackBar(
                         content: Text(
                           success
-                              ? 'Descargada para modo offline (audio y letras sincronizadas)'
+                              ? 'Descargada para modo offline (audio y letras)'
                               : 'No se pudo descargar la canción',
                         ),
                         duration: const Duration(seconds: 3),
                       ),
                     );
-                  }
+                  });
                 },
               ),
 
@@ -356,8 +326,19 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: 'Agregar a una playlist...',
               textColor: textColor,
               onTap: () {
+                final targetCtx = NavigationHelper.navigatorKey.currentContext ?? context;
                 Navigator.of(context).pop();
-                _openPlaylistPicker(context, currentSong);
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (targetCtx.mounted) {
+                    showModalBottomSheet(
+                      context: targetCtx,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      useRootNavigator: true,
+                      builder: (sheetCtx) => PlaylistSelectionBottomSheet(song: currentSong),
+                    );
+                  }
+                });
               },
             ),
 
@@ -367,16 +348,19 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: 'Ver créditos',
               textColor: textColor,
               onTap: () {
+                final rootNav = Navigator.of(context, rootNavigator: true);
                 Navigator.of(context).pop();
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (ctx) => SongCreditsScreen(
-                      song: currentSong,
-                      imageProvider: effectiveImage,
-                      onNavigateToLyrics: widget.onNavigateToLyrics,
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  rootNav.push(
+                    MaterialPageRoute(
+                      builder: (ctx) => SongCreditsScreen(
+                        song: currentSong,
+                        imageProvider: effectiveImage,
+                        onNavigateToLyrics: widget.onNavigateToLyrics,
+                      ),
                     ),
-                  ),
-                );
+                  );
+                });
               },
             ),
 
@@ -386,7 +370,6 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: 'Ir al álbum',
               textColor: textColor,
               onTap: () {
-                Navigator.of(context).pop();
                 final cleanAlb = AlbumSanitizer.cleanTitle(currentSong.album);
                 final effectiveAlbumId = currentSong.albumId ??
                     (cleanAlb.isNotEmpty
@@ -400,15 +383,26 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                         coverArt: currentSong.coverArt,
                       )
                     : null;
-                Navigator.of(context).push(
-                  CupertinoPageRoute(
-                    builder: (ctx) => AlbumScreen(
-                      albumId: effectiveAlbumId,
-                      album: alb,
-                      song: currentSong,
-                    ),
-                  ),
-                );
+
+                final closeNowPlaying = widget.onCloseNowPlaying;
+                Navigator.of(context).pop();
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (closeNowPlaying != null) {
+                    closeNowPlaying();
+                  }
+                  final targetCtx = NavigationHelper.navigatorKey.currentContext;
+                  if (targetCtx != null && targetCtx.mounted) {
+                    NavigationHelper.push(
+                      targetCtx,
+                      AlbumScreen(
+                        albumId: effectiveAlbumId,
+                        album: alb,
+                        song: currentSong,
+                      ),
+                    );
+                  }
+                });
               },
             ),
 
@@ -418,43 +412,45 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: 'Ir al artista',
               textColor: textColor,
               onTap: () {
-                final nav = Navigator.of(context);
-                nav.pop();
                 final participants = currentSong.artistParticipants;
-                if (participants != null && participants.length > 1) {
-                  final ctx = NavigationHelper.navigatorKey.currentContext;
-                  if (ctx != null) {
+                final artistId = currentSong.artistId ?? currentSong.artist ?? '';
+                final closeNowPlaying = widget.onCloseNowPlaying;
+                Navigator.of(context).pop();
+
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (closeNowPlaying != null) {
+                    closeNowPlaying();
+                  }
+                  final targetCtx = NavigationHelper.navigatorKey.currentContext;
+                  if (targetCtx == null || !targetCtx.mounted) return;
+
+                  if (participants != null && participants.length > 1) {
                     showModalBottomSheet(
-                      context: ctx,
+                      context: targetCtx,
                       backgroundColor: Colors.transparent,
                       builder: (sheetCtx) => ArtistsBottomSheet(
                         artists: participants,
                         onArtistTap: (artist) {
                           Navigator.pop(sheetCtx);
                           final effectiveId = artist.id.isNotEmpty ? artist.id : 'artist_${artist.name}';
-                          nav.push(
-                            CupertinoPageRoute(
-                              builder: (_) => ArtistScreen(
-                                artistId: effectiveId,
-                                artist: Artist(
-                                  id: effectiveId,
-                                  name: artist.name.isNotEmpty ? artist.name : effectiveId,
-                                  coverArt: artist.effectiveCoverArt,
-                                ),
+                          NavigationHelper.push(
+                            targetCtx,
+                            ArtistScreen(
+                              artistId: effectiveId,
+                              artist: Artist(
+                                id: effectiveId,
+                                name: artist.name.isNotEmpty ? artist.name : effectiveId,
+                                coverArt: artist.effectiveCoverArt,
                               ),
                             ),
                           );
                         },
                       ),
                     );
-                    return;
-                  }
-                }
-                final artistId = currentSong.artistId ?? currentSong.artist ?? '';
-                if (artistId.isNotEmpty) {
-                  nav.push(
-                    CupertinoPageRoute(
-                      builder: (ctx) => ArtistScreen(
+                  } else if (artistId.isNotEmpty) {
+                    NavigationHelper.push(
+                      targetCtx,
+                      ArtistScreen(
                         artistId: artistId,
                         artist: Artist(
                           id: artistId,
@@ -462,9 +458,9 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                           coverArt: currentSong.coverArt,
                         ),
                       ),
-                    ),
-                  );
-                }
+                    );
+                  }
+                });
               },
             ),
 
@@ -474,8 +470,8 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               title: isStarred ? 'Eliminar de Favoritos' : 'Agregar a Favoritos',
               textColor: textColor,
               onTap: () async {
-                Navigator.of(context).pop();
                 final messenger = ScaffoldMessenger.of(context);
+                Navigator.of(context).pop();
                 final newFav = await libraryProvider.toggleStarSong(currentSong);
                 playerProvider.updateSongStarred(currentSong.id, newFav);
                 messenger.showSnackBar(

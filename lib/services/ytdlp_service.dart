@@ -156,7 +156,7 @@ class YtDlpService {
   }
 
   /// Queries official YouTube Music Innertube API (Songs filter) directly in pure Dart.
-  Future<List<Map<String, dynamic>>> searchYtMusicInnertube(String query, {int limit = 25}) async {
+  Future<List<Map<String, dynamic>>> searchYtMusicInnertube(String query, {int limit = 50}) async {
     try {
       final req = await _innertubeHttpClient.postUrl(
         Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
@@ -1106,7 +1106,7 @@ class YtDlpService {
   }
 
   /// Dual search: returns a map with 'music' and 'youtube' lists of tracks.
-  Future<Map<String, List<Map<String, dynamic>>>> searchDual(String query, {int limit = 20}) async {
+  Future<Map<String, List<Map<String, dynamic>>>> searchDual(String query, {int limit = 50}) async {
     final cleanQuery = query.trim().toLowerCase();
     if (_dualSearchCache.containsKey(cleanQuery)) {
       return _dualSearchCache[cleanQuery]!;
@@ -1184,7 +1184,7 @@ class YtDlpService {
   }
 
   /// Searches YouTube / YouTube Music for tracks matching [query].
-  Future<List<Map<String, dynamic>>> search(String query, {int limit = 25}) async {
+  Future<List<Map<String, dynamic>>> search(String query, {int limit = 50}) async {
     final cleanQuery = query.trim().toLowerCase();
     if (_searchCache.containsKey(cleanQuery)) {
       return _searchCache[cleanQuery]!;

@@ -176,23 +176,37 @@ class _PlaylistSelectionBottomSheetState extends State<PlaylistSelectionBottomSh
   }
 
   Future<void> _loadPlaylists() async {
+    final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
+    if (libraryProvider.playlists.isNotEmpty) {
+      if (mounted) {
+        setState(() {
+          _playlists = libraryProvider.playlists;
+          _isLoading = false;
+        });
+      }
+    }
     final youtubeService = Provider.of<YoutubeService>(context, listen: false);
     try {
       final playlists = await youtubeService.getPlaylists();
       if (mounted) {
         setState(() {
-          _playlists = playlists;
+          _playlists = playlists.isNotEmpty ? playlists : libraryProvider.playlists;
           _isLoading = false;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
+          if (_playlists == null || _playlists!.isEmpty) {
+            _playlists = libraryProvider.playlists;
+          }
           _isLoading = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorLoadingPlaylists(e.toString()))),
-        );
+        if (_playlists == null || _playlists!.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(AppLocalizations.of(context)!.errorLoadingPlaylists(e.toString()))),
+          );
+        }
       }
     }
   }
