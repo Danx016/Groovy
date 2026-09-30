@@ -121,22 +121,38 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
         physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics()),
         slivers: [
-          // 1. Top App Bar with Red Back Chevron
+          // 1. Top App Bar with consistent circular back button
           SliverAppBar(
             pinned: true,
             floating: false,
+            toolbarHeight: 64,
             elevation: 0,
             scrolledUnderElevation: 0,
             backgroundColor:
                 isDark ? AppTheme.darkBackground : AppTheme.lightBackground,
             leading: IconButton(
-              icon: const Icon(
-                CupertinoIcons.chevron_back,
-                color: AppTheme.appleMusicRed,
-                size: 28,
+              icon: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_back_rounded,
+                  color: isDark ? Colors.white : Colors.black,
+                  size: 20,
+                ),
               ),
-              tooltip: 'Atrás',
               onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              'Descargas',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.4,
+                color: isDark ? Colors.white : Colors.black,
+              ),
             ),
             actions: [
               if (_downloadedSongs.isNotEmpty && _selectedTab == 0)
@@ -151,22 +167,6 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
                 ),
               const SizedBox(width: 6),
             ],
-          ),
-
-          // 2. Large Apple Music Header ("Descargas")
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20.0, 4.0, 20.0, 14.0),
-              child: Text(
-                'Descargas',
-                style: TextStyle(
-                  fontSize: 34,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.8,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-            ),
           ),
 
           // 3. Apple Music Filter Tabs (Pills: Canciones / Álbumes)

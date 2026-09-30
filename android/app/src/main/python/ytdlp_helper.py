@@ -152,9 +152,88 @@ def _search_query(target, limit):
 
 import urllib.request
 
-def _search_ytmusic_innertube(query, limit=25):
-    """Directly queries the official YouTube Music Innertube API with the official Songs filter."""
-    url = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false"
+def _parse_innertube_music_items(contents, results, limit):
+    for item in contents:
+        r = item.get("musicResponsiveListItemRenderer", {})
+        if not r:
+            continue
+        flex = r.get("flexColumns", [])
+        if not flex:
+            continue
+        title_runs = flex[0].get("musicResponsiveListItemFlexColumnRenderer", {}).get("text", {}).get("runs", [])
+        title = title_runs[0].get("text", "") if title_runs else ""
+        nav = title_runs[0].get("navigationEndpoint", {}).get("watchEndpoint", {}) if title_runs else {}
+        video_id = nav.get("videoId", "")
+        if not video_id:
+            overlay = r.get("overlay", {}).get("musicItemThumbnailOverlayRenderer", {}).get("content", {}).get("musicPlayButtonRenderer", {}).get("playNavigationEndpoint", {}).get("watchEndpoint", {})
+            video_id = overlay.get("videoId", "")
+        if not video_id:
+            continue
+
+        # Avoid duplicate song IDs
+        if any(x.get("id") == video_id for x in results):
+            continue
+
+        info_runs = flex[1].get("musicResponsiveListItemFlexColumnRenderer", {}).get("text", {}).get("runs", []) if len(flex) > 1 else []
+        parts = []
+        curr = []
+        for x in info_runs:
+            t = x.get("text", "")
+            if t == " • ":
+                if curr:
+                    parts.append("".join(curr))
+                    curr = []
+            else:
+                curr.append(t)
+        if curr:
+            parts.append("".join(curr))
+
+        artist = "Unknown Artist"
+        album_name = None
+        duration_secs = 0
+        if len(parts) >= 3:
+            artist = parts[0]
+            album_name = parts[1]
+            duration_str = parts[2]
+        elif len(parts) == 2:
+            artist = parts[0]
+            duration_str = parts[1]
+        elif len(parts) == 1:
+            artist = parts[0]
+            duration_str = "0:00"
+        else:
+            duration_str = "0:00"
+
+        dur_split = duration_str.split(":")
+        if len(dur_split) == 2:
+            try:
+                duration_secs = int(dur_split[0]) * 60 + int(dur_split[1])
+            except:
+                pass
+        elif len(dur_split) == 3:
+            try:
+                duration_secs = int(dur_split[0]) * 3600 + int(dur_split[1]) * 60 + int(dur_split[2])
+            except:
+                pass
+
+        thumbs = r.get("thumbnail", {}).get("musicThumbnailRenderer", {}).get("thumbnail", {}).get("thumbnails", [])
+        thumb = _upgrade_thumbnail(thumbs[-1].get("url", "")) if thumbs else ""
+
+        results.append({
+            "id": video_id,
+            "title": title,
+            "artist": artist,
+            "album": album_name,
+            "duration": duration_secs,
+            "thumbnailUrl": thumb,
+            "coverArt": thumb if thumb else video_id
+        })
+        if len(results) >= limit:
+            break
+
+def _search_ytmusic_innertube(query, limit=100):
+    """Directly queries the official YouTube Music Innertube API with the official Songs filter and continuation support."""
+    url = "https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Content-Type": "application/json",
@@ -165,8 +244,8 @@ def _search_ytmusic_innertube(query, limit=25):
         "context": {
             "client": {
                 "clientName": "WEB_REMIX",
-                "clientVersion": "1.20240101.01.00",
-                "hl": "en",
+                "clientVersion": "1.20240918.01.00",
+                "hl": "es",
                 "gl": "US"
             }
         },
@@ -179,87 +258,52 @@ def _search_ytmusic_innertube(query, limit=25):
         res = json.loads(resp.read().decode("utf-8"))
         sections = res.get("contents", {}).get("tabbedSearchResultsRenderer", {}).get("tabs", [{}])[0].get("tabRenderer", {}).get("content", {}).get("sectionListRenderer", {}).get("contents", [])
         results = []
+        continuation_token = None
+
         for sec in sections:
             music_shelf = sec.get("musicShelfRenderer", {})
             contents = music_shelf.get("contents", [])
-            for item in contents:
-                r = item.get("musicResponsiveListItemRenderer", {})
-                flex = r.get("flexColumns", [])
-                if not flex:
-                    continue
-                title_runs = flex[0].get("musicResponsiveListItemFlexColumnRenderer", {}).get("text", {}).get("runs", [])
-                title = title_runs[0].get("text", "") if title_runs else ""
-                nav = title_runs[0].get("navigationEndpoint", {}).get("watchEndpoint", {}) if title_runs else {}
-                video_id = nav.get("videoId", "")
-                if not video_id:
-                    overlay = r.get("overlay", {}).get("musicItemThumbnailOverlayRenderer", {}).get("content", {}).get("musicPlayButtonRenderer", {}).get("playNavigationEndpoint", {}).get("watchEndpoint", {})
-                    video_id = overlay.get("videoId", "")
-                if not video_id:
-                    continue
+            _parse_innertube_music_items(contents, results, limit)
+            continuations = music_shelf.get("continuations", [])
+            if continuations:
+                continuation_token = continuations[0].get("nextContinuationData", {}).get("continuation")
 
-                info_runs = flex[1].get("musicResponsiveListItemFlexColumnRenderer", {}).get("text", {}).get("runs", []) if len(flex) > 1 else []
-                parts = []
-                curr = []
-                for x in info_runs:
-                    t = x.get("text", "")
-                    if t == " • ":
-                        if curr:
-                            parts.append("".join(curr))
-                            curr = []
-                    else:
-                        curr.append(t)
-                if curr:
-                    parts.append("".join(curr))
-
-                artist = "Unknown Artist"
-                album_name = None
-                duration_secs = 0
-                if len(parts) >= 3:
-                    artist = parts[0]
-                    album_name = parts[1]
-                    duration_str = parts[2]
-                elif len(parts) == 2:
-                    artist = parts[0]
-                    duration_str = parts[1]
-                elif len(parts) == 1:
-                    artist = parts[0]
-                    duration_str = "0:00"
-                else:
-                    duration_str = "0:00"
-
-                dur_split = duration_str.split(":")
-                if len(dur_split) == 2:
-                    try:
-                        duration_secs = int(dur_split[0]) * 60 + int(dur_split[1])
-                    except:
-                        pass
-                elif len(dur_split) == 3:
-                    try:
-                        duration_secs = int(dur_split[0]) * 3600 + int(dur_split[1]) * 60 + int(dur_split[2])
-                    except:
-                        pass
-
-                thumbs = r.get("thumbnail", {}).get("musicThumbnailRenderer", {}).get("thumbnail", {}).get("thumbnails", [])
-                thumb = _upgrade_thumbnail(thumbs[-1].get("url", "")) if thumbs else ""
-
-                results.append({
-                    "id": video_id,
-                    "title": title,
-                    "artist": artist,
-                    "album": album_name,
-                    "duration": duration_secs,
-                    "thumbnailUrl": thumb,
-                    "coverArt": thumb if thumb else video_id
-                })
-                if len(results) >= limit:
+        pages = 0
+        while len(results) < limit and continuation_token and pages < 6:
+            pages += 1
+            try:
+                cont_url = f"https://music.youtube.com/youtubei/v1/search?continuation={continuation_token}&prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU"
+                cont_data = {
+                    "context": {
+                        "client": {
+                            "clientName": "WEB_REMIX",
+                            "clientVersion": "1.20240918.01.00",
+                            "hl": "es",
+                            "gl": "US"
+                        }
+                    }
+                }
+                cont_req = urllib.request.Request(cont_url, data=json.dumps(cont_data).encode("utf-8"), headers=headers)
+                cont_resp = urllib.request.urlopen(cont_req, timeout=7)
+                cont_res = json.loads(cont_resp.read().decode("utf-8"))
+                shelf_cont = cont_res.get("continuationContents", {}).get("musicShelfContinuation", {})
+                if not shelf_cont:
                     break
-            if len(results) >= limit:
+                cont_contents = shelf_cont.get("contents", [])
+                _parse_innertube_music_items(cont_contents, results, limit)
+                next_conts = shelf_cont.get("continuations", [])
+                if next_conts:
+                    continuation_token = next_conts[0].get("nextContinuationData", {}).get("continuation")
+                else:
+                    continuation_token = None
+            except Exception:
                 break
+
         return results
     except Exception:
         return []
 
-def _search_youtube_video_innertube(query, limit=25):
+def _search_youtube_video_innertube(query, limit=50):
     """Directly queries the official YouTube Innertube API with the Video filter."""
     url = "https://www.youtube.com/youtubei/v1/search?prettyPrint=false"
     headers = {
@@ -272,8 +316,8 @@ def _search_youtube_video_innertube(query, limit=25):
         "context": {
             "client": {
                 "clientName": "WEB",
-                "clientVersion": "2.20240101.01.00",
-                "hl": "en",
+                "clientVersion": "2.20240918.01.00",
+                "hl": "es",
                 "gl": "US"
             }
         },
@@ -333,7 +377,7 @@ def _search_youtube_video_innertube(query, limit=25):
     except Exception:
         return []
 
-def search_dual(query, limit=20):
+def search_dual(query, limit=100):
     """Executes official YouTube Music and YouTube Classic searches concurrently using ultra-fast HTTP."""
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         f_music = executor.submit(_search_ytmusic_innertube, query, limit)
@@ -353,7 +397,7 @@ def search_dual(query, limit=20):
         'youtube': classic_results,
     })
 
-def search(query, limit=25):
+def search(query, limit=100):
     """Searches YouTube for tracks matching query using fast Innertube with yt-dlp fallback."""
     results = _search_ytmusic_innertube(query, limit)
     if not results:

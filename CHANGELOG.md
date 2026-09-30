@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.9] - 2026-09-30
+
+### Added & Changed
+- **Soporte de Empaquetado Nativo MSIX**: Integrado el empaquetado oficial MSIX para Windows 10/11 con instalación limpia mediante el instalador nativo de Microsoft y preparación para la Microsoft Store.
+- **Rediseño Consistente de AppBars**: Estandarización visual de la parte superior de todas las pantallas secundarias (estilo Apple Music con botones circulares de retroceso sutiles, elevación 0 y tipografía consistente).
+- **Gestión de Listas de Reproducción**: Solucionado el problema que impedía eliminar listas de reproducción creadas por el usuario.
+- **Búsqueda Expandida**: Eliminado el límite restrictivo en los resultados de búsqueda de canciones y artistas.
+- **Cast a Televisores y Dispositivos**: Detección de televisores en red local (DLNA/Cast) sin requerir autenticación de cuenta Groovy, manteniendo el aislamiento de Groovy Connect para cuentas de usuario.
+- **Corrección de Márgenes en Windows**: Restaurado el margen y dimensionado correcto al instalar e iniciar en Windows.
+- **Web Oficial**: Añadida tarjeta de descarga MSIX y guía amigable de instalación para navegadores.
+
 ## [1.5.6] - 2026-09-28
 
 ### Added & Changed

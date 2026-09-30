@@ -777,9 +777,9 @@ class YoutubeService {
 
   Future<SearchResult> search(
     String query, {
-    int artistCount = 20,
-    int albumCount = 20,
-    int songCount = 50,
+    int artistCount = 30,
+    int albumCount = 30,
+    int songCount = 100,
   }) async {
     try {
       // 1. Concurrently query songs, official albums, and official artists via YouTube Music Innertube

@@ -155,8 +155,98 @@ class YtDlpService {
     return current;
   }
 
+  void _parseInnertubeMusicItems(List<dynamic> contents, List<Map<String, dynamic>> results, int limit) {
+    for (final item in contents) {
+      final r = item['musicResponsiveListItemRenderer'];
+      if (r == null) continue;
+      final flex = r['flexColumns'] as List<dynamic>? ?? [];
+      if (flex.isEmpty) continue;
+
+      final titleRuns = (flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [];
+      final title = titleRuns.isNotEmpty ? (titleRuns[0]['text'] as String? ?? '') : '';
+
+      final firstRun = titleRuns.isNotEmpty && titleRuns[0] is Map ? (titleRuns[0] as Map) : null;
+      String? videoId;
+      if (firstRun != null && firstRun['navigationEndpoint'] is Map) {
+        final ep = firstRun['navigationEndpoint'] as Map;
+        if (ep['watchEndpoint'] is Map) {
+          videoId = ep['watchEndpoint']['videoId']?.toString();
+        }
+      }
+      if (videoId == null || videoId.isEmpty) {
+        final overlay = _dig(r, ['overlay', 'musicItemThumbnailOverlayRenderer', 'content', 'musicPlayButtonRenderer', 'playNavigationEndpoint', 'watchEndpoint']);
+        if (overlay is Map) {
+          videoId = overlay['videoId']?.toString();
+        }
+      }
+      if (videoId == null || videoId.isEmpty) continue;
+
+      // Avoid duplicate song IDs in the same search result
+      if (results.any((x) => x['id'] == videoId)) continue;
+
+      final infoRuns = flex.length > 1
+          ? ((flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [])
+          : <dynamic>[];
+
+      final parts = <String>[];
+      var curr = <String>[];
+      for (final x in infoRuns) {
+        final t = x['text'] as String? ?? '';
+        if (t == ' • ') {
+          if (curr.isNotEmpty) {
+            parts.add(curr.join(''));
+            curr = [];
+          }
+        } else {
+          curr.add(t);
+        }
+      }
+      if (curr.isNotEmpty) parts.add(curr.join(''));
+
+      String artist = 'Unknown Artist';
+      String? albumName;
+      int durationSecs = 0;
+
+      if (parts.length >= 3) {
+        artist = parts[0];
+        albumName = parts[1];
+        final durSplit = parts[2].split(':');
+        if (durSplit.length == 2) {
+          durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
+        } else if (durSplit.length == 3) {
+          durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
+        }
+      } else if (parts.length == 2) {
+        artist = parts[0];
+        final durSplit = parts[1].split(':');
+        if (durSplit.length == 2) {
+          durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
+        } else if (durSplit.length == 3) {
+          durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
+        }
+      } else if (parts.isNotEmpty) {
+        artist = parts[0];
+      }
+
+      final thumbs = (r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
+      final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
+
+      results.add({
+        'id': videoId,
+        'title': title,
+        'artist': artist,
+        'album': albumName,
+        'duration': durationSecs,
+        'thumbnailUrl': thumb,
+        'coverArt': thumb.isNotEmpty ? thumb : videoId,
+      });
+
+      if (results.length >= limit) break;
+    }
+  }
+
   /// Queries official YouTube Music Innertube API (Songs filter) directly in pure Dart.
-  Future<List<Map<String, dynamic>>> searchYtMusicInnertube(String query, {int limit = 50}) async {
+  Future<List<Map<String, dynamic>>> searchYtMusicInnertube(String query, {int limit = 100}) async {
     try {
       final req = await _innertubeHttpClient.postUrl(
         Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
@@ -184,97 +274,66 @@ class YtDlpService {
       final res = jsonDecode(jsonStr) as Map<String, dynamic>;
       final sections = res['contents']?['tabbedSearchResultsRenderer']?['tabs']?[0]?['tabRenderer']?['content']?['sectionListRenderer']?['contents'] as List<dynamic>? ?? [];
       final results = <Map<String, dynamic>>[];
+      String? continuationToken;
 
       for (final sec in sections) {
         final musicShelf = sec['musicShelfRenderer'];
         if (musicShelf == null) continue;
         final contents = musicShelf['contents'] as List<dynamic>? ?? [];
-        for (final item in contents) {
-          final r = item['musicResponsiveListItemRenderer'];
-          if (r == null) continue;
-          final flex = r['flexColumns'] as List<dynamic>? ?? [];
-          if (flex.isEmpty) continue;
+        _parseInnertubeMusicItems(contents, results, limit);
 
-          final titleRuns = (flex[0]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [];
-          final title = titleRuns.isNotEmpty ? (titleRuns[0]['text'] as String? ?? '') : '';
-
-          final firstRun = titleRuns.isNotEmpty && titleRuns[0] is Map ? (titleRuns[0] as Map) : null;
-          String? videoId;
-          if (firstRun != null && firstRun['navigationEndpoint'] is Map) {
-            final ep = firstRun['navigationEndpoint'] as Map;
-            if (ep['watchEndpoint'] is Map) {
-              videoId = ep['watchEndpoint']['videoId']?.toString();
-            }
+        final continuations = musicShelf['continuations'] as List<dynamic>? ?? [];
+        if (continuations.isNotEmpty) {
+          final nextData = continuations[0]['nextContinuationData'];
+          if (nextData is Map) {
+            continuationToken = nextData['continuation'] as String?;
           }
-          if (videoId == null || videoId.isEmpty) {
-            final overlay = _dig(r, ['overlay', 'musicItemThumbnailOverlayRenderer', 'content', 'musicPlayButtonRenderer', 'playNavigationEndpoint', 'watchEndpoint']);
-            if (overlay is Map) {
-              videoId = overlay['videoId']?.toString();
-            }
-          }
-          if (videoId == null || videoId.isEmpty) continue;
-
-          final infoRuns = flex.length > 1
-              ? ((flex[1]['musicResponsiveListItemFlexColumnRenderer']?['text']?['runs'] as List<dynamic>?) ?? [])
-              : <dynamic>[];
-
-          final parts = <String>[];
-          var curr = <String>[];
-          for (final x in infoRuns) {
-            final t = x['text'] as String? ?? '';
-            if (t == ' • ') {
-              if (curr.isNotEmpty) {
-                parts.add(curr.join(''));
-                curr = [];
-              }
-            } else {
-              curr.add(t);
-            }
-          }
-          if (curr.isNotEmpty) parts.add(curr.join(''));
-
-          String artist = 'Unknown Artist';
-          String? albumName;
-          int durationSecs = 0;
-
-          if (parts.length >= 3) {
-            artist = parts[0];
-            albumName = parts[1];
-            final durSplit = parts[2].split(':');
-            if (durSplit.length == 2) {
-              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
-            } else if (durSplit.length == 3) {
-              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
-            }
-          } else if (parts.length == 2) {
-            artist = parts[0];
-            final durSplit = parts[1].split(':');
-            if (durSplit.length == 2) {
-              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 60 + (int.tryParse(durSplit[1]) ?? 0);
-            } else if (durSplit.length == 3) {
-              durationSecs = (int.tryParse(durSplit[0]) ?? 0) * 3600 + (int.tryParse(durSplit[1]) ?? 0) * 60 + (int.tryParse(durSplit[2]) ?? 0);
-            }
-          } else if (parts.isNotEmpty) {
-            artist = parts[0];
-          }
-
-          final thumbs = (r['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
-          final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
-
-          results.add({
-            'id': videoId,
-            'title': title,
-            'artist': artist,
-            'album': albumName,
-            'duration': durationSecs,
-            'thumbnailUrl': thumb,
-            'coverArt': thumb.isNotEmpty ? thumb : videoId,
-          });
-
-          if (results.length >= limit) break;
         }
-        if (results.length >= limit) break;
       }
+
+      // Fetch subsequent pages via continuation to return rich, unconstrained song lists
+      int pages = 0;
+      while (results.length < limit && continuationToken != null && pages < 6) {
+        pages++;
+        try {
+          final contReq = await _innertubeHttpClient.postUrl(
+            Uri.parse('https://music.youtube.com/youtubei/v1/search?continuation=$continuationToken&prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
+          );
+          _innertubeHeaders.forEach((k, v) => contReq.headers.set(k, v));
+          contReq.write(jsonEncode({
+            'context': {
+              'client': {
+                'clientName': 'WEB_REMIX',
+                'clientVersion': '1.20240918.01.00',
+                'hl': 'es',
+                'gl': 'US',
+              }
+            },
+          }));
+          final contResp = await contReq.close();
+          if (contResp.statusCode != 200) {
+            await contResp.drain<void>();
+            break;
+          }
+          final contJsonStr = await contResp.transform(utf8.decoder).join();
+          final contRes = jsonDecode(contJsonStr) as Map<String, dynamic>;
+          final shelfCont = contRes['continuationContents']?['musicShelfContinuation'];
+          if (shelfCont == null) break;
+          final contContents = shelfCont['contents'] as List<dynamic>? ?? [];
+          _parseInnertubeMusicItems(contContents, results, limit);
+
+          final nextConts = shelfCont['continuations'] as List<dynamic>? ?? [];
+          if (nextConts.isNotEmpty) {
+            final nextData = nextConts[0]['nextContinuationData'];
+            continuationToken = nextData is Map ? nextData['continuation'] as String? : null;
+          } else {
+            continuationToken = null;
+          }
+        } catch (_) {
+          break;
+        }
+      }
+
       return results;
     } catch (e) {
       debugPrint('[yt-dlp] searchYtMusicInnertube error: $e');
@@ -1076,7 +1135,7 @@ class YtDlpService {
 
   /// Internal helper: search via youtube_explode_dart, works even when
   /// Innertube is blocked on server/VPS IPs (common on Linux deployments).
-  Future<List<Map<String, dynamic>>> _searchYoutubeExplodeFallback(String query, {int limit = 20}) async {
+  Future<List<Map<String, dynamic>>> _searchYoutubeExplodeFallback(String query, {int limit = 100}) async {
     try {
       final searchResults = await _fallbackClient.search
           .search(query, filter: yt.TypeFilters.video)
@@ -1106,7 +1165,7 @@ class YtDlpService {
   }
 
   /// Dual search: returns a map with 'music' and 'youtube' lists of tracks.
-  Future<Map<String, List<Map<String, dynamic>>>> searchDual(String query, {int limit = 50}) async {
+  Future<Map<String, List<Map<String, dynamic>>>> searchDual(String query, {int limit = 100}) async {
     final cleanQuery = query.trim().toLowerCase();
     if (_dualSearchCache.containsKey(cleanQuery)) {
       return _dualSearchCache[cleanQuery]!;
@@ -1184,7 +1243,7 @@ class YtDlpService {
   }
 
   /// Searches YouTube / YouTube Music for tracks matching [query].
-  Future<List<Map<String, dynamic>>> search(String query, {int limit = 50}) async {
+  Future<List<Map<String, dynamic>>> search(String query, {int limit = 100}) async {
     final cleanQuery = query.trim().toLowerCase();
     if (_searchCache.containsKey(cleanQuery)) {
       return _searchCache[cleanQuery]!;

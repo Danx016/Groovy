@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
+import '../theme/app_theme.dart';
 import '../services/youtube_service.dart';
 import '../providers/library_provider.dart';
 import '../utils/navigation_helper.dart';
@@ -58,9 +59,39 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       appBar: AppBar(
-        title: const Text('Favoritos'),
+        backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        toolbarHeight: 64,
+        leading: IconButton(
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.arrow_back_rounded,
+              color: isDark ? Colors.white : Colors.black,
+              size: 20,
+            ),
+          ),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Text(
+          'Favoritos',
+          style: TextStyle(
+            fontSize: 22,
+            fontWeight: FontWeight.bold,
+            letterSpacing: -0.4,
+            color: isDark ? Colors.white : Colors.black,
+          ),
+        ),
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(48),
           child: Container(

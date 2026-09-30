@@ -167,13 +167,15 @@ void main() async {
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     await windowManager.ensureInitialized();
     const windowOptions = WindowOptions(
-      size: Size(1280, 800),
+      size: Size(1160, 680),
       minimumSize: Size(800, 500),
       center: true,
       title: 'Groovy',
     );
     await windowManager.waitUntilReadyToShow(windowOptions, () async {
       await windowManager.setTitle('Groovy');
+      await windowManager.setSize(const Size(1160, 680));
+      await windowManager.center();
       await windowManager.show();
       await windowManager.focus();
       if (Platform.isWindows) {

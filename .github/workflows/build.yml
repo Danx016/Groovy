@@ -206,12 +206,22 @@ jobs:
         run: |
           Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "Groovy-Windows-Portable.zip" -Force
 
+      - name: Build MSIX Package
+        run: |
+          dart run msix:create --windows-build false
+          if (Test-Path "build\windows\x64\runner\Release\groovy.msix") {
+            Copy-Item -Path "build\windows\x64\runner\Release\groovy.msix" -Destination "Groovy.msix" -Force
+          }
+
       - name: Prepare Windows Package
         run: |
           New-Item -ItemType Directory -Force -Path windows_package
           Copy-Item -Path "build\windows\x64\runner\Release\*" -Destination "windows_package\" -Recurse -Force
           Copy-Item -Path "Groovy-Setup.exe" -Destination "windows_package\" -Force
           Copy-Item -Path "Groovy-Windows-Portable.zip" -Destination "windows_package\" -Force
+          if (Test-Path "Groovy.msix") {
+            Copy-Item -Path "Groovy.msix" -Destination "windows_package\" -Force
+          }
 
       - name: Upload Windows Build
         uses: actions/upload-artifact@v4
@@ -559,6 +569,7 @@ jobs:
           - \`Groovy.apk\` — APK universal para cualquier dispositivo Android
 
           **🪟 Windows:**
+          - \`Groovy.msix\` — Paquete nativo Windows 10/11 (Recomendado)
           - \`Groovy-Setup.exe\` — Instalador con asistente para Windows
           - \`Groovy-Windows-Portable.zip\` — Versión portable, descomprimir y usar
 
@@ -585,6 +596,7 @@ jobs:
           fail_on_unmatched_files: false
           files: |
             artifacts/android/*.apk
+            artifacts/windows/Groovy.msix
             artifacts/windows/Groovy-Setup.exe
             artifacts/windows/Groovy-Windows-Portable.zip
             artifacts/linux/*.AppImage

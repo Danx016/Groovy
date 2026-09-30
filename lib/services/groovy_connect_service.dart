@@ -18,6 +18,8 @@ class GroovyRemoteDevice {
   final String host;
   final int port;
   final bool isLocalLan;
+  final int? userId;
+  final String? userEmail;
   final Song? currentSong;
   final bool isPlaying;
   final double? volume;
@@ -31,6 +33,8 @@ class GroovyRemoteDevice {
     this.host = '',
     this.port = 42425,
     this.isLocalLan = false,
+    this.userId,
+    this.userEmail,
     this.currentSong,
     this.isPlaying = false,
     this.volume = 1.0,
@@ -45,6 +49,8 @@ class GroovyRemoteDevice {
     String? host,
     int? port,
     bool? isLocalLan,
+    int? userId,
+    String? userEmail,
     Song? currentSong,
     bool? isPlaying,
     double? volume,
@@ -58,6 +64,8 @@ class GroovyRemoteDevice {
       host: host ?? this.host,
       port: port ?? this.port,
       isLocalLan: isLocalLan ?? this.isLocalLan,
+      userId: userId ?? this.userId,
+      userEmail: userEmail ?? this.userEmail,
       currentSong: currentSong ?? this.currentSong,
       isPlaying: isPlaying ?? this.isPlaying,
       volume: volume ?? this.volume,
@@ -73,6 +81,8 @@ class GroovyRemoteDevice {
     'host': host,
     'port': port,
     'isLocalLan': isLocalLan,
+    'user_id': userId,
+    'user_email': userEmail,
     'isPlaying': isPlaying,
     'volume': volume,
     'song': currentSong?.toJson(),
@@ -81,6 +91,9 @@ class GroovyRemoteDevice {
   factory GroovyRemoteDevice.fromJson(Map<String, dynamic> json, {String? host, int? port}) {
     final resolvedHost = host ?? json['host']?.toString() ?? json['ip_address']?.toString() ?? '';
     final isLan = host != null && host.isNotEmpty;
+    final rawUserId = json['user_id'] ?? json['userId'];
+    final parsedUserId = rawUserId is int ? rawUserId : int.tryParse(rawUserId?.toString() ?? '');
+    final parsedEmail = json['user_email']?.toString() ?? json['userEmail']?.toString() ?? json['email']?.toString();
 
     return GroovyRemoteDevice(
       id: json['device_key']?.toString() ?? json['device_id']?.toString() ?? json['id']?.toString() ?? '',
@@ -90,6 +103,8 @@ class GroovyRemoteDevice {
       host: resolvedHost,
       port: port ?? (json['port'] is int ? json['port'] : int.tryParse(json['port']?.toString() ?? '42425') ?? 42425),
       isLocalLan: isLan,
+      userId: parsedUserId,
+      userEmail: parsedEmail,
       isPlaying: json['isPlaying'] == true || json['is_playing'] == 1 || json['is_playing'] == true,
       currentSong: json['song'] != null
           ? Song.fromJson(json['song'] as Map<String, dynamic>)
@@ -883,6 +898,8 @@ class GroovyConnectService extends ChangeNotifier {
             host: localIpCandidate,
             port: localPortCandidate,
             isLocalLan: false,
+            userId: _cachedUserId,
+            userEmail: _cachedUserEmail,
             isPlaying: isPlaying,
             currentSong: song,
             lastSeen: DateTime.now(),
@@ -891,6 +908,8 @@ class GroovyConnectService extends ChangeNotifier {
           _discoveredDevices[remoteDeviceId] = existing.copyWith(
             name: remoteDeviceName,
             platform: remoteDevicePlatform,
+            userId: _cachedUserId ?? existing.userId,
+            userEmail: _cachedUserEmail ?? existing.userEmail,
             isPlaying: isPlaying,
             currentSong: song,
             lastSeen: DateTime.now(),

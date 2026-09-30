@@ -98,7 +98,17 @@ class LibraryProvider extends ChangeNotifier {
       notifyListeners();
     } else if (_mergeLocalLibrary) {
       // Merge mode - just notify that local library changed
-      // The getters will handle the merging
+      if (_randomSongs.isEmpty && _localMusicService!.songs.isNotEmpty) {
+        _randomSongs = List.from(_localMusicService!.songs.take(50));
+      }
+      if (_recentAlbums.isEmpty && _localMusicService!.albums.isNotEmpty) {
+        _recentAlbums = List.from(_localMusicService!.albums.take(20));
+      }
+      if (_artists.isEmpty && _localMusicService!.artists.isNotEmpty) {
+        _artists = List.from(_localMusicService!.artists.take(20));
+      }
+      _isInitialized = true;
+      _isLoading = false;
       notifyListeners();
     }
   }
@@ -276,6 +286,16 @@ class LibraryProvider extends ChangeNotifier {
         ]);
       } catch (e) {
         debugPrint('Library initialization error: $e');
+      }
+
+      if (_randomSongs.isEmpty && cachedAllSongs.isNotEmpty) {
+        _randomSongs = cachedAllSongs.take(50).toList();
+      }
+      if (_recentAlbums.isEmpty && cachedAllAlbums.isNotEmpty) {
+        _recentAlbums = cachedAllAlbums.take(20).toList();
+      }
+      if (_artists.isEmpty && artists.isNotEmpty) {
+        _artists = artists.take(20).toList();
       }
 
       _isInitialized = true;
@@ -811,14 +831,34 @@ class LibraryProvider extends ChangeNotifier {
   }
 
   Future<void> loadRandomSongs() async {
-    if (_serverOfflineMode) return;
+    if (_serverOfflineMode) {
+      if (_randomSongs.isEmpty && cachedAllSongs.isNotEmpty) {
+        _randomSongs = cachedAllSongs.take(50).toList();
+        notifyListeners();
+      }
+      return;
+    }
     try {
-      _randomSongs = await _youtubeService.getRandomSongs(size: 50);
+      var songs = await _youtubeService.getRandomSongs(size: 50);
+      if (songs.isEmpty) {
+        // Fallback search to ensure initial install / cold start immediately retrieves trending songs
+        final fallbackRes = await _youtubeService.search('grandes exitos canciones mas escuchadas', songCount: 50);
+        songs = fallbackRes.songs;
+      }
+      if (songs.isNotEmpty) {
+        _randomSongs = songs;
+      } else if (cachedAllSongs.isNotEmpty) {
+        _randomSongs = cachedAllSongs.take(50).toList();
+      }
       notifyListeners();
       _audioHandler
           .notifyAutoChildrenChanged([GroovyAudioHandler.mediaIdRecent]);
     } catch (e) {
       debugPrint('Error loading random songs: $e');
+      if (_randomSongs.isEmpty && cachedAllSongs.isNotEmpty) {
+        _randomSongs = cachedAllSongs.take(50).toList();
+        notifyListeners();
+      }
     }
   }
 
@@ -999,14 +1039,18 @@ class LibraryProvider extends ChangeNotifier {
 
   SearchResult searchLocal(String query) => _searchLocal(query);
 
-  Future<SearchResult> search(String query, {bool includeOnline = true}) async {
+  Future<SearchResult> search(
+    String query, {
+    bool includeOnline = true,
+    int songCount = 100,
+  }) async {
     final localResult = _searchLocal(query);
     if (!includeOnline || _localOnlyMode) {
       return localResult;
     }
 
     try {
-      final ytResults = await _youtubeService.search(query, songCount: 50);
+      final ytResults = await _youtubeService.search(query, songCount: songCount);
 
       final existingIds = localResult.songs.map((s) => s.id).toSet();
       final extraSongs = ytResults.songs

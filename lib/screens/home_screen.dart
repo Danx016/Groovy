@@ -147,7 +147,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   return _buildLoadingState(isDesktop, hPad);
                 }
 
-                final allSongs = libraryProvider.randomSongs;
+                final allSongs = libraryProvider.randomSongs.isNotEmpty
+                    ? libraryProvider.randomSongs
+                    : libraryProvider.cachedAllSongs;
                 final key = _computeRandomKey(allSongs);
 
                 if (recommendationService.enabled && key.isNotEmpty) {
@@ -198,6 +200,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 final recentSongs = playerProvider.playbackHistory.isNotEmpty
                     ? playerProvider.playbackHistory
                     : recentSongsFromProfiles;
+
+                final hasAnyContent = recentSongs.isNotEmpty ||
+                    recentAlbums.isNotEmpty ||
+                    personalizedFeed.isNotEmpty ||
+                    mixes.isNotEmpty ||
+                    playlists.isNotEmpty;
+
+                if (!hasAnyContent) {
+                  if (libraryProvider.isLoading) {
+                    return _buildLoadingState(isDesktop, hPad);
+                  }
+                  // Proactively trigger loading if still empty on fresh install
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      libraryProvider.loadRandomSongs();
+                      recommendationService.refreshStudiedRecommendations(force: true);
+                    }
+                  });
+                  return _buildLoadingState(isDesktop, hPad);
+                }
 
                 return Padding(
                   padding: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 0),

@@ -239,11 +239,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       appBar: AppBar(
         backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        toolbarHeight: 64,
         leading: IconButton(
-          icon: const Icon(
-            CupertinoIcons.arrow_left,
-            color: AppTheme.appleMusicRed,
-            size: 24,
+          icon: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.arrow_back_rounded,
+              color: isDark ? Colors.white : Colors.black,
+              size: 20,
+            ),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),

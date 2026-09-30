@@ -213,6 +213,25 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
                               icon: Icons.playlist_play_rounded,
                               label: pl.name,
                               onTap: () => _navigateToPlaylist(pl),
+                              onDelete: () async {
+                                final confirmed = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('¿Eliminar playlist?'),
+                                    content: Text('¿Seguro que deseas eliminar "${pl.name}"?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(ctx, true),
+                                        child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                                if (confirmed == true) {
+                                  await libraryProvider.deletePlaylist(pl.id);
+                                }
+                              },
                             );
                           }).toList(),
                         );
@@ -553,11 +572,13 @@ class _SidebarSubItem extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
 
   const _SidebarSubItem({
     required this.icon,
     required this.label,
     required this.onTap,
+    this.onDelete,
   });
 
   @override
@@ -575,7 +596,7 @@ class _SidebarSubItem extends StatelessWidget {
       child: Container(
         height: 38,
         margin: const EdgeInsets.symmetric(vertical: 1),
-        padding: const EdgeInsets.only(left: 36, right: 12),
+        padding: const EdgeInsets.only(left: 36, right: 8),
         alignment: Alignment.centerLeft,
         child: Row(
           children: [
@@ -593,6 +614,17 @@ class _SidebarSubItem extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
               ),
             ),
+            if (onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.close_rounded, size: 16),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+                splashRadius: 14,
+                tooltip: 'Eliminar playlist',
+                color: isDark ? Colors.white38 : Colors.black38,
+                hoverColor: Colors.redAccent.withValues(alpha: 0.15),
+                onPressed: onDelete,
+              ),
           ],
         ),
       ),

@@ -79,6 +79,11 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
             html_url: GITHUB_RELEASES_PAGE,
             assets: [
               {
+                name: 'Groovy.msix',
+                browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy.msix`,
+                size: 87310394,
+              },
+              {
                 name: 'Groovy-Setup.exe',
                 browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy-Setup.exe`,
                 size: 38709480,
@@ -120,6 +125,12 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
     return releaseInfo.assets.find((a) =>
       a.name.toLowerCase().includes(pattern.toLowerCase())
     );
+  };
+
+  const windowsMsix = getAsset('.msix') || {
+    name: 'Groovy.msix',
+    browser_download_url: `https://github.com/${GITHUB_REPO}/releases/latest/download/Groovy.msix`,
+    size: 87310394,
   };
 
   const windowsExe = getAsset('setup') || getAsset('.exe') || {
@@ -606,24 +617,68 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
             </p>
           </div>
 
+          {/* Windows SmartScreen friendly guidance banner */}
+          <div style={{
+            background: 'rgba(56, 189, 248, 0.08)',
+            border: '1px solid rgba(56, 189, 248, 0.22)',
+            borderRadius: '14px',
+            padding: '16px 20px',
+            marginBottom: '26px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px',
+          }}>
+            <Shield size={24} style={{ color: '#38bdf8', flexShrink: 0 }} />
+            <div style={{ fontSize: '13px', lineHeight: 1.5, color: '#d4d4d8', flex: 1 }}>
+              <span style={{ color: '#ffffff', fontWeight: 600 }}>¿Aviso de descarga en el navegador?</span>{' '}
+              Edge y Chrome pueden mostrar un aviso preventivo para archivos nuevos. Haz clic en los 3 puntos <code style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 5px', borderRadius: '4px' }}>...</code> &gt; <strong>Conservar</strong> &gt; <strong>Conservar de todos modos</strong>. También puedes instalar el paquete nativo <strong>MSIX</strong> o la versión <strong>Portable (.zip)</strong>.
+            </div>
+          </div>
+
           {/* Cards Grid */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '18px', marginBottom: '32px' }}>
             
-            {/* Windows Setup Card */}
-            <div style={{ background: '#141417', borderRadius: '14px', border: userOS === 'windows' ? '1px solid rgba(250, 45, 72, 0.5)' : '1px solid rgba(255,255,255,0.06)', padding: '22px', display: 'flex', flexDirection: 'column' }}>
+            {/* Windows MSIX Card (Recomendado) */}
+            <div style={{ background: '#141417', borderRadius: '14px', border: userOS === 'windows' ? '1px solid rgba(56, 189, 248, 0.5)' : '1px solid rgba(255,255,255,0.06)', padding: '22px', display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <Laptop size={22} style={{ color: '#38bdf8' }} />
-                  <span style={{ fontSize: '16px', fontWeight: 600 }}>Windows Setup</span>
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>Windows MSIX</span>
                 </div>
-                {userOS === 'windows' && (
-                  <span style={{ fontSize: '10px', background: 'rgba(250, 45, 72, 0.15)', color: '#fa2d48', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
-                    Tu sistema
-                  </span>
-                )}
+                <span style={{ fontSize: '10px', background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', padding: '2px 8px', borderRadius: '6px', fontWeight: 600 }}>
+                  Recomendado
+                </span>
               </div>
               <p style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.5, marginBottom: '16px', flex: 1 }}>
-                Instalador con asistente, accesos directos y configuración de usuario segura.
+                Paquete moderno para Windows 10/11 con instalación limpia e integrada en el sistema.
+              </p>
+              <div style={{ fontSize: '11px', color: '#52525b', marginBottom: '14px' }}>
+                <code>Groovy.msix</code> • {formatSize(windowsMsix.size) || '83.2 MB'}
+              </div>
+              <a
+                href={windowsMsix.browser_download_url}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+                  padding: '11px', borderRadius: '8px',
+                  background: '#0284c7', color: '#ffffff',
+                  fontSize: '13px', fontWeight: 600, textDecoration: 'none',
+                }}
+              >
+                <Download size={15} />
+                <span>Descargar .msix ({versionTag})</span>
+              </a>
+            </div>
+
+            {/* Windows Setup Card */}
+            <div style={{ background: '#141417', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.06)', padding: '22px', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <Laptop size={22} style={{ color: '#fa2d48' }} />
+                  <span style={{ fontSize: '16px', fontWeight: 600 }}>Windows Setup</span>
+                </div>
+              </div>
+              <p style={{ fontSize: '13px', color: '#71717a', lineHeight: 1.5, marginBottom: '16px', flex: 1 }}>
+                Instalador clásico (.exe) con asistente paso a paso y accesos directos.
               </p>
               <div style={{ fontSize: '11px', color: '#52525b', marginBottom: '14px' }}>
                 <code>Groovy-Setup.exe</code> • {formatSize(windowsExe.size) || '38.7 MB'}
@@ -633,7 +688,8 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                   padding: '11px', borderRadius: '8px',
-                  background: '#fa2d48', color: '#ffffff',
+                  background: 'rgba(250, 45, 72, 0.15)', color: '#fa2d48',
+                  border: '1px solid rgba(250, 45, 72, 0.3)',
                   fontSize: '13px', fontWeight: 600, textDecoration: 'none',
                 }}
               >

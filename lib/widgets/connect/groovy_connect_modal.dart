@@ -424,21 +424,38 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
     final isGroovyConnected = groovyConnect.isConnected;
     final isRemoteConnected = isCastConnected || isUpnpConnected || isGroovyConnected;
 
-    // Filter out local self-device, Web clients, and deduplicate by unique device ID
+    // Filter out local self-device, Web clients, foreign accounts, and deduplicate by unique device ID
     final Map<String, GroovyRemoteDevice> uniqueDevices = {};
-    for (final dev in groovyConnect.discoveredDevices) {
-      if (dev.id == groovyConnect.localDeviceId) continue;
-      if (dev.platform.toLowerCase() == 'web' || dev.platform.toLowerCase() == 'browser') continue;
+    if (auth.isAuthenticated) {
+      final currentUserId = auth.currentUser?.id;
+      final currentUserEmail = auth.currentUser?.email.toLowerCase().trim();
 
-      final isSamePlatform = dev.platform.toLowerCase() == groovyConnect.localPlatform.toLowerCase();
-      final isSameName = dev.name.toLowerCase() == groovyConnect.localDeviceName.toLowerCase() &&
-          dev.model.toLowerCase() == groovyConnect.localModel.toLowerCase();
-      final isSameIp = groovyConnect.localIp.isNotEmpty && dev.host.isNotEmpty &&
-          dev.host != '127.0.0.1' && dev.host == groovyConnect.localIp;
+      for (final dev in groovyConnect.discoveredDevices) {
+        if (dev.id == groovyConnect.localDeviceId) continue;
+        if (dev.platform.toLowerCase() == 'web' || dev.platform.toLowerCase() == 'browser') continue;
 
-      if (isSamePlatform && isSameName && isSameIp) continue;
+        // Ensure remote Groovy app instance belongs to the authenticated account
+        final bool hasMatchingUserId = currentUserId != null && dev.userId != null && currentUserId == dev.userId;
+        final bool hasMatchingUserEmail = currentUserEmail != null && dev.userEmail != null &&
+            currentUserEmail == dev.userEmail!.toLowerCase().trim();
 
-      uniqueDevices[dev.id] = dev;
+        if (dev.userId != null || dev.userEmail != null) {
+          if (!hasMatchingUserId && !hasMatchingUserEmail) {
+            // Belongs to another account on the same Wi-Fi
+            continue;
+          }
+        }
+
+        final isSamePlatform = dev.platform.toLowerCase() == groovyConnect.localPlatform.toLowerCase();
+        final isSameName = dev.name.toLowerCase() == groovyConnect.localDeviceName.toLowerCase() &&
+            dev.model.toLowerCase() == groovyConnect.localModel.toLowerCase();
+        final isSameIp = groovyConnect.localIp.isNotEmpty && dev.host.isNotEmpty &&
+            dev.host != '127.0.0.1' && dev.host == groovyConnect.localIp;
+
+        if (isSamePlatform && isSameName && isSameIp) continue;
+
+        uniqueDevices[dev.id] = dev;
+      }
     }
     final groovyDevices = uniqueDevices.values.toList();
 

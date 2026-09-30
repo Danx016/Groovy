@@ -15,6 +15,7 @@ groovy-*-setup.exe
 Groovy-Setup*.exe
 *.exe
 *.zip
+*.msix
 .claude/
 /discord_sdk_temp
 # lib/services/analytics_service.dart

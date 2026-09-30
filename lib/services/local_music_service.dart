@@ -47,6 +47,14 @@ class LocalMusicService extends ChangeNotifier {
     '/storage/emulated/0/Music',
     '/storage/emulated/0/Download',
     '/storage/emulated/0/Downloads',
+    '/storage/emulated/0/Audio',
+    '/storage/emulated/0/media',
+    '/storage/emulated/0/Snaptube/Download/SnapTube Audio',
+    '/storage/emulated/0/Telegram/Telegram Audio',
+    '/storage/emulated/0/Documents',
+    '/sdcard/Music',
+    '/sdcard/Download',
+    '/sdcard/Downloads',
   ];
 
   static const String _customScanPathsKey = 'local_custom_scan_paths';
@@ -175,7 +183,9 @@ class LocalMusicService extends ChangeNotifier {
 
   Future<bool> requestPermission() async {
     if (Platform.isAndroid) {
-      if (await Permission.manageExternalStorage.isGranted) {
+      if (await Permission.audio.isGranted ||
+          await Permission.storage.isGranted ||
+          await Permission.manageExternalStorage.isGranted) {
         return true;
       }
 
@@ -365,10 +375,20 @@ class LocalMusicService extends ChangeNotifier {
       return [];
     } else if (Platform.isWindows) {
       final userProfile = Platform.environment['USERPROFILE'] ?? '';
-      return ['$userProfile\\Music', '$userProfile\\Downloads'];
+      return [
+        if (userProfile.isNotEmpty) '$userProfile\\Music',
+        if (userProfile.isNotEmpty) '$userProfile\\Downloads',
+        if (userProfile.isNotEmpty) '$userProfile\\Desktop',
+        if (userProfile.isNotEmpty) '$userProfile\\Documents\\Music',
+        'C:\\Music',
+      ];
     } else if (Platform.isMacOS || Platform.isLinux) {
       final home = Platform.environment['HOME'] ?? '';
-      return ['$home/Music', '$home/Downloads'];
+      return [
+        if (home.isNotEmpty) '$home/Music',
+        if (home.isNotEmpty) '$home/Downloads',
+        if (home.isNotEmpty) '$home/Desktop',
+      ];
     }
     return [];
   }

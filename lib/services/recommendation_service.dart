@@ -101,7 +101,10 @@ class RecommendationService extends ChangeNotifier {
       final query = (targetArtist == 'éxitos top música' || targetArtist.contains('éxitos'))
           ? targetArtist
           : '$targetArtist mix exitos';
-      final res = await yt.search(query, songCount: 20);
+      var res = await yt.search(query, songCount: 20);
+      if (res.songs.isEmpty) {
+        res = await yt.search('top hits canciones mas escuchadas', songCount: 20);
+      }
       if (res.songs.isNotEmpty) {
         _dynamicRecommendations = res.songs;
         notifyListeners();

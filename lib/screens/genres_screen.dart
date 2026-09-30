@@ -53,23 +53,41 @@ class _GenresScreenState extends State<GenresScreen> {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       body: CustomScrollView(
         slivers: [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 120,
-            flexibleSpace: FlexibleSpaceBar(
-              title: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.bottomLeft,
-                child: Text(
-                  l10n.genres,
-                  style: theme.appBarTheme.titleTextStyle?.copyWith(fontSize: 24) ??
-                      const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+            toolbarHeight: 64,
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+            leading: IconButton(
+              icon: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.arrow_back_rounded,
+                  color: isDark ? Colors.white : Colors.black,
+                  size: 20,
                 ),
               ),
-              titlePadding: const EdgeInsets.only(left: 52, right: 20, bottom: 14),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            title: Text(
+              l10n.genres,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.4,
+                color: isDark ? Colors.white : Colors.black,
+              ),
             ),
           ),
           if (_isLoading)

@@ -352,6 +352,41 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
     }
   }
 
+  Future<void> _deletePlaylist() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('¿Eliminar playlist?'),
+        content: Text('¿Seguro que deseas eliminar "${_playlist?.name ?? 'esta playlist'}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Eliminar', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
+      await OfflineService().cancelPlaylistDownload(widget.playlistId);
+      await libraryProvider.deletePlaylist(widget.playlistId);
+      if (mounted) {
+        Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Playlist eliminada'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
+  }
+
   Widget _buildDownloadButton(BuildContext context) {
     if (_allDownloaded) {
       return IconButton(
@@ -656,6 +691,11 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                   onPressed: _toggleSelectMode,
                 ),
                 if (!isOffline) _buildDownloadButton(context),
+                IconButton(
+                  tooltip: 'Eliminar playlist',
+                  icon: const Icon(CupertinoIcons.trash),
+                  onPressed: _deletePlaylist,
+                ),
               ],
             ],
           ),
