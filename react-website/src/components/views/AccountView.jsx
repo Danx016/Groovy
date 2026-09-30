@@ -2,6 +2,7 @@ import React from 'react';
 import { User, Database, Server, ShieldCheck, LogOut, Mail, Calendar, RefreshCw, Heart, ListMusic } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
+import logoImg from '../../assets/logo.png';
 
 const StatCard = ({ label, value, icon }) => (
   <div style={{ background: '#181818', borderRadius: '12px', padding: '16px', border: '0.5px solid #282828', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -28,7 +29,7 @@ export const AccountView = ({ setActiveTab }) => {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', padding: '32px', textAlign: 'center' }}>
         <div style={{ width: '72px', height: '72px', borderRadius: '16px', overflow: 'hidden', marginBottom: '20px' }}>
-          <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <h2 style={{ fontSize: '22px', fontWeight: 700 }}>Mi Cuenta</h2>
         <p style={{ fontSize: '15px', color: '#B3B3B3', marginTop: '8px', maxWidth: '360px' }}>

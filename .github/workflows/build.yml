@@ -208,7 +208,7 @@ jobs:
 
       - name: Build MSIX Package
         run: |
-          dart run msix:create --windows-build false
+          dart run msix:create --build-windows false
           if (Test-Path "build\windows\x64\runner\Release\groovy.msix") {
             Copy-Item -Path "build\windows\x64\runner\Release\groovy.msix" -Destination "Groovy.msix" -Force
           }

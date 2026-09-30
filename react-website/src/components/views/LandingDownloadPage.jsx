@@ -26,6 +26,7 @@ import {
   RefreshCw,
   HelpCircle
 } from 'lucide-react';
+import logoImg from '../../assets/logo.png';
 
 const GITHUB_REPO = 'Danx016/Groovy';
 const GITHUB_API_RELEASE = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
@@ -217,7 +218,7 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
             onClick={onOpenPlayer}
           >
             <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden' }}>
-              <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <span style={{ fontSize: '17px', fontWeight: 700, letterSpacing: '-0.3px', color: '#ffffff' }}>
               Groovy
@@ -924,7 +925,7 @@ export const LandingDownloadPage = ({ onOpenPlayer }) => {
         <div style={{ maxWidth: '1120px', margin: '0 auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <img src="./logo.png" alt="Groovy" style={{ width: '20px', height: '20px', borderRadius: '4px' }} />
+            <img src={logoImg} alt="Groovy" style={{ width: '20px', height: '20px', borderRadius: '4px' }} />
             <span style={{ color: '#a1a1aa', fontWeight: 600 }}>Groovy</span>
             <span>— Reproductor de música libre</span>
           </div>

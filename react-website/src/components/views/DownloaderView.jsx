@@ -5,6 +5,7 @@ import {
   Clock, Eye, CheckCircle2, Film, Music2, ExternalLink, Disc3, Layers
 } from "lucide-react";
 import { downloadApi } from "../../services/api";
+import logoImg from "../../assets/logo.png";
 
 // Groovy Light + Red
 const R   = "#FA243C";   // Groovy red accent
@@ -256,7 +257,7 @@ export function DownloaderView({ onBack }) {
 
       {/* NAV */}
       <nav style={{ background:WH, borderBottom:`1px solid ${BOR}`, boxShadow:"0 1px 4px rgba(0,0,0,0.05)", padding:"0 28px", height:"54px", display:"flex", alignItems:"center", gap:"10px" }}>
-        <img src="/logo.png" alt="Groovy" style={{ width:"30px", height:"30px", borderRadius:"8px" }} />
+        <img src={logoImg} alt="Groovy" style={{ width:"30px", height:"30px", borderRadius:"8px" }} />
         <span style={{ fontWeight:700, fontSize:"15px", color:TX }}>Groovy</span>
       </nav>
 

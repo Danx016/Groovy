@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { adminApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import logoImg from '../../assets/logo.png';
 
 export const AdminPortal = ({ onBackToPlayer }) => {
   const { user: currentUser, isAdmin, isAuthenticated, isLoading: isAuthLoading, login, logout } = useAuth();
@@ -439,7 +440,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       <div style={{ minHeight: '100vh', background: '#000000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '12px', overflow: 'hidden' }}>
-            <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <RefreshCw size={24} style={{ color: '#FA243C', animation: 'spin 1s linear infinite' }} />
         </div>
@@ -472,7 +473,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           boxShadow: '0 16px 40px rgba(0,0,0,0.6)',
         }}>
           <div style={{ width: '64px', height: '64px', borderRadius: '14px', overflow: 'hidden', marginBottom: '20px' }}>
-            <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
 
           <h1 style={{ fontSize: '24px', fontWeight: 700, letterSpacing: '-0.4px', color: '#fff' }}>
@@ -631,7 +632,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
         {/* Brand */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', marginBottom: '16px' }}>
           <div style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-            <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

@@ -5,6 +5,13 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-09-30
+
+### Added & Changed
+- **Actualización de Logo en todas las plataformas web**: El nuevo logo de Groovy ahora se sirve como asset empaquetado por Vite con hash de cache-busting, garantizando que todos los navegadores carguen la imagen actualizada sin depender del caché del navegador.
+- **Fix MSIX Build**: Corregido el argumento CLI `--windows-build` → `--build-windows` para el paquete `msix:create` en el workflow de GitHub Actions y en el script local `build_msix.ps1`.
+- **Logo importado como módulo**: Todos los componentes React (PublicSite, Header, Sidebar, AuthModal, AdminPortal, LandingDownloadPage, AccountView, DownloaderView, SettingsView) ahora importan el logo directamente desde `assets/logo.png` via bundler en lugar de rutas estáticas.
+
 ## [1.5.9] - 2026-09-30
 
 ### Added & Changed

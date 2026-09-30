@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { authApi } from '../../services/api';
+import logoImg from '../../assets/logo.png';
 
 const featureGroups = [
   { icon: Zap, title: 'Rápido y multiplataforma', text: 'Una experiencia ligera para Windows, Android, macOS, Linux, iOS y web.' },
@@ -152,7 +153,7 @@ export function PublicSite({ onOpenDownloads, onOpenDownloader, onOpenAdmin }) {
     <div className="public-site">
       <header className="public-header">
         <a className="brand" href="#inicio" onClick={() => setMobileMenu(false)}>
-          <img className="brand-mark" src="/logo.png" alt="Groovy" /><span>Groovy</span>
+          <img className="brand-mark" src={logoImg} alt="Groovy" /><span>Groovy</span>
         </a>
         <button className="mobile-menu-button" onClick={() => setMobileMenu(!mobileMenu)} aria-label="Abrir menú">
           {mobileMenu ? <X size={22} /> : <Menu size={22} />}
@@ -207,7 +208,7 @@ export function PublicSite({ onOpenDownloads, onOpenDownloader, onOpenAdmin }) {
             <div className="panel-glow" />
             <div className="hero-card">
               <div className="hero-card-top"><span className="status-dot" /> Groovy Cloud <span>En línea</span></div>
-              <div className="hero-card-icon"><img src="/logo.png" alt="" /></div>
+              <div className="hero-card-icon"><img src={logoImg} alt="" /></div>
               <h3>Tu experiencia,<br /><strong>siempre sincronizada.</strong></h3>
               <p>Inicia sesión para administrar tu cuenta y mantener todo bajo control.</p>
               <button onClick={() => isAuthenticated ? openAccount() : openAuth('register')}>{isAuthenticated ? 'Ver mi cuenta' : 'Crear una cuenta'} <ArrowRight size={16} /></button>
@@ -238,7 +239,7 @@ export function PublicSite({ onOpenDownloads, onOpenDownloader, onOpenAdmin }) {
         <section className="security-section" id="seguridad"><ShieldCheck size={28} /><div><h2>Diseñado pensando en tu privacidad.</h2><p>Tus credenciales se procesan mediante el backend seguro de Groovy y las funciones administrativas están protegidas por permisos.</p></div></section>
       </main>
 
-      <footer className="public-footer"><div className="brand"><img className="brand-mark" src="/logo.png" alt="Groovy" /><span>Groovy</span></div><p>Tu música. Tu cuenta. Tu experiencia.</p><button onClick={onOpenDownloads}>Descargas</button></footer>
+      <footer className="public-footer"><div className="brand"><img className="brand-mark" src={logoImg} alt="Groovy" /><span>Groovy</span></div><p>Tu música. Tu cuenta. Tu experiencia.</p><button onClick={onOpenDownloads}>Descargas</button></footer>
 
       {showAuth && <Modal onClose={() => setShowAuth(false)} title={authMode === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta'} subtitle={authMode === 'login' ? 'Ingresa a tu cuenta de Groovy' : 'Empieza a gestionar tu experiencia Groovy.'}><form className="site-form" onSubmit={submitAuth}>{authMode === 'register' && <label>Nombre<input required value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Tu nombre" /></label>}<label>Correo electrónico<input required type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="tu@correo.com" /></label><label>Contraseña<input required minLength={6} type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder="Mínimo 6 caracteres" /></label>{error && <p className="form-error">{error}</p>}<button className="primary-action full" disabled={busy}>{busy ? 'Procesando...' : authMode === 'login' ? 'Iniciar sesión' : 'Crear cuenta'} <ArrowRight size={17} /></button>{authMode === 'login' && googleClientId && <div className="google-auth-section"><div className="auth-divider"><span>o continúa con</span></div><div id="google-sign-in" className="google-sign-in" /></div>}<button type="button" className="form-switch" onClick={() => { setAuthMode(authMode === 'login' ? 'register' : 'login'); setError(''); }}>{authMode === 'login' ? '¿Aún no tienes cuenta? Regístrate gratis' : 'Ya tengo una cuenta'}</button></form></Modal>}
       {showAccount && <div className="account-backdrop"><section className="account-page">{showEditProfile ? <EditProfilePage profileName={profileName} setProfileName={setProfileName} profileAvatar={profileAvatar} selectAvatar={selectAvatar} error={error} busy={busy} saveProfile={saveProfile} onBack={() => setShowEditProfile(false)} /> : <><button className="account-back" onClick={() => setShowAccount(false)}><ArrowRight size={24} /> <span>Cuenta</span></button><div className="account-profile-row"><div className="avatar-preview account-avatar-large">{profileAvatar ? <img src={profileAvatar} alt="Foto de perfil" /> : <UserRound size={34} />}</div><div><h2>{profileName}</h2><p>Tu nombre y foto serán visibles para los colaboradores de las playlists y de las sesiones de escucha conjunta.</p></div><button type="button" className="account-edit" onClick={() => setShowEditProfile(true)}>Editar</button></div><button type="button" className="account-config-row" onClick={() => setShowEditProfile(true)}><span><strong>Configura tu perfil</strong><small>Configura tu perfil para compartir tu música y ver lo que están escuchando tus amigos.</small></span><ArrowRight size={19} /></button><div className="account-logout"><button type="button" className="account-link accent" onClick={() => { logout(); setShowAccount(false); }}><LogOut size={16} /> Cerrar sesión</button><p>{user.email}</p></div></>}</section></div>}
@@ -247,7 +248,7 @@ export function PublicSite({ onOpenDownloads, onOpenDownloader, onOpenAdmin }) {
 }
 
 function Modal({ onClose, title, subtitle, children }) {
-  return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="site-modal"><button className="modal-close" onClick={onClose}><X size={19} /></button><div className="modal-heading"><img className="brand-mark" src="/logo.png" alt="Groovy" /><h2>{title}</h2><p>{subtitle}</p></div>{children}</div></div>;
+  return <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}><div className="site-modal"><button className="modal-close" onClick={onClose}><X size={19} /></button><div className="modal-heading"><img className="brand-mark" src={logoImg} alt="Groovy" /><h2>{title}</h2><p>{subtitle}</p></div>{children}</div></div>;
 }
 
 function EditProfilePage({ profileName, setProfileName, profileAvatar, selectAvatar, error, busy, saveProfile, onBack }) {

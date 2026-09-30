@@ -3,6 +3,7 @@ import {
   Volume2, Sliders, Database, Info, Trash2, Check,
   Moon, Sparkles, Activity, ShieldCheck, Cpu, HardDrive
 } from 'lucide-react';
+import logoImg from '../../assets/logo.png';
 
 const QUALITIES = [
   { id: 'normal', label: 'Normal', rate: '128 kbps', desc: 'Ahorro de datos' },
@@ -271,10 +272,10 @@ export const SettingsView = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <div style={{ background: '#131418', borderRadius: '14px', border: '1px solid #222', padding: '24px', textAlign: 'center' }}>
             <div style={{ width: '64px', height: '64px', borderRadius: '14px', overflow: 'hidden', margin: '0 auto 16px' }}>
-              <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#fff', margin: '0 0 4px' }}>Groovy Cloud Music</h2>
-            <p style={{ fontSize: '13px', color: '#8E8E93', margin: '0 0 16px' }}>Versión Oficial v1.4.2</p>
+            <p style={{ fontSize: '13px', color: '#8E8E93', margin: '0 0 16px' }}>Versión Oficial v1.6.0</p>
             <p style={{ fontSize: '13px', color: '#aaa', maxWidth: '400px', margin: '0 auto', lineHeight: 1.5 }}>
               Reproductor musical en la nube con soporte multiplataforma para Windows, Android y Web. Desarrollado con pasión.
             </p>

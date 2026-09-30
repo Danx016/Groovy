@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { X, Mail, Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import logoImg from '../../assets/logo.png';
 
 export const AuthModal = () => {
   const { isAuthModalOpen, closeAuthModal, login, register, authError, setAuthError } = useAuth();
@@ -81,7 +82,7 @@ export const AuthModal = () => {
               width: '60px', height: '60px', borderRadius: '14px', overflow: 'hidden',
               boxShadow: '0 4px 16px rgba(0,0,0,0.5)'
             }}>
-              <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             </div>
             <div style={{ textAlign: 'center' }}>
               <h2 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px', color: '#fff' }}>Groovy</h2>

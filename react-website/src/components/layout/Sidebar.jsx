@@ -7,6 +7,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLibrary } from '../../context/LibraryContext';
 import { usePlayer } from '../../context/PlayerContext';
+import logoImg from '../../assets/logo.png';
 
 export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
   const { user, isAuthenticated, openAuthModal } = useAuth();
@@ -51,7 +52,7 @@ export const Sidebar = ({ activeTab, setActiveTab, onOpenCreatePlaylist }) => {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
         }}>
-          <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
 
         {!isCollapsed && (

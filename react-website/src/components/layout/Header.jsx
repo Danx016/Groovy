@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search, Library, User, Settings, Download } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import logoImg from '../../assets/logo.png';
 
 export const Header = ({ onSearchClick, activeTab, setActiveTab }) => {
   const { user, isAuthenticated, openAuthModal } = useAuth();
@@ -18,7 +19,7 @@ export const Header = ({ onSearchClick, activeTab, setActiveTab }) => {
       {/* Mobile brand */}
       <div className="mobile-brand" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <div style={{ width: '32px', height: '32px', borderRadius: '8px', overflow: 'hidden' }}>
-          <img src="./logo.png" alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          <img src={logoImg} alt="Groovy" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <span style={{ fontWeight: 700, fontSize: '17px', letterSpacing: '-0.3px' }}>Groovy</span>
       </div>
