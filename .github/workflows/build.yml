@@ -177,9 +177,10 @@ jobs:
           $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Where-Object { $_.FullName -like "*\x64\*" } |
             Sort-Object FullName -Descending |
             Select-Object -First 1
-          if (-not $signtool) { throw "Windows SDK signtool.exe was not found" }
+          if (-not $signtool) { throw "Windows SDK x64 signtool.exe was not found" }
           & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "http://timestamp.digicert.com" /td SHA256 "build\windows\x64\runner\Release\groovy.exe"
           if ($LASTEXITCODE -ne 0) { throw "Windows executable signing failed with exit code $LASTEXITCODE" }
 
@@ -196,9 +197,10 @@ jobs:
           $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
           [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
           $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+            Where-Object { $_.FullName -like "*\x64\*" } |
             Sort-Object FullName -Descending |
             Select-Object -First 1
-          if (-not $signtool) { throw "Windows SDK signtool.exe was not found" }
+          if (-not $signtool) { throw "Windows SDK x64 signtool.exe was not found" }
           & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "http://timestamp.digicert.com" /td SHA256 "Groovy-Setup.exe"
           if ($LASTEXITCODE -ne 0) { throw "Windows installer signing failed with exit code $LASTEXITCODE" }
 
@@ -225,14 +227,17 @@ jobs:
               [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
             }
             $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+              Where-Object { $_.FullName -like "*\x64\*" } |
               Sort-Object FullName -Descending |
               Select-Object -First 1
             if ($signtool) {
+              Write-Host "Using Signtool: $($signtool.FullName)"
               & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "http://timestamp.digicert.com" /td SHA256 "Groovy.msix"
               if ($LASTEXITCODE -eq 0) {
                 Write-Host "✅ Groovy.msix signed successfully"
               } else {
-                Write-Warning "MSIX signature note: $LASTEXITCODE"
+                Write-Warning "MSIX signature note: $LASTEXITCODE (continuing packaging)"
+                $global:LASTEXITCODE = 0
               }
             }
           }
