@@ -95,10 +95,16 @@ class GoogleAuthService {
   Future<GoogleUserInfo?> _signInDesktop() async {
     HttpServer? server;
     try {
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort);
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort, shared: true);
     } catch (e) {
-      debugPrint('[GoogleAuth] Could not bind port $loopbackPort: $e');
-      throw Exception('El puerto local de autenticación está ocupado. Intenta de nuevo.');
+      debugPrint('[GoogleAuth] Initial bind error on port $loopbackPort: $e');
+      try {
+        await Future.delayed(const Duration(milliseconds: 350));
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort, shared: true);
+      } catch (e2) {
+        debugPrint('[GoogleAuth] Could not bind port $loopbackPort on retry: $e2');
+        throw Exception('El puerto local de autenticación ($loopbackPort) está ocupado. Intenta de nuevo.');
+      }
     }
 
     final completer = Completer<String?>();
@@ -374,12 +380,12 @@ class GoogleAuthService {
     if (!launched) {
       await sub.cancel();
       await server.close(force: true);
-      throw Exception('No se pudo abrir el navegador web para iniciar sesiÃ³n.');
+      throw Exception('No se pudo abrir el navegador web para iniciar sesión.');
     }
 
     try {
-      // Timeout after 2 minutes if user abandons browser
-      final code = await completer.future.timeout(const Duration(minutes: 2));
+      // Timeout after 3 minutes if user takes time with 2FA/browser
+      final code = await completer.future.timeout(const Duration(minutes: 3));
       await sub.cancel();
       await server.close(force: true);
 
@@ -396,24 +402,24 @@ class GoogleAuthService {
           'redirect_uri': loopbackRedirectUri,
           'grant_type': 'authorization_code',
         },
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       if (tokenRes.statusCode != 200) {
         debugPrint('[GoogleAuth] Token exchange failed: ${tokenRes.body}');
-        throw Exception('Error al canjear cÃ³digo de Google (${tokenRes.statusCode})');
+        throw Exception('Error al canjear código de Google (${tokenRes.statusCode})');
       }
 
       final tokenData = jsonDecode(utf8.decode(tokenRes.bodyBytes)) as Map<String, dynamic>;
       final accessToken = tokenData['access_token'] as String?;
       final idToken = tokenData['id_token'] as String?;
 
-      if (accessToken == null) throw Exception('No se recibiÃ³ token de acceso');
+      if (accessToken == null) throw Exception('No se recibió token de acceso de Google');
 
       // Fetch user profile
       final userRes = await http.get(
         Uri.parse('https://www.googleapis.com/oauth2/v3/userinfo'),
         headers: {'Authorization': 'Bearer $accessToken'},
-      ).timeout(const Duration(seconds: 8));
+      ).timeout(const Duration(seconds: 15));
 
       if (userRes.statusCode != 200) {
         throw Exception('Error al obtener perfil de Google');
