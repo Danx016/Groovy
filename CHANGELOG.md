@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.2] - 2026-09-30
+
+### Added & Changed
+- **Autenticación con Google en Windows**: Solucionado el problema de espera infinita en Windows al enlazar el servidor local loopback de OAuth en ambos adaptadores IPv4 e IPv6 (`localhost`), garantizando compatibilidad con todos los navegadores.
+- **Recuperación de Contraseña Completa**: Implementados los endpoints de validación de correo y restablecimiento de contraseña (`/api/auth/reset-password`) en el backend MySQL con fallback de recuperación automática.
+- **Rediseño de Correos de Verificación**: Plantilla HTML premium en tema oscuro con la identidad visual oficial de Groovy, acentos en rojo `#FA243C` y tarjetas de dígitos OTP iluminadas.
+- **Corrección de Codificación UTF-8**: Eliminados todos los caracteres con mojibake en los mensajes y respuestas del servicio API.
+
 ## [1.6.1] - 2026-09-30
 
 ### Added & Changed
