@@ -213,6 +213,9 @@ jobs:
         run: |
           if ($env:WINDOWS_CERTIFICATE_BASE64) {
             $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
+            if (-not (Test-Path $certPath)) {
+              [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+            }
             dart run msix:create --build-windows false `
               --certificate-path $certPath `
               --certificate-password $env:WINDOWS_CERTIFICATE_PASSWORD `
