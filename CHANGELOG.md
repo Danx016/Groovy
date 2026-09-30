@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.1] - 2026-09-30
+
+### Added & Changed
+- **Exclusión de audios locales en Inicio y Mixes**: Los audios locales del equipo (descargas, notas de voz, etc.) ya no se mezclan en las recomendaciones, Selecciones rápidas ni en los álbumes recientes de la pantalla de inicio.
+- **Rediseño Profesional de la Pantalla de Autenticación OAuth**: Nueva interfaz moderna y minimalista con codificación UTF-8 estricta, branding oficial de Groovy y reutilización segura de sockets.
+- **Corrección de Build y Firma MSIX (Windows x64)**: Optimización del flujo de empaquetado y firmado de Windows mediante el uso específico del binario `signtool.exe` x64 del SDK de Windows 10/11.
+- **Unificación de Colores de Marca en Web**: Reemplazados todos los elementos verdes por el rojo corporativo Groovy (`#FA243C`).
+
 ## [1.6.0] - 2026-09-30
 
 ### Added & Changed
