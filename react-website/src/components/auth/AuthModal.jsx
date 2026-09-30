@@ -168,7 +168,7 @@ export const AuthModal = () => {
 
           {/* Cloud status */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759' }} />
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FA243C' }} />
             <span style={{ fontSize: '12px', color: '#B3B3B3' }}>Groovy Cloud • MySQL DB en línea</span>
           </div>
         </motion.div>

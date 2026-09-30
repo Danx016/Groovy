@@ -69,8 +69,8 @@ export const Header = ({ onSearchClick, activeTab, setActiveTab }) => {
           fontSize: '11px', color: '#B3B3B3',
         }} className="desktop-ctrl">
           <div style={{ position: 'relative', width: '8px', height: '8px' }}>
-            <div className="animate-ping" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#34C759', opacity: 0.6 }} />
-            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#34C759' }} />
+            <div className="animate-ping" style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#FA243C', opacity: 0.6 }} />
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: '#FA243C' }} />
           </div>
           <span style={{ fontWeight: 500 }}>MySQL Cloud</span>
         </div>

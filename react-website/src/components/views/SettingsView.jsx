@@ -228,9 +228,9 @@ export const SettingsView = () => {
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '8px',
                 padding: '10px 18px', borderRadius: '10px',
-                background: cacheCleared ? 'rgba(52,199,89,0.15)' : 'rgba(255,59,48,0.12)',
-                border: `1px solid ${cacheCleared ? '#34C759' : 'rgba(255,59,48,0.3)'}`,
-                color: cacheCleared ? '#34C759' : '#FF3B30',
+                background: cacheCleared ? 'rgba(250,36,60,0.15)' : 'rgba(255,59,48,0.12)',
+                border: `1px solid ${cacheCleared ? '#FA243C' : 'rgba(255,59,48,0.3)'}`,
+                color: cacheCleared ? '#FA243C' : '#FF3B30',
                 fontSize: '13px', fontWeight: 700, cursor: 'pointer',
               }}
             >
@@ -256,11 +256,11 @@ export const SettingsView = () => {
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #222' }}>
                 <span style={{ fontSize: '13px', color: '#8E8E93' }}>Base de Datos MySQL</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#34C759' }}>● Conectada (Online)</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#FA243C' }}>● Conectada (Online)</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid #222' }}>
                 <span style={{ fontSize: '13px', color: '#8E8E93' }}>Telemetría en Vivo (Groovy Connect)</span>
-                <span style={{ fontSize: '13px', fontWeight: 700, color: '#34C759' }}>● Activa</span>
+                <span style={{ fontSize: '13px', fontWeight: 700, color: '#FA243C' }}>● Activa</span>
               </div>
             </div>
           </div>

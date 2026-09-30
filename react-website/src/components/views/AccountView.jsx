@@ -88,7 +88,7 @@ export const AccountView = ({ setActiveTab }) => {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <h2 style={{ fontSize: '20px', fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.name || 'Usuario'}</h2>
-              <span style={{ background: 'rgba(52,199,89,0.15)', border: '0.5px solid rgba(52,199,89,0.3)', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: 700, color: '#34C759', whiteSpace: 'nowrap' }}>
+              <span style={{ background: 'rgba(250,36,60,0.15)', border: '0.5px solid rgba(250,36,60,0.3)', borderRadius: '20px', padding: '2px 8px', fontSize: '11px', fontWeight: 700, color: '#FA243C', whiteSpace: 'nowrap' }}>
                 ● Activo
               </span>
               {isAdmin && (
@@ -136,10 +136,10 @@ export const AccountView = ({ setActiveTab }) => {
           </button>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <InfoRow label="Servidor Host:" value="groovyapi.duckdns.org" accent="#34C759" />
+          <InfoRow label="Servidor Host:" value="groovyapi.duckdns.org" accent="#FA243C" />
           <InfoRow label="Motor de BD:" value="MySQL 8.0 Community" />
           <InfoRow label="Puerto API:" value=":4000 → Nginx /api" />
-          <InfoRow label="Estado:" value="● Conectado y Sincronizado" accent="#34C759" />
+          <InfoRow label="Estado:" value="● Conectado y Sincronizado" accent="#FA243C" />
         </div>
       </div>
     </div>

@@ -377,9 +377,9 @@ export const AdminView = () => {
       {actionMessage && (
         <div style={{
           padding: '12px 16px', borderRadius: '10px', marginBottom: '20px',
-          background: actionMessage.type === 'success' ? 'rgba(52,199,89,0.15)' : 'rgba(255,59,48,0.15)',
-          border: `1px solid ${actionMessage.type === 'success' ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
-          color: actionMessage.type === 'success' ? '#34C759' : '#FF453A',
+          background: actionMessage.type === 'success' ? 'rgba(250,36,60,0.15)' : 'rgba(255,59,48,0.15)',
+          border: `1px solid ${actionMessage.type === 'success' ? 'rgba(250,36,60,0.3)' : 'rgba(255,59,48,0.3)'}`,
+          color: actionMessage.type === 'success' ? '#FA243C' : '#FF453A',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <span style={{ fontSize: '14px', fontWeight: 500 }}>{actionMessage.text}</span>
@@ -406,7 +406,7 @@ export const AdminView = () => {
             <Users size={20} style={{ color: '#0A84FF' }} />
           </div>
           <div style={{ fontSize: '28px', fontWeight: 800, color: '#fff' }}>{metrics?.totalUsers ?? users.length}</div>
-          <div style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div style={{ fontSize: '12px', color: '#FA243C', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
             <TrendingUp size={12} /> {metrics?.activeToday ?? 0} activos hoy
           </div>
         </div>
@@ -624,7 +624,7 @@ export const AdminView = () => {
 
                           <span style={{
                             fontSize: '11px', fontWeight: 600,
-                            color: u.isBanned ? '#FF453A' : '#34C759',
+                            color: u.isBanned ? '#FF453A' : '#FA243C',
                             display: 'flex', alignItems: 'center', gap: '4px',
                           }}>
                             {u.isBanned ? <XCircle size={11} /> : <CheckCircle2 size={11} />}
@@ -637,7 +637,7 @@ export const AdminView = () => {
                       <td style={{ padding: '14px 16px' }}>
                         {u.lastLoginIp ? (
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <code style={{ fontSize: '12px', background: '#242426', padding: '3px 7px', borderRadius: '6px', color: '#34C759' }}>
+                            <code style={{ fontSize: '12px', background: '#242426', padding: '3px 7px', borderRadius: '6px', color: '#FA243C' }}>
                               {u.lastLoginIp}
                             </code>
                             <button
@@ -645,7 +645,7 @@ export const AdminView = () => {
                               title="Copiar IP"
                               style={{ background: 'none', border: 'none', color: '#A1A1A6', cursor: 'pointer', padding: '2px' }}
                             >
-                              {copiedIp === u.lastLoginIp ? <Check size={13} color="#34C759" /> : <Copy size={13} />}
+                              {copiedIp === u.lastLoginIp ? <Check size={13} color="#FA243C" /> : <Copy size={13} />}
                             </button>
                           </div>
                         ) : (
@@ -729,9 +729,9 @@ export const AdminView = () => {
                               title={u.isBanned ? 'Reactivar usuario' : 'Suspender usuario'}
                               style={{
                                 padding: '6px', borderRadius: '8px',
-                                background: u.isBanned ? 'rgba(52,199,89,0.15)' : 'rgba(255,59,48,0.15)',
-                                border: `1px solid ${u.isBanned ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
-                                color: u.isBanned ? '#34C759' : '#FF453A',
+                                background: u.isBanned ? 'rgba(250,36,60,0.15)' : 'rgba(255,59,48,0.15)',
+                                border: `1px solid ${u.isBanned ? 'rgba(250,36,60,0.3)' : 'rgba(255,59,48,0.3)'}`,
+                                color: u.isBanned ? '#FA243C' : '#FF453A',
                                 cursor: 'pointer',
                               }}
                             >
@@ -809,7 +809,7 @@ export const AdminView = () => {
 
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                        <code style={{ fontSize: '12px', background: '#242426', padding: '3px 7px', borderRadius: '6px', color: '#34C759', fontWeight: 600 }}>
+                        <code style={{ fontSize: '12px', background: '#242426', padding: '3px 7px', borderRadius: '6px', color: '#FA243C', fontWeight: 600 }}>
                           {s.ip_address}
                         </code>
                         <button
@@ -817,7 +817,7 @@ export const AdminView = () => {
                           title="Copiar IP"
                           style={{ background: 'none', border: 'none', color: '#A1A1A6', cursor: 'pointer', padding: '2px' }}
                         >
-                          {copiedIp === s.ip_address ? <Check size={12} color="#34C759" /> : <Copy size={12} />}
+                          {copiedIp === s.ip_address ? <Check size={12} color="#FA243C" /> : <Copy size={12} />}
                         </button>
                       </div>
                     </td>
@@ -887,7 +887,7 @@ export const AdminView = () => {
                       {song.artist}
                     </p>
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#34C759', background: 'rgba(52,199,89,0.1)', padding: '3px 8px', borderRadius: '12px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: '#FA243C', background: 'rgba(250,36,60,0.1)', padding: '3px 8px', borderRadius: '12px' }}>
                     {song.play_count} plays
                   </span>
                 </div>
@@ -948,13 +948,13 @@ export const AdminView = () => {
               </div>
               <div style={{ background: '#121212', padding: '12px', borderRadius: '10px', border: '1px solid #242424' }}>
                 <span style={{ fontSize: '11px', color: '#8E8E93', textTransform: 'uppercase' }}>Estado</span>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: selectedUserDetail.user.isBanned ? '#FF453A' : '#34C759', marginTop: '2px' }}>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: selectedUserDetail.user.isBanned ? '#FF453A' : '#FA243C', marginTop: '2px' }}>
                   {selectedUserDetail.user.isBanned ? 'Suspendido' : 'Activo'}
                 </p>
               </div>
               <div style={{ background: '#121212', padding: '12px', borderRadius: '10px', border: '1px solid #242424' }}>
                 <span style={{ fontSize: '11px', color: '#8E8E93', textTransform: 'uppercase' }}>Última IP</span>
-                <p style={{ fontSize: '13px', fontWeight: 600, color: '#34C759', marginTop: '2px', fontFamily: 'monospace' }}>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: '#FA243C', marginTop: '2px', fontFamily: 'monospace' }}>
                   {selectedUserDetail.user.lastLoginIp || 'N/A'}
                 </p>
               </div>
@@ -984,7 +984,7 @@ export const AdminView = () => {
                   <tbody>
                     {selectedUserDetail.sessions?.map((s) => (
                       <tr key={s.id} style={{ borderBottom: '1px solid #1C1C1E' }}>
-                        <td style={{ padding: '8px 12px', color: '#34C759', fontFamily: 'monospace' }}>{s.ip_address}</td>
+                        <td style={{ padding: '8px 12px', color: '#FA243C', fontFamily: 'monospace' }}>{s.ip_address}</td>
                         <td style={{ padding: '8px 12px', color: '#fff' }}>{s.device_os}</td>
                         <td style={{ padding: '8px 12px', color: '#A1A1A6' }}>{s.browser}</td>
                         <td style={{ padding: '8px 12px', color: '#8E8E93' }}>{new Date(s.created_at).toLocaleString()}</td>
@@ -1198,15 +1198,15 @@ export const AdminView = () => {
         }}>
           <div style={{
             background: '#181818',
-            border: `1px solid ${userToToggleBan.isBanned ? '#34C759' : '#FF9500'}`,
+            border: `1px solid ${userToToggleBan.isBanned ? '#FA243C' : '#FF9500'}`,
             borderRadius: '20px',
             width: '100%', maxWidth: '440px', padding: '24px', textAlign: 'center',
           }}>
             <div style={{
               width: '56px', height: '56px', borderRadius: '50%',
-              background: userToToggleBan.isBanned ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+              background: userToToggleBan.isBanned ? 'rgba(250,36,60,0.15)' : 'rgba(255,149,0,0.15)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
-              color: userToToggleBan.isBanned ? '#34C759' : '#FF9500',
+              color: userToToggleBan.isBanned ? '#FA243C' : '#FF9500',
             }}>
               {userToToggleBan.isBanned ? <CheckCircle2 size={28} /> : <Ban size={28} />}
             </div>
@@ -1241,7 +1241,7 @@ export const AdminView = () => {
                 disabled={isSubmitting}
                 style={{
                   padding: '10px 22px', borderRadius: '10px',
-                  background: userToToggleBan.isBanned ? '#34C759' : '#FF9500',
+                  background: userToToggleBan.isBanned ? '#FA243C' : '#FF9500',
                   color: '#fff', border: 'none', cursor: 'pointer', fontWeight: 700,
                 }}
               >

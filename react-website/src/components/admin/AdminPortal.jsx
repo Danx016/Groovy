@@ -285,7 +285,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
     const str = `${os} ${browser} ${deviceType}`.toLowerCase();
     if (str.includes('android') || str.includes('phone') || str.includes('mobile')) {
-      return <Smartphone size={16} style={{ color: '#34C759' }} />;
+      return <Smartphone size={16} style={{ color: '#FA243C' }} />;
     }
     if (str.includes('ios') || str.includes('iphone')) {
       return <Smartphone size={16} style={{ color: '#007AFF' }} />;
@@ -317,9 +317,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       return {
         label: 'ACTIVO EN ANDROID',
         icon: '📱',
-        color: '#34C759',
-        bg: 'rgba(52,199,89,0.15)',
-        border: 'rgba(52,199,89,0.3)',
+        color: '#FA243C',
+        bg: 'rgba(250,36,60,0.15)',
+        border: 'rgba(250,36,60,0.3)',
       };
     }
     if (str.includes('ios') || str.includes('iphone') || str.includes('ipad')) {
@@ -669,13 +669,13 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             onMouseLeave={e => { if (activeTab !== 'live') e.currentTarget.style.color = '#B3B3B3'; }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <Radio size={19} style={{ color: '#34C759', flexShrink: 0 }} />
+              <Radio size={19} style={{ color: '#FA243C', flexShrink: 0 }} />
               <span>Usuarios en Línea</span>
             </div>
             {totalOnlineAppCount > 0 ? (
               <span style={{
                 fontSize: '11px', fontWeight: 700, padding: '1px 7px', borderRadius: '10px',
-                background: '#34C759', color: '#000',
+              background: '#FA243C', color: '#fff',
               }}>
                 {totalOnlineAppCount} EN LÍNEA
               </span>
@@ -914,9 +914,9 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           {actionMessage && (
             <div style={{
               padding: '12px 18px', borderRadius: '10px', marginBottom: '24px',
-              background: actionMessage.type === 'success' ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)',
-              border: `0.5px solid ${actionMessage.type === 'success' ? 'rgba(52,199,89,0.3)' : 'rgba(255,59,48,0.3)'}`,
-              color: actionMessage.type === 'success' ? '#34C759' : '#FF3B30',
+              background: actionMessage.type === 'success' ? 'rgba(250,36,60,0.12)' : 'rgba(255,59,48,0.12)',
+              border: `0.5px solid ${actionMessage.type === 'success' ? 'rgba(250,36,60,0.3)' : 'rgba(255,59,48,0.3)'}`,
+              color: actionMessage.type === 'success' ? '#FA243C' : '#FF3B30',
               fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             }}>
               <span>{actionMessage.text}</span>
@@ -952,7 +952,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <div style={{ fontSize: '28px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
                 {metrics?.totalUsers ?? users.length}
               </div>
-              <p style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              <p style={{ fontSize: '12px', color: '#FA243C', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                 ● {metrics?.activeToday ?? 0} activos hoy
               </p>
             </div>
@@ -964,7 +964,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <span style={{ fontSize: '12px', color: '#B3B3B3', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 En Vivo en la App
               </span>
-              <div style={{ fontSize: '28px', fontWeight: 700, color: totalOnlineAppCount > 0 ? '#34C759' : '#fff', marginTop: '6px' }}>
+              <div style={{ fontSize: '28px', fontWeight: 700, color: totalOnlineAppCount > 0 ? '#FA243C' : '#fff', marginTop: '6px' }}>
                 {totalOnlineAppCount}
               </div>
               <p style={{ fontSize: '12px', color: '#B3B3B3', marginTop: '4px' }}>
@@ -982,7 +982,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               <div style={{ fontSize: '24px', fontWeight: 700, color: '#fff', marginTop: '6px' }}>
                 {formatListeningTime(metrics?.totalListenSeconds ?? 0)}
               </div>
-              <p style={{ fontSize: '12px', color: '#34C759', marginTop: '4px', fontWeight: 600 }}>
+              <p style={{ fontSize: '12px', color: '#FA243C', marginTop: '4px', fontWeight: 600 }}>
                 {formatListeningTime(metrics?.totalSongDurationSeconds ?? 0)} en reproducciones registradas
               </p>
             </div>
@@ -1104,7 +1104,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                               <span style={{
                                 position: 'absolute', bottom: '2px', right: '2px',
                                 width: '10px', height: '10px', borderRadius: '50%',
-                                background: '#34C759', border: '2px solid #161616',
+                                background: '#FA243C', border: '2px solid #161616',
                               }} />
                             </div>
                             <div>
@@ -1140,7 +1140,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                                   />
                                 ) : (
                                   <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                    <Music size={24} style={{ color: item.isPlaying ? '#34C759' : '#FF9500' }} />
+                                    <Music size={24} style={{ color: item.isPlaying ? '#FA243C' : '#FF9500' }} />
                                   </div>
                                 )}
                                 <div style={{ minWidth: 0 }}>
@@ -1396,10 +1396,10 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                         padding: '14px 20px',
                         borderBottom: '0.5px solid #202020',
                         transition: 'background 0.15s',
-                        background: isLive ? 'rgba(52,199,89,0.03)' : 'transparent',
+                        background: isLive ? 'rgba(250,36,60,0.03)' : 'transparent',
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = isLive ? 'rgba(52,199,89,0.06)' : '#202020'}
-                      onMouseLeave={e => e.currentTarget.style.background = isLive ? 'rgba(52,199,89,0.03)' : 'transparent'}
+                      onMouseEnter={e => e.currentTarget.style.background = isLive ? 'rgba(250,36,60,0.06)' : '#202020'}
+                      onMouseLeave={e => e.currentTarget.style.background = isLive ? 'rgba(250,36,60,0.03)' : 'transparent'}
                     >
                       {/* User profile & email */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, paddingRight: '12px' }}>
@@ -1429,7 +1429,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                             )}
                             {isLive && (
                               <span style={{
-                                fontSize: '10px', color: '#34C759', background: 'rgba(52,199,89,0.15)',
+                                fontSize: '10px', color: '#FA243C', background: 'rgba(250,36,60,0.15)',
                                 padding: '1px 6px', borderRadius: '4px', fontWeight: 700,
                               }}>
                                 ● En Vivo
@@ -1454,8 +1454,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                             {u.role === 'admin' ? 'Admin' : 'Usuario'}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', color: u.isBanned ? '#FF3B30' : '#34C759' }}>
-                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: u.isBanned ? '#FF3B30' : '#34C759' }} />
+                        <div style={{ fontSize: '12px', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '5px', color: u.isBanned ? '#FF3B30' : '#FA243C' }}>
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: u.isBanned ? '#FF3B30' : '#FA243C' }} />
                           <span>{u.isBanned ? 'Suspendido' : 'Activo'}</span>
                         </div>
                       </div>
@@ -1498,7 +1498,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       {/* Total Songs Listened */}
                       <div>
                         <div style={{ fontSize: '13px', fontWeight: 700, color: '#fff', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                          <Music size={13} style={{ color: '#34C759' }} />
+                          <Music size={13} style={{ color: '#FA243C' }} />
                           <span>{u.stats?.plays ?? u.historyCount ?? 0} {(u.stats?.plays === 1 || u.historyCount === 1) ? 'canción' : 'canciones'}</span>
                         </div>
                         <div style={{ fontSize: '11px', color: '#B3B3B3', display: 'flex', gap: '8px', marginTop: '2px' }}>
@@ -1540,7 +1540,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                             title={u.isBanned ? 'Reactivar acceso' : 'Suspender acceso'}
                             style={{
                               padding: '7px', borderRadius: '8px', background: '#282828',
-                              border: '0.5px solid #404040', color: u.isBanned ? '#34C759' : '#FF9500',
+                              border: '0.5px solid #404040', color: u.isBanned ? '#FA243C' : '#FF9500',
                             }}
                           >
                             <Ban size={13} />
@@ -1713,7 +1713,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       onMouseEnter={e => e.currentTarget.style.color = '#fff'}
                       onMouseLeave={e => e.currentTarget.style.color = '#6B6B6B'}
                     >
-                      {copiedIp === s.ip_address ? <Check size={12} style={{ color: '#34C759' }} /> : <Copy size={12} />}
+                      {copiedIp === s.ip_address ? <Check size={12} style={{ color: '#FA243C' }} /> : <Copy size={12} />}
                     </button>
                   </div>
 
@@ -1752,7 +1752,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   </div>
 
                   {/* Session Duration */}
-                  <div style={{ fontSize: '13px', color: '#34C759', fontWeight: 600 }}>
+                  <div style={{ fontSize: '13px', color: '#FA243C', fontWeight: 600 }}>
                     {formatSessionDuration(s.session_duration_seconds)}
                   </div>
 
@@ -1892,8 +1892,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       {/* Play Count */}
                       <div style={{ textAlign: 'right' }}>
                         <span style={{
-                          fontSize: '12px', fontWeight: 700, color: '#34C759',
-                          background: 'rgba(52,199,89,0.12)', padding: '4px 10px', borderRadius: '12px',
+                          fontSize: '12px', fontWeight: 700, color: '#FA243C',
+                          background: 'rgba(250,36,60,0.12)', padding: '4px 10px', borderRadius: '12px',
                           display: 'inline-block',
                         }}>
                           {song.play_count} {song.play_count === 1 ? 'reproducción' : 'reproducciones'}
@@ -1946,7 +1946,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                     <h2 style={{ fontSize: '22px', fontWeight: 700, letterSpacing: '-0.3px' }}>{selectedUser.user.name}</h2>
                     {selectedUser.livePlayback?.isPlaying && (
                       <span style={{
-                        fontSize: '11px', color: '#34C759', background: 'rgba(52,199,89,0.15)',
+                        fontSize: '11px', color: '#FA243C', background: 'rgba(250,36,60,0.15)',
                         padding: '2px 8px', borderRadius: '6px', fontWeight: 700,
                       }}>
                         ● Escuchando Ahora
@@ -1971,8 +1971,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               .filter(lp => lp?.title)
               .map((lp, idx) => (
                 <div key={idx} style={{
-                  background: lp.isPlaying ? 'linear-gradient(135deg, rgba(52,199,89,0.15), rgba(24,24,24,0.9))' : 'linear-gradient(135deg, rgba(255,149,0,0.12), rgba(24,24,24,0.9))',
-                  border: `1px solid ${lp.isPlaying ? 'rgba(52,199,89,0.4)' : 'rgba(255,149,0,0.4)'}`,
+                  background: lp.isPlaying ? 'linear-gradient(135deg, rgba(250,36,60,0.15), rgba(24,24,24,0.9))' : 'linear-gradient(135deg, rgba(255,149,0,0.12), rgba(24,24,24,0.9))',
+                  border: `1px solid ${lp.isPlaying ? 'rgba(250,36,60,0.4)' : 'rgba(255,149,0,0.4)'}`,
                   borderRadius: '12px',
                   padding: '14px 18px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}>
@@ -1993,11 +1993,11 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       />
                     ) : (
                       <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: '#282828', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        <Music size={20} color={lp.isPlaying ? '#34C759' : '#FF9500'} />
+                        <Music size={20} color={lp.isPlaying ? '#FA243C' : '#FF9500'} />
                       </div>
                     )}
                     <div>
-                      <span style={{ fontSize: '11px', color: lp.isPlaying ? '#34C759' : '#FF9500', fontWeight: 700, textTransform: 'uppercase' }}>
+                      <span style={{ fontSize: '11px', color: lp.isPlaying ? '#FA243C' : '#FF9500', fontWeight: 700, textTransform: 'uppercase' }}>
                         {lp.isPlaying ? '🟢 Reproduciendo en vivo' : '⏸️ En pausa'} en {lp.platform || 'App'} {lp.deviceModel ? `· ${lp.deviceModel}` : ''}
                       </span>
                       <p style={{ fontSize: '15px', fontWeight: 700, color: '#fff' }}>{lp.title}</p>
@@ -2021,7 +2021,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
 
               <div style={{ background: '#282828', padding: '12px 14px', borderRadius: '10px' }}>
                 <span style={{ fontSize: '11px', color: '#B3B3B3', textTransform: 'uppercase', fontWeight: 600 }}>Canciones Escuchadas</span>
-                <p style={{ fontSize: '15px', fontWeight: 700, marginTop: '3px', color: '#34C759' }}>
+                <p style={{ fontSize: '15px', fontWeight: 700, marginTop: '3px', color: '#FA243C' }}>
                   {selectedUser.stats?.plays ?? selectedUser.user?.totalPlays ?? selectedUser.history?.length ?? 0} canciones
                 </p>
               </div>
@@ -2068,7 +2068,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#8E8E93' }}>Proveedor de Red (ISP):</span>
-                    <span style={{ color: '#34C759', fontWeight: 600 }}>
+                    <span style={{ color: '#FA243C', fontWeight: 600 }}>
                       {selectedUser.user.lastIsp || selectedUser.sessions?.[0]?.isp || 'Red Local / ISP'}
                     </span>
                   </div>
@@ -2214,7 +2214,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <span style={{ fontSize: '12px', color: '#34C759', fontWeight: 600 }}>
+                      <span style={{ fontSize: '12px', color: '#FA243C', fontWeight: 600 }}>
                         {formatSessionDuration(s.session_duration_seconds)}
                       </span>
                       <code style={{ fontSize: '12px', background: '#181818', padding: '2px 6px', borderRadius: '4px' }}>
@@ -2462,11 +2462,11 @@ export const AdminPortal = ({ onBackToPlayer }) => {
           }}>
             <div style={{
               width: '52px', height: '52px', borderRadius: '50%',
-              background: userToToggleBan.isBanned ? 'rgba(52,199,89,0.15)' : 'rgba(255,149,0,0.15)',
+              background: userToToggleBan.isBanned ? 'rgba(250,36,60,0.15)' : 'rgba(255,149,0,0.15)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px',
             }}>
               {userToToggleBan.isBanned ? (
-                <CheckCircle2 size={26} style={{ color: '#34C759' }} />
+                <CheckCircle2 size={26} style={{ color: '#FA243C' }} />
               ) : (
                 <Ban size={26} style={{ color: '#FF9500' }} />
               )}
@@ -2506,7 +2506,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 disabled={isSubmitting}
                 style={{
                   padding: '10px 20px', borderRadius: '10px',
-                  background: userToToggleBan.isBanned ? '#34C759' : '#FF9500',
+                  background: userToToggleBan.isBanned ? '#FA243C' : '#FF9500',
                   color: '#fff', fontSize: '13px', fontWeight: 700,
                   cursor: 'pointer', border: 'none',
                 }}

@@ -128,7 +128,7 @@ export const RadioView = () => {
             background: 'rgba(0,0,0,0.35)', backdropFilter: 'blur(10px)',
             padding: '4px 10px', borderRadius: '20px', marginBottom: '10px',
           }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34C759', animation: 'pulse 1.5s infinite' }} />
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#FA243C', animation: 'pulse 1.5s infinite' }} />
             <span style={{ fontSize: '11px', fontWeight: 800, color: '#fff', letterSpacing: '0.04em' }}>EN VIVO AHORA</span>
           </div>
 
@@ -237,8 +237,8 @@ export const RadioView = () => {
               {/* Status Badge */}
               <div style={{
                 padding: '4px 8px', borderRadius: '6px',
-                background: isStPlaying ? 'rgba(52,199,89,0.15)' : '#222',
-                color: isStPlaying ? '#34C759' : '#6B6B6B',
+                background: isStPlaying ? 'rgba(250,36,60,0.15)' : '#222',
+                color: isStPlaying ? '#FA243C' : '#6B6B6B',
                 fontSize: '10px', fontWeight: 800, letterSpacing: '0.04em',
               }}>
                 {isStPlaying ? 'EN VIVO' : 'STREAM'}
