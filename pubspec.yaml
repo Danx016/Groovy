@@ -155,3 +155,4 @@ msix_config:
   logo_path: assets/app_icon_1024.png
   capabilities: internetClient, internetClientServer, privateNetworkClientServer
   execution_alias: groovy
+  sign_msix: false

@@ -42,7 +42,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 3. Create MSIX package
 Write-Host "`n[2/2] Empaquetando en formato nativo MSIX..." -ForegroundColor Yellow
-& dart run msix:create --build-windows false
+& dart run msix:create --build-windows false --sign-msix false
 
 if ($LASTEXITCODE -eq 0 -and (Test-Path "build\windows\x64\runner\Release\groovy.msix")) {
     Copy-Item -Path "build\windows\x64\runner\Release\groovy.msix" -Destination "Groovy.msix" -Force

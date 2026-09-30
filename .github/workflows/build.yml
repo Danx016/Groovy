@@ -207,24 +207,34 @@ jobs:
           Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "Groovy-Windows-Portable.zip" -Force
 
       - name: Build MSIX Package
+        run: |
+          dart run msix:create --build-windows false --sign-msix false
+          if (Test-Path "build\windows\x64\runner\Release\groovy.msix") {
+            Copy-Item -Path "build\windows\x64\runner\Release\groovy.msix" -Destination "Groovy.msix" -Force
+          }
+
+      - name: Sign MSIX Package
+        if: env.WINDOWS_CERTIFICATE_BASE64 != ''
         env:
           WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
-          if ($env:WINDOWS_CERTIFICATE_BASE64) {
+          if (Test-Path "Groovy.msix") {
             $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
             if (-not (Test-Path $certPath)) {
               [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
             }
-            dart run msix:create --build-windows false `
-              --certificate-path $certPath `
-              --certificate-password $env:WINDOWS_CERTIFICATE_PASSWORD `
-              --install-certificate false
-          } else {
-            dart run msix:create --build-windows false --install-certificate false
-          }
-          if (Test-Path "build\windows\x64\runner\Release\groovy.msix") {
-            Copy-Item -Path "build\windows\x64\runner\Release\groovy.msix" -Destination "Groovy.msix" -Force
+            $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Filter signtool.exe -Recurse |
+              Sort-Object FullName -Descending |
+              Select-Object -First 1
+            if ($signtool) {
+              & $signtool.FullName sign /fd SHA256 /f $certPath /p $env:WINDOWS_CERTIFICATE_PASSWORD /tr "http://timestamp.digicert.com" /td SHA256 "Groovy.msix"
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "✅ Groovy.msix signed successfully"
+              } else {
+                Write-Warning "MSIX signature note: $LASTEXITCODE"
+              }
+            }
           }
 
       - name: Prepare Windows Package
