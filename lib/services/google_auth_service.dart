@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -98,7 +98,7 @@ class GoogleAuthService {
       server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort);
     } catch (e) {
       debugPrint('[GoogleAuth] Could not bind port $loopbackPort: $e');
-      throw Exception('El puerto local de autenticaciÃ³n estÃ¡ ocupado. Intenta de nuevo.');
+      throw Exception('El puerto local de autenticación está ocupado. Intenta de nuevo.');
     }
 
     final completer = Completer<String?>();
@@ -110,165 +110,238 @@ class GoogleAuthService {
         final error = uri.queryParameters['error'];
 
         final isSuccess = error == null;
-        final title = isSuccess ? 'Â¡AutenticaciÃ³n Exitosa!' : 'Error de AutenticaciÃ³n';
-        final message = isSuccess
-            ? 'Has iniciado sesiÃ³n con Google en <strong style="color: #FA243C;">Groovy</strong>.<br>Ya puedes cerrar esta ventana y regresar a la aplicaciÃ³n.'
-            : 'No se pudo completar el inicio de sesiÃ³n.<br>CÃ³digo de error: <code>$error</code>';
+        final pageTitle = isSuccess ? 'Autenticación exitosa' : 'Error de autenticación';
 
-        req.response.headers.contentType = ContentType.html;
-        req.response.write('''
-<!DOCTYPE html>
+        req.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
+        req.response.encoding = utf8;
+        req.response.write('''<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Groovy Â· $title</title>
+  <title>Groovy · $pageTitle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      background-color: #0C0D12;
-      background-image: radial-gradient(circle at 50% 40%, rgba(250, 36, 60, 0.15) 0%, rgba(12, 13, 18, 0) 70%);
-      color: #FFFFFF;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      background-color: #0b0b0f;
+      color: #f1f1f4;
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      padding: 20px;
-      overflow: hidden;
+      padding: 24px;
+      -webkit-font-smoothing: antialiased;
+    }
+    .container {
+      width: 100%;
+      max-width: 440px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .brand-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+    }
+    .brand-name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+    }
+    .brand-badge {
+      font-size: 11px;
+      font-weight: 600;
+      color: #9494a0;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 2px 8px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
     .card {
-      background: rgba(22, 22, 28, 0.85);
-      backdrop-filter: blur(28px) saturate(180%);
-      -webkit-backdrop-filter: blur(28px) saturate(180%);
-      padding: 44px 36px;
-      border-radius: 24px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      text-align: center;
-      max-width: 420px;
       width: 100%;
-      box-shadow: 0 30px 60px -12px rgba(0, 0, 0, 0.7), 0 0 40px rgba(250, 36, 60, 0.12);
-      animation: fadeIn 0.4s ease-out;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(16px) scale(0.98); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    .icon-wrapper {
-      width: 72px;
-      height: 72px;
-      margin: 0 auto 20px;
-      background: linear-gradient(135deg, #1E1E26 0%, #16161E 100%);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: #14141b;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 20px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      box-shadow: 0 12px 28px rgba(0,0,0,0.4);
+      padding: 36px 32px;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.45);
     }
-    .status-badge {
-      position: absolute;
-      bottom: -4px;
-      right: -4px;
-      width: 26px;
-      height: 26px;
+    .status-icon {
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
-      background: ${isSuccess ? 'linear-gradient(135deg, #FA243C, #FF4B63)' : '#E02424'};
-      border: 2.5px solid #0C0D12;
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 0 14px rgba(250, 36, 60, 0.6);
+      margin: 0 auto 20px;
+      background: ${isSuccess ? 'rgba(250, 36, 60, 0.12)' : 'rgba(255, 69, 58, 0.12)'};
+      border: 1px solid ${isSuccess ? 'rgba(250, 36, 60, 0.3)' : 'rgba(255, 69, 58, 0.3)'};
     }
-    .status-badge svg {
-      width: 14px;
-      height: 14px;
-      fill: #fff;
+    .status-icon svg {
+      width: 28px;
+      height: 28px;
+      stroke: ${isSuccess ? '#FA243C' : '#FF453A'};
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
     }
     h1 {
-      color: #FFFFFF;
-      margin: 0 0 10px;
-      font-size: 22px;
+      font-size: 21px;
       font-weight: 700;
       letter-spacing: -0.4px;
+      color: #ffffff;
+      margin-bottom: 8px;
     }
-    p {
-      color: rgba(255, 255, 255, 0.72);
+    .description {
       font-size: 14px;
-      line-height: 1.6;
-      margin: 0 0 24px;
+      line-height: 1.55;
+      color: #9d9da8;
+      margin-bottom: 24px;
     }
-    code {
-      background: rgba(255,255,255,0.08);
-      padding: 2px 6px;
-      border-radius: 6px;
-      font-size: 13px;
-      color: #FF5C65;
+    .description strong {
+      color: #ffffff;
+      font-weight: 600;
     }
-    .btn {
+    .hint-box {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-align: left;
+      margin-bottom: 24px;
+    }
+    .hint-box svg {
+      width: 18px;
+      height: 18px;
+      stroke: #FA243C;
+      stroke-width: 2;
+      flex-shrink: 0;
+      fill: none;
+    }
+    .hint-box span {
+      font-size: 12.5px;
+      color: #b5b5c2;
+      line-height: 1.4;
+    }
+    .btn-group {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-primary {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(135deg, #FA243C 0%, #D81B32 100%);
-      color: #FFFFFF;
-      font-weight: 600;
+      gap: 8px;
+      width: 100%;
+      background: #FA243C;
+      color: #ffffff;
       text-decoration: none;
-      padding: 12px 32px;
-      border-radius: 30px;
       font-size: 14px;
-      letter-spacing: -0.2px;
-      transition: all 0.2s ease;
-      box-shadow: 0 8px 24px rgba(250, 36, 60, 0.4);
-      cursor: pointer;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 12px;
       border: none;
-      outline: none;
+      cursor: pointer;
+      transition: background 0.15s ease, transform 0.1s ease;
     }
-    .btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 12px 28px rgba(250, 36, 60, 0.55);
-      filter: brightness(1.08);
+    .btn-primary:hover {
+      background: #e01b31;
+      transform: translateY(-1px);
     }
-    .btn:active {
-      transform: translateY(0);
+    .btn-secondary {
+      background: transparent;
+      color: #848492;
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.15s;
     }
-    .footer {
-      margin-top: 18px;
+    .btn-secondary:hover {
+      color: #ffffff;
+    }
+    .footer-note {
+      margin-top: 24px;
       font-size: 12px;
-      color: rgba(255, 255, 255, 0.35);
+      color: #555562;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="icon-wrapper">
-      <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="#FA243C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M9 18V5l12-2v13"></path>
-        <circle cx="6" cy="18" r="3" fill="#FA243C"></circle>
-        <circle cx="18" cy="16" r="3" fill="#FA243C"></circle>
+  <div class="container">
+    <div class="brand-header">
+      <svg class="brand-logo" viewBox="0 0 36 36" fill="none">
+        <rect width="36" height="36" rx="8" fill="#FA243C"/>
+        <path d="M22 10V22.5C22 24.43 20.43 26 18.5 26C16.57 26 15 24.43 15 22.5C15 20.57 16.57 19 18.5 19C19.38 19 20.19 19.33 20.8 19.87V13H25V10H22Z" fill="white"/>
       </svg>
-      <div class="status-badge">
+      <span class="brand-name">Groovy</span>
+      <span class="brand-badge">Desktop</span>
+    </div>
+
+    <div class="card">
+      <div class="status-icon">
         ${isSuccess
-            ? '<svg viewBox="0 0 24 24"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>'
-            : '<svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>'}
+            ? '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>'
+            : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>'}
+      </div>
+
+      <h1>${isSuccess ? '¡Sesión iniciada con éxito!' : 'Error de autenticación'}</h1>
+      <p class="description">
+        ${isSuccess
+            ? 'Tu cuenta de Google se ha vinculado correctamente con <strong>Groovy</strong>.'
+            : 'No se pudo completar la autenticación con Google.'}
+      </p>
+
+      ${isSuccess ? '''
+      <div class="hint-box">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+        <span>Ya puedes volver a la aplicación Groovy en tu equipo para seguir escuchando tu música.</span>
+      </div>
+      ''' : '''
+      <div class="hint-box">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        <span>Detalle del error: <code>$error</code></span>
+      </div>
+      '''}
+
+      <div class="btn-group">
+        <button class="btn-primary" onclick="window.close();">Cerrar esta pestaña</button>
       </div>
     </div>
-    <h1>$title</h1>
-    <p>$message</p>
-    <a href="javascript:window.close();" class="btn">Cerrar pestaÃ±a</a>
-    <div class="footer" id="countdown">Cerrando automÃ¡ticamente en <span id="sec">3</span>s...</div>
+
+    <div class="footer-note">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+      <span>Conexión segura OAuth 2.0</span>
+    </div>
   </div>
+
   <script>
-    var remaining = 3;
-    var el = document.getElementById('sec');
-    var timer = setInterval(function() {
-      remaining--;
-      if (el) el.innerText = remaining;
-      if (remaining <= 0) {
-        clearInterval(timer);
-        window.close();
-      }
-    }, 1000);
+    setTimeout(function() {
+      window.close();
+    }, 4000);
   </script>
 </body>
 </html>
