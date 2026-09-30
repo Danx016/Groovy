@@ -284,8 +284,8 @@ void main() async {
     transcodingService,
   );
   final libraryProvider = LibraryProvider(youtubeService, audioHandler);
-  libraryProvider.setLocalMusicService(localMusicService, mergeWithServer: true);
-  libraryProvider.setMergeLocalLibrary(true);
+  libraryProvider.setLocalMusicService(localMusicService, mergeWithServer: false);
+  libraryProvider.setMergeLocalLibrary(false);
   playerProvider.setLibraryProvider(libraryProvider);
 
   final groovyConnectService = GroovyConnectService();

@@ -420,25 +420,30 @@ class RecommendationService extends ChangeNotifier {
     return score.clamp(0.0, 1.0);
   }
 
+  static bool _isOnlineSong(Song s) =>
+      !s.isLocal && !s.id.startsWith('local_') && s.title.trim().isNotEmpty;
+
   List<Song> getPersonalizedFeed(List<Song> allSongs, {int limit = 50}) {
-    if (!_enabled || allSongs.isEmpty) return allSongs.take(limit).toList();
-    return _sortByScore(allSongs, jitter: _W.randomJitter, limit: limit);
+    final online = allSongs.where(_isOnlineSong).toList();
+    if (!_enabled || online.isEmpty) return online.take(limit).toList();
+    return _sortByScore(online, jitter: _W.randomJitter, limit: limit);
   }
 
   List<Song> getQuickPicks(List<Song> allSongs, {int limit = 20}) {
-    if (!_enabled || allSongs.isEmpty) return [];
+    final online = allSongs.where(_isOnlineSong).toList();
+    if (!_enabled || online.isEmpty) return [];
 
     final topArtists = _getTopArtists(5).toSet();
     final topGenres = _getTopGenres(4).toSet();
     final recentSet = _recentlyPlayed.take(10).toSet();
 
-    var candidates = allSongs.where((s) {
+    var candidates = online.where((s) {
       if (recentSet.contains(s.id)) return false;
       return topArtists.contains(s.artist) || topGenres.contains(s.genre);
     }).toList();
 
     if (candidates.length < limit) {
-      final extra = allSongs
+      final extra = online
           .where((s) => !recentSet.contains(s.id) && !candidates.contains(s))
           .take(limit - candidates.length);
       candidates = [...candidates, ...extra];
@@ -448,7 +453,8 @@ class RecommendationService extends ChangeNotifier {
   }
 
   List<Song> getDiscoverMix(List<Song> allSongs, {int limit = 25}) {
-    if (!_enabled || allSongs.isEmpty) return [];
+    final online = allSongs.where(_isOnlineSong).toList();
+    if (!_enabled || online.isEmpty) return [];
 
     final knownIds = _profiles.keys.toSet();
     final topGenres = _getTopGenres(5).toSet();
@@ -458,18 +464,18 @@ class RecommendationService extends ChangeNotifier {
     bool isUnheard(Song s) =>
         !knownIds.contains(s.id) && !recentSet.contains(s.id);
 
-    final tier1 = allSongs
+    final tier1 = online
         .where((s) =>
             isUnheard(s) &&
             topGenres.contains(s.genre) &&
             !topArtists.contains(s.artist))
         .toList();
 
-    final tier2 = allSongs
+    final tier2 = online
         .where((s) => isUnheard(s) && topGenres.contains(s.genre))
         .toList();
 
-    final tier3 = allSongs.where(isUnheard).toList();
+    final tier3 = online.where(isUnheard).toList();
 
     final pool = tier1.isNotEmpty
         ? tier1
@@ -477,7 +483,7 @@ class RecommendationService extends ChangeNotifier {
             ? tier2
             : tier3.isNotEmpty
                 ? tier3
-                : allSongs.where((s) => !recentSet.contains(s.id)).toList();
+                : online.where((s) => !recentSet.contains(s.id)).toList();
 
     return _sortByScore(pool, jitter: 0.30, limit: limit);
   }
@@ -487,8 +493,9 @@ class RecommendationService extends ChangeNotifier {
     String artist, {
     int limit = 25,
   }) {
+    final online = allSongs.where(_isOnlineSong).toList();
     if (!_enabled) return [];
-    final artistSongs = allSongs.where((s) => s.artist == artist).toList();
+    final artistSongs = online.where((s) => s.artist == artist).toList();
     return _sortByScore(artistSongs, jitter: 0.08, limit: limit);
   }
 
@@ -497,24 +504,26 @@ class RecommendationService extends ChangeNotifier {
     String genre, {
     int limit = 25,
   }) {
+    final online = allSongs.where(_isOnlineSong).toList();
     if (!_enabled) return [];
-    final genreSongs = allSongs.where((s) => s.genre == genre).toList();
+    final genreSongs = online.where((s) => s.genre == genre).toList();
     return _sortByScore(genreSongs, jitter: 0.10, limit: limit);
   }
 
   Map<String, List<Song>> generateMixes(List<Song> allSongs) {
-    if (!_enabled || allSongs.isEmpty) return {};
+    final online = allSongs.where(_isOnlineSong).toList();
+    if (!_enabled || online.isEmpty) return {};
 
     final mixes = <String, List<Song>>{};
 
-    final quick = getQuickPicks(allSongs, limit: 20);
+    final quick = getQuickPicks(online, limit: 20);
     if (quick.isNotEmpty) mixes['Quick Picks'] = quick;
 
-    final discover = getDiscoverMix(allSongs, limit: 20);
+    final discover = getDiscoverMix(online, limit: 20);
     if (discover.isNotEmpty) mixes['Discover Mix'] = discover;
 
     for (final artist in _getTopArtists(3)) {
-      final mix = getArtistMix(allSongs, artist, limit: 15);
+      final mix = getArtistMix(online, artist, limit: 15);
       if (mix.length >= 5) mixes['$artist Mix'] = mix;
     }
 

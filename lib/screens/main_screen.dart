@@ -210,23 +210,14 @@ class _MainScreenState extends State<MainScreen> {
 
       libraryProvider.setLocalMusicService(
         localMusicService,
-        mergeWithServer: true,
+        mergeWithServer: false,
       );
-      libraryProvider.setMergeLocalLibrary(true);
+      libraryProvider.setMergeLocalLibrary(false);
       libraryProvider.setLocalOnlyMode(false);
       libraryProvider.setServerOfflineMode(widget.isOfflineMode);
 
       await localMusicService.initialize();
       libraryProvider.initialize();
-
-      // Defer initial music folder scan slightly so UI startup is butter-smooth (60/120fps)
-      if (localMusicService.isEmpty && !localMusicService.isScanning) {
-        Future.delayed(const Duration(seconds: 3), () {
-          if (mounted && localMusicService.isEmpty && !localMusicService.isScanning) {
-            localMusicService.scanForMusic();
-          }
-        });
-      }
 
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) _checkForUpdate();

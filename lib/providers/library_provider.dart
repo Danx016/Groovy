@@ -97,16 +97,7 @@ class LibraryProvider extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     } else if (_mergeLocalLibrary) {
-      // Merge mode - just notify that local library changed
-      if (_randomSongs.isEmpty && _localMusicService!.songs.isNotEmpty) {
-        _randomSongs = List.from(_localMusicService!.songs.take(50));
-      }
-      if (_recentAlbums.isEmpty && _localMusicService!.albums.isNotEmpty) {
-        _recentAlbums = List.from(_localMusicService!.albums.take(20));
-      }
-      if (_artists.isEmpty && _localMusicService!.artists.isNotEmpty) {
-        _artists = List.from(_localMusicService!.artists.take(20));
-      }
+      // Merge mode - just notify that local library changed without overwriting cloud random songs
       _isInitialized = true;
       _isLoading = false;
       notifyListeners();

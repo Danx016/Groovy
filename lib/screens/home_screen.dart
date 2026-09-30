@@ -147,9 +147,17 @@ class _HomeScreenState extends State<HomeScreen> {
                   return _buildLoadingState(isDesktop, hPad);
                 }
 
-                final allSongs = libraryProvider.randomSongs.isNotEmpty
+                final allSongs = (libraryProvider.randomSongs.isNotEmpty
                     ? libraryProvider.randomSongs
-                    : libraryProvider.cachedAllSongs;
+                    : libraryProvider.cachedAllSongs)
+                    .where((s) =>
+                        !s.isLocal &&
+                        !s.id.startsWith('local_') &&
+                        s.title.trim().isNotEmpty &&
+                        !_numberOnlyRegex.hasMatch(s.title.trim()) &&
+                        !s.title.startsWith('AUD-') &&
+                        !s.title.startsWith('PTT-'))
+                    .toList();
                 final key = _computeRandomKey(allSongs);
 
                 if (recommendationService.enabled && key.isNotEmpty) {
@@ -170,19 +178,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 Map<String, List<Song>> mixes = Map<String, List<Song>>.from(_cachedMixes);
                 final dynamicRecs = recommendationService.dynamicRecommendations;
 
-                List<Song> personalizedFeed = dynamicRecs.isNotEmpty
+                List<Song> personalizedFeed = (dynamicRecs.isNotEmpty
                     ? dynamicRecs
-                    : _cachedPersonalized
-                        .where((s) =>
-                            s.title.trim().isNotEmpty &&
-                            !_numberOnlyRegex.hasMatch(s.title.trim()) &&
-                            !s.title.startsWith('AUD-') &&
-                            !s.title.startsWith('PTT-') &&
-                            (s.duration == null || s.duration! >= 15))
-                        .toList();
+                    : _cachedPersonalized)
+                    .where((s) =>
+                        !s.isLocal &&
+                        !s.id.startsWith('local_') &&
+                        s.title.trim().isNotEmpty &&
+                        !_numberOnlyRegex.hasMatch(s.title.trim()) &&
+                        !s.title.startsWith('AUD-') &&
+                        !s.title.startsWith('PTT-') &&
+                        (s.duration == null || s.duration! >= 15))
+                    .toList();
 
                 List<Album> recentAlbums = libraryProvider.recentAlbums
                     .where((a) =>
+                        !a.isLocal &&
+                        !a.id.startsWith('local_') &&
                         a.name.trim().isNotEmpty &&
                         !_numberOnlyRegex.hasMatch(a.name.trim()) &&
                         a.name.toLowerCase() != 'unknown' &&
@@ -190,16 +202,19 @@ class _HomeScreenState extends State<HomeScreen> {
                     .toList();
                 List<Playlist> playlists = libraryProvider.playlists;
 
-                // Extract recent songs: prioritize actual persistent playback history (YouTube, streams, local)
+                // Extract recent songs: prioritize actual persistent playback history (YouTube, streams, online)
                 // then fall back to profiles indexed in library
                 final cachedSongMap = libraryProvider.songsByIdMap;
                 final recentSongsFromProfiles = recommendationService.recentlyPlayed
                     .where((id) => cachedSongMap.containsKey(id))
                     .map((id) => cachedSongMap[id]!)
+                    .where((s) => !s.isLocal && !s.id.startsWith('local_'))
                     .toList();
-                final recentSongs = playerProvider.playbackHistory.isNotEmpty
+                final recentSongs = (playerProvider.playbackHistory.isNotEmpty
                     ? playerProvider.playbackHistory
-                    : recentSongsFromProfiles;
+                    : recentSongsFromProfiles)
+                    .where((s) => !s.isLocal && !s.id.startsWith('local_'))
+                    .toList();
 
                 final hasAnyContent = recentSongs.isNotEmpty ||
                     recentAlbums.isNotEmpty ||
@@ -377,7 +392,16 @@ class _HomeScreenState extends State<HomeScreen> {
     required double hPad,
     VoidCallback? onSeeAllTap,
   }) {
-    final topSongs = songs.take(15).toList();
+    final cleanSongs = songs
+        .where((s) =>
+            !s.isLocal &&
+            !s.id.startsWith('local_') &&
+            s.title.trim().isNotEmpty &&
+            !_numberOnlyRegex.hasMatch(s.title.trim()))
+        .toList();
+    if (cleanSongs.isEmpty) return const SizedBox.shrink();
+
+    final topSongs = cleanSongs.take(15).toList();
     final cardSize = isDesktop ? 180.0 : 145.0;
 
     return Column(
