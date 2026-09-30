@@ -553,4 +553,116 @@ router.put('/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// POST /api/auth/check-email
+router.post('/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: 'Correo electrónico requerido.',
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const pool = getPool();
+    const [rows] = await pool.query('SELECT id, email FROM users WHERE email = ? LIMIT 1', [cleanEmail]);
+
+    return res.json({
+      success: true,
+      exists: rows.length > 0,
+    });
+  } catch (err) {
+    console.error('[Auth Check Email Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Error interno al verificar correo.',
+    });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, password, newPassword } = req.body;
+    const targetPassword = newPassword || password;
+
+    if (!email || !targetPassword) {
+      return res.status(400).json({
+        success: false,
+        error: 'Correo electrónico y nueva contraseña son requeridos.',
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+
+    if (targetPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: 'La nueva contraseña debe tener al menos 6 caracteres.',
+      });
+    }
+
+    const pool = getPool();
+    const [rows] = await pool.query(
+      'SELECT id, name, email, avatar_url, role, is_banned, created_at FROM users WHERE email = ? LIMIT 1',
+      [cleanEmail]
+    );
+
+    if (rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No existe ninguna cuenta registrada con este correo electrónico.',
+      });
+    }
+
+    const dbUser = rows[0];
+
+    if (dbUser.is_banned === 1) {
+      return res.status(403).json({
+        success: false,
+        error: 'Tu cuenta ha sido suspendida por el administrador.',
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(targetPassword, salt);
+
+    await pool.query(
+      'UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [passwordHash, dbUser.id]
+    );
+
+    const clientInfo = parseFullClientInfo(req);
+    await recordSession(pool, dbUser.id, clientInfo);
+
+    const user = {
+      id: dbUser.id,
+      name: dbUser.name,
+      email: dbUser.email,
+      avatarUrl: dbUser.avatar_url,
+      role: dbUser.role || 'user',
+      isBanned: false,
+      lastLoginIp: clientInfo.ip,
+      lastDevice: clientInfo.deviceSummary,
+      createdAt: dbUser.created_at,
+    };
+
+    const token = generateToken(user);
+
+    return res.json({
+      success: true,
+      message: 'Contraseña actualizada correctamente.',
+      token,
+      user,
+    });
+  } catch (err) {
+    console.error('[Auth Reset Password Error]:', err);
+    return res.status(500).json({
+      success: false,
+      error: 'Error interno del servidor al restablecer contraseña.',
+    });
+  }
+});
+
 module.exports = router;

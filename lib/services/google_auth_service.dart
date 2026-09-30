@@ -93,34 +93,61 @@ class GoogleAuthService {
 
   /// Desktop Google Sign-In using local loopback HTTP server and system browser
   Future<GoogleUserInfo?> _signInDesktop() async {
-    HttpServer? server;
+    final List<HttpServer> servers = [];
+    final List<StreamSubscription<HttpRequest>> subs = [];
+
     try {
-      server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort, shared: true);
-    } catch (e) {
-      debugPrint('[GoogleAuth] Initial bind error on port $loopbackPort: $e');
+      // 1. Bind to IPv4 loopback
       try {
-        await Future.delayed(const Duration(milliseconds: 350));
-        server = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort, shared: true);
-      } catch (e2) {
-        debugPrint('[GoogleAuth] Could not bind port $loopbackPort on retry: $e2');
-        throw Exception('El puerto local de autenticación ($loopbackPort) está ocupado. Intenta de nuevo.');
+        final server4 = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort, shared: true);
+        servers.add(server4);
+      } catch (e) {
+        debugPrint('[GoogleAuth] IPv4 bind note on port $loopbackPort: $e');
+        try {
+          await Future.delayed(const Duration(milliseconds: 300));
+          final server4Retry = await HttpServer.bind(InternetAddress.loopbackIPv4, loopbackPort, shared: true);
+          servers.add(server4Retry);
+        } catch (e2) {
+          debugPrint('[GoogleAuth] IPv4 bind retry failed: $e2');
+        }
       }
-    }
 
-    final completer = Completer<String?>();
+      // 2. Also bind to IPv6 loopback if available (crucial on Windows where localhost resolves to ::1)
+      try {
+        final server6 = await HttpServer.bind(InternetAddress.loopbackIPv6, loopbackPort, shared: true);
+        servers.add(server6);
+      } catch (e) {
+        debugPrint('[GoogleAuth] IPv6 loopback bind note: $e');
+      }
 
-    final sub = server.listen((HttpRequest req) async {
-      final uri = req.uri;
-      if (uri.path == '/oauth/callback') {
-        final code = uri.queryParameters['code'];
-        final error = uri.queryParameters['error'];
+      if (servers.isEmpty) {
+        throw Exception('El puerto local de autenticación ($loopbackPort) está ocupado. Cierra otras instancias de Groovy o inténtalo de nuevo.');
+      }
 
-        final isSuccess = error == null;
-        final pageTitle = isSuccess ? 'Autenticación exitosa' : 'Error de autenticación';
+      final completer = Completer<String?>();
 
-        req.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
-        req.response.encoding = utf8;
-        req.response.write('''<!DOCTYPE html>
+      void handleRequest(HttpRequest req) async {
+        try {
+          final uri = req.uri;
+          req.response.headers.add('Access-Control-Allow-Origin', '*');
+          req.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+
+          if (req.method == 'OPTIONS') {
+            req.response.statusCode = HttpStatus.ok;
+            await req.response.close();
+            return;
+          }
+
+          if (uri.path == '/oauth/callback') {
+            final code = uri.queryParameters['code'];
+            final error = uri.queryParameters['error'];
+
+            final isSuccess = error == null && code != null;
+            final pageTitle = isSuccess ? 'Autenticación exitosa' : 'Error de autenticación';
+
+            req.response.headers.contentType = ContentType('text', 'html', charset: 'utf-8');
+            req.response.encoding = utf8;
+            req.response.write('''<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
@@ -272,20 +299,6 @@ class GoogleAuthService {
       background: #e01b31;
       transform: translateY(-1px);
     }
-    .btn-secondary {
-      background: transparent;
-      color: #848492;
-      border: none;
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px;
-      cursor: pointer;
-      text-decoration: none;
-      transition: color 0.15s;
-    }
-    .btn-secondary:hover {
-      color: #ffffff;
-    }
     .footer-note {
       margin-top: 24px;
       font-size: 12px;
@@ -329,7 +342,7 @@ class GoogleAuthService {
       ''' : '''
       <div class="hint-box">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-        <span>Detalle del error: <code>$error</code></span>
+        <span>Detalle del error: <code>${error ?? 'Cancelado por el usuario'}</code></span>
       </div>
       '''}
 
@@ -352,42 +365,65 @@ class GoogleAuthService {
 </body>
 </html>
 ''');
-        await req.response.close();
+            await req.response.close();
 
-        if (error != null) {
-          completer.completeError(Exception('Google auth error: $error'));
-        } else if (code != null) {
-          completer.complete(code);
-        } else {
-          completer.complete(null);
+            if (!completer.isCompleted) {
+              if (error != null) {
+                if (error == 'access_denied') {
+                  completer.complete(null); // User closed/cancelled
+                } else {
+                  completer.completeError(Exception('Google auth error: $error'));
+                }
+              } else if (code != null) {
+                completer.complete(code);
+              } else {
+                completer.complete(null);
+              }
+            }
+          } else {
+            req.response.statusCode = HttpStatus.notFound;
+            await req.response.close();
+          }
+        } catch (err) {
+          debugPrint('[GoogleAuth] HTTP request handling error: $err');
         }
-      } else {
-        req.response.statusCode = HttpStatus.notFound;
-        await req.response.close();
       }
-    });
 
-    final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
-      'client_id': webClientId,
-      'redirect_uri': loopbackRedirectUri,
-      'response_type': 'code',
-      'scope': 'email profile openid',
-      'access_type': 'offline',
-      'prompt': 'select_account',
-    });
+      for (final s in servers) {
+        subs.add(s.listen(handleRequest));
+      }
 
-    final launched = await launchUrl(authUrl, mode: LaunchMode.externalApplication);
-    if (!launched) {
-      await sub.cancel();
-      await server.close(force: true);
-      throw Exception('No se pudo abrir el navegador web para iniciar sesión.');
-    }
+      final authUrl = Uri.https('accounts.google.com', '/o/oauth2/v2/auth', {
+        'client_id': webClientId,
+        'redirect_uri': loopbackRedirectUri,
+        'response_type': 'code',
+        'scope': 'email profile openid',
+        'access_type': 'offline',
+        'prompt': 'select_account',
+      });
 
-    try {
-      // Timeout after 3 minutes if user takes time with 2FA/browser
-      final code = await completer.future.timeout(const Duration(minutes: 3));
-      await sub.cancel();
-      await server.close(force: true);
+      bool launched = false;
+      try {
+        launched = await launchUrl(authUrl, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        launched = false;
+      }
+
+      if (!launched) {
+        try {
+          launched = await launchUrl(authUrl, mode: LaunchMode.platformDefault);
+        } catch (_) {}
+      }
+
+      if (!launched) {
+        throw Exception('No se pudo abrir el navegador web para iniciar sesión.');
+      }
+
+      // Timeout after 2 minutes if user takes time
+      final code = await completer.future.timeout(
+        const Duration(minutes: 2),
+        onTimeout: () => throw Exception('Tiempo de espera agotado. No se completó el inicio de sesión en el navegador.'),
+      );
 
       if (code == null) return null;
 
@@ -439,10 +475,15 @@ class GoogleAuthService {
         idToken: idToken,
       );
     } catch (e) {
-      await sub.cancel();
-      await server.close(force: true);
       debugPrint('[GoogleAuth] Desktop flow error: $e');
       rethrow;
+    } finally {
+      for (final sub in subs) {
+        await sub.cancel().catchError((_) {});
+      }
+      for (final server in servers) {
+        await server.close(force: true).catchError((_) {});
+      }
     }
   }
 

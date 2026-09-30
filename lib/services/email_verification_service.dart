@@ -99,15 +99,15 @@ class EmailVerificationService {
     }
   }
 
-  /// Construye la plantilla visual HTML del correo electrónico
+  /// Construye la plantilla visual HTML del correo electrónico con el diseño oficial de Groovy
   static String _buildHtmlEmail({
     required String recipientEmail,
     required String code,
   }) {
     final digits = code.split('');
     final digitsHtml = digits.map((d) => '''
-      <td style="padding: 0 4px;">
-        <div style="width: 44px; height: 54px; line-height: 54px; background: rgba(255, 51, 75, 0.12); border: 1.5px solid rgba(255, 51, 75, 0.4); border-radius: 12px; font-size: 28px; font-weight: 800; color: #ff334b; text-align: center; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;">
+      <td style="padding: 0 4px;" align="center">
+        <div style="width: 46px; height: 58px; line-height: 58px; background: rgba(250, 36, 60, 0.1); border: 1.5px solid rgba(250, 36, 60, 0.45); border-radius: 14px; font-size: 30px; font-weight: 800; color: #FA243C; text-align: center; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; box-shadow: 0 4px 12px rgba(250, 36, 60, 0.15);">
           $d
         </div>
       </td>
@@ -118,48 +118,72 @@ class EmailVerificationService {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Código de Recuperación - Groovy</title>
+  <title>Código de Seguridad · Groovy</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <!--[if mso]>
+  <style type="text/css">
+    body, table, td {font-family: Arial, Helvetica, sans-serif !important;}
+  </style>
+  <![endif]-->
 </head>
-<body style="margin: 0; padding: 0; background-color: #08090b; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #08090b; min-height: 100vh; padding: 40px 15px;">
+<body style="margin: 0; padding: 0; background-color: #07080a; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; color: #f1f1f4;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color: #07080a; min-height: 100vh; padding: 40px 16px;">
     <tr>
       <td align="center" valign="middle">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 500px; background: linear-gradient(180deg, #14151a 0%, #0d0e12 100%); border-radius: 28px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); overflow: hidden; text-align: center;">
-          <!-- Header with Logo / Brand -->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width: 480px; background: #111217; border-radius: 24px; border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6); overflow: hidden; text-align: center;">
+          
+          <!-- Top Accent Line -->
           <tr>
-            <td style="padding: 40px 32px 20px 32px;">
+            <td height="4" style="background: linear-gradient(90deg, #FA243C 0%, #FF5E62 50%, #FA243C 100%);"></td>
+          </tr>
+
+          <!-- Brand Header -->
+          <tr>
+            <td style="padding: 36px 32px 20px 32px;">
               <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                 <tr>
                   <td align="center">
-                    <div style="width: 64px; height: 64px; background: linear-gradient(135deg, #ff334b 0%, #e50914 100%); border-radius: 18px; box-shadow: 0 8px 24px rgba(229, 9, 20, 0.45); line-height: 64px; text-align: center;">
-                      <span style="font-size: 30px; color: #ffffff;">🎵</span>
-                    </div>
+                    <!-- Brand Icon -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+                      <tr>
+                        <td align="center" style="width: 56px; height: 56px; background: linear-gradient(135deg, #FA243C 0%, #D81329 100%); border-radius: 16px; box-shadow: 0 8px 24px rgba(250, 36, 60, 0.4);">
+                          <span style="font-size: 26px; line-height: 56px; color: #ffffff;">🎵</span>
+                        </td>
+                      </tr>
+                    </table>
                   </td>
                 </tr>
               </table>
-              <h1 style="margin: 18px 0 0 0; font-size: 26px; font-weight: 800; letter-spacing: -0.8px; color: #ffffff;">Groovy</h1>
-              <div style="display: inline-block; margin-top: 6px; padding: 4px 12px; background: rgba(255, 51, 75, 0.12); border-radius: 20px;">
-                <span style="font-size: 12px; font-weight: 700; color: #ff334b; letter-spacing: 0.3px; text-transform: uppercase;">Recuperación de Contraseña</span>
+
+              <h1 style="margin: 16px 0 0 0; font-size: 24px; font-weight: 800; letter-spacing: -0.6px; color: #ffffff;">Groovy</h1>
+              
+              <div style="display: inline-block; margin-top: 8px; padding: 4px 12px; background: rgba(250, 36, 60, 0.12); border: 1px solid rgba(250, 36, 60, 0.25); border-radius: 20px;">
+                <span style="font-size: 11px; font-weight: 700; color: #FA243C; letter-spacing: 0.5px; text-transform: uppercase;">Seguridad de Cuenta</span>
               </div>
             </td>
           </tr>
 
-          <!-- Message Body -->
+          <!-- Main Content -->
           <tr>
             <td style="padding: 0 32px 20px 32px;">
-              <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #a1a1aa; font-weight: 400;">
-                Hemos recibido una solicitud para restablecer la contraseña de tu cuenta vinculada a <strong style="color: #ffffff;">$recipientEmail</strong>.
+              <h2 style="margin: 0 0 10px 0; font-size: 19px; font-weight: 700; letter-spacing: -0.4px; color: #ffffff;">
+                Restablecer tu contraseña
+              </h2>
+              <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #9d9da8;">
+                Recibimos una solicitud para cambiar la contraseña de tu cuenta de Groovy vinculada a <strong style="color: #ffffff;">$recipientEmail</strong>.
               </p>
-              <p style="margin: 8px 0 0 0; font-size: 14px; line-height: 1.5; color: #71717a;">
-                Introduce el siguiente código de 6 dígitos en la aplicación para crear tu nueva clave:
+              <p style="margin: 10px 0 0 0; font-size: 13.5px; line-height: 1.5; color: #787885;">
+                Ingresa el siguiente código de verificación en la aplicación:
               </p>
             </td>
           </tr>
 
-          <!-- OTP Code Table -->
+          <!-- OTP Digits Box -->
           <tr>
-            <td style="padding: 10px 24px 28px 24px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" style="margin: 0 auto;">
+            <td style="padding: 10px 20px 24px 20px;" align="center">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
                 <tr>
                   $digitsHtml
                 </tr>
@@ -167,33 +191,50 @@ class EmailVerificationService {
             </td>
           </tr>
 
-          <!-- Advisory / Expiration Notice -->
+          <!-- Security & Expiration Info -->
           <tr>
-            <td style="padding: 0 32px 32px 32px;">
-              <div style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 14px 18px; text-align: left;">
-                <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                  <tr>
-                    <td width="24" valign="top" style="padding-top: 2px;">
-                      <span style="font-size: 14px; color: #ff334b;">🔒</span>
-                    </td>
-                    <td style="padding-left: 8px;">
-                      <div style="font-size: 12px; color: #d4d4d8; font-weight: 600; margin-bottom: 2px;">Vigencia del código: 15 minutos</div>
-                      <div style="font-size: 11px; color: #71717a; line-height: 1.4;">Si tú no realizaste esta solicitud, puedes ignorar este mensaje; tu cuenta permanecerá totalmente protegida.</div>
-                    </td>
-                  </tr>
-                </table>
-              </div>
+            <td style="padding: 0 32px 30px 32px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 14px; padding: 14px 16px; text-align: left;">
+                <tr>
+                  <td width="28" valign="top" style="padding-top: 1px;">
+                    <div style="width: 22px; height: 22px; background: rgba(250, 36, 60, 0.15); border-radius: 50%; text-align: center; line-height: 22px; font-size: 12px; color: #FA243C;">
+                      ⏱
+                    </div>
+                  </td>
+                  <td style="padding-left: 10px;">
+                    <div style="font-size: 12.5px; color: #e4e4e7; font-weight: 700; margin-bottom: 2px;">
+                      Válido durante 15 minutos
+                    </div>
+                    <div style="font-size: 11.5px; color: #82828e; line-height: 1.45;">
+                      Si tú no solicitaste este cambio, puedes ignorar este correo; tu cuenta seguirá protegida.
+                    </div>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding: 24px 32px; border-top: 1px solid rgba(255, 255, 255, 0.05); background-color: rgba(0, 0, 0, 0.2);">
-              <div style="font-size: 12px; font-weight: 600; color: #71717a;">Groovy Music App</div>
-              <div style="font-size: 11px; color: #52525b; margin-top: 4px;">Tu música en streaming de alta calidad sin interrupciones.</div>
-              <div style="font-size: 10px; color: #3f3f46; margin-top: 8px;">© ${DateTime.now().year} Groovy. Todos los derechos reservados.</div>
+            <td style="padding: 22px 32px; border-top: 1px solid rgba(255, 255, 255, 0.06); background-color: #0b0c10;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="center">
+                    <div style="font-size: 12px; font-weight: 700; color: #8e8e9a; letter-spacing: -0.2px;">
+                      Groovy Music
+                    </div>
+                    <div style="font-size: 11px; color: #555562; margin-top: 4px;">
+                      Streaming de música de alta fidelidad sin límites
+                    </div>
+                    <div style="font-size: 10.5px; color: #40404c; margin-top: 8px;">
+                      © ${DateTime.now().year} Groovy App. Todos los derechos reservados.
+                    </div>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
+
         </table>
       </td>
     </tr>
