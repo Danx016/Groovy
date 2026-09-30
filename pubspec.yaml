@@ -149,6 +149,7 @@ flutter:
 msix_config:
   display_name: Groovy
   publisher_display_name: Groovy Music
+  publisher: CN=Groovy Music
   identity_name: com.groovy.music
   msix_version: 1.6.0.0
   logo_path: assets/app_icon_1024.png

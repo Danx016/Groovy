@@ -207,8 +207,19 @@ jobs:
           Compress-Archive -Path "build\windows\x64\runner\Release\*" -DestinationPath "Groovy-Windows-Portable.zip" -Force
 
       - name: Build MSIX Package
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
-          dart run msix:create --build-windows false
+          if ($env:WINDOWS_CERTIFICATE_BASE64) {
+            $certPath = Join-Path $env:RUNNER_TEMP "groovy-signing.pfx"
+            dart run msix:create --build-windows false `
+              --certificate-path $certPath `
+              --certificate-password $env:WINDOWS_CERTIFICATE_PASSWORD `
+              --install-certificate false
+          } else {
+            dart run msix:create --build-windows false --install-certificate false
+          }
           if (Test-Path "build\windows\x64\runner\Release\groovy.msix") {
             Copy-Item -Path "build\windows\x64\runner\Release\groovy.msix" -Destination "Groovy.msix" -Force
           }
