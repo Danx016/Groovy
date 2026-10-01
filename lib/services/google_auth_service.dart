@@ -60,12 +60,16 @@ class GoogleAuthService {
   static const int loopbackPort = 42426;
   static const String loopbackRedirectUri = 'http://127.0.0.1:$loopbackPort';
 
-  GoogleSignIn _buildGoogleSignIn({bool withServerClientId = true}) {
+  /// Builds a GoogleSignIn instance.
+  /// On Android, serverClientId must be null — Play Services uses the registered SHA-1
+  /// fingerprint to identify the app. Passing a web client ID causes ApiException 10.
+  /// serverClientId is only used on Desktop (Windows/Linux/macOS) for the loopback OAuth flow.
+  GoogleSignIn _buildGoogleSignIn({bool withServerClientId = false}) {
+    final bool isAndroid = !kIsWeb && Platform.isAndroid;
     return GoogleSignIn(
-      // On Android, clientId must be null. Flutter's google_sign_in plugin only uses
-      // clientId on iOS/macOS. Setting it on Android conflicts with serverClientId and causes ApiException 10.
       clientId: null,
-      serverClientId: withServerClientId ? webClientId : null,
+      // On Android: always null. On Desktop: use webClientId for server token exchange.
+      serverClientId: (withServerClientId && !isAndroid) ? webClientId : null,
       scopes: const ['email', 'profile'],
     );
   }
@@ -120,9 +124,11 @@ class GoogleAuthService {
     try {
       GoogleSignInAccount? account;
 
-      // Primary native attempt: using webClientId as serverClientId so Google Play Services can verify the client and issue tokens
+      // Android native sign-in: NO serverClientId needed.
+      // Play Services validates via the registered SHA-1 fingerprint of the APK.
+      // Passing a web serverClientId causes ApiException 10 (DEVELOPER_ERROR).
       try {
-        final gSignIn = _buildGoogleSignIn(withServerClientId: true);
+        final gSignIn = _buildGoogleSignIn(withServerClientId: false);
         account = await gSignIn.signIn();
       } on PlatformException catch (pe) {
         debugPrint('[GoogleAuth] Native sign-in PlatformException: ${pe.code} - ${pe.message}');
@@ -130,21 +136,7 @@ class GoogleAuthService {
           debugPrint('[GoogleAuth] Native sign-in dismissed by user');
           return null;
         }
-
-        // Secondary fallback attempt: without serverClientId if standalone Play Services default is configured
-        try {
-          final fallbackGSignIn = _buildGoogleSignIn(withServerClientId: false);
-          account = await fallbackGSignIn.signIn();
-        } on PlatformException catch (spe) {
-          if (_isUserCancellation(spe.code, spe.message)) {
-            debugPrint('[GoogleAuth] Native sign-in dismissed by user on retry');
-            return null;
-          }
-          throw _mapPlatformException(spe);
-        } catch (se) {
-          if (_isUserCancellation(null, se.toString())) return null;
-          throw Exception('Error al iniciar sesión con Google: $se');
-        }
+        throw _mapPlatformException(pe);
       } catch (e) {
         debugPrint('[GoogleAuth] Native sign-in non-platform exception: $e');
         if (_isUserCancellation(null, e.toString())) {
