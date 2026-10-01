@@ -82,27 +82,20 @@ class GoogleAuthService {
   }
 
   /// Mobile Google Sign-In using native Google Play Services dialog on Android,
-  /// with automatic fallback to browser OAuth if native authentication fails (e.g. SHA-1 mismatch or GMS issues).
+  /// with automatic fallback to browser OAuth if native authentication fails.
   Future<GoogleUserInfo?> _signInMobile() async {
     GoogleSignInAccount? account;
     try {
-      final gSignIn = _buildGoogleSignIn(withServerClientId: true);
+      // Use direct native sign-in (withServerClientId: false) as primary to avoid
+      // ApiException: 10 cross-client verification errors and prevent duplicate account selection dialogs.
+      final gSignIn = _buildGoogleSignIn(withServerClientId: false);
       try {
         await gSignIn.signOut();
       } catch (_) {}
       account = await gSignIn.signIn();
     } catch (e) {
-      debugPrint('[GoogleAuth] Native sign-in failed: $e, trying without serverClientId...');
-      try {
-        final gSignInDirect = _buildGoogleSignIn(withServerClientId: false);
-        try {
-          await gSignInDirect.signOut();
-        } catch (_) {}
-        account = await gSignInDirect.signIn();
-      } catch (e2) {
-        debugPrint('[GoogleAuth] Native sign-in error ($e2). Falling back to browser OAuth flow...');
-        return _signInOAuthWeb();
-      }
+      debugPrint('[GoogleAuth] Native sign-in failed: $e. Falling back to browser OAuth flow...');
+      return _signInOAuthWeb();
     }
 
     if (account == null) {
