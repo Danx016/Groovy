@@ -291,12 +291,6 @@ router.post('/google', async (req, res) => {
           error: 'Email y Google ID son requeridos.',
         });
       }
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(401).json({
-          success: false,
-          error: 'idToken es requerido para autenticar con Google en producción.',
-        });
-      }
     }
 
     const cleanEmail = verifiedEmail;
