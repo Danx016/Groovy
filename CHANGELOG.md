@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.4] - 2026-10-01
+
+### Fixed & Changed
+- **Autenticación con Google en Android**:
+  - Corregido el problema donde la selección de cuenta en Android se cerraba sin iniciar sesión. Se eliminó el parámetro de cliente no soportado en Android que entraba en conflicto con Google Play Services (`ApiException: 10`).
+  - Añadido mecanismo de respaldo automático (fallback) al flujo OAuth 2.0 por navegador en caso de fallos o falta de configuración de firmas en Google Play Services.
+  - Retención y retorno seguro del token de identidad y datos de usuario en Android.
+- **Versión Multiplataforma**: Actualizado el sistema a la versión 1.6.4 (Build 145) en Windows, Android, Web y backend.
+
 ## [1.6.3] - 2026-10-01
 
 ### Added & Changed

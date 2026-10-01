@@ -61,7 +61,9 @@ class GoogleAuthService {
 
   GoogleSignIn _buildGoogleSignIn({bool withServerClientId = true}) {
     return GoogleSignIn(
-      clientId: (!kIsWeb && Platform.isAndroid) ? androidClientId : null,
+      // On Android, clientId must be null. Flutter's google_sign_in plugin only uses
+      // clientId on iOS/macOS. Setting it on Android conflicts with serverClientId and causes ApiException 10.
+      clientId: null,
       serverClientId: withServerClientId ? webClientId : null,
       scopes: const ['email', 'profile'],
     );
@@ -79,7 +81,8 @@ class GoogleAuthService {
     }
   }
 
-  /// Mobile Google Sign-In using native Google Play Services dialog on Android
+  /// Mobile Google Sign-In using native Google Play Services dialog on Android,
+  /// with automatic fallback to browser OAuth if native authentication fails (e.g. SHA-1 mismatch or GMS issues).
   Future<GoogleUserInfo?> _signInMobile() async {
     GoogleSignInAccount? account;
     try {
@@ -89,7 +92,7 @@ class GoogleAuthService {
       } catch (_) {}
       account = await gSignIn.signIn();
     } catch (e) {
-      debugPrint('[GoogleAuth] Primary native sign-in note: $e, trying direct native mode...');
+      debugPrint('[GoogleAuth] Native sign-in failed: $e, trying without serverClientId...');
       try {
         final gSignInDirect = _buildGoogleSignIn(withServerClientId: false);
         try {
@@ -97,8 +100,8 @@ class GoogleAuthService {
         } catch (_) {}
         account = await gSignInDirect.signIn();
       } catch (e2) {
-        debugPrint('[GoogleAuth] Direct native sign-in note: $e2');
-        rethrow;
+        debugPrint('[GoogleAuth] Native sign-in error ($e2). Falling back to browser OAuth flow...');
+        return _signInOAuthWeb();
       }
     }
 
@@ -107,13 +110,20 @@ class GoogleAuthService {
       return null;
     }
 
-    final authentication = await account.authentication;
+    String? idToken;
+    try {
+      final authentication = await account.authentication;
+      idToken = authentication.idToken;
+    } catch (e) {
+      debugPrint('[GoogleAuth] Note obtaining authentication tokens: $e');
+    }
+
     return GoogleUserInfo(
       id: account.id,
       email: account.email,
       name: account.displayName ?? account.email.split('@').first,
       avatarUrl: account.photoUrl,
-      idToken: authentication.idToken,
+      idToken: idToken,
     );
   }
 
