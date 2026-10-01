@@ -876,15 +876,10 @@ class _AlbumScreenState extends State<AlbumScreen> {
                                       ),
                                       boxShadow: [
                                         BoxShadow(
-                                          color: Colors.black.withValues(alpha: isDark ? 0.60 : 0.22),
-                                          blurRadius: 30,
-                                          offset: const Offset(0, 15),
+                                          color: Colors.black.withValues(alpha: isDark ? 0.50 : 0.16),
+                                          blurRadius: 28,
+                                          offset: const Offset(0, 12),
                                           spreadRadius: -4,
-                                        ),
-                                        BoxShadow(
-                                          color: AppTheme.appleMusicRed.withValues(alpha: isDark ? 0.18 : 0.08),
-                                          blurRadius: 36,
-                                          offset: const Offset(0, 6),
                                         ),
                                       ],
                                     ),
@@ -1226,67 +1221,16 @@ class _PlayButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    if (isPrimary) {
-      return Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          gradient: const LinearGradient(
-            colors: [Color(0xFFFA243C), Color(0xFFFF3C58)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFFFA243C).withValues(alpha: 0.38),
-              blurRadius: 16,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(14),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(icon, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      letterSpacing: -0.3,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      );
-    }
+    final btnBg = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
 
-    final btnBg = isDark ? const Color(0xFF24242A) : const Color(0xFFEBEBF0);
     return Material(
       color: btnBg,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(14),
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04),
-            ),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -1297,8 +1241,8 @@ class _PlayButton extends StatelessWidget {
                 style: const TextStyle(
                   color: AppTheme.appleMusicRed,
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2,
                 ),
               ),
             ],

@@ -5,7 +5,6 @@ import '../models/models.dart';
 import '../providers/library_provider.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/widgets.dart';
-import '../theme/app_theme.dart';
 import 'album_screen.dart';
 
 /// Screen displaying all liked/starred albums
@@ -108,12 +107,7 @@ class _LikedAlbumsScreenState extends State<LikedAlbumsScreen> {
               height: 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.amber.withValues(alpha: 0.18),
-                    AppTheme.appleMusicRed.withValues(alpha: 0.08),
-                  ],
-                ),
+                color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
               ),
               child: const Icon(
                 CupertinoIcons.star_fill,

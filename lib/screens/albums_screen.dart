@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -463,12 +462,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
               height: 80,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                    Colors.purpleAccent.withValues(alpha: 0.05),
-                  ],
-                ),
+                color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
               ),
               child: const Icon(
                 CupertinoIcons.music_albums,
@@ -618,17 +612,11 @@ class _AlbumGridItemState extends State<_AlbumGridItem> {
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: isDark ? 0.40 : 0.12),
-                        blurRadius: _isHovered ? 16 : 10,
+                        color: Colors.black.withValues(alpha: isDark ? (_isHovered ? 0.50 : 0.35) : (_isHovered ? 0.16 : 0.08)),
+                        blurRadius: _isHovered ? 16 : 8,
                         offset: Offset(0, _isHovered ? 8 : 4),
                         spreadRadius: -2,
                       ),
-                      if (_isHovered)
-                        BoxShadow(
-                          color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                          blurRadius: 18,
-                          offset: const Offset(0, 4),
-                        ),
                     ],
                   ),
                   child: ClipRRect(

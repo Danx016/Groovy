@@ -306,21 +306,14 @@ class _MainScreenState extends State<MainScreen> {
                                         height: 64,
                                         decoration: BoxDecoration(
                                           shape: BoxShape.circle,
-                                          gradient: LinearGradient(
-                                            colors: isInstallerReady
-                                                ? const [Color(0xFF10B981), Color(0xFF059669)]
-                                                : const [Color(0xFFFF334B), Color(0xFFE50914)],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                          ),
+                                          color: isInstallerReady
+                                              ? const Color(0xFF10B981)
+                                              : const Color(0xFFE50914),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: (isInstallerReady
-                                                      ? const Color(0xFF10B981)
-                                                      : const Color(0xFFE50914))
-                                                  .withValues(alpha: 0.4),
-                                              blurRadius: 20,
-                                              offset: const Offset(0, 8),
+                                              color: Colors.black.withValues(alpha: 0.18),
+                                              blurRadius: 12,
+                                              offset: const Offset(0, 4),
                                             ),
                                           ],
                                         ),

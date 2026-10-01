@@ -59,17 +59,11 @@ class _AlbumCardState extends State<AlbumCard> {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                          color: Colors.black.withValues(alpha: isDark ? (_isHovered ? 0.45 : 0.30) : (_isHovered ? 0.16 : 0.08)),
                           blurRadius: _isHovered ? 16 : 8,
                           offset: Offset(0, _isHovered ? 8 : 4),
                           spreadRadius: -2,
                         ),
-                        if (_isHovered)
-                          BoxShadow(
-                            color: AppTheme.appleMusicRed.withValues(alpha: 0.18),
-                            blurRadius: 16,
-                            offset: const Offset(0, 4),
-                          ),
                       ],
                     ),
                     child: AspectRatio(

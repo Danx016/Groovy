@@ -96,20 +96,12 @@ class GroovyConfirmDialog extends StatelessWidget {
                 height: 58,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: iconGradient ??
-                        (isDestructive
-                            ? const [Color(0xFFFF334B), Color(0xFFE50914)]
-                            : [primaryColor, primaryColor.withValues(alpha: 0.85)]),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+                  color: isDestructive ? destructiveColor : primaryColor,
                   boxShadow: [
                     BoxShadow(
-                      color: (isDestructive ? destructiveColor : primaryColor)
-                          .withValues(alpha: 0.35),
-                      blurRadius: 16,
-                      offset: const Offset(0, 6),
+                      color: Colors.black.withValues(alpha: 0.18),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
                   ],
                 ),
