@@ -242,7 +242,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
   }
 
-  /// Handle app lifecycle changes - save queue state when going to background (important for iOS/Android)
+  /// Handle app lifecycle changes - save queue state and handle disconnects
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
@@ -250,6 +250,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint(
           '[Player] App lifecycle state: $state - saving queue state immediately');
       _saveQueueStateImmediate();
+    } else if (state == AppLifecycleState.detached) {
+      debugPrint('[Player] App lifecycle state: detached - stopping playback on remote devices');
+      if (_groovyConnectService?.isConnected == true) {
+        _groovyConnectService?.sendControl('pause').catchError((_) => false);
+        _groovyConnectService?.disconnect();
+      }
+      if (_isPlaying) {
+        _isPlaying = false;
+        _sendTelemetryHeartbeat(overridePlaying: false);
+      }
     } else if (state == AppLifecycleState.resumed) {
       if (!_isRenderingRemotely && _audioPlayer.playing) {
         _position = _audioPlayer.position;
@@ -408,6 +418,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         !_castService.isConnected &&
         !_upnpService.isConnected) {
       _isRenderingRemotely = false;
+      _isPlaying = false;
       _remotePositionTickerTimer?.cancel();
       _remotePositionTickerTimer = null;
       _remoteAnchorTime = null;

@@ -927,14 +927,16 @@ class GroovyConnectService extends ChangeNotifier {
   }
 
   /// Removes devices that haven't sent a ping in over 30 seconds.
-  /// Never prunes the active connected device while connected.
+  /// Removes devices that haven't sent a ping in over 30 seconds.
+  /// Disconnects the active connected device if silent for > 12s.
   void _pruneStaleDevices() {
     final now = DateTime.now();
     _discoveredDevices.removeWhere((id, dev) {
       if (_connectedDevice?.id == id) {
-        // Never disconnect the active device unless completely silent for > 60s
-        final isConnectedStale = now.difference(_connectedDevice!.lastSeen).inSeconds > 60;
+        // Disconnect if the active remote device has been silent for > 12s (e.g. app closed/killed)
+        final isConnectedStale = now.difference(_connectedDevice!.lastSeen).inSeconds > 12;
         if (isConnectedStale) {
+          debugPrint('[GroovyConnect] Connected remote device $id became stale/silent (>12s). Disconnecting.');
           _connectedDevice = null;
           _statusSyncTimer?.cancel();
           return true;

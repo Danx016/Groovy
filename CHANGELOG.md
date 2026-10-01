@@ -5,6 +5,21 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.1] - 2026-10-01
+
+### Fixed & Improved
+- **Control Multimedia en Windows**:
+  - Corregido el procesamiento de teclas multimedia físicas (Pausa, Play, Siguiente, Anterior, Stop) para que respondan instantáneamente (0ms) sin saltar pistas por error ni sufrir latencia de multiclic.
+  - Implementado sistema de filtrado (throttling de 200ms) para ignorar pulsaciones y rebotes repetidos del controlador de teclado de Windows.
+- **Sincronización y Pausa Cross-Device (Groovy Connect)**:
+  - Al cerrar la app o cerrar sesión en un dispositivo, la reproducción remota se detiene de forma instantánea en el otro dispositivo en lugar de continuar sin audio.
+  - Detección ultrarrápida de desconexión de dispositivos remotos (reducida a 12s) para pausar la barra de progreso de inmediato y evitar desincronizaciones de estado.
+- **Icono en Pantalla de Bloqueo / Centro de Control de iOS**:
+  - Eliminado el canal alfa (transparencia) y configurado fondo sólido `#1C1C1E` en la generación de iconos según las directrices de Apple, permitiendo que el logo de Groovy se muestre nítido en el reproductor del sistema.
+- **Google Sign-In en Android**:
+  - Actualizado el Client ID oficial de Android vinculado a la huella digital SHA-1 en Google Cloud Console para habilitar el inicio de sesión nativo directo con Google Play Services sin redirigir al navegador.
+- **Actualización Multiplataforma**: Actualizado el sistema a la versión **1.7.1** (Build 152) para Windows y Android.
+
 ## [1.7.0] - 2026-10-01
 
 ### Fixed & Changed

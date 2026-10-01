@@ -59,6 +59,22 @@ class WindowsSystemService {
     });
   }
 
+  DateTime? _lastKeyActionTime;
+  LogicalKeyboardKey? _lastHandledKey;
+  static const _keyThrottleDuration = Duration(milliseconds: 200);
+
+  bool _isKeyThrottled(LogicalKeyboardKey key) {
+    final now = DateTime.now();
+    if (_lastHandledKey == key &&
+        _lastKeyActionTime != null &&
+        now.difference(_lastKeyActionTime!) < _keyThrottleDuration) {
+      return true;
+    }
+    _lastHandledKey = key;
+    _lastKeyActionTime = now;
+    return false;
+  }
+
   @visibleForTesting
   void handleMediaClickForTesting() => _handleMediaClick();
 
@@ -68,26 +84,36 @@ class WindowsSystemService {
   bool _handleKeyEvent(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
 
-    if (event.logicalKey == LogicalKeyboardKey.mediaPlayPause ||
-        event.logicalKey == LogicalKeyboardKey.mediaPlay && !_isPlaying ||
-        event.logicalKey == LogicalKeyboardKey.mediaPause && _isPlaying) {
-      // Single-button headset and keyboard media keys: use the multi-click handler
-      // so 1 tap=play/pause, 2 taps=skip next, 3 taps=skip previous
-      _handleMediaClick();
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.mediaPlayPause) {
+      if (_isKeyThrottled(key)) return true;
+      if (onTogglePlayPause != null) {
+        onTogglePlayPause!.call();
+      } else if (_isPlaying) {
+        onPause?.call();
+      } else {
+        onPlay?.call();
+      }
       return true;
-    } else if (event.logicalKey == LogicalKeyboardKey.mediaPlay) {
+    } else if (key == LogicalKeyboardKey.mediaPlay) {
+      if (_isKeyThrottled(key)) return true;
       onPlay?.call();
       return true;
-    } else if (event.logicalKey == LogicalKeyboardKey.mediaPause) {
+    } else if (key == LogicalKeyboardKey.mediaPause) {
+      if (_isKeyThrottled(key)) return true;
       onPause?.call();
       return true;
-    } else if (event.logicalKey == LogicalKeyboardKey.mediaTrackNext) {
+    } else if (key == LogicalKeyboardKey.mediaTrackNext) {
+      if (_isKeyThrottled(key)) return true;
       onSkipNext?.call();
       return true;
-    } else if (event.logicalKey == LogicalKeyboardKey.mediaTrackPrevious) {
+    } else if (key == LogicalKeyboardKey.mediaTrackPrevious) {
+      if (_isKeyThrottled(key)) return true;
       onSkipPrevious?.call();
       return true;
-    } else if (event.logicalKey == LogicalKeyboardKey.mediaStop) {
+    } else if (key == LogicalKeyboardKey.mediaStop) {
+      if (_isKeyThrottled(key)) return true;
       onStop?.call();
       return true;
     }

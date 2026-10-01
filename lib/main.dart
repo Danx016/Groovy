@@ -295,6 +295,14 @@ void main() async {
   playerProvider.setGroovyConnectService(groovyConnectService);
 
   void syncConnectAuth() {
+    final hasAuth = authProvider.token != null && authProvider.token!.isNotEmpty;
+    if (!hasAuth) {
+      if (groovyConnectService.isConnected) {
+        groovyConnectService.sendControl('pause').catchError((_) => false);
+        groovyConnectService.disconnect();
+      }
+      playerProvider.pause();
+    }
     groovyConnectService.updateAuth(
       token: authProvider.token,
       userId: authProvider.currentUser?.id,

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:groovy/services/windows_system_service.dart';
 
 void main() {
@@ -76,6 +77,124 @@ void main() {
       expect(togglePlayPauseCalls, 0, reason: 'Single click action must be superseded');
       expect(skipNextCalls, 0, reason: 'Double click action must be superseded');
       expect(skipPreviousCalls, 1, reason: 'Triple click must invoke onSkipPrevious');
+    });
+  });
+
+  group('WindowsSystemService Direct Media Key Event Handling', () {
+    late WindowsSystemService service;
+    int playCalls = 0;
+    int pauseCalls = 0;
+    int stopCalls = 0;
+    int skipNextCalls = 0;
+    int skipPreviousCalls = 0;
+    int togglePlayPauseCalls = 0;
+
+    setUp(() {
+      service = WindowsSystemService();
+      playCalls = 0;
+      pauseCalls = 0;
+      stopCalls = 0;
+      skipNextCalls = 0;
+      skipPreviousCalls = 0;
+      togglePlayPauseCalls = 0;
+
+      service.onPlay = () => playCalls++;
+      service.onPause = () => pauseCalls++;
+      service.onStop = () => stopCalls++;
+      service.onSkipNext = () => skipNextCalls++;
+      service.onSkipPrevious = () => skipPreviousCalls++;
+      service.onTogglePlayPause = () => togglePlayPauseCalls++;
+    });
+
+    test('mediaPause key directly invokes onPause without delay or skipping', () {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaPause,
+        logicalKey: LogicalKeyboardKey.mediaPause,
+        timeStamp: Duration.zero,
+      );
+
+      final handled = service.handleKeyEventForTesting(event);
+      expect(handled, isTrue);
+      expect(pauseCalls, 1);
+      expect(skipNextCalls, 0, reason: 'Pausing should NEVER trigger skipNext');
+      expect(togglePlayPauseCalls, 0);
+    });
+
+    test('mediaPlay key directly invokes onPlay', () {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaPlay,
+        logicalKey: LogicalKeyboardKey.mediaPlay,
+        timeStamp: Duration.zero,
+      );
+
+      final handled = service.handleKeyEventForTesting(event);
+      expect(handled, isTrue);
+      expect(playCalls, 1);
+      expect(skipNextCalls, 0);
+    });
+
+    test('mediaPlayPause key directly invokes onTogglePlayPause', () {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaPlayPause,
+        logicalKey: LogicalKeyboardKey.mediaPlayPause,
+        timeStamp: Duration.zero,
+      );
+
+      final handled = service.handleKeyEventForTesting(event);
+      expect(handled, isTrue);
+      expect(togglePlayPauseCalls, 1);
+      expect(skipNextCalls, 0);
+    });
+
+    test('mediaTrackNext key directly invokes onSkipNext', () {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaTrackNext,
+        logicalKey: LogicalKeyboardKey.mediaTrackNext,
+        timeStamp: Duration.zero,
+      );
+
+      final handled = service.handleKeyEventForTesting(event);
+      expect(handled, isTrue);
+      expect(skipNextCalls, 1);
+    });
+
+    test('mediaTrackPrevious key directly invokes onSkipPrevious', () {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaTrackPrevious,
+        logicalKey: LogicalKeyboardKey.mediaTrackPrevious,
+        timeStamp: Duration.zero,
+      );
+
+      final handled = service.handleKeyEventForTesting(event);
+      expect(handled, isTrue);
+      expect(skipPreviousCalls, 1);
+    });
+
+    test('mediaStop key directly invokes onStop', () {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaStop,
+        logicalKey: LogicalKeyboardKey.mediaStop,
+        timeStamp: Duration.zero,
+      );
+
+      final handled = service.handleKeyEventForTesting(event);
+      expect(handled, isTrue);
+      expect(stopCalls, 1);
+    });
+
+    test('Rapid repeat keydown event within throttle window is throttled', () async {
+      final event = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaPause,
+        logicalKey: LogicalKeyboardKey.mediaPause,
+        timeStamp: Duration.zero,
+      );
+
+      service.handleKeyEventForTesting(event);
+      // Rapid duplicate event (key repeat)
+      service.handleKeyEventForTesting(event);
+
+      expect(pauseCalls, 1, reason: 'Duplicate rapid keydown within 200ms must be throttled');
+      expect(skipNextCalls, 0);
     });
   });
 }
