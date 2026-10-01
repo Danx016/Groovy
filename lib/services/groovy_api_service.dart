@@ -121,7 +121,7 @@ class GroovyApiService {
       'X-Client-Platform': platform,
       'X-Device-Model': dev?.deviceModel ?? '$_clientPlatformName Device',
       'X-OS-Version': dev?.osVersion ?? Platform.operatingSystemVersion,
-      'X-App-Version': dev?.appVersion ?? '1.6.8',
+      'X-App-Version': dev?.appVersion ?? '1.6.9',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
     if (token != null && token.isNotEmpty) {
