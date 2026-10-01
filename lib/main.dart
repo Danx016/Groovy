@@ -461,7 +461,10 @@ class GroovyApp extends StatelessWidget {
             return const Locale('es');
           },
           home: const AuthWrapper(),
-          navigatorObservers: [AnalyticsNavigatorObserver()],
+          navigatorObservers: [
+            AnalyticsNavigatorObserver(),
+            DisplayModeRouteObserver(),
+          ],
           builder: (context, child) {
             if (!kIsWeb && Platform.isWindows) {
               final isDark = Theme.of(context).brightness == Brightness.dark;

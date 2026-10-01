@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
+import android.view.Surface
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import com.ryanheise.audioservice.AudioServiceFragmentActivity
@@ -25,6 +26,11 @@ class MainActivity : AudioServiceFragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        setHighRefreshRate()
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
         setHighRefreshRate()
     }
 
@@ -93,12 +99,31 @@ class MainActivity : AudioServiceFragmentActivity() {
                 val maxMode = modes.maxByOrNull { it.refreshRate }
                 if (maxMode != null) {
                     val params = window.attributes
+                    // 1. Force the high-refresh modeId
                     params.preferredDisplayModeId = maxMode.modeId
-                    try {
-                        params.javaClass.getField("preferredMinDisplayRefreshRate").setFloat(params, maxMode.refreshRate)
-                        params.javaClass.getField("preferredMaxDisplayRefreshRate").setFloat(params, maxMode.refreshRate)
-                    } catch (_: Exception) {}
+                    // 2. Set official public preferredRefreshRate (API 23+)
+                    params.preferredRefreshRate = maxMode.refreshRate
                     window.attributes = params
+
+                    // 3. Android 11+ (API 30+) View/Surface frame rate:
+                    // Prevents SurfaceFlinger and OEM power managers (Transsion XOS, MIUI, OneUI)
+                    // from throttling back to 60Hz during idle or animations
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        window.decorView.post {
+                            try {
+                                val setFrameRateMethod = window.decorView.javaClass.methods.firstOrNull {
+                                    it.name == "setFrameRate" && it.parameterTypes.size >= 2
+                                }
+                                if (setFrameRateMethod != null) {
+                                    if (setFrameRateMethod.parameterTypes.size == 2) {
+                                        setFrameRateMethod.invoke(window.decorView, maxMode.refreshRate, 0)
+                                    } else if (setFrameRateMethod.parameterTypes.size == 3) {
+                                        setFrameRateMethod.invoke(window.decorView, maxMode.refreshRate, 0, 0)
+                                    }
+                                }
+                            } catch (_: Exception) {}
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -122,6 +147,18 @@ class MainActivity : AudioServiceFragmentActivity() {
             }
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.groovy.music/display").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setHighRefreshRate" -> {
+                    runOnUiThread {
+                        setHighRefreshRate()
+                        result.success(true)
+                    }
+                }
+                else -> result.notImplemented()
+            }
         }
 
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->

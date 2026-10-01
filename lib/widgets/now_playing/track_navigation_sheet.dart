@@ -165,15 +165,15 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
         : coverUrl;
 
     return RepaintBoundary(
-      child: Container(
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-      padding: const EdgeInsets.only(top: 12, bottom: 32),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: Material(
+        color: isDark ? const Color(0xFF1C1C1E) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.only(top: 12, bottom: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
           // Top Handle
           Center(
             child: Container(
@@ -312,7 +312,8 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
         ],
       ),
     ),
-  );
+  ),
+);
   }
 
   Widget _buildArtistAvatarImage(String? fallbackUrl, bool isDark) {
