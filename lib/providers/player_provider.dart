@@ -147,6 +147,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _optimisticLocalPlayPauseTime;
   bool? _optimisticLocalPlayPauseState;
   bool _togglePending = false; // prevents re-entrant double-tap desync
+  bool _skipPending = false;    // prevents rapid double-skip from mis-taps or race conditions
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
@@ -1842,7 +1843,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                       _activeAudioSongId == _currentSong?.id &&
                       effDur > const Duration(seconds: 5) &&
                       pos >= effDur - const Duration(milliseconds: 250)) {
-                    if (_currentSong != null &&
+                    // Guard: don't auto-complete if the user just pressed pause
+                    // (race condition where timer fires at same instant as pause tap)
+                    final recentPause = _lastUserPauseTime != null &&
+                        DateTime.now().difference(_lastUserPauseTime!) <
+                            const Duration(milliseconds: 2000);
+                    if (!recentPause &&
+                        _currentSong != null &&
                         _lastCompletedSongId != _currentSong!.id) {
                       _lastCompletedSongId = _currentSong!.id;
                       debugPrint(
@@ -3137,6 +3144,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipNext() async {
+    // Debounce rapid double-taps / race conditions (same pattern as togglePlayPause)
+    if (_skipPending) return;
+    _skipPending = true;
+    Future.delayed(const Duration(milliseconds: 400), () => _skipPending = false);
+
     _hasRetriedCurrentPlay = false;
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition
@@ -3370,6 +3382,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipPrevious() async {
+    // Debounce rapid double-taps / race conditions (same pattern as togglePlayPause)
+    if (_skipPending) return;
+    _skipPending = true;
+    Future.delayed(const Duration(milliseconds: 400), () => _skipPending = false);
+
     _hasRetriedCurrentPlay = false;
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition

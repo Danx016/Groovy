@@ -374,6 +374,9 @@ class _MiniPlayerControls extends StatelessWidget {
               color: color,
             ),
 
+            // Small gap to prevent accidental skip when tapping edge of play/pause
+            const SizedBox(width: 4),
+
             // Next / Fast-Forward Button (Apple Music double arrow)
             IconButton(
               onPressed: hasNext

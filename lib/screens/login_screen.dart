@@ -508,35 +508,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 12),
-
-                  // Continuar sin cuenta (Modo Invitado)
-                  Center(
-                    child: TextButton(
-                      onPressed: _isLoading
-                          ? null
-                          : () {
-                              HapticFeedback.lightImpact();
-                              final authProvider = Provider.of<AuthProvider>(context, listen: false);
-                              authProvider.enterOfflineMode();
-                              if (Navigator.of(context).canPop()) {
-                                Navigator.of(context).pop(true);
-                              }
-                            },
-                      style: TextButton.styleFrom(
-                        foregroundColor: isDark ? Colors.white70 : Colors.black54,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
-                      child: const Text(
-                        'Continuar sin cuenta (Modo Invitado)',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 24),
                 ],
               ),
