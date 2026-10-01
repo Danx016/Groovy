@@ -93,12 +93,6 @@ class GoogleAuthService {
         text.contains('user_canceled');
   }
 
-  bool _isDeveloperOrConfigError(String? code, String? message) {
-    final text = '${code ?? ''} ${message ?? ''}'.toLowerCase();
-    return text.contains('10') ||
-        text.contains('apiexception: 10') ||
-        text.contains('developer_error');
-  }
 
   Exception _mapPlatformException(PlatformException pe) {
     final msg = (pe.message ?? pe.code).toLowerCase();
@@ -126,9 +120,9 @@ class GoogleAuthService {
     try {
       GoogleSignInAccount? account;
 
-      // 1. Primary native attempt: Google Play Services with serverClientId to get idToken
+      // 1. Direct native attempt: without serverClientId to avoid ApiException 10 cross-client verification errors
       try {
-        final gSignIn = _buildGoogleSignIn(withServerClientId: true);
+        final gSignIn = _buildGoogleSignIn(withServerClientId: false);
         account = await gSignIn.signIn();
       } on PlatformException catch (pe) {
         debugPrint('[GoogleAuth] Native sign-in PlatformException: ${pe.code} - ${pe.message}');
@@ -137,38 +131,26 @@ class GoogleAuthService {
           return null;
         }
 
-        // If developer error (ApiException: 10) occurs, fallback to native sign-in without serverClientId
-        if (_isDeveloperOrConfigError(pe.code, pe.message)) {
-          debugPrint('[GoogleAuth] Retrying native Google sign-in without serverClientId...');
-          try {
-            final fallbackSignIn = _buildGoogleSignIn(withServerClientId: false);
-            account = await fallbackSignIn.signIn();
-          } on PlatformException catch (fpe) {
-            if (_isUserCancellation(fpe.code, fpe.message)) {
-              debugPrint('[GoogleAuth] Native sign-in cancelled by user on retry');
-              return null;
-            }
-            throw _mapPlatformException(fpe);
-          } catch (fe) {
-            if (_isUserCancellation(null, fe.toString())) return null;
-            throw Exception('Error al iniciar sesión con Google: $fe');
+        // Secondary attempt: try with serverClientId in case backend server client is required
+        try {
+          final serverGSignIn = _buildGoogleSignIn(withServerClientId: true);
+          account = await serverGSignIn.signIn();
+        } on PlatformException catch (spe) {
+          if (_isUserCancellation(spe.code, spe.message)) {
+            debugPrint('[GoogleAuth] Native sign-in dismissed by user on retry');
+            return null;
           }
-        } else {
-          throw _mapPlatformException(pe);
+          throw _mapPlatformException(spe);
+        } catch (se) {
+          if (_isUserCancellation(null, se.toString())) return null;
+          throw Exception('Error al iniciar sesión con Google: $se');
         }
       } catch (e) {
         debugPrint('[GoogleAuth] Native sign-in non-platform exception: $e');
         if (_isUserCancellation(null, e.toString())) {
           return null;
         }
-        // Fallback native attempt without serverClientId
-        try {
-          final fallbackSignIn = _buildGoogleSignIn(withServerClientId: false);
-          account = await fallbackSignIn.signIn();
-        } catch (e2) {
-          if (_isUserCancellation(null, e2.toString())) return null;
-          throw Exception('No se pudo iniciar sesión con Google en este dispositivo: $e2');
-        }
+        throw Exception('No se pudo completar el inicio de sesión con Google: $e');
       }
 
       if (account == null) {

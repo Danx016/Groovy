@@ -489,7 +489,7 @@ class AuthWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
 
-    if (authProvider.state == AuthState.authenticating && authProvider.currentUser == null) {
+    if (authProvider.isInitialLoading) {
       return const Scaffold(
         backgroundColor: Color(0xFF0C0D10),
         body: Center(

@@ -80,12 +80,15 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  bool _isInitialLoading = true;
+  bool get isInitialLoading => _isInitialLoading;
+
   AuthState get state => _state;
   String? get error => _error;
   dynamic get config => null;
   GroovyUser? get currentUser => _currentUser;
   String? get token => _token;
-  bool get isAuthenticated => _state == AuthState.authenticated;
+  bool get isAuthenticated => _state == AuthState.authenticated || _state == AuthState.offlineMode;
   bool get hasOfflineContent => false;
 
   Future<void> _loadSavedSession() async {
@@ -100,6 +103,7 @@ class AuthProvider extends ChangeNotifier {
         _token = savedToken;
         _currentUser = GroovyUser.fromJson(savedProfile);
         _state = AuthState.authenticated;
+        _isInitialLoading = false;
         notifyListeners();
 
         // Start real-time presence heartbeat
@@ -110,11 +114,13 @@ class AuthProvider extends ChangeNotifier {
         syncUserDataFromCloud();
       } else {
         _state = AuthState.unauthenticated;
+        _isInitialLoading = false;
         notifyListeners();
       }
     } catch (e) {
       debugPrint('[AuthProvider] Error loading saved session: $e');
       _state = AuthState.unauthenticated;
+      _isInitialLoading = false;
       notifyListeners();
     }
   }
@@ -305,6 +311,12 @@ class AuthProvider extends ChangeNotifier {
 
   void enterOfflineMode() {
     OfflineService().setOfflineMode(true);
+    _currentUser ??= GroovyUser(
+      id: 0,
+      name: 'Invitado',
+      email: 'guest@groovy.local',
+      createdAt: DateTime.now().toIso8601String(),
+    );
     _state = AuthState.offlineMode;
     notifyListeners();
   }
