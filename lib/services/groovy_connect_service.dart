@@ -510,7 +510,7 @@ class GroovyConnectService extends ChangeNotifier {
         InternetAddress.anyIPv4,
         _defaultUdpPort,
         reuseAddress: true,
-        reusePort: !Platform.isWindows,
+        reusePort: !Platform.isWindows && !Platform.isAndroid,
       );
       _udpSocket!.broadcastEnabled = true;
 

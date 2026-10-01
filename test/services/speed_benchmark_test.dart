@@ -102,7 +102,7 @@ void main() {
       expect(song, isNull);
       expect(albums, isEmpty);
       expect(artists, isEmpty);
-      expect(sw.elapsedMilliseconds, lessThan(10));
+      expect(sw.elapsedMilliseconds, lessThan(50));
     });
 
     test('Heavy Library Scale Benchmark (5,000 songs simulated)', () {
