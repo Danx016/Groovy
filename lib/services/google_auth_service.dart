@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -81,43 +82,118 @@ class GoogleAuthService {
     }
   }
 
-  /// Mobile Google Sign-In using native Google Play Services dialog on Android,
-  /// with automatic fallback to browser OAuth if native authentication fails.
-  Future<GoogleUserInfo?> _signInMobile() async {
-    GoogleSignInAccount? account;
-    try {
-      // Use direct native sign-in (withServerClientId: false) as primary to avoid
-      // ApiException: 10 cross-client verification errors and prevent duplicate account selection dialogs.
-      final gSignIn = _buildGoogleSignIn(withServerClientId: false);
-      try {
-        await gSignIn.signOut();
-      } catch (_) {}
-      account = await gSignIn.signIn();
-    } catch (e) {
-      debugPrint('[GoogleAuth] Native sign-in failed: $e. Falling back to browser OAuth flow...');
-      return _signInOAuthWeb();
-    }
+  bool _isSigningIn = false;
 
-    if (account == null) {
-      debugPrint('[GoogleAuth] Mobile login cancelled by user');
+  bool _isUserCancellation(String? code, String? message) {
+    final text = '${code ?? ''} ${message ?? ''}'.toLowerCase();
+    return text.contains('sign_in_canceled') ||
+        text.contains('12501') ||
+        text.contains('canceled') ||
+        text.contains('cancelled') ||
+        text.contains('user_canceled');
+  }
+
+  bool _isDeveloperOrConfigError(String? code, String? message) {
+    final text = '${code ?? ''} ${message ?? ''}'.toLowerCase();
+    return text.contains('10') ||
+        text.contains('apiexception: 10') ||
+        text.contains('developer_error');
+  }
+
+  Exception _mapPlatformException(PlatformException pe) {
+    final msg = (pe.message ?? pe.code).toLowerCase();
+    if (msg.contains('network') || msg.contains('7') || msg.contains('socket') || msg.contains('connection')) {
+      return Exception('Error de red al conectar con Google. Revisa tu conexión a internet.');
+    }
+    if (msg.contains('12500') || msg.contains('sign_in_failed')) {
+      return Exception('Servicios de Google Play no disponibles o desactualizados (12500).');
+    }
+    if (msg.contains('10') || msg.contains('developer_error')) {
+      return Exception('Error de configuración en Google Play Services (10).');
+    }
+    return Exception(pe.message ?? 'Error en Google Play Services (${pe.code})');
+  }
+
+  /// Mobile Google Sign-In using native Google Play Services modal inside the app.
+  /// Authentication happens 100% in-app without ever launching an external web browser.
+  Future<GoogleUserInfo?> _signInMobile() async {
+    if (_isSigningIn) {
+      debugPrint('[GoogleAuth] Sign-in already in progress, ignoring duplicate tap');
       return null;
     }
+    _isSigningIn = true;
 
-    String? idToken;
     try {
-      final authentication = await account.authentication;
-      idToken = authentication.idToken;
-    } catch (e) {
-      debugPrint('[GoogleAuth] Note obtaining authentication tokens: $e');
-    }
+      GoogleSignInAccount? account;
 
-    return GoogleUserInfo(
-      id: account.id,
-      email: account.email,
-      name: account.displayName ?? account.email.split('@').first,
-      avatarUrl: account.photoUrl,
-      idToken: idToken,
-    );
+      // 1. Primary native attempt: Google Play Services with serverClientId to get idToken
+      try {
+        final gSignIn = _buildGoogleSignIn(withServerClientId: true);
+        account = await gSignIn.signIn();
+      } on PlatformException catch (pe) {
+        debugPrint('[GoogleAuth] Native sign-in PlatformException: ${pe.code} - ${pe.message}');
+        if (_isUserCancellation(pe.code, pe.message)) {
+          debugPrint('[GoogleAuth] Native sign-in dismissed by user');
+          return null;
+        }
+
+        // If developer error (ApiException: 10) occurs, fallback to native sign-in without serverClientId
+        if (_isDeveloperOrConfigError(pe.code, pe.message)) {
+          debugPrint('[GoogleAuth] Retrying native Google sign-in without serverClientId...');
+          try {
+            final fallbackSignIn = _buildGoogleSignIn(withServerClientId: false);
+            account = await fallbackSignIn.signIn();
+          } on PlatformException catch (fpe) {
+            if (_isUserCancellation(fpe.code, fpe.message)) {
+              debugPrint('[GoogleAuth] Native sign-in cancelled by user on retry');
+              return null;
+            }
+            throw _mapPlatformException(fpe);
+          } catch (fe) {
+            if (_isUserCancellation(null, fe.toString())) return null;
+            throw Exception('Error al iniciar sesión con Google: $fe');
+          }
+        } else {
+          throw _mapPlatformException(pe);
+        }
+      } catch (e) {
+        debugPrint('[GoogleAuth] Native sign-in non-platform exception: $e');
+        if (_isUserCancellation(null, e.toString())) {
+          return null;
+        }
+        // Fallback native attempt without serverClientId
+        try {
+          final fallbackSignIn = _buildGoogleSignIn(withServerClientId: false);
+          account = await fallbackSignIn.signIn();
+        } catch (e2) {
+          if (_isUserCancellation(null, e2.toString())) return null;
+          throw Exception('No se pudo iniciar sesión con Google en este dispositivo: $e2');
+        }
+      }
+
+      if (account == null) {
+        debugPrint('[GoogleAuth] Native sign-in returned null (user cancelled)');
+        return null;
+      }
+
+      String? idToken;
+      try {
+        final authentication = await account.authentication;
+        idToken = authentication.idToken;
+      } catch (e) {
+        debugPrint('[GoogleAuth] Note obtaining authentication tokens: $e');
+      }
+
+      return GoogleUserInfo(
+        id: account.id,
+        email: account.email,
+        name: account.displayName ?? (account.email.isNotEmpty ? account.email.split('@').first : 'Usuario'),
+        avatarUrl: account.photoUrl,
+        idToken: idToken,
+      );
+    } finally {
+      _isSigningIn = false;
+    }
   }
 
   /// Generates a cryptographic PKCE code verifier and code challenge (S256)
