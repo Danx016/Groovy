@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] - 2026-10-01
+
+### Fixed & Changed
+- **Autenticación con Google en Android**:
+  - Solucionado el error `12500` (`SIGN_IN_FAILED`) de Google Play Services mediante registro de huella digital SHA-1 y unificación del identificador de paquete `com.groovy.music`.
+  - Incorporado fallback automático e instantáneo al flujo seguro OAuth 2.0 en navegador ante cualquier anomalía o desactualización de Google Play Services en el dispositivo móvil.
+- **Actualización Multiplataforma**: Actualizado el sistema a la versión **1.7.0** (Build 151) para Windows, Android y Linux con sincronización de actualizador automático.
+
 ## [1.6.4] - 2026-10-01
 
 ### Fixed & Changed

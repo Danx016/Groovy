@@ -98,22 +98,10 @@ class GoogleAuthService {
   }
 
 
-  Exception _mapPlatformException(PlatformException pe) {
-    final msg = (pe.message ?? pe.code).toLowerCase();
-    if (msg.contains('network') || msg.contains('7') || msg.contains('socket') || msg.contains('connection')) {
-      return Exception('Error de red al conectar con Google. Revisa tu conexión a internet.');
-    }
-    if (msg.contains('12500') || msg.contains('sign_in_failed')) {
-      return Exception('Servicios de Google Play no disponibles o desactualizados (12500).');
-    }
-    if (msg.contains('10') || msg.contains('developer_error')) {
-      return Exception('Error de configuración en Google Play Services (10).');
-    }
-    return Exception(pe.message ?? 'Error en Google Play Services (${pe.code})');
-  }
 
   /// Mobile Google Sign-In using native Google Play Services modal inside the app.
-  /// Authentication happens 100% in-app without ever launching an external web browser.
+  /// If native Google Play Services fails (e.g., error 12500 due to SHA-1 mismatch or unavailable Play Services),
+  /// it automatically falls back to the OAuth browser flow to guarantee successful sign-in.
   Future<GoogleUserInfo?> _signInMobile() async {
     if (_isSigningIn) {
       debugPrint('[GoogleAuth] Sign-in already in progress, ignoring duplicate tap');
@@ -124,9 +112,6 @@ class GoogleAuthService {
     try {
       GoogleSignInAccount? account;
 
-      // Android native sign-in: NO serverClientId needed.
-      // Play Services validates via the registered SHA-1 fingerprint of the APK.
-      // Passing a web serverClientId causes ApiException 10 (DEVELOPER_ERROR).
       try {
         final gSignIn = _buildGoogleSignIn(withServerClientId: false);
         account = await gSignIn.signIn();
@@ -136,13 +121,17 @@ class GoogleAuthService {
           debugPrint('[GoogleAuth] Native sign-in dismissed by user');
           return null;
         }
-        throw _mapPlatformException(pe);
+        // If native Google Play Services throws 12500, 10, or sign_in_failed,
+        // seamlessly fall back to universal OAuth browser flow
+        debugPrint('[GoogleAuth] Native sign-in failed (${pe.code}), falling back to OAuth Web flow...');
+        return await _signInOAuthWeb();
       } catch (e) {
         debugPrint('[GoogleAuth] Native sign-in non-platform exception: $e');
         if (_isUserCancellation(null, e.toString())) {
           return null;
         }
-        throw Exception('No se pudo completar el inicio de sesión con Google: $e');
+        debugPrint('[GoogleAuth] Native sign-in failed ($e), falling back to OAuth Web flow...');
+        return await _signInOAuthWeb();
       }
 
       if (account == null) {
