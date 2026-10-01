@@ -120,9 +120,9 @@ class GoogleAuthService {
     try {
       GoogleSignInAccount? account;
 
-      // 1. Direct native attempt: without serverClientId to avoid ApiException 10 cross-client verification errors
+      // Primary native attempt: using webClientId as serverClientId so Google Play Services can verify the client and issue tokens
       try {
-        final gSignIn = _buildGoogleSignIn(withServerClientId: false);
+        final gSignIn = _buildGoogleSignIn(withServerClientId: true);
         account = await gSignIn.signIn();
       } on PlatformException catch (pe) {
         debugPrint('[GoogleAuth] Native sign-in PlatformException: ${pe.code} - ${pe.message}');
@@ -131,10 +131,10 @@ class GoogleAuthService {
           return null;
         }
 
-        // Secondary attempt: try with serverClientId in case backend server client is required
+        // Secondary fallback attempt: without serverClientId if standalone Play Services default is configured
         try {
-          final serverGSignIn = _buildGoogleSignIn(withServerClientId: true);
-          account = await serverGSignIn.signIn();
+          final fallbackGSignIn = _buildGoogleSignIn(withServerClientId: false);
+          account = await fallbackGSignIn.signIn();
         } on PlatformException catch (spe) {
           if (_isUserCancellation(spe.code, spe.message)) {
             debugPrint('[GoogleAuth] Native sign-in dismissed by user on retry');
