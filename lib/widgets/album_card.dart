@@ -50,37 +50,51 @@ class _AlbumCardState extends State<AlbumCard> {
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 200),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      boxShadow: _isHovered
-                          ? [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.3),
-                                blurRadius: 16,
-                                offset: const Offset(0, 8),
-                              ),
-                            ]
-                          : [],
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.10)
+                            : Colors.black.withValues(alpha: 0.05),
+                        width: 1,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
+                          blurRadius: _isHovered ? 16 : 8,
+                          offset: Offset(0, _isHovered ? 8 : 4),
+                          spreadRadius: -2,
+                        ),
+                        if (_isHovered)
+                          BoxShadow(
+                            color: AppTheme.appleMusicRed.withValues(alpha: 0.18),
+                            blurRadius: 16,
+                            offset: const Offset(0, 4),
+                          ),
+                      ],
                     ),
                     child: AspectRatio(
                       aspectRatio: 1.0,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(
-                            child: AlbumArtwork(
-                              coverArt: widget.album.coverArt,
-                              size: widget.size,
-                              borderRadius: 8,
-                            ),
-                          ),
-                          if (_isHovered && widget.onPlayPressed != null)
-                            Positioned(
-                              bottom: 8,
-                              right: 8,
-                              child: _PlayButton(
-                                onPressed: widget.onPlayPressed!,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(13),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: AlbumArtwork(
+                                coverArt: widget.album.coverArt,
+                                size: widget.size,
+                                borderRadius: 13,
                               ),
                             ),
-                        ],
+                            if (_isHovered && widget.onPlayPressed != null)
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: _PlayButton(
+                                  onPressed: widget.onPlayPressed!,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -91,7 +105,10 @@ class _AlbumCardState extends State<AlbumCard> {
                   Expanded(
                     child: Text(
                       widget.album.name,
-                      style: theme.textTheme.bodyMedium,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: -0.2,
+                      ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -103,9 +120,9 @@ class _AlbumCardState extends State<AlbumCard> {
                         return const Padding(
                           padding: EdgeInsets.only(left: 4),
                           child: Icon(
-                            CupertinoIcons.arrow_down_circle_fill,
+                            CupertinoIcons.checkmark_seal_fill,
                             size: 14,
-                            color: Colors.grey,
+                            color: Colors.greenAccent,
                           ),
                         );
                       }
@@ -124,6 +141,7 @@ class _AlbumCardState extends State<AlbumCard> {
                     color: isDark
                         ? AppTheme.darkSecondaryText
                         : AppTheme.lightSecondaryText,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
             ],

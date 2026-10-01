@@ -3,8 +3,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/library_provider.dart';
-import '../widgets/widgets.dart';
 import '../l10n/app_localizations.dart';
+import '../widgets/widgets.dart';
+import '../theme/app_theme.dart';
 import 'album_screen.dart';
 
 /// Screen displaying all liked/starred albums
@@ -68,28 +69,70 @@ class _LikedAlbumsScreenState extends State<LikedAlbumsScreen> {
         title: Text(l10n.likedAlbums),
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? _buildLoadingGrid()
           : _likedAlbums.isEmpty
-              ? _buildEmptyState()
+              ? _buildEmptyState(Theme.of(context).brightness == Brightness.dark)
               : _buildAlbumsGrid(),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(CupertinoIcons.star, size: 64, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            AppLocalizations.of(context)!.noLikedAlbums,
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey[600],
-            ),
+  Widget _buildLoadingGrid() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final crossAxisCount = (width / 180).floor().clamp(2, 8);
+        return GridView.builder(
+          padding: const EdgeInsets.all(16).copyWith(bottom: 150),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: crossAxisCount,
+            mainAxisSpacing: 20,
+            crossAxisSpacing: 16,
+            childAspectRatio: 0.76,
           ),
-        ],
+          itemCount: 8,
+          itemBuilder: (_, __) => const AlbumCardShimmer(),
+        );
+      },
+    );
+  }
+
+  Widget _buildEmptyState(bool isDark) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.amber.withValues(alpha: 0.18),
+                    AppTheme.appleMusicRed.withValues(alpha: 0.08),
+                  ],
+                ),
+              ),
+              child: const Icon(
+                CupertinoIcons.star_fill,
+                size: 38,
+                color: Colors.amber,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              AppLocalizations.of(context)!.noLikedAlbums,
+              style: TextStyle(
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.3,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

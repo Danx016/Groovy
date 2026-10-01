@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -763,66 +764,171 @@ class _AlbumScreenState extends State<AlbumScreen> {
     final minutes = (totalDuration % 3600) ~/ 60;
 
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       body: Stack(
         children: [
           CustomScrollView(
             slivers: [
               SliverAppBar(
                 pinned: true,
-                expandedHeight: ScreenHelper.isSmallScreen(context) ? 280 : 360,
+                elevation: 0,
+                scrolledUnderElevation: 2,
+                backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+                expandedHeight: ScreenHelper.isSmallScreen(context) ? 320 : 390,
                 leading: IconButton(
                   icon: Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? Colors.black.withValues(alpha: 0.5)
-                          : Colors.white.withValues(alpha: 0.5),
+                          ? Colors.black.withValues(alpha: 0.55)
+                          : Colors.white.withValues(alpha: 0.75),
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.15),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
                     child: Icon(
                       CupertinoIcons.back,
                       color: isDark ? Colors.white : Colors.black,
+                      size: 20,
                     ),
                   ),
                   onPressed: () => Navigator.pop(context),
                 ),
                 flexibleSpace: FlexibleSpaceBar(
+                  collapseMode: CollapseMode.parallax,
                   background: ValueListenableBuilder<Set<String>>(
                     valueListenable: OfflineService().downloadedPlaylistIds,
                     builder: (context, downloaded, _) {
                       final allDownloaded = _album != null && downloaded.contains(_album!.id);
+                      final cover = _resolvedCoverArt;
+                      final artworkSize = ScreenHelper.isSmallScreen(context) ? 210.0 : 270.0;
+
                       return Stack(
                         fit: StackFit.expand,
                         children: [
-                          Padding(
-                            padding: EdgeInsets.only(
-                              top: MediaQuery.of(context).padding.top + 40,
-                              left: ScreenHelper.isSmallScreen(context) ? 24 : 40,
-                              right: ScreenHelper.isSmallScreen(context) ? 24 : 40,
-                              bottom: ScreenHelper.isSmallScreen(context) ? 60 : 80,
-                            ),
-                            child: AlbumArtwork(
-                              coverArt: _resolvedCoverArt,
-                              size: ScreenHelper.isSmallScreen(context) ? 200 : 280,
-                              borderRadius: 10,
-                            ),
-                          ),
-                          if (allDownloaded)
-                            Positioned(
-                              bottom: 86,
-                              right: 46,
-                              child: Container(
-                                decoration: const BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  CupertinoIcons.arrow_down_circle_fill,
-                                  color: Colors.grey,
-                                  size: 28,
+                          // 1. Ambient Blurred Backdrop
+                          if (cover != null && cover.isNotEmpty)
+                            Positioned.fill(
+                              child: Opacity(
+                                opacity: isDark ? 0.32 : 0.18,
+                                child: ImageFiltered(
+                                  imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                                  child: cover.startsWith('http')
+                                      ? CachedNetworkImage(
+                                          imageUrl: cover,
+                                          fit: BoxFit.cover,
+                                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                        )
+                                      : isLocalFilePath(cover)
+                                          ? Image.file(
+                                              File(cover),
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                            )
+                                          : AlbumArtwork(
+                                              coverArt: cover,
+                                              size: 300,
+                                            ),
                                 ),
                               ),
                             ),
+
+                          // 2. Gradient Fade to background
+                          Positioned.fill(
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    (isDark ? AppTheme.darkBackground : Colors.white).withValues(alpha: 0.65),
+                                    isDark ? AppTheme.darkBackground : Colors.white,
+                                  ],
+                                  stops: const [0.0, 0.70, 1.0],
+                                ),
+                              ),
+                            ),
+                          ),
+
+                          // 3. Main Elevated 3D Album Artwork
+                          Center(
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                top: MediaQuery.of(context).padding.top + 30,
+                                bottom: 20,
+                              ),
+                              child: Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  Container(
+                                    width: artworkSize,
+                                    height: artworkSize,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(18),
+                                      border: Border.all(
+                                        color: Colors.white.withValues(alpha: isDark ? 0.14 : 0.20),
+                                        width: 1.2,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withValues(alpha: isDark ? 0.60 : 0.22),
+                                          blurRadius: 30,
+                                          offset: const Offset(0, 15),
+                                          spreadRadius: -4,
+                                        ),
+                                        BoxShadow(
+                                          color: AppTheme.appleMusicRed.withValues(alpha: isDark ? 0.18 : 0.08),
+                                          blurRadius: 36,
+                                          offset: const Offset(0, 6),
+                                        ),
+                                      ],
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(18),
+                                      child: AlbumArtwork(
+                                        coverArt: cover,
+                                        size: artworkSize,
+                                        borderRadius: 18,
+                                      ),
+                                    ),
+                                  ),
+
+                                  // Floating Downloaded Badge
+                                  if (allDownloaded)
+                                    Positioned(
+                                      bottom: 8,
+                                      right: 8,
+                                      child: Container(
+                                        padding: const EdgeInsets.all(5),
+                                        decoration: BoxDecoration(
+                                          color: isDark
+                                              ? const Color(0xFF1E1E24).withValues(alpha: 0.90)
+                                              : Colors.white.withValues(alpha: 0.90),
+                                          shape: BoxShape.circle,
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withValues(alpha: 0.3),
+                                              blurRadius: 8,
+                                              offset: const Offset(0, 2),
+                                            ),
+                                          ],
+                                        ),
+                                        child: const Icon(
+                                          CupertinoIcons.checkmark_seal_fill,
+                                          color: Colors.greenAccent,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          ),
                         ],
                       );
                     },
@@ -831,59 +937,80 @@ class _AlbumScreenState extends State<AlbumScreen> {
                 actions: [
                   _buildStarButton(context, isDark),
                   _buildMoreButton(context, isDark),
+                  const SizedBox(width: 4),
                 ],
               ),
+
+              // Header Metadata & Controls
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
+                      const SizedBox(height: 6),
+                      // Album Name
                       Text(
                         _album!.name,
-                        style: theme.textTheme.headlineLarge?.copyWith(
-                          fontSize:
-                              ScreenHelper.isSmallScreen(context) ? 22 : null,
+                        style: TextStyle(
+                          fontSize: ScreenHelper.isSmallScreen(context) ? 23 : 28,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.6,
+                          color: isDark ? Colors.white : Colors.black87,
+                          height: 1.2,
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 8),
+
+                      // Artist with Clickable Navigation
                       MultiArtistWidget(
                         artists: _album!.artistParticipants,
                         artistFallback: _album!.artist ??
                             AppLocalizations.of(context)!.unknownArtist,
                         artistIdFallback: _album!.artistId,
-                        style: theme.textTheme.titleLarge?.copyWith(
+                        style: TextStyle(
                           color: AppTheme.appleMusicRed,
-                          fontSize:
-                              ScreenHelper.isSmallScreen(context) ? 16 : null,
+                          fontSize: ScreenHelper.isSmallScreen(context) ? 16 : 18,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.2,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        [
-                          if (_album!.genre != null)
-                            _album!.genre!.toUpperCase(),
-                          if (_album!.year != null) _album!.year.toString(),
-                          if (hours > 0)
-                            '$hours HR $minutes MIN'
-                          else
-                            '$minutes MIN',
-                        ].join(' • '),
-                        style: theme.textTheme.bodySmall,
-                        textAlign: TextAlign.center,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      const SizedBox(height: 12),
+
+                      // Metadata Capsules / Pills
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        spacing: 8,
+                        runSpacing: 6,
+                        children: [
+                          if (_album!.year != null)
+                            _buildMetaBadge('${_album!.year}', isDark),
+                          if (_album!.genre != null && _album!.genre!.isNotEmpty)
+                            _buildMetaBadge(_album!.genre!.toUpperCase(), isDark),
+                          _buildMetaBadge(
+                            '${_songs.length} ${_songs.length == 1 ? "canción" : "canciones"}',
+                            isDark,
+                          ),
+                          if (totalDuration > 0)
+                            _buildMetaBadge(
+                              hours > 0 ? '$hours h $minutes min' : '$minutes min',
+                              isDark,
+                            ),
+                        ],
                       ),
-                      const SizedBox(height: 20),
+                      const SizedBox(height: 22),
+
+                      // Primary Play & Shuffle Buttons
                       Row(
                         children: [
                           Expanded(
                             child: _PlayButton(
                               icon: CupertinoIcons.play_fill,
                               label: AppLocalizations.of(context)!.play,
+                              isPrimary: true,
                               onTap: () => _playAll(),
                             ),
                           ),
@@ -892,18 +1019,77 @@ class _AlbumScreenState extends State<AlbumScreen> {
                             child: _PlayButton(
                               icon: CupertinoIcons.shuffle,
                               label: AppLocalizations.of(context)!.shuffle,
+                              isPrimary: false,
                               onTap: () => _playAll(shuffle: true),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
+
+                      // Quick Action Bar (Download, Add to Queue, Star, More)
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          _buildQuickActionButton(
+                            icon: _album!.starred == true
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            iconColor: _album!.starred == true ? Colors.amber : (isDark ? Colors.white70 : Colors.black54),
+                            tooltip: _album!.starred == true ? 'En favoritos' : 'Favorito',
+                            onTap: _toggleLike,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(width: 14),
+                          _buildQuickActionButton(
+                            icon: _allDownloaded
+                                ? Icons.cloud_done_rounded
+                                : (_isQueued ? CupertinoIcons.cloud_download_fill : CupertinoIcons.cloud_download),
+                            iconColor: _allDownloaded
+                                ? Colors.green
+                                : (_isQueued ? AppTheme.appleMusicRed : (isDark ? Colors.white70 : Colors.black54)),
+                            tooltip: _allDownloaded ? 'Descargado' : 'Descargar álbum',
+                            onTap: () {
+                              if (_allDownloaded) {
+                                _removeDownloads();
+                              } else {
+                                _downloadAlbum();
+                              }
+                            },
+                            isDark: isDark,
+                          ),
+                          const SizedBox(width: 14),
+                          _buildQuickActionButton(
+                            icon: Icons.queue_music_rounded,
+                            iconColor: isDark ? Colors.white70 : Colors.black54,
+                            tooltip: 'Agregar a la cola',
+                            onTap: _addAlbumToQueue,
+                            isDark: isDark,
+                          ),
+                          const SizedBox(width: 14),
+                          _buildQuickActionButton(
+                            icon: Icons.more_horiz_rounded,
+                            iconColor: isDark ? Colors.white70 : Colors.black54,
+                            tooltip: 'Opciones',
+                            onTap: () => _showAlbumOptionsMenu(context),
+                            isDark: isDark,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Divider(
+                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                        height: 1,
+                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
               ),
+
+              // Tracklist
               SliverFixedExtentList(
-                itemExtent: 58.0,
+                itemExtent: 60.0,
                 delegate: SliverChildBuilderDelegate((context, index) {
                   final song = _songs[index];
                   return SongTile(
@@ -916,10 +1102,108 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   );
                 }, childCount: _songs.length),
               ),
-              const SliverToBoxAdapter(child: SizedBox(height: 150)),
+
+              // Album Bottom Footer & Copyright
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 28, 24, 140),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Divider(
+                        color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.06),
+                        height: 1,
+                      ),
+                      const SizedBox(height: 18),
+                      Text(
+                        '${_songs.length} ${_songs.length == 1 ? "canción" : "canciones"} • ${hours > 0 ? "$hours horas " : ""}$minutes minutos',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '℗ ${_album!.year ?? DateTime.now().year} ${_album!.artist ?? "Groovy Cloud Music"}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: isDark ? Colors.white38 : Colors.black38,
+                          letterSpacing: -0.1,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.waveform_path,
+                            size: 14,
+                            color: AppTheme.appleMusicRed.withValues(alpha: 0.8),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Calidad Alta Definición Sin Pérdida (Lossless)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? Colors.white54 : Colors.black54,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildMetaBadge(String text, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04),
+        ),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white70 : Colors.black54,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionButton({
+    required IconData icon,
+    required Color iconColor,
+    required String tooltip,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.black.withValues(alpha: 0.04),
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+        ),
       ),
     );
   }
@@ -928,42 +1212,93 @@ class _AlbumScreenState extends State<AlbumScreen> {
 class _PlayButton extends StatelessWidget {
   final IconData icon;
   final String label;
+  final bool isPrimary;
   final VoidCallback onTap;
 
   const _PlayButton({
     required this.icon,
     required this.label,
+    this.isPrimary = false,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = Theme.of(context).colorScheme.primary;
-    final btnBg = isDark
-        ? const Color(0xFF2C2C2E)
-        : const Color(0xFFF2F2F7);
 
+    if (isPrimary) {
+      return Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFA243C), Color(0xFFFF3C58)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFA243C).withValues(alpha: 0.38),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(14),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(icon, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final btnBg = isDark ? const Color(0xFF24242A) : const Color(0xFFEBEBF0);
     return Material(
       color: btnBg,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.black.withValues(alpha: 0.04),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: accent, size: 20),
+              Icon(icon, color: AppTheme.appleMusicRed, size: 20),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(
-                  color: accent,
+                style: const TextStyle(
+                  color: AppTheme.appleMusicRed,
                   fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: -0.2,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.3,
                 ),
               ),
             ],
