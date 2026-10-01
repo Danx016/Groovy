@@ -45,14 +45,6 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
           'sans-serif',
         ];
 
-  static const List<Shadow> _currentLineShadow = [
-    Shadow(
-      color: Color(0x33000000),
-      blurRadius: 2,
-      offset: Offset(0, 1.5),
-    ),
-  ];
-
   static final TextStyle _lyricTextStyle = TextStyle(
     fontSize: 32,
     fontWeight: FontWeight.w700,
@@ -60,7 +52,6 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
     color: Colors.white,
     height: 1.25,
     fontFamilyFallback: _fontFallback,
-    shadows: _currentLineShadow,
   );
 
   @override
@@ -72,25 +63,22 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
         ? 0.95
         : (isCurrent
             ? 1.0
-            : (_isHovered
-                ? 0.75
-                : (widget.distance == 1
-                    ? 0.40
-                    : 0.36)));
+            : (_isHovered ? 0.75 : 0.38));
 
     // Fluid Apple Music style animation: smooth scale up on active line
     // and smooth opacity cross-fade between active and dimmed lines.
-    // RepaintBoundary isolates the static text layout on the GPU layer.
+    // RepaintBoundary isolates the text raster on its own GPU layer so scale animations
+    // execute as hardware matrix transforms at 120 FPS without re-rasterizing text glyphs.
     Widget content = AnimatedScale(
       scale: isCurrent ? 1.025 : 1.0,
       alignment: Alignment.centerLeft,
-      duration: const Duration(milliseconds: 350),
+      duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
-      child: AnimatedOpacity(
-        opacity: targetOpacity,
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-        child: RepaintBoundary(
+      child: RepaintBoundary(
+        child: AnimatedOpacity(
+          opacity: targetOpacity,
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
           child: Text(
             widget.line.text,
             style: _lyricTextStyle,
@@ -101,26 +89,30 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
     // On mobile (Android/iOS) skip MouseRegion entirely — no hover on touch
     if (_isMobilePlatform) {
-      return GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-          child: content,
+      return RepaintBoundary(
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+            child: content,
+          ),
         ),
       );
     }
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-          child: content,
+    return RepaintBoundary(
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+            child: content,
+          ),
         ),
       ),
     );

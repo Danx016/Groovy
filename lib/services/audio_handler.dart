@@ -675,7 +675,7 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
 /// Initialises [audio_service] and returns the singleton [GroovyAudioHandler].
 /// Call this once from [main()] before [runApp()].
 Future<GroovyAudioHandler> initAudioService() async {
-  if (!kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS || Platform.isWindows)) {
+  if (!kIsWeb && (Platform.isIOS || Platform.isAndroid || Platform.isMacOS)) {
     return AudioService.init(
       builder: () => GroovyAudioHandler(),
       config: const AudioServiceConfig(

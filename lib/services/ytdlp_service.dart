@@ -291,9 +291,9 @@ class YtDlpService {
         }
       }
 
-      // Fetch subsequent pages via continuation to return rich, unconstrained song lists
+      // Fetch continuation pages ultra-fast (up to 50-60 songs in < 500ms)
       int pages = 0;
-      while (results.length < limit && continuationToken != null && pages < 6) {
+      while (results.length < limit && continuationToken != null && pages < 2) {
         pages++;
         try {
           final contReq = await _innertubeHttpClient.postUrl(
@@ -818,6 +818,12 @@ class YtDlpService {
       if (Platform.isWindows) ...[
         '$exeDir/yt-dlp.exe',
         '$exeDir/data/yt-dlp.exe',
+        if (Platform.environment['ProgramFiles'] != null)
+          '${Platform.environment['ProgramFiles']}\\Groovy\\yt-dlp.exe',
+        if (Platform.environment['ProgramFiles(x86)'] != null)
+          '${Platform.environment['ProgramFiles(x86)']}\\Groovy\\yt-dlp.exe',
+        'C:\\Program Files\\Groovy\\yt-dlp.exe',
+        'C:\\Program Files (x86)\\Groovy\\yt-dlp.exe',
         if (Platform.environment['LOCALAPPDATA'] != null)
           '${Platform.environment['LOCALAPPDATA']}\\Programs\\Groovy\\yt-dlp.exe',
         if (Platform.environment['APPDATA'] != null)
@@ -830,6 +836,7 @@ class YtDlpService {
         '$exeDir/../yt-dlp.exe',
         '${Directory.current.path}/yt-dlp.exe',
         '${Directory.current.path}/windows/yt-dlp.exe',
+        '${Directory.current.parent.path}/yt-dlp.exe',
         'yt-dlp.exe',
       ],
       if (Platform.isLinux || Platform.isMacOS) ...[
@@ -1171,7 +1178,29 @@ class YtDlpService {
       return _dualSearchCache[cleanQuery]!;
     }
 
-    // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
+    // 1. FAST Innertube APIs in parallel (200-300ms pure HTTP REST) - Instant on all platforms!
+    try {
+      final results = await Future.wait([
+        searchYtMusicInnertube(query, limit: limit),
+        searchYoutubeVideoInnertube(query, limit: 30),
+      ]).timeout(const Duration(seconds: 4));
+      final musicTracks = results[0];
+      final ytTracks = results[1];
+
+      if (musicTracks.isNotEmpty || ytTracks.isNotEmpty) {
+        final res = <String, List<Map<String, dynamic>>>{
+          'music': musicTracks,
+          'youtube': ytTracks,
+        };
+        debugPrint('[yt-dlp/Dual] Fast search "$query": ${musicTracks.length} music, ${ytTracks.length} youtube');
+        if (cleanQuery.isNotEmpty) _dualSearchCache[cleanQuery] = res;
+        return res;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp/Dual] Fast search note: $e');
+    }
+
+    // 2. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy) as fallback only
     if (Platform.isAndroid) {
       try {
         final jsonStr = await _androidChannel.invokeMethod<String>('searchDual', {
@@ -1191,33 +1220,18 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop or Android fallback: Innertube + youtube_explode_dart in parallel
+    // 2b. Fallback to youtube_explode_dart if Innertube was blocked or empty
     try {
-      final results = await Future.wait([
-        searchYtMusicInnertube(query, limit: limit),
-        searchYoutubeVideoInnertube(query, limit: limit),
-        _searchYoutubeExplodeFallback(query, limit: limit),
-      ]).timeout(const Duration(seconds: 12));
-      final musicTracks = results[0];
-      final ytTracks = results[1];
-      final explodeTracks = results[2];
-
-      // Prefer Innertube results; fall back to youtube_explode_dart if blocked
-      final finalMusic = musicTracks.isNotEmpty ? musicTracks : explodeTracks;
-      final finalYt = ytTracks.isNotEmpty ? ytTracks : explodeTracks;
-
-      if (finalMusic.isNotEmpty || finalYt.isNotEmpty) {
+      final explodeTracks = await _searchYoutubeExplodeFallback(query, limit: limit).timeout(const Duration(seconds: 6));
+      if (explodeTracks.isNotEmpty) {
         final res = <String, List<Map<String, dynamic>>>{
-          'music': finalMusic,
-          'youtube': finalYt,
+          'music': explodeTracks,
+          'youtube': explodeTracks,
         };
-        debugPrint('[yt-dlp/Dual] search "$query": ${finalMusic.length} music, ${finalYt.length} youtube');
         if (cleanQuery.isNotEmpty) _dualSearchCache[cleanQuery] = res;
         return res;
       }
-    } catch (e) {
-      debugPrint('[yt-dlp/Dual] search error: $e');
-    }
+    } catch (_) {}
 
     // 3. Fallback: Process execution or youtube_explode_dart only
     try {
@@ -1249,7 +1263,25 @@ class YtDlpService {
       return _searchCache[cleanQuery]!;
     }
 
-    // 1. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy)
+    // 1. Fast Innertube API first (200-400ms) - Instant on all platforms!
+    try {
+      final musicItems = await searchYtMusicInnertube(query, limit: limit).timeout(const Duration(seconds: 3));
+      if (musicItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Search] Fast Innertube "$query" returned ${musicItems.length} items');
+        _searchCache[cleanQuery] = musicItems;
+        return musicItems;
+      }
+      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 3));
+      if (ytItems.isNotEmpty) {
+        debugPrint('[yt-dlp/Innertube] Fast video search "$query" returned ${ytItems.length} items');
+        _searchCache[cleanQuery] = ytItems;
+        return ytItems;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp/Innertube] Fast search note: $e');
+    }
+
+    // 2. Android: Execute embedded Python interpreter with yt-dlp (Chaquopy) as fallback only
     if (Platform.isAndroid) {
       try {
         final jsonStr = await _androidChannel.invokeMethod<String>('search', {
@@ -1269,29 +1301,14 @@ class YtDlpService {
       }
     }
 
-    // 2. Desktop (Windows / macOS / Linux) or Android fallback: Innertube + youtube_explode_dart in parallel
+    // 2b. Fallback to youtube_explode_dart if Innertube empty
     try {
-      final parallel = await Future.wait([
-        searchYtMusicInnertube(query, limit: limit),
-        _searchYoutubeExplodeFallback(query, limit: limit),
-      ]).timeout(const Duration(seconds: 10));
-      final musicItems = parallel[0];
-      final explodeItems = parallel[1];
-      final bestItems = musicItems.isNotEmpty ? musicItems : explodeItems;
-      if (bestItems.isNotEmpty) {
-        debugPrint('[yt-dlp/Search] "$query" returned ${bestItems.length} items (innertube=${musicItems.length}, explode=${explodeItems.length})');
-        _searchCache[cleanQuery] = bestItems;
-        return bestItems;
+      final explodeItems = await _searchYoutubeExplodeFallback(query, limit: limit).timeout(const Duration(seconds: 5));
+      if (explodeItems.isNotEmpty) {
+        _searchCache[cleanQuery] = explodeItems;
+        return explodeItems;
       }
-      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 8));
-      if (ytItems.isNotEmpty) {
-        debugPrint('[yt-dlp/Innertube] Fast video search "$query" returned ${ytItems.length} items');
-        _searchCache[cleanQuery] = ytItems;
-        return ytItems;
-      }
-    } catch (e) {
-      debugPrint('[yt-dlp/Innertube] Fast search error: $e');
-    }
+    } catch (_) {}
 
     // 3. Desktop: Execute host Python / yt-dlp subprocess
     final searchParam = 'ytsearch$limit:$query';

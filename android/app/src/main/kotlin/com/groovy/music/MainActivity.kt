@@ -94,13 +94,10 @@ class MainActivity : AudioServiceFragmentActivity() {
                 if (maxMode != null) {
                     val params = window.attributes
                     params.preferredDisplayModeId = maxMode.modeId
-                    @Suppress("DEPRECATION")
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                        try {
-                            params.javaClass.getField("preferredMinDisplayRefreshRate").set(params, maxMode.refreshRate)
-                            params.javaClass.getField("preferredMaxDisplayRefreshRate").set(params, maxMode.refreshRate)
-                        } catch (_: Exception) {}
-                    }
+                    try {
+                        params.javaClass.getField("preferredMinDisplayRefreshRate").setFloat(params, maxMode.refreshRate)
+                        params.javaClass.getField("preferredMaxDisplayRefreshRate").setFloat(params, maxMode.refreshRate)
+                    } catch (_: Exception) {}
                     window.attributes = params
                 }
             }

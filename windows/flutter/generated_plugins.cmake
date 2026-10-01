@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  audio_service_win
   battery_plus
   connectivity_plus
   dynamic_color

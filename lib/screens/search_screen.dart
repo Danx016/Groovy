@@ -20,6 +20,13 @@ import '../widgets/now_playing/now_playing_more_menu.dart';
 import '../l10n/app_localizations.dart';
 import '../services/player_ui_settings_service.dart';
 
+enum SearchCategoryFilter {
+  all,
+  songs,
+  albums,
+  artists,
+}
+
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
 
@@ -38,6 +45,7 @@ class _SearchScreenState extends State<SearchScreen> {
   String _query = '';
   Timer? _debounceTimer;
   bool _liveSearch = true;
+  SearchCategoryFilter _selectedFilter = SearchCategoryFilter.all;
 
   @override
   void initState() {
@@ -124,8 +132,8 @@ class _SearchScreenState extends State<SearchScreen> {
       }
     }
 
-    // 2. Smooth debounced online search (280ms)
-    _debounceTimer = Timer(const Duration(milliseconds: 280), () {
+    // 2. Smooth debounced online search (250ms)
+    _debounceTimer = Timer(const Duration(milliseconds: 250), () {
       if (!mounted || _searchController.text.trim() != value.trim()) return;
       if (_liveSearch) {
         _search(value);
@@ -177,9 +185,11 @@ class _SearchScreenState extends State<SearchScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final recentSearches = Provider.of<RecentSearchesService>(context);
+    final primaryColor = theme.colorScheme.primary;
 
     return Scaffold(
       resizeToAvoidBottomInset: false,
+      backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
       body: Stack(
         children: [
           CustomScrollView(
@@ -187,9 +197,9 @@ class _SearchScreenState extends State<SearchScreen> {
               SliverAppBar(
                 pinned: true,
                 floating: true,
-                expandedHeight: 120,
+                expandedHeight: 116,
                 elevation: 0,
-                backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+                backgroundColor: isDark ? const Color(0xFF121212) : Colors.white,
                 flexibleSpace: FlexibleSpaceBar(
                   title: FittedBox(
                     fit: BoxFit.scaleDown,
@@ -207,64 +217,66 @@ class _SearchScreenState extends State<SearchScreen> {
                   titlePadding: const EdgeInsets.only(left: 16, right: 16, bottom: 58),
                 ),
                 bottom: PreferredSize(
-                  preferredSize: const Size.fromHeight(56),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: CupertinoSearchTextField(
-                      controller: _searchController,
-                      focusNode: _focusNode,
-                      placeholder: 'Artistas, canciones, letras y...',
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                        fontSize: 16,
+                  preferredSize: const Size.fromHeight(60),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+                        child: CupertinoSearchTextField(
+                          controller: _searchController,
+                          focusNode: _focusNode,
+                          placeholder: 'Artistas, canciones, álbumes...',
+                          placeholderStyle: TextStyle(
+                            color: isDark ? const Color(0xFF9E9E9E) : const Color(0xFF6E6E73),
+                            fontSize: 15,
+                          ),
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.black,
+                            fontSize: 15,
+                          ),
+                          prefixIcon: Icon(
+                            CupertinoIcons.search,
+                            color: primaryColor,
+                            size: 20,
+                          ),
+                          backgroundColor: isDark
+                              ? const Color(0xFF242424)
+                              : const Color(0xFFF2F2F7),
+                          borderRadius: BorderRadius.circular(12),
+                          onChanged: _onSearchChanged,
+                          onSubmitted: (value) {
+                            setState(() => _showSuggestions = false);
+                            _search(value);
+                          },
+                        ),
                       ),
-                      prefixIcon: const Icon(
-                        CupertinoIcons.search,
-                        color: AppTheme.appleMusicRed,
-                        size: 20,
-                      ),
-                      backgroundColor: isDark
-                          ? const Color(0xFF2C2C2E)
-                          : const Color(0xFFF2F2F7),
-                      borderRadius: BorderRadius.circular(12),
-                      onChanged: _onSearchChanged,
-                      onSubmitted: (value) {
-                        setState(() => _showSuggestions = false);
-                        _search(value);
-                      },
-                    ),
+                      if (_isSearching)
+                        LinearProgressIndicator(
+                          minHeight: 2,
+                          backgroundColor: Colors.transparent,
+                          valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                        )
+                      else
+                        const SizedBox(height: 2),
+                    ],
                   ),
                 ),
               ),
-              if (_isSearching)
+
+              // Filter Pills (Todo, Canciones, Álbumes, Artistas)
+              if (_searchResult != null || _isSearching || _query.isNotEmpty)
                 SliverToBoxAdapter(
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 24),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          AppLocalizations.of(context)!.albums,
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      HorizontalShimmerList(
-                        count: 3,
-                        child: const AlbumCardShimmer(size: 150),
-                      ),
-                      const SizedBox(height: 24),
-                      ...List.generate(5, (_) => const SongTileShimmer()),
-                    ],
-                  ),
+                  child: _buildFilterPills(isDark, primaryColor),
+                ),
+
+              if (_searchResult != null && !_searchResult!.isEmpty)
+                ..._buildSliverSearchResults(isDark, primaryColor)
+              else if (_isSearching)
+                SliverList.builder(
+                  itemCount: 8,
+                  itemBuilder: (_, __) => const SongTileShimmer(),
                 )
-              else if (_searchResult != null && !_searchResult!.isEmpty)
-                SliverToBoxAdapter(child: _buildSearchResults())
               else if (_query.isNotEmpty && _searchResult?.isEmpty == true)
                 SliverFillRemaining(
                   child: Center(
@@ -295,20 +307,451 @@ class _SearchScreenState extends State<SearchScreen> {
               else ...[
                 if (recentSearches.items.isNotEmpty)
                   SliverToBoxAdapter(
-                    child: _buildRecentSearchesSection(context, recentSearches, isDark),
+                    child: _buildRecentSearchesSection(context, recentSearches, isDark, primaryColor),
                   ),
               ],
+              const SliverToBoxAdapter(
+                child: SizedBox(height: 120),
+              ),
             ],
           ),
           
           if (_showSuggestions && _searchController.text.isNotEmpty)
             Positioned(
-              top: 120 + 56 + 8,
+              top: 116 + 56 + 8,
               left: 16,
               right: 16,
-              child: _buildAutocompleteOverlay(isDark),
+              child: _buildAutocompleteOverlay(isDark, primaryColor),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterPills(bool isDark, Color primaryColor) {
+    final filters = [
+      {'filter': SearchCategoryFilter.all, 'label': 'Todo'},
+      {'filter': SearchCategoryFilter.songs, 'label': 'Canciones'},
+      {'filter': SearchCategoryFilter.albums, 'label': 'Álbumes'},
+      {'filter': SearchCategoryFilter.artists, 'label': 'Artistas'},
+    ];
+
+    return Container(
+      height: 48,
+      margin: const EdgeInsets.only(top: 4, bottom: 4),
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        itemCount: filters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final item = filters[index];
+          final filter = item['filter'] as SearchCategoryFilter;
+          final label = item['label'] as String;
+          final isSelected = _selectedFilter == filter;
+
+          return GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedFilter = filter;
+              });
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 180),
+              curve: Curves.easeInOut,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? primaryColor
+                    : (isDark ? const Color(0xFF242424) : const Color(0xFFE5E5EA)),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Center(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected
+                        ? Colors.white
+                        : (isDark ? Colors.white : Colors.black87),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  List<Widget> _buildSliverSearchResults(bool isDark, Color primaryColor) {
+    final result = _searchResult!;
+    final libraryProvider = Provider.of<LibraryProvider>(context);
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+
+    // Combine all songs (regular + youtube)
+    final allSongs = <Song>[
+      ...result.songs,
+      if (result.youtubeVideos != null) ...result.youtubeVideos!,
+    ];
+
+    final slivers = <Widget>[];
+
+    // Filter: ARTISTS ONLY
+    if (_selectedFilter == SearchCategoryFilter.artists) {
+      if (result.artists.isEmpty) {
+        slivers.add(SliverToBoxAdapter(child: _buildEmptyCategoryMessage('No se encontraron artistas')));
+      } else {
+        slivers.add(
+          SliverList.builder(
+            itemCount: result.artists.length,
+            itemBuilder: (ctx, index) {
+              final artist = result.artists[index];
+              return _buildSpotifyItemTile(
+                title: artist.name,
+                subtitle: 'Artista',
+                imageUrl: artist.coverArt,
+                isCircular: true,
+                isDark: isDark,
+                primaryColor: primaryColor,
+                onTap: () {
+                  RecentSearchesService().addArtist(artist);
+                  NavigationHelper.push(
+                    context,
+                    ArtistScreen(artistId: artist.id, artist: artist),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      }
+      return slivers;
+    }
+
+    // Filter: ALBUMS ONLY
+    if (_selectedFilter == SearchCategoryFilter.albums) {
+      if (result.albums.isEmpty) {
+        slivers.add(SliverToBoxAdapter(child: _buildEmptyCategoryMessage('No se encontraron álbumes')));
+      } else {
+        slivers.add(
+          SliverList.builder(
+            itemCount: result.albums.length,
+            itemBuilder: (ctx, index) {
+              final album = result.albums[index];
+              return _buildSpotifyItemTile(
+                title: album.name,
+                subtitle: 'Álbum • ${album.artist ?? "Varios Artistas"}${album.year != null ? " • ${album.year}" : ""}',
+                imageUrl: album.coverArt,
+                isCircular: false,
+                isDark: isDark,
+                primaryColor: primaryColor,
+                onTap: () {
+                  RecentSearchesService().addAlbum(album);
+                  NavigationHelper.push(
+                    context,
+                    AlbumScreen(albumId: album.id, album: album),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      }
+      return slivers;
+    }
+
+    // Filter: SONGS ONLY
+    if (_selectedFilter == SearchCategoryFilter.songs) {
+      if (allSongs.isEmpty) {
+        slivers.add(SliverToBoxAdapter(child: _buildEmptyCategoryMessage('No se encontraron canciones')));
+      } else {
+        slivers.add(
+          SliverList.builder(
+            itemCount: allSongs.length,
+            itemBuilder: (ctx, index) {
+              final song = allSongs[index];
+              final isStarred = libraryProvider.isSongStarred(song.id) || (song.starred ?? false);
+              final isCurrentPlaying = player.currentSong?.id == song.id;
+
+              return _buildSpotifyItemTile(
+                title: song.title,
+                subtitle: 'Canción • ${song.artist ?? "Desconocido"}',
+                imageUrl: song.coverArt,
+                isCircular: false,
+                isDark: isDark,
+                isStarred: isStarred,
+                isPlaying: isCurrentPlaying,
+                primaryColor: primaryColor,
+                onStarredToggle: () {
+                  libraryProvider.toggleStarSong(song);
+                },
+                onOptionsPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    useRootNavigator: true,
+                    builder: (ctx) => NowPlayingMoreMenu(song: song),
+                  );
+                },
+                onTap: () {
+                  RecentSearchesService().addSong(song);
+                  player.playSong(song, playlist: allSongs, startIndex: index);
+                },
+              );
+            },
+          ),
+        );
+      }
+      return slivers;
+    }
+
+    // Filter: ALL ("Todo") - Unified Stream
+    if (_selectedFilter == SearchCategoryFilter.all) {
+      // 1. Top artists (up to 2)
+      if (result.artists.isNotEmpty) {
+        final topArtists = result.artists.take(2).toList();
+        slivers.add(
+          SliverList.builder(
+            itemCount: topArtists.length,
+            itemBuilder: (ctx, index) {
+              final artist = topArtists[index];
+              return _buildSpotifyItemTile(
+                title: artist.name,
+                subtitle: 'Artista',
+                imageUrl: artist.coverArt,
+                isCircular: true,
+                isDark: isDark,
+                primaryColor: primaryColor,
+                onTap: () {
+                  RecentSearchesService().addArtist(artist);
+                  NavigationHelper.push(
+                    context,
+                    ArtistScreen(artistId: artist.id, artist: artist),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      }
+
+      // 2. Top albums (up to 2)
+      if (result.albums.isNotEmpty) {
+        final topAlbums = result.albums.take(2).toList();
+        slivers.add(
+          SliverList.builder(
+            itemCount: topAlbums.length,
+            itemBuilder: (ctx, index) {
+              final album = topAlbums[index];
+              return _buildSpotifyItemTile(
+                title: album.name,
+                subtitle: 'Álbum • ${album.artist ?? "Varios Artistas"}',
+                imageUrl: album.coverArt,
+                isCircular: false,
+                isDark: isDark,
+                primaryColor: primaryColor,
+                onTap: () {
+                  RecentSearchesService().addAlbum(album);
+                  NavigationHelper.push(
+                    context,
+                    AlbumScreen(albumId: album.id, album: album),
+                  );
+                },
+              );
+            },
+          ),
+        );
+      }
+
+      // 3. Songs list
+      if (allSongs.isNotEmpty) {
+        slivers.add(
+          SliverList.builder(
+            itemCount: allSongs.length,
+            itemBuilder: (ctx, index) {
+              final song = allSongs[index];
+              final isStarred = libraryProvider.isSongStarred(song.id) || (song.starred ?? false);
+              final isCurrentPlaying = player.currentSong?.id == song.id;
+
+              return _buildSpotifyItemTile(
+                title: song.title,
+                subtitle: 'Canción • ${song.artist ?? "Desconocido"}',
+                imageUrl: song.coverArt,
+                isCircular: false,
+                isDark: isDark,
+                isStarred: isStarred,
+                isPlaying: isCurrentPlaying,
+                primaryColor: primaryColor,
+                onStarredToggle: () {
+                  libraryProvider.toggleStarSong(song);
+                },
+                onOptionsPressed: () {
+                  showModalBottomSheet(
+                    context: context,
+                    backgroundColor: Colors.transparent,
+                    isScrollControlled: true,
+                    useRootNavigator: true,
+                    builder: (ctx) => NowPlayingMoreMenu(song: song),
+                  );
+                },
+                onTap: () {
+                  RecentSearchesService().addSong(song);
+                  player.playSong(song, playlist: allSongs, startIndex: index);
+                },
+              );
+            },
+          ),
+        );
+      }
+    }
+
+    return slivers;
+  }
+
+  Widget _buildEmptyCategoryMessage(String message) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      child: Center(
+        child: Text(
+          message,
+          style: const TextStyle(
+            color: Color(0xFF9E9E9E),
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSpotifyItemTile({
+    required String title,
+    required String subtitle,
+    required String? imageUrl,
+    required bool isCircular,
+    required bool isDark,
+    required Color primaryColor,
+    bool? isStarred,
+    bool isPlaying = false,
+    VoidCallback? onStarredToggle,
+    VoidCallback? onOptionsPressed,
+    required VoidCallback onTap,
+  }) {
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+    final coverUrl = imageUrl != null
+        ? (isLocalFilePath(imageUrl)
+            ? imageUrl
+            : youtubeService.getCoverArtUrl(imageUrl, size: 160))
+        : null;
+
+    Widget imageWidget;
+    if (isCircular) {
+      imageWidget = ClipOval(
+        child: SizedBox(
+          width: 50,
+          height: 50,
+          child: coverUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: coverUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(color: const Color(0xFF242424)),
+                  errorWidget: (_, __, ___) => _defaultArtistAvatar(isDark),
+                )
+              : _defaultArtistAvatar(isDark),
+        ),
+      );
+    } else {
+      imageWidget = ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: SizedBox(
+          width: 50,
+          height: 50,
+          child: coverUrl != null
+              ? CachedNetworkImage(
+                  imageUrl: coverUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Container(color: const Color(0xFF242424)),
+                  errorWidget: (_, __, ___) => _defaultCover(isDark),
+                )
+              : _defaultCover(isDark),
+        ),
+      );
+    }
+
+    return RepaintBoundary(
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          child: Row(
+            children: [
+              imageWidget,
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 15.5,
+                        fontWeight: FontWeight.w600,
+                        color: isPlaying
+                            ? primaryColor
+                            : (isDark ? Colors.white : const Color(0xFF121212)),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w400,
+                        color: isDark ? const Color(0xFFA7A7A7) : const Color(0xFF6E6E73),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onOptionsPressed != null) ...[
+                IconButton(
+                  icon: Icon(
+                    CupertinoIcons.ellipsis_vertical,
+                    size: 18,
+                    color: isDark ? const Color(0xFFA7A7A7) : const Color(0xFF6E6E73),
+                  ),
+                  splashRadius: 20,
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: onOptionsPressed,
+                ),
+              ],
+              if (isStarred != null) ...[
+                IconButton(
+                  icon: Icon(
+                    isStarred ? Icons.star_rounded : Icons.star_outline_rounded,
+                    size: 22,
+                    color: isStarred
+                        ? const Color(0xFFFFD60A)
+                        : (isDark ? const Color(0xFFA7A7A7) : const Color(0xFF8E8E93)),
+                  ),
+                  splashRadius: 20,
+                  padding: const EdgeInsets.all(8),
+                  constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                  onPressed: onStarredToggle,
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -317,9 +760,10 @@ class _SearchScreenState extends State<SearchScreen> {
     BuildContext context,
     RecentSearchesService recentSearches,
     bool isDark,
+    Color primaryColor,
   ) {
     final items = recentSearches.items;
-    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+    final libraryProvider = Provider.of<LibraryProvider>(context);
     final player = Provider.of<PlayerProvider>(context, listen: false);
 
     return Column(
@@ -334,7 +778,7 @@ class _SearchScreenState extends State<SearchScreen> {
               Text(
                 'Búsquedas recientes',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                   letterSpacing: -0.4,
                   color: isDark ? Colors.white : Colors.black,
@@ -347,184 +791,101 @@ class _SearchScreenState extends State<SearchScreen> {
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
-                child: const Text(
+                child: Text(
                   'Borrar',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: AppTheme.appleMusicRed,
+                    color: primaryColor,
                   ),
                 ),
               ),
             ],
           ),
         ),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          itemCount: items.length,
-          separatorBuilder: (ctx, i) => Divider(
-            height: 1,
-            thickness: 0.5,
-            indent: 68,
-            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
-          ),
-          itemBuilder: (ctx, index) {
-            final item = items[index];
-            final coverUrl = item.imageUrl != null
-                ? (isLocalFilePath(item.imageUrl)
-                    ? item.imageUrl!
-                    : youtubeService.getCoverArtUrl(item.imageUrl!, size: 150))
-                : null;
+        ...items.map((item) {
+          final isArtist = item.type == RecentSearchType.artist;
+          final isAlbum = item.type == RecentSearchType.album;
+          final isSong = item.type == RecentSearchType.song;
 
-            Widget leadingWidget;
-            if (item.type == RecentSearchType.artist) {
-              leadingWidget = ClipOval(
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: coverUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: coverUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: Colors.grey[800]),
-                          errorWidget: (_, __, ___) => _defaultArtistAvatar(isDark),
-                        )
-                      : _defaultArtistAvatar(isDark),
-                ),
-              );
-            } else {
-              leadingWidget = ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: SizedBox(
-                  width: 52,
-                  height: 52,
-                  child: coverUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: coverUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (_, __) => Container(color: Colors.grey[800]),
-                          errorWidget: (_, __, ___) => _defaultCover(isDark),
-                        )
-                      : _defaultCover(isDark),
-                ),
-              );
-            }
-
-            return ListTile(
-              contentPadding: const EdgeInsets.symmetric(vertical: 4),
-              leading: leadingWidget,
-              title: Text(
-                item.title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: isDark ? Colors.white : const Color(0xFF1C1C1E),
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 2),
-                  Text(
-                    item.subtitle ?? (item.type == RecentSearchType.artist ? 'Artista' : 'Música'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  if (item.extra != null && item.extra!.isNotEmpty) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      'Letra: "${item.extra}"',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.grey[500] : Colors.grey[700],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ],
-              ),
-              trailing: item.type == RecentSearchType.song
-                  ? IconButton(
-                      icon: const Icon(
-                        CupertinoIcons.ellipsis_vertical,
-                        size: 18,
-                        color: Colors.grey,
-                      ),
-                      splashRadius: 20,
-                      padding: const EdgeInsets.all(8),
-                      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-                      onPressed: () {
-                        final song = item.song ??
-                            Song(
-                              id: item.id,
-                              title: item.title,
-                              artist: item.subtitle?.replaceFirst('Canción • ', ''),
-                              coverArt: item.imageUrl,
-                            );
-                        showModalBottomSheet(
-                          context: context,
-                          backgroundColor: Colors.transparent,
-                          isScrollControlled: true,
-                          useRootNavigator: true,
-                          builder: (ctx) => NowPlayingMoreMenu(song: song),
-                        );
-                      },
-                    )
-                  : null,
-              onTap: () {
-                recentSearches.addItem(item);
-                if (item.type == RecentSearchType.artist) {
-                  NavigationHelper.push(
-                    context,
-                    ArtistScreen(
-                      artistId: item.id,
-                      artist: Artist(
-                        id: item.id,
-                        name: item.title,
-                        coverArt: item.imageUrl,
-                      ),
-                    ),
-                  );
-                } else if (item.type == RecentSearchType.album) {
-                  NavigationHelper.push(
-                    context,
-                    AlbumScreen(
-                      albumId: item.id,
-                      album: item.album ??
-                          Album(
-                            id: item.id,
-                            name: item.title,
-                            artist: item.subtitle,
-                            coverArt: item.imageUrl,
-                          ),
-                    ),
-                  );
-                } else if (item.type == RecentSearchType.song) {
-                  if (item.song != null) {
-                    player.playSongWithRadio(item.song!);
-                  } else {
-                    final fallbackSong = Song(
+          final songObj = item.song ??
+              (isSong
+                  ? Song(
                       id: item.id,
                       title: item.title,
                       artist: item.subtitle?.replaceFirst('Canción • ', ''),
                       coverArt: item.imageUrl,
-                    );
-                    player.playSongWithRadio(fallbackSong);
+                    )
+                  : null);
+
+          final isStarred = songObj != null
+              ? (libraryProvider.isSongStarred(songObj.id) || (songObj.starred ?? false))
+              : null;
+
+          return _buildSpotifyItemTile(
+            title: item.title,
+            subtitle: item.subtitle ??
+                (isArtist
+                    ? 'Artista'
+                    : isAlbum
+                        ? 'Álbum'
+                        : 'Canción'),
+            imageUrl: item.imageUrl,
+            isCircular: isArtist,
+            isDark: isDark,
+            isStarred: isStarred,
+            primaryColor: primaryColor,
+            isPlaying: songObj != null && player.currentSong?.id == songObj.id,
+            onStarredToggle: songObj != null
+                ? () {
+                    libraryProvider.toggleStarSong(songObj);
                   }
-                }
-              },
-            );
-          },
-        ),
+                : null,
+            onOptionsPressed: songObj != null
+                ? () {
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      isScrollControlled: true,
+                      useRootNavigator: true,
+                      builder: (ctx) => NowPlayingMoreMenu(song: songObj),
+                    );
+                  }
+                : null,
+            onTap: () {
+              recentSearches.addItem(item);
+              if (isArtist) {
+                NavigationHelper.push(
+                  context,
+                  ArtistScreen(
+                    artistId: item.id,
+                    artist: Artist(
+                      id: item.id,
+                      name: item.title,
+                      coverArt: item.imageUrl,
+                    ),
+                  ),
+                );
+              } else if (isAlbum) {
+                NavigationHelper.push(
+                  context,
+                  AlbumScreen(
+                    albumId: item.id,
+                    album: item.album ??
+                        Album(
+                          id: item.id,
+                          name: item.title,
+                          artist: item.subtitle,
+                          coverArt: item.imageUrl,
+                        ),
+                  ),
+                );
+              } else if (isSong && songObj != null) {
+                player.playSongWithRadio(songObj);
+              }
+            },
+          );
+        }),
         const SizedBox(height: 24),
       ],
     );
@@ -532,7 +893,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _defaultArtistAvatar(bool isDark) {
     return Container(
-      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+      color: isDark ? const Color(0xFF242424) : Colors.grey[300],
       child: const Center(
         child: Icon(CupertinoIcons.person_fill, color: Colors.white38, size: 26),
       ),
@@ -541,129 +902,18 @@ class _SearchScreenState extends State<SearchScreen> {
 
   Widget _defaultCover(bool isDark) {
     return Container(
-      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
+      color: isDark ? const Color(0xFF242424) : Colors.grey[300],
       child: const Center(
         child: Icon(CupertinoIcons.music_note, color: Colors.white38, size: 26),
       ),
     );
   }
 
-  Widget _buildSearchResults() {
-    final result = _searchResult!;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (result.artists.isNotEmpty) ...[
-          SectionHeader(title: AppLocalizations.of(context)!.artists),
-          ...result.artists
-              .take(5)
-              .map(
-                (artist) => ArtistTile(
-                  artist: artist,
-                  onTap: () {
-                    RecentSearchesService().addArtist(artist);
-                    NavigationHelper.push(
-                      context,
-                      ArtistScreen(artistId: artist.id, artist: artist),
-                    );
-                  },
-                ),
-              ),
-          const SizedBox(height: 16),
-        ],
-
-        if (result.albums.isNotEmpty) ...[
-          HorizontalScrollSection(
-            title: AppLocalizations.of(context)!.albums,
-            children: result.albums
-                .take(10)
-                .map(
-                  (album) => AlbumCard(
-                    album: album,
-                    size: 150,
-                    onTap: () {
-                      RecentSearchesService().addAlbum(album);
-                      NavigationHelper.push(
-                        context,
-                        AlbumScreen(albumId: album.id, album: album),
-                      );
-                    },
-                  ),
-                )
-                .toList(),
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        if (result.songs.isNotEmpty) ...[
-          SectionHeader(
-            title: AppLocalizations.of(context)!.songs,
-          ),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemExtent: 68.0,
-            addAutomaticKeepAlives: false,
-            addRepaintBoundaries: true,
-            itemCount: result.songs.length,
-            itemBuilder: (context, index) {
-              final song = result.songs[index];
-              return SongTile(
-                song: song,
-                index: index,
-                showArtist: true,
-                showAlbum: true,
-                onTap: () {
-                  RecentSearchesService().addSong(song);
-                  final player = Provider.of<PlayerProvider>(context, listen: false);
-                  player.playSongWithRadio(song);
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        if (result.youtubeVideos != null && result.youtubeVideos!.isNotEmpty) ...[
-          const SectionHeader(title: 'YouTube'),
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemExtent: 68.0,
-            addAutomaticKeepAlives: false,
-            addRepaintBoundaries: true,
-            itemCount: result.youtubeVideos!.length,
-            itemBuilder: (context, index) {
-              final song = result.youtubeVideos![index];
-              return SongTile(
-                song: song,
-                index: index,
-                showArtist: true,
-                showAlbum: true,
-                onTap: () {
-                  RecentSearchesService().addSong(song);
-                  final player = Provider.of<PlayerProvider>(context, listen: false);
-                  player.playSongWithRadio(song);
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
-
-        const SizedBox(height: 150),
-      ],
-    );
-  }
-
-
-
-  Widget _buildAutocompleteOverlay(bool isDark) {
+  Widget _buildAutocompleteOverlay(bool isDark, Color primaryColor) {
     return Material(
       elevation: 8,
       borderRadius: BorderRadius.circular(12),
-      color: isDark ? AppTheme.darkCard : Colors.white,
+      color: isDark ? const Color(0xFF242424) : Colors.white,
       child: Container(
         constraints: const BoxConstraints(maxHeight: 400),
         decoration: BoxDecoration(
@@ -674,13 +924,16 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ),
         child: _isLoadingSuggestions
-            ? const Padding(
-                padding: EdgeInsets.all(24),
+            ? Padding(
+                padding: const EdgeInsets.all(24),
                 child: Center(
                   child: SizedBox(
                     width: 24,
                     height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(primaryColor),
+                    ),
                   ),
                 ),
               )
@@ -720,7 +973,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           leading: Icon(
                             CupertinoIcons.person,
                             size: 20,
-                            color: AppTheme.appleMusicRed,
+                            color: primaryColor,
                           ),
                           title: Text(
                             artist.name,
@@ -757,7 +1010,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           leading: Icon(
                             CupertinoIcons.music_albums,
                             size: 20,
-                            color: AppTheme.appleMusicRed,
+                            color: primaryColor,
                           ),
                           title: Text(
                             album.name,
@@ -802,7 +1055,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           leading: Icon(
                             CupertinoIcons.music_note,
                             size: 20,
-                            color: AppTheme.appleMusicRed,
+                            color: primaryColor,
                           ),
                           title: Text(
                             song.title,
@@ -843,5 +1096,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 }
+
+
 
 

@@ -4,7 +4,7 @@
 ; Version (passed via /DGROOVY_VERSION=x.x.x from CI/script, or fallback)
 
 !ifndef GROOVY_VERSION
-  !define GROOVY_VERSION "1.6.2"
+  !define GROOVY_VERSION "1.6.3"
 !endif
 
 ;--------------------------------
@@ -92,6 +92,7 @@ Section "Groovy" SecMain
   ; Copy all files from Release folder
   File /r "build\windows\x64\runner\Release\*.*"
   File "windows\runner\resources\app_icon.ico"
+  File /nonfatal "yt-dlp.exe"
   
   ; Store installation folder
   WriteRegStr HKCU "Software\Groovy" "" $INSTDIR

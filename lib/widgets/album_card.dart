@@ -159,7 +159,7 @@ class _PlayButton extends StatelessWidget {
         width: 48,
         height: 48,
         decoration: BoxDecoration(
-          color: AppTheme.spotifyGreen,
+          color: Theme.of(context).colorScheme.primary,
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(

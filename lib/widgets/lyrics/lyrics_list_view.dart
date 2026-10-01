@@ -217,13 +217,25 @@ class _LyricsListViewState extends State<LyricsListView> {
           _currentLyricIndex = -1;
         }
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollToCurrentLine();
-      });
+      _scrollToCurrentLine();
     }
   }
 
+  static final List<String> _fontFallback = !kIsWeb && Platform.isAndroid
+      ? const ['Roboto', 'sans-serif']
+      : const [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'SF Pro Display',
+          'SF Pro Text',
+          'Inter',
+          'Segoe UI',
+          'Roboto',
+          'sans-serif',
+        ];
+
   double _lastViewportWidth = 0;
+  double _lastViewportHeight = 0;
   List<double> _itemOffsets = [];
   List<double> _itemHeights = [];
   double _computedForWidth = 0;
@@ -260,11 +272,12 @@ class _LyricsListViewState extends State<LyricsListView> {
           final tp = TextPainter(
             text: TextSpan(
               text: text,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w700,
                 letterSpacing: -0.5,
                 height: 1.25,
+                fontFamilyFallback: _fontFallback,
               ),
             ),
             textDirection: TextDirection.ltr,
@@ -300,18 +313,15 @@ class _LyricsListViewState extends State<LyricsListView> {
           : 0.0;
 
       final bool isMobile = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-      final double targetOffset;
 
+      // On mobile, initial lines start at the top; once past the threshold, center in viewport.
+      // On Windows / Desktop, keep original centered placement.
+      final double targetOffset;
       if (isMobile) {
-        // On Android/mobile: start naturally from top (32px padding).
-        // The 3 dots and first lines sit at the top without empty space,
-        // and as the song plays it scrolls up smoothly keeping the active line at ~28%.
-        final viewportHeight = _scrollController.position.viewportDimension;
-        const topPadding = 32.0;
-        const focalFraction = 0.28;
-        targetOffset = topPadding + itemOffset - (viewportHeight * focalFraction);
+        final focalPoint = _lastViewportHeight > 0 ? _lastViewportHeight * 0.38 : 220.0;
+        const topPadding = 24.0;
+        targetOffset = (itemOffset - (focalPoint - topPadding)).clamp(0.0, double.infinity);
       } else {
-        // On Windows/Desktop: keep the centered alignment matching the desktop layout
         targetOffset = itemOffset;
       }
 
@@ -327,17 +337,17 @@ class _LyricsListViewState extends State<LyricsListView> {
           return;
         }
 
-        // Adaptive duration & smooth Apple-style ease-in-out curve:
-        // Stanza transitions glide gracefully without abrupt jerky snaps
+        // Smooth Apple-style ease-out curve:
+        // Stanza transitions glide immediately with zero initial lag or jerk
         final effectiveDuration = duration ??
             (scrollDelta > 140
-                ? const Duration(milliseconds: 520)
-                : const Duration(milliseconds: 380));
+                ? const Duration(milliseconds: 400)
+                : const Duration(milliseconds: 320));
 
         _scrollController.animateTo(
           clamped,
           duration: effectiveDuration,
-          curve: Curves.easeInOutCubic,
+          curve: Curves.easeOutCubic,
         );
       }
     } catch (_) {}
@@ -382,6 +392,7 @@ class _LyricsListViewState extends State<LyricsListView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         _lastViewportWidth = constraints.maxWidth;
+        _lastViewportHeight = constraints.maxHeight;
         _recomputeItemHeights(constraints.maxWidth);
 
         final isLandscape = constraints.maxWidth > constraints.maxHeight;
@@ -391,12 +402,12 @@ class _LyricsListViewState extends State<LyricsListView> {
         final double bottomPadding;
 
         if (isMobile) {
-          // Android / Mobile: 32px top padding so the intro/3 dots and initial lines start at the top
-          topPadding = 32.0;
-          bottomPadding = constraints.maxHeight * 0.50;
+          // On mobile: start cleanly from top (24px padding) with room at bottom for scrolling
+          topPadding = 24.0;
+          bottomPadding = constraints.maxHeight * 0.65;
         } else {
-          // Windows / Desktop: vertically centered with album art
-          final focalFraction = isLandscape ? 0.46 : 0.44;
+          // Centered lyrics on Windows / Desktop as requested
+          final focalFraction = isLandscape ? 0.46 : 0.40;
           topPadding = constraints.maxHeight * focalFraction;
           bottomPadding = constraints.maxHeight * 0.55;
         }
@@ -418,6 +429,19 @@ class _LyricsListViewState extends State<LyricsListView> {
                 bottom: bottomPadding,
               ),
               itemCount: _items.length,
+              findChildIndexCallback: (Key key) {
+                if (key is ValueKey<String>) {
+                  final v = key.value;
+                  if (v.startsWith('interlude_')) {
+                    return int.tryParse(v.substring(10));
+                  } else if (v.startsWith('lyric_')) {
+                    final lIdx = int.tryParse(v.substring(6));
+                    if (lIdx == null) return null;
+                    return _items.indexWhere((it) => it.lyricIndex == lIdx);
+                  }
+                }
+                return null;
+              },
               itemBuilder: (context, index) {
             final item = _items[index];
             

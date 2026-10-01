@@ -5,6 +5,12 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-10-01
+
+### Added & Changed
+- **Autenticación con Google en Windows (Final)**: Flujo de inicio de sesión OAuth 2.0 completamente optimizado con dirección loopback directa `127.0.0.1`, PKCE (S256), reutilización de sockets `SO_REUSEADDR` (`shared: true`), y respuesta HTTP instantánea con cabeceras `Connection: close` y `Private Network Access`.
+- **Diseño y Auto-Scroll de Letras en Móvil**: En dispositivos móviles (Android / iOS), las letras sincronizadas inician directamente desde la parte superior (`topPadding = 24.0`) sin huecos vacíos, y al avanzar la canción hacen scroll fluido hacia la posición central focal. En Windows se preserva el centrado de pantalla completa original.
+
 ## [1.6.2] - 2026-09-30
 
 ### Added & Changed

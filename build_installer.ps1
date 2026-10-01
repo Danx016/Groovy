@@ -40,6 +40,11 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
+if (Test-Path "yt-dlp.exe") {
+    Write-Host "Copiando yt-dlp.exe a Release..." -ForegroundColor Gray
+    Copy-Item "yt-dlp.exe" "build\windows\x64\runner\Release\yt-dlp.exe" -Force
+}
+
 # 3. Locate NSIS compiler (makensis.exe)
 Write-Host "`n[2/3] Localizando compilador de instaladores NSIS..." -ForegroundColor Yellow
 

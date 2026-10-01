@@ -362,6 +362,12 @@ class YoutubeService {
           }
         } catch (_) {}
       }
+      try {
+        debugPrint('[YouTube] Desktop: trying buildAudioSource fallback for $videoId');
+        return await buildAudioSource(videoId);
+      } catch (e) {
+        debugPrint('[YouTube] Desktop buildAudioSource fallback error for $videoId: $e');
+      }
       return null;
     }
     return buildAudioSource(videoId);

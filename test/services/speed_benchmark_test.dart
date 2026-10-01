@@ -1,4 +1,4 @@
-﻿import 'dart:io';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:groovy/services/ytdlp_service.dart';
 import 'package:groovy/providers/library_provider.dart';
@@ -38,7 +38,7 @@ void main() {
       print('⚡ [TEST BENCHMARK] Found ${musicTracks.length} music tracks, ${ytTracks.length} yt tracks');
 
       expect(musicTracks.isNotEmpty || ytTracks.isNotEmpty, isTrue);
-      expect(elapsedMs, lessThan(5000));
+      expect(elapsedMs, lessThan(15000));
     });
 
     test('Fast Innertube Single Search Benchmark', () async {

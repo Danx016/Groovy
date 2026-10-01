@@ -13,6 +13,10 @@ if %ERRORLEVEL% NEQ 0 (
     pause
     exit /b %ERRORLEVEL%
 )
+if exist "yt-dlp.exe" (
+    echo [*] Copiando yt-dlp.exe a la carpeta Release...
+    copy /Y "yt-dlp.exe" "build\windows\x64\runner\Release\yt-dlp.exe" >nul
+)
 
 :: 2. Firmar ejecutable principal con certificado Authenticode
 echo [2/4] Firmando groovy.exe con certificado digital Authenticode...

@@ -3,6 +3,7 @@ import 'package:groovy/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:groovy/providers/providers.dart';
 import 'package:groovy/services/services.dart';
+import 'package:groovy/services/recent_searches_service.dart';
 import 'package:groovy/services/audio_handler.dart';
 import 'package:groovy/services/transcoding_service.dart';
 
@@ -71,6 +72,8 @@ Widget createTestApp({
       ),
       ChangeNotifierProvider<TranscodingService>(
           create: (_) => TranscodingService()),
+      ChangeNotifierProvider<RecentSearchesService>(
+          create: (_) => RecentSearchesService()),
     ],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,

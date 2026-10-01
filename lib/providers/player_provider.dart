@@ -2631,13 +2631,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             if (offlinePath != null) {
               playUrl = 'file://$offlinePath';
             } else {
-              if (!kIsWeb &&
-                  (Platform.isWindows ||
-                      Platform.isLinux ||
-                      Platform.isMacOS)) {
-                throw Exception(
-                    'No playable audio stream available with authentication headers for "${song.title}"');
-              }
               playUrl = await _youtubeService.resolveStreamUrlAsync(song);
             }
           }
