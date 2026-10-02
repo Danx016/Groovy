@@ -77,12 +77,6 @@ class _NextTrackAction extends Action<NextTrackIntent> {
 
   @override
   bool isEnabled(NextTrackIntent intent, [BuildContext? targetContext]) {
-    final focus = FocusManager.instance.primaryFocus;
-    if (focus != null && focus.context != null) {
-      if (focus.context!.findAncestorWidgetOfExactType<EditableText>() != null) {
-        return false;
-      }
-    }
     return true;
   }
 
@@ -104,12 +98,6 @@ class _PreviousTrackAction extends Action<PreviousTrackIntent> {
 
   @override
   bool isEnabled(PreviousTrackIntent intent, [BuildContext? targetContext]) {
-    final focus = FocusManager.instance.primaryFocus;
-    if (focus != null && focus.context != null) {
-      if (focus.context!.findAncestorWidgetOfExactType<EditableText>() != null) {
-        return false;
-      }
-    }
     return true;
   }
 
@@ -836,7 +824,11 @@ class _MainScreenState extends State<MainScreen> {
           const SingleActivator(LogicalKeyboardKey.mediaPlay): const PlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaPause): const PlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const NextTrackIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaFastForward): const NextTrackIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaSkipForward): const NextTrackIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaTrackPrevious): const PreviousTrackIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaRewind): const PreviousTrackIntent(),
+          const SingleActivator(LogicalKeyboardKey.mediaSkipBackward): const PreviousTrackIntent(),
           const SingleActivator(LogicalKeyboardKey.f11): const ToggleFullScreenIntent(),
         },
         child: Actions(

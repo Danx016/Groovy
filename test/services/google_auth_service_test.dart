@@ -8,7 +8,7 @@ void main() {
     test('androidClientId matches Google Cloud Console credentials', () {
       expect(
         GoogleAuthService.androidClientId,
-        '990139942021-75nj5m9et3ke40qu4b8rf5ps5ckclj5c.apps.googleusercontent.com',
+        '318948269972-hqqb1ctdq2ounraa32r4271sjvmfr9u2.apps.googleusercontent.com',
       );
     });
 

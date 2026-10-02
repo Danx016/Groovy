@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.2] - 2026-10-01
+
+### Fixed & Improved
+- **Botones de Teclado y Control Multimedia en Windows**:
+  - Implementado receptor nativo de mensajes `WM_APPCOMMAND` en el runner de Windows (`flutter_window.cpp`) para procesar teclas dedicadas de Siguiente, Anterior, Play/Pausa y Stop en todos los teclados multimedia, teclados Bluetooth y combinaciones Fn de portátiles.
+  - Registrados atajos globales del sistema con `RegisterHotKey` (`VK_MEDIA_NEXT_TRACK`, `VK_MEDIA_PREV_TRACK`, `VK_MEDIA_PLAY_PAUSE`, `VK_MEDIA_STOP`), permitiendo controlar la reproducción incluso con la app minimizada o en segundo plano.
+  - Corregido el retroceso de pista (`skipPrevious`): ahora pulsar Anterior reinicia la canción a 0:00 si supera los 3 segundos, y una segunda pulsación en menos de 3 segundos (o cualquier pulsación en los primeros 3s) retrocede inmediatamente a la canción anterior en la cola.
+  - Eliminado el bloqueo arbitrario de 400ms (`_skipPending`) que descartaba pulsaciones consecutivas de Siguiente y Anterior.
+  - Habilitados los atajos de pista siguiente y anterior en la interfaz independientemente del foco en pantalla (incluso escribiendo en campos de búsqueda).
+- **Inicio de Sesión Nativo de Google en Android**:
+  - Actualizado el ID de cliente de Android para vincularse directamente con el SHA-1 de producción en Google Cloud Console, garantizando inicio de sesión nativo mediante Google Play Services sin redirigir al navegador externo.
+- **Actualización Multiplataforma**: Actualizado el sistema a la versión **1.7.2** (Build 153) para Windows y Android con sincronización de actualizador automático.
+
 ## [1.7.1] - 2026-10-01
 
 ### Fixed & Improved

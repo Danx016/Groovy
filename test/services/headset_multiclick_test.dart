@@ -182,6 +182,70 @@ void main() {
       expect(stopCalls, 1);
     });
 
+    test('mediaFastForward and mediaSkipForward directly invoke onSkipNext', () async {
+      final ffEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaFastForward,
+        logicalKey: LogicalKeyboardKey.mediaFastForward,
+        timeStamp: Duration.zero,
+      );
+      final handledFF = service.handleKeyEventForTesting(ffEvent);
+      expect(handledFF, isTrue);
+      expect(skipNextCalls, 1);
+
+      await Future.delayed(const Duration(milliseconds: 220));
+
+      final skipFwdEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaTrackNext,
+        logicalKey: LogicalKeyboardKey.mediaSkipForward,
+        timeStamp: Duration.zero,
+      );
+      final handledSkip = service.handleKeyEventForTesting(skipFwdEvent);
+      expect(handledSkip, isTrue);
+      expect(skipNextCalls, 2);
+    });
+
+    test('mediaRewind and mediaSkipBackward directly invoke onSkipPrevious', () async {
+      final rwEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaRewind,
+        logicalKey: LogicalKeyboardKey.mediaRewind,
+        timeStamp: Duration.zero,
+      );
+      final handledRW = service.handleKeyEventForTesting(rwEvent);
+      expect(handledRW, isTrue);
+      expect(skipPreviousCalls, 1);
+
+      await Future.delayed(const Duration(milliseconds: 220));
+
+      final skipBackEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaTrackPrevious,
+        logicalKey: LogicalKeyboardKey.mediaSkipBackward,
+        timeStamp: Duration.zero,
+      );
+      final handledBack = service.handleKeyEventForTesting(skipBackEvent);
+      expect(handledBack, isTrue);
+      expect(skipPreviousCalls, 2);
+    });
+
+    test('unidentified logicalKey with physical mediaTrackNext and mediaTrackPrevious keys are handled', () async {
+      final nextEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaTrackNext,
+        logicalKey: LogicalKeyboardKey.unidentified,
+        timeStamp: Duration.zero,
+      );
+      expect(service.handleKeyEventForTesting(nextEvent), isTrue);
+      expect(skipNextCalls, 1);
+
+      await Future.delayed(const Duration(milliseconds: 220));
+
+      final prevEvent = KeyDownEvent(
+        physicalKey: PhysicalKeyboardKey.mediaTrackPrevious,
+        logicalKey: LogicalKeyboardKey.unidentified,
+        timeStamp: Duration.zero,
+      );
+      expect(service.handleKeyEventForTesting(prevEvent), isTrue);
+      expect(skipPreviousCalls, 1);
+    });
+
     test('Rapid repeat keydown event within throttle window is throttled', () async {
       final event = KeyDownEvent(
         physicalKey: PhysicalKeyboardKey.mediaPause,

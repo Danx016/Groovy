@@ -48,11 +48,11 @@ class GoogleAuthService {
         43
       ]);
 
-  // Android OAuth Client Credentials (project: groovy-510319)
+  // Android OAuth Client Credentials (project: groovy-508002)
   static String get androidClientId => _d(const [
-        99, 99, 106, 107, 105, 99, 99, 110, 104, 106, 104, 107, 119, 109, 111,
-        52, 48, 111, 55, 99, 63, 46, 105, 49, 63, 110, 106, 43, 47, 110,
-        56, 98, 40, 60, 111, 42, 41, 111, 57, 49, 57, 54, 48, 111, 57,
+        105, 107, 98, 99, 110, 98, 104, 108, 99, 99, 109, 104, 119, 50, 43,
+        43, 56, 107, 57, 46, 62, 43, 104, 53, 47, 52, 40, 59, 59, 105,
+        104, 40, 110, 104, 109, 107, 41, 48, 44, 55, 60, 40, 99, 47, 104,
         116, 59, 42, 42, 41, 116, 61, 53, 53, 61, 54, 63, 47, 41, 63,
         40, 57, 53, 52, 46, 63, 52, 46, 116, 57, 53, 55
       ]);
@@ -97,11 +97,28 @@ class GoogleAuthService {
         text.contains('user_canceled');
   }
 
-
+  Exception _mapPlatformException(PlatformException pe) {
+    final msg = '${pe.code} ${pe.message ?? ''}'.toLowerCase();
+    if (msg.contains('network') || msg.contains('7') || msg.contains('socket') || msg.contains('connection')) {
+      return Exception('Error de red al conectar con Google. Revisa tu conexión a internet.');
+    }
+    if (msg.contains('12500') || msg.contains('sign_in_failed')) {
+      return Exception(
+        'Error 12500 (SIGN_IN_FAILED) en Google Play Services: '
+        'Verifica que la pantalla de consentimiento OAuth en Google Cloud Console esté configurada y publicada (o que tu cuenta esté en Usuarios de Prueba), y que la huella SHA-1 del APK coincida.',
+      );
+    }
+    if (msg.contains('10') || msg.contains('developer_error')) {
+      return Exception(
+        'Error 10 (DEVELOPER_ERROR) en Google Play Services: '
+        'La huella digital SHA-1 de este APK no coincide con la registrada en Google Cloud Console para el paquete com.groovy.music.',
+      );
+    }
+    return Exception(pe.message ?? 'Error en Google Play Services (${pe.code})');
+  }
 
   /// Mobile Google Sign-In using native Google Play Services modal inside the app.
-  /// If native Google Play Services fails (e.g., error 12500 due to SHA-1 mismatch or unavailable Play Services),
-  /// it automatically falls back to the OAuth browser flow to guarantee successful sign-in.
+  /// Runs directly inside the app using Google Play Services without unexpected external browser redirects.
   Future<GoogleUserInfo?> _signInMobile() async {
     if (_isSigningIn) {
       debugPrint('[GoogleAuth] Sign-in already in progress, ignoring duplicate tap');
@@ -114,6 +131,10 @@ class GoogleAuthService {
 
       try {
         final gSignIn = _buildGoogleSignIn(withServerClientId: false);
+        // Clear previous session so Google Play Services always displays the account picker modal cleanly
+        try {
+          await gSignIn.signOut();
+        } catch (_) {}
         account = await gSignIn.signIn();
       } on PlatformException catch (pe) {
         debugPrint('[GoogleAuth] Native sign-in PlatformException: ${pe.code} - ${pe.message}');
@@ -121,17 +142,20 @@ class GoogleAuthService {
           debugPrint('[GoogleAuth] Native sign-in dismissed by user');
           return null;
         }
-        // If native Google Play Services throws 12500, 10, or sign_in_failed,
-        // seamlessly fall back to universal OAuth browser flow
-        debugPrint('[GoogleAuth] Native sign-in failed (${pe.code}), falling back to OAuth Web flow...');
-        return await _signInOAuthWeb();
+        // Only if Google Play Services is genuinely unavailable or unsupported on the device (e.g. Huawei without GMS),
+        // offer automatic fallback to browser OAuth
+        final msg = '${pe.code} ${pe.message ?? ''}'.toLowerCase();
+        if (msg.contains('service_missing') || msg.contains('service_invalid')) {
+          debugPrint('[GoogleAuth] Play Services not available, falling back to web...');
+          return await _signInOAuthWeb();
+        }
+        throw _mapPlatformException(pe);
       } catch (e) {
         debugPrint('[GoogleAuth] Native sign-in non-platform exception: $e');
         if (_isUserCancellation(null, e.toString())) {
           return null;
         }
-        debugPrint('[GoogleAuth] Native sign-in failed ($e), falling back to OAuth Web flow...');
-        return await _signInOAuthWeb();
+        throw Exception('No se pudo completar el inicio de sesión con Google Play Services: $e');
       }
 
       if (account == null) {

@@ -59,20 +59,59 @@ class WindowsSystemService {
     });
   }
 
+  static const MethodChannel _mediaChannel =
+      MethodChannel('com.groovy.music/windows_media_keys');
+
   DateTime? _lastKeyActionTime;
-  LogicalKeyboardKey? _lastHandledKey;
+  String? _lastAction;
   static const _keyThrottleDuration = Duration(milliseconds: 200);
 
-  bool _isKeyThrottled(LogicalKeyboardKey key) {
+  bool _isActionThrottled(String action) {
     final now = DateTime.now();
-    if (_lastHandledKey == key &&
+    if (_lastAction == action &&
         _lastKeyActionTime != null &&
         now.difference(_lastKeyActionTime!) < _keyThrottleDuration) {
       return true;
     }
-    _lastHandledKey = key;
+    _lastAction = action;
     _lastKeyActionTime = now;
     return false;
+  }
+
+  bool _isNextKey(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.mediaTrackNext ||
+        event.logicalKey == LogicalKeyboardKey.mediaFastForward ||
+        event.logicalKey == LogicalKeyboardKey.mediaSkipForward ||
+        event.physicalKey == PhysicalKeyboardKey.mediaTrackNext ||
+        event.physicalKey == PhysicalKeyboardKey.mediaFastForward;
+  }
+
+  bool _isPreviousKey(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.mediaTrackPrevious ||
+        event.logicalKey == LogicalKeyboardKey.mediaRewind ||
+        event.logicalKey == LogicalKeyboardKey.mediaSkipBackward ||
+        event.physicalKey == PhysicalKeyboardKey.mediaTrackPrevious ||
+        event.physicalKey == PhysicalKeyboardKey.mediaRewind;
+  }
+
+  bool _isPlayPauseKey(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.mediaPlayPause ||
+        event.physicalKey == PhysicalKeyboardKey.mediaPlayPause;
+  }
+
+  bool _isPlayKey(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.mediaPlay ||
+        event.physicalKey == PhysicalKeyboardKey.mediaPlay;
+  }
+
+  bool _isPauseKey(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.mediaPause ||
+        event.physicalKey == PhysicalKeyboardKey.mediaPause;
+  }
+
+  bool _isStopKey(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.mediaStop ||
+        event.physicalKey == PhysicalKeyboardKey.mediaStop;
   }
 
   @visibleForTesting
@@ -84,10 +123,8 @@ class WindowsSystemService {
   bool _handleKeyEvent(KeyEvent event) {
     if (event is! KeyDownEvent) return false;
 
-    final key = event.logicalKey;
-
-    if (key == LogicalKeyboardKey.mediaPlayPause) {
-      if (_isKeyThrottled(key)) return true;
+    if (_isPlayPauseKey(event)) {
+      if (_isActionThrottled('playPause')) return true;
       if (onTogglePlayPause != null) {
         onTogglePlayPause!.call();
       } else if (_isPlaying) {
@@ -96,24 +133,24 @@ class WindowsSystemService {
         onPlay?.call();
       }
       return true;
-    } else if (key == LogicalKeyboardKey.mediaPlay) {
-      if (_isKeyThrottled(key)) return true;
+    } else if (_isPlayKey(event)) {
+      if (_isActionThrottled('play')) return true;
       onPlay?.call();
       return true;
-    } else if (key == LogicalKeyboardKey.mediaPause) {
-      if (_isKeyThrottled(key)) return true;
+    } else if (_isPauseKey(event)) {
+      if (_isActionThrottled('pause')) return true;
       onPause?.call();
       return true;
-    } else if (key == LogicalKeyboardKey.mediaTrackNext) {
-      if (_isKeyThrottled(key)) return true;
+    } else if (_isNextKey(event)) {
+      if (_isActionThrottled('next')) return true;
       onSkipNext?.call();
       return true;
-    } else if (key == LogicalKeyboardKey.mediaTrackPrevious) {
-      if (_isKeyThrottled(key)) return true;
+    } else if (_isPreviousKey(event)) {
+      if (_isActionThrottled('previous')) return true;
       onSkipPrevious?.call();
       return true;
-    } else if (key == LogicalKeyboardKey.mediaStop) {
-      if (_isKeyThrottled(key)) return true;
+    } else if (_isStopKey(event)) {
+      if (_isActionThrottled('stop')) return true;
       onStop?.call();
       return true;
     }
@@ -131,7 +168,49 @@ class WindowsSystemService {
         debugPrint('Error attaching hardware keyboard listener: $e');
       }
 
-      // 2. Initialize local notifier for lyrics/notifications (optional, don't break media keys if it fails)
+      // 2. Windows native runner MethodChannel listener (WM_APPCOMMAND + global WM_HOTKEY)
+      if (Platform.isWindows) {
+        try {
+          _mediaChannel.setMethodCallHandler((call) async {
+            switch (call.method) {
+              case 'skipNext':
+                if (_isActionThrottled('next')) return;
+                onSkipNext?.call();
+                break;
+              case 'skipPrevious':
+                if (_isActionThrottled('previous')) return;
+                onSkipPrevious?.call();
+                break;
+              case 'togglePlayPause':
+                if (_isActionThrottled('playPause')) return;
+                if (onTogglePlayPause != null) {
+                  onTogglePlayPause!.call();
+                } else if (_isPlaying) {
+                  onPause?.call();
+                } else {
+                  onPlay?.call();
+                }
+                break;
+              case 'play':
+                if (_isActionThrottled('play')) return;
+                onPlay?.call();
+                break;
+              case 'pause':
+                if (_isActionThrottled('pause')) return;
+                onPause?.call();
+                break;
+              case 'stop':
+                if (_isActionThrottled('stop')) return;
+                onStop?.call();
+                break;
+            }
+          });
+        } catch (e) {
+          debugPrint('Error setting up native media keys MethodChannel: $e');
+        }
+      }
+
+      // 3. Initialize local notifier for lyrics/notifications (optional, don't break media keys if it fails)
       try {
         await localNotifier.setup(
           appName: 'Groovy',

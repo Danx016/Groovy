@@ -115,6 +115,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _lastUserPauseTime;
   String? _lastCompletedSongId;
   DateTime? _lastManualSkipTime;
+  DateTime? _lastPreviousPressTime;
   static const Duration _skipDebounceDuration = Duration(milliseconds: 350);
 
   /// Last playback error message, set when a song fails to load after all retries.
@@ -147,7 +148,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   DateTime? _optimisticLocalPlayPauseTime;
   bool? _optimisticLocalPlayPauseState;
   bool _togglePending = false; // prevents re-entrant double-tap desync
-  bool _skipPending = false;    // prevents rapid double-skip from mis-taps or race conditions
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
@@ -3155,11 +3155,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipNext() async {
-    // Debounce rapid double-taps / race conditions (same pattern as togglePlayPause)
-    if (_skipPending) return;
-    _skipPending = true;
-    Future.delayed(const Duration(milliseconds: 400), () => _skipPending = false);
-
     _hasRetriedCurrentPlay = false;
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition
@@ -3393,11 +3388,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   Future<void> skipPrevious() async {
-    // Debounce rapid double-taps / race conditions (same pattern as togglePlayPause)
-    if (_skipPending) return;
-    _skipPending = true;
-    Future.delayed(const Duration(milliseconds: 400), () => _skipPending = false);
-
     _hasRetriedCurrentPlay = false;
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition
@@ -3405,13 +3395,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     if (_queue.isEmpty || _currentSong == null) return;
 
+    final now = DateTime.now();
+    final isDoublePress = _lastPreviousPressTime != null &&
+        now.difference(_lastPreviousPressTime!) < const Duration(seconds: 3);
+
     // Standard player behavior: if song has been playing for more than 3 seconds,
     // rewinding restarts the current song from the beginning.
     // A subsequent press within 3 seconds navigates to the previous song.
-    if (_position > const Duration(seconds: 3)) {
+    if (!isDoublePress && _position > const Duration(seconds: 3)) {
+      _lastPreviousPressTime = now;
+      _position = Duration.zero;
+      _positionController.add(Duration.zero);
       await seek(Duration.zero);
       return;
     }
+    _lastPreviousPressTime = now;
 
     if (_groovyConnectService?.isConnected == true) {
       if (_currentSong != null) {
