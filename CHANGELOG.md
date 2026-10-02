@@ -5,6 +5,30 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.5] - 2026-10-02
+
+### Fixed & Improved
+- **Rediseño Hero en Pantalla de Artista**:
+  - Carátula de artista grande de **~330 px** con esquinas redondeadas (`BorderRadius.circular(20)`), sombra 3D profunda y fondo ambiental dinámico (`ImageFilter.blur(sigmaX: 55, sigmaY: 55)`), alineada con el diseño de Apple Music y de la pantalla de álbumes.
+  - Corrección de offset superior para adaptarse al notch y barra de estado de dispositivos móviles sin obstruir los controles de navegación.
+  - Tipografía responsiva en el nombre del artista (`ScreenHelper.isSmallScreen`).
+  - Precarga inteligente de audio (`warmUpStreamCache`) para la primera canción destacada al abrir la pantalla de artista.
+- **Resolución y Fotos Reales de Artistas**:
+  - Detección mejorada de fotos de artistas en alta resolución (Deezer / iTunes) en `ArtistImageService`.
+  - Normalización de tildes y caracteres latinos (p. ej., *Diomedes Díaz* -> *Diomedes Diaz*).
+  - Separación adecuada de duetos y colaboraciones (*"Diomedes Díaz y Iván Zuleta"*, *con*, *&*, *,*) para resolver la foto del artista principal.
+  - Blindaje de caché: se evita que las carátulas de álbumes contaminen la memoria o disco como si fueran fotos de artistas.
+- **Menú de Navegación de Pista (Apple Music Style)**:
+  - Corregido el avatar de *"Ir al artista"* en `TrackNavigationBottomSheet` y `NowPlayingMoreMenu`, que mostraba la carátula del álbum en lugar de la foto real del artista.
+  - Carga inmediata desde la caché de memoria de la foto del artista sin bloquear la apertura del menú.
+- **Visualización de Álbumes en Descargas**:
+  - Corregido el problema por el cual los álbumes descargados desde YouTube Music o en línea no aparecían en la sección *"Álbumes"* de Descargas.
+  - Implementada agrupación inteligente automática de pistas descargadas por álbum, generando sus tarjetas visuales completas con carátula, artista, año y conteo de canciones descargadas.
+  - Registro y persistencia de álbumes descargados en `OfflineService`.
+  - Soporte offline completo en la pantalla de Álbum: al abrir cualquier álbum descargado sin conexión a internet, ahora carga y reproduce inmediatamente todas las canciones descargadas de dicho álbum.
+  - Sincronización en tiempo real del estado de descarga del álbum con badge verde al completarse.
+- **Actualización Multiplataforma**: Versión **1.7.5** (Build 156) para Windows y Android.
+
 ## [1.7.4] - 2026-10-01
 
 ### Fixed & Improved

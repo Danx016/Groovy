@@ -10,6 +10,7 @@ import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/album_resolver_service.dart';
+import '../../services/artist_image_service.dart';
 import '../../utils/album_sanitizer.dart';
 
 class TrackNavigationBottomSheet extends StatefulWidget {
@@ -47,6 +48,10 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
   @override
   void initState() {
     super.initState();
+    final song = widget.song;
+    if (song?.artist != null && song!.artist!.isNotEmpty) {
+      _artistImageUrl = ArtistImageService.getCachedArtistImageUrl(song.artist!);
+    }
     _fetchArtistImage();
     _resolveAlbumInfo();
   }
@@ -80,6 +85,19 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
     final song = widget.song;
     if (song == null) return;
 
+    final artistName = song.artist ?? '';
+    if (artistName.isNotEmpty) {
+      try {
+        final url = await ArtistImageService().getArtistImageUrl(artistName);
+        if (url != null && url.isNotEmpty && mounted) {
+          setState(() {
+            _artistImageUrl = url;
+          });
+          return;
+        }
+      } catch (_) {}
+    }
+
     try {
       final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
       final youtubeService = Provider.of<YoutubeService>(context, listen: false);
@@ -89,7 +107,6 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
       // 2. If null, search in library artists
       if (targetArtistId == null || targetArtistId.isEmpty) {
-        final artistName = song.artist ?? '';
         for (final a in libraryProvider.artists) {
           if (a.name.toLowerCase() == artistName.toLowerCase()) {
             targetArtistId = a.id;
@@ -162,7 +179,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
 
     final artistFallbackCover = matchedArtist?.coverArt != null
         ? youtubeService.getCoverArtUrl(matchedArtist!.coverArt!, size: 150)
-        : coverUrl;
+        : null;
 
     return RepaintBoundary(
       child: Material(
@@ -231,7 +248,7 @@ class _TrackNavigationBottomSheetState extends State<TrackNavigationBottomSheet>
                       artist: Artist(
                         id: effectiveArtistId,
                         name: artistName,
-                        coverArt: coverUrl,
+                        coverArt: _artistImageUrl ?? matchedArtist?.coverArt,
                       ),
                     ),
                   ),

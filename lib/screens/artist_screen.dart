@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import 'package:flutter/cupertino.dart';
@@ -10,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import '../utils/album_sanitizer.dart';
+import '../utils/screen_helper.dart';
 import '../services/services.dart';
 
 class ArtistScreen extends StatefulWidget {
@@ -34,6 +36,8 @@ class _ArtistScreenState extends State<ArtistScreen> {
   void initState() {
     super.initState();
     FavoriteArtistsService().initialize();
+    final initialName = widget.artist?.name ?? widget.artistId;
+    _resolvedCoverArt = ArtistImageService.getCachedArtistImageUrl(initialName);
     _loadArtistDetails();
   }
 
@@ -244,29 +248,30 @@ class _ArtistScreenState extends State<ArtistScreen> {
       } catch (_) {}
 
       // Resolve high-resolution artist image if missing or empty
-      String? coverArtUrl = artist.coverArt ?? artist.artistImageUrl;
-      final fallbackCover = topSongs.isNotEmpty ? topSongs.first.coverArt : null;
+      String? coverArtUrl = ArtistImageService.getCachedArtistImageUrl(artist.name) ??
+          artist.coverArt ??
+          artist.artistImageUrl;
       try {
         final resolved = await ArtistImageService()
-            .getArtistImageUrl(artist.name, fallbackCoverArt: fallbackCover)
-            .timeout(const Duration(seconds: 3));
-          if (resolved != null && resolved.isNotEmpty) {
-            coverArtUrl = resolved;
-            artist = Artist(
-              id: artist.id,
-              name: artist.name,
-              coverArt: resolved,
-              albumCount: artist.albumCount ?? albums.length,
-              artistImageUrl: resolved,
-              isLocal: artist.isLocal,
-            );
-            libraryProvider.updateArtistCoverArt(
-              artist.id,
-              resolved,
-              artistName: artist.name,
-            );
-          }
-        } catch (_) {}
+            .getArtistImageUrl(artist.name)
+            .timeout(const Duration(seconds: 4));
+        if (resolved != null && resolved.isNotEmpty) {
+          coverArtUrl = resolved;
+          artist = Artist(
+            id: artist.id,
+            name: artist.name,
+            coverArt: resolved,
+            albumCount: artist.albumCount ?? albums.length,
+            artistImageUrl: resolved,
+            isLocal: artist.isLocal,
+          );
+          libraryProvider.updateArtistCoverArt(
+            artist.id,
+            resolved,
+            artistName: artist.name,
+          );
+        }
+      } catch (_) {}
 
       if (mounted) {
         setState(() {
@@ -276,6 +281,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
           _resolvedCoverArt = coverArtUrl;
           _isLoading = false;
         });
+        if (topSongs.isNotEmpty && topSongs.first.isLocal != true) {
+          final firstSong = topSongs.first;
+          final cleanId = firstSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+            YtDlpService().warmUpStreamCache(cleanId);
+          }
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -391,296 +403,454 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final pageBgColor = isDark ? AppTheme.darkBackground : Colors.white;
-    final titleTextColor = isDark ? Colors.white : Colors.black87;
 
     if (_isLoading) {
       return Scaffold(
-        appBar: AppBar(),
+        backgroundColor: pageBgColor,
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     if (_artist == null) {
       return Scaffold(
-        appBar: AppBar(),
+        backgroundColor: pageBgColor,
+        appBar: AppBar(backgroundColor: Colors.transparent, elevation: 0),
         body: Center(
           child: Text(AppLocalizations.of(context)!.artistDataNotFound),
         ),
       );
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmall = ScreenHelper.isSmallScreen(context);
+    final topPadding = MediaQuery.of(context).padding.top;
+    final artworkSize = isSmall
+        ? (screenWidth - 64.0).clamp(285.0, 345.0)
+        : (screenWidth * 0.36).clamp(300.0, 360.0);
+    final topOffset = topPadding + (isSmall ? 48.0 : 56.0);
+    const bottomOffset = 18.0;
+    final headerExpandedHeight = topOffset + artworkSize + bottomOffset;
+
     return Scaffold(
+      backgroundColor: pageBgColor,
       body: CustomScrollView(
         slivers: [
+          // 1. Hero AppBar with Collapsible Title & Ambient Large Artwork
           SliverAppBar(
             pinned: true,
-            expandedHeight: 300,
+            expandedHeight: headerExpandedHeight,
             backgroundColor: pageBgColor,
             surfaceTintColor: Colors.transparent,
+            elevation: 0,
+            scrolledUnderElevation: 2,
             leading: IconButton(
               icon: Container(
-                padding: const EdgeInsets.all(7),
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: isDark
-                      ? Colors.black.withValues(alpha: 0.45)
-                      : Colors.black.withValues(alpha: 0.25),
+                      ? Colors.black.withValues(alpha: 0.55)
+                      : Colors.white.withValues(alpha: 0.75),
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.15),
+                      blurRadius: 8,
+                    ),
+                  ],
                 ),
-                child: const Icon(
-                  CupertinoIcons.arrow_left,
-                  color: Colors.white,
+                child: Icon(
+                  CupertinoIcons.back,
+                  color: isDark ? Colors.white : Colors.black87,
                   size: 20,
                 ),
               ),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            flexibleSpace: FlexibleSpaceBar(
-              centerTitle: true,
-              titlePadding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
-              title: Text(
-                _artist!.name,
-                style: TextStyle(
-                  color: titleTextColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 22,
-                  letterSpacing: -0.4,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              background: _buildHeaderBackground(context, pageBgColor),
+            flexibleSpace: LayoutBuilder(
+              builder: (context, constraints) {
+                final top = constraints.biggest.height;
+                final isCollapsed = top <= (kToolbarHeight + topPadding + 20);
+
+                return FlexibleSpaceBar(
+                  centerTitle: true,
+                  collapseMode: CollapseMode.parallax,
+                  title: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isCollapsed ? 1.0 : 0.0,
+                    child: Text(
+                      _artist!.name,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black87,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        letterSpacing: -0.3,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  background: _buildHeaderBackground(
+                    context,
+                    pageBgColor,
+                    isDark,
+                    topOffset,
+                    bottomOffset,
+                    artworkSize,
+                  ),
+                );
+              },
             ),
             actions: [
               _buildStarButton(context, isDark),
               _buildMoreButton(context, isDark),
+              const SizedBox(width: 4),
             ],
           ),
-          if (_topSongs.isNotEmpty)
+
+          // 2. Artist Name, Badges & Primary Play/Shuffle Controls
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 6),
+
+                  // Artist Name (Apple Music typography)
+                  Text(
+                    _artist!.name,
+                    style: TextStyle(
+                      fontSize: isSmall ? 23 : 28,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.6,
+                      color: isDark ? Colors.white : Colors.black87,
+                      height: 1.2,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Metadata Badges
+                  Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      _buildMetaBadge('ARTISTA', isDark),
+                      if (_albums.isNotEmpty)
+                        _buildMetaBadge(
+                          '${_albums.length} ${_albums.length == 1 ? "álbum" : "álbumes"}',
+                          isDark,
+                        ),
+                      if (_topSongs.isNotEmpty)
+                        _buildMetaBadge(
+                          '${_topSongs.length} canciones',
+                          isDark,
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Primary Play & Shuffle Buttons (Apple Music style)
+                  if (_topSongs.isNotEmpty)
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _PlayButton(
+                            icon: CupertinoIcons.play_fill,
+                            label: AppLocalizations.of(context)!.play,
+                            onTap: () => _playTopSongs(),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _PlayButton(
+                            icon: CupertinoIcons.shuffle,
+                            label: AppLocalizations.of(context)!.shuffle,
+                            onTap: () => _playTopSongs(shuffle: true),
+                          ),
+                        ),
+                      ],
+                    ),
+                  const SizedBox(height: 28),
+                ],
+              ),
+            ),
+          ),
+
+          // 3. Canciones Populares (Top Songs)
+          if (_topSongs.isNotEmpty) ...[
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                child: Row(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 10),
+                child: Text(
+                  AppLocalizations.of(context)!.topSongs,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final song = _topSongs[index];
+                    return SongTile(
+                      song: song,
+                      playlist: _topSongs,
+                      index: index,
+                      showArtist: false,
+                      showAlbum: true,
+                      showDuration: true,
+                    );
+                  },
+                  childCount: _topSongs.take(8).length,
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
+          ],
+
+          // 4. Discografía
+          if (_albums.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                child: Text(
+                  'Discografía',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.5,
+                    color: isDark ? Colors.white : Colors.black87,
+                  ),
+                ),
+              ),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              sliver: SliverGrid(
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                  maxCrossAxisExtent: 180,
+                  childAspectRatio: 0.72,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
+                ),
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final album = _albums[index];
+                    return AlbumCard(
+                      album: album,
+                      size: double.infinity,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              AlbumScreen(albumId: album.id, album: album),
+                        ),
+                      ),
+                    );
+                  },
+                  childCount: _albums.length,
+                ),
+              ),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 28)),
+          ],
+
+          // 5. Acerca de / Biografía
+          if (_artistInfo?.biography != null && _artistInfo!.biography!.isNotEmpty) ...[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(
-                      child: _PlayButton(
-                        icon: CupertinoIcons.play_fill,
-                        label: AppLocalizations.of(context)!.play,
-                        onTap: () => _playTopSongs(),
+                    Text(
+                      'Acerca de ${_artist!.name}',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: -0.5,
+                        color: isDark ? Colors.white : Colors.black87,
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _PlayButton(
-                        icon: CupertinoIcons.shuffle,
-                        label: AppLocalizations.of(context)!.shuffle,
-                        onTap: () => _playTopSongs(shuffle: true),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : Colors.black.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.05),
+                        ),
+                      ),
+                      child: Text(
+                        _artistInfo!.biography!,
+                        style: TextStyle(
+                          fontSize: 15,
+                          height: 1.5,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_topSongs.isNotEmpty) ...[
-                    Text(
-                      AppLocalizations.of(context)!.topSongs,
-                      style: theme.textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 8),
-                    ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemExtent: 68.0,
-                      itemCount: _topSongs.take(5).length,
-                      itemBuilder: (context, index) {
-                        final song = _topSongs[index];
-                        return SongTile(
-                          song: song,
-                          playlist: _topSongs,
-                          index: index,
-                          showArtist: false,
-                          showAlbum: true,
-                          showDuration: false,
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  if (_albums.isNotEmpty) ...[
-                    Text(
-                      'Discografía',
-                      style: theme.textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 180,
-                        childAspectRatio: 0.72,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                      ),
-                      itemCount: _albums.length,
-                      itemBuilder: (context, index) {
-                        final album = _albums[index];
-                        return AlbumCard(
-                          album: album,
-                          size: double.infinity,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  AlbumScreen(albumId: album.id, album: album),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 24),
-                  ],
-                  if (_artistInfo?.biography != null &&
-                      _artistInfo!.biography!.isNotEmpty) ...[
-                    const SizedBox(height: 32),
-                    Text(
-                      'About ${_artist!.name}',
-                      style: theme.textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _artistInfo!.biography!,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color
-                            ?.withValues(alpha: 0.8),
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 100),
-                ],
-              ),
-            ),
-          ),
+          ] else ...[
+            const SliverToBoxAdapter(child: SizedBox(height: 80)),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildHeaderBackground(BuildContext context, Color pageBgColor) {
-    final cover = _resolvedCoverArt ?? _artist?.coverArt ?? _artist?.artistImageUrl;
-
-    if (cover != null && cover.isNotEmpty) {
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          if (cover.startsWith('http'))
-            CachedNetworkImage(
-              imageUrl: cover,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              placeholder: (ctx, url) => Container(
-                color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                child: const Center(
-                  child: Icon(
-                    CupertinoIcons.mic_fill,
-                    size: 64,
-                    color: AppTheme.appleMusicRed,
-                  ),
-                ),
-              ),
-              errorWidget: (ctx, url, err) => Container(
-                color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                child: const Center(
-                  child: Icon(
-                    CupertinoIcons.mic_fill,
-                    size: 64,
-                    color: AppTheme.appleMusicRed,
-                  ),
-                ),
-              ),
-            )
-          else if (isLocalFilePath(cover))
-            Image.file(
-              File(cover),
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              errorBuilder: (_, __, ___) => Container(
-                color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                child: const Center(
-                  child: Icon(
-                    CupertinoIcons.mic_fill,
-                    size: 64,
-                    color: AppTheme.appleMusicRed,
-                  ),
-                ),
-              ),
-            )
-          else
-            AlbumArtwork(
-              coverArt: cover,
-              size: 400,
-            ),
-          // Top gradient to ensure back button and actions contrast nicely
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 90,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.45),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Bottom gradient for smooth fade into page background
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: 180,
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    pageBgColor.withValues(alpha: 0.35),
-                    pageBgColor.withValues(alpha: 0.85),
-                    pageBgColor,
-                  ],
-                  stops: const [0.0, 0.45, 0.8, 1.0],
-                ),
-              ),
-            ),
-          ),
-        ],
-      );
-    }
-
+  Widget _buildMetaBadge(String text, bool isDark) {
     return Container(
-      color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-      child: const Center(
-        child: Icon(
-          CupertinoIcons.mic_fill,
-          size: 64,
-          color: AppTheme.appleMusicRed,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.04),
         ),
       ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white70 : Colors.black54,
+          letterSpacing: -0.1,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeaderBackground(
+    BuildContext context,
+    Color pageBgColor,
+    bool isDark,
+    double topOffset,
+    double bottomOffset,
+    double artworkSize,
+  ) {
+    final cover = _resolvedCoverArt ?? _artist?.coverArt ?? _artist?.artistImageUrl;
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // 1. Ambient Blurred Backdrop
+        if (cover != null && cover.isNotEmpty)
+          Positioned.fill(
+            child: Opacity(
+              opacity: isDark ? 0.36 : 0.28,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+                child: cover.startsWith('http')
+                    ? CachedNetworkImage(
+                        imageUrl: cover,
+                        fit: BoxFit.cover,
+                        errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                      )
+                    : isLocalFilePath(cover)
+                        ? Image.file(
+                            File(cover),
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                          )
+                        : AlbumArtwork(coverArt: cover, size: 320),
+              ),
+            ),
+          ),
+
+        // 2. Gradient overlay fading cleanly into page background
+        Positioned.fill(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.transparent,
+                  pageBgColor.withValues(alpha: 0.65),
+                  pageBgColor,
+                ],
+                stops: const [0.0, 0.70, 1.0],
+              ),
+            ),
+          ),
+        ),
+
+        // 3. Main Elevated 3D Artist Artwork (matching AlbumScreen)
+        Center(
+          child: Padding(
+            padding: EdgeInsets.only(
+              top: topOffset,
+              bottom: bottomOffset,
+            ),
+            child: Container(
+              width: artworkSize,
+              height: artworkSize,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isDark
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.black.withValues(alpha: 0.08),
+                  width: 1.0,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: isDark ? 0.50 : 0.18),
+                    blurRadius: 30,
+                    offset: const Offset(0, 14),
+                    spreadRadius: -2,
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: (cover != null && cover.isNotEmpty)
+                    ? (cover.startsWith('http')
+                        ? CachedNetworkImage(
+                            imageUrl: cover,
+                            fit: BoxFit.cover,
+                            errorWidget: (_, __, ___) => _buildFallbackAvatar(),
+                          )
+                        : isLocalFilePath(cover)
+                            ? Image.file(
+                                File(cover),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _buildFallbackAvatar(),
+                              )
+                            : AlbumArtwork(
+                                coverArt: cover,
+                                size: artworkSize,
+                                borderRadius: 20,
+                              ))
+                    : _buildFallbackAvatar(),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -764,6 +934,24 @@ class _ArtistScreenState extends State<ArtistScreen> {
     );
   }
 
+  Future<void> _addArtistToQueueNext() async {
+    if (_topSongs.isEmpty) return;
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    for (int i = _topSongs.length - 1; i >= 0; i--) {
+      await playerProvider.addToQueueNext(_topSongs[i]);
+    }
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text('Se reproducirá a continuación "${_artist?.name ?? ""}"'),
+        duration: const Duration(seconds: 2),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
   void _showArtistOptionsMenu(BuildContext context) {
     if (_artist == null) return;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -771,165 +959,269 @@ class _ArtistScreenState extends State<ArtistScreen> {
     final textColor = isDark ? Colors.white : const Color(0xFF1C1C1E);
     final subtitleColor = isDark ? Colors.white60 : Colors.black54;
     final dividerColor = isDark ? Colors.white12 : Colors.black.withValues(alpha: 0.08);
+    const appleRed = Color(0xFFFA2D48);
 
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       useRootNavigator: true,
-      builder: (ctx) => SafeArea(
+      builder: (ctx) => RepaintBoundary(
         child: Container(
-          margin: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: bgColor,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.25),
+                color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.12),
                 blurRadius: 16,
-                offset: const Offset(0, 4),
+                offset: const Offset(0, -3),
               ),
             ],
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Center(
-                child: Container(
-                  margin: const EdgeInsets.only(top: 8, bottom: 8),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 10),
+
+                // Top pill handle
+                Container(
                   width: 36,
-                  height: 4,
+                  height: 5,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.black26,
-                    borderRadius: BorderRadius.circular(2),
+                    color: isDark ? Colors.white24 : Colors.black12,
+                    borderRadius: BorderRadius.circular(3),
                   ),
                 ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Row(
-                  children: [
-                    ClipOval(
-                      child: SizedBox(
-                        width: 50,
-                        height: 50,
-                        child: (_resolvedCoverArt != null && _resolvedCoverArt!.isNotEmpty)
-                            ? (_resolvedCoverArt!.startsWith('http')
-                                ? CachedNetworkImage(
-                                    imageUrl: _resolvedCoverArt!,
-                                    fit: BoxFit.cover,
-                                    errorWidget: (_, __, ___) => _buildFallbackAvatar(),
-                                  )
-                                : isLocalFilePath(_resolvedCoverArt)
-                                    ? Image.file(
-                                        File(_resolvedCoverArt!),
-                                        fit: BoxFit.cover,
-                                        errorBuilder: (_, __, ___) => _buildFallbackAvatar(),
-                                      )
-                                    : AlbumArtwork(coverArt: _resolvedCoverArt, size: 50))
-                            : _buildFallbackAvatar(),
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _artist!.name,
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 17,
-                              color: textColor,
+
+                const SizedBox(height: 14),
+
+                // Header (Artist Thumbnail + Name + "Artista" (red) + Albums & Songs count)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 18.0),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
                             ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_albums.length} ${_albums.length == 1 ? "álbum" : "álbumes"} • ${_topSongs.length} canciones',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: subtitleColor,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: (_resolvedCoverArt != null && _resolvedCoverArt!.isNotEmpty)
+                              ? (_resolvedCoverArt!.startsWith('http')
+                                  ? CachedNetworkImage(
+                                      imageUrl: _resolvedCoverArt!,
+                                      fit: BoxFit.cover,
+                                      errorWidget: (_, __, ___) => _buildFallbackAvatar(),
+                                    )
+                                  : isLocalFilePath(_resolvedCoverArt)
+                                      ? Image.file(
+                                          File(_resolvedCoverArt!),
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => _buildFallbackAvatar(),
+                                        )
+                                      : AlbumArtwork(coverArt: _resolvedCoverArt, size: 54, borderRadius: 10))
+                              : _buildFallbackAvatar(),
+                        ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _artist!.name,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: textColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 2),
+                            const Text(
+                              'Artista',
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: appleRed,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              '${_albums.length} ${_albums.length == 1 ? "álbum" : "álbumes"} • ${_topSongs.length} canciones',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: subtitleColor,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Divider(height: 1, color: dividerColor),
-              ListTile(
-                leading: const Icon(Icons.queue_music_rounded, color: AppTheme.appleMusicRed),
-                title: Text(
-                  AppLocalizations.of(context)?.addToQueue ?? 'Agregar a la cola',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+
+                const SizedBox(height: 14),
+                Divider(height: 1, color: dividerColor),
+                const SizedBox(height: 4),
+
+                // 1. Agregar a la biblioteca / Eliminar de la biblioteca
+                AnimatedBuilder(
+                  animation: FavoriteArtistsService(),
+                  builder: (context, _) {
+                    final isStarred = FavoriteArtistsService().isFavorite(
+                      _artist!.id,
+                      artistName: _artist!.name,
+                    );
+                    return _buildMoreMenuItem(
+                      icon: isStarred ? CupertinoIcons.minus : CupertinoIcons.add,
+                      title: isStarred ? 'Eliminar de la biblioteca' : 'Agregar a la biblioteca',
+                      textColor: textColor,
+                      appleRed: appleRed,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _toggleFavoriteArtist();
+                      },
+                    );
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _addArtistToQueue();
-                },
-              ),
-              ListTile(
-                leading: const Icon(CupertinoIcons.cloud_download, color: AppTheme.appleMusicRed),
-                title: Text(
-                  'Descargar álbumes',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+
+                // 2. Reproducir a continuación
+                _buildMoreMenuItem(
+                  icon: Icons.play_arrow_rounded,
+                  title: 'Reproducir a continuación',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _addArtistToQueueNext();
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _downloadArtistAlbums();
-                },
-              ),
-              ListTile(
-                leading: const Icon(CupertinoIcons.play_circle, color: AppTheme.appleMusicRed),
-                title: Text(
-                  'Reproducir canciones',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+
+                // 3. Añadir a la cola
+                _buildMoreMenuItem(
+                  icon: Icons.queue_music_rounded,
+                  title: 'Añadir a la cola',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _addArtistToQueue();
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _playTopSongs();
-                },
-              ),
-              ListTile(
-                leading: const Icon(CupertinoIcons.shuffle, color: AppTheme.appleMusicRed),
-                title: Text(
-                  'Reproducción aleatoria',
-                  style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+
+                // 4. Descargar álbumes
+                _buildMoreMenuItem(
+                  icon: CupertinoIcons.arrow_down_circle,
+                  title: 'Descargar álbumes',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _downloadArtistAlbums();
+                  },
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _playTopSongs(shuffle: true);
-                },
-              ),
-              AnimatedBuilder(
-                animation: FavoriteArtistsService(),
-                builder: (context, _) {
-                  final isStarred = FavoriteArtistsService().isFavorite(
-                    _artist!.id,
-                    artistName: _artist!.name,
-                  );
-                  return ListTile(
-                    leading: Icon(
-                      isStarred ? Icons.star_rounded : Icons.star_outline_rounded,
-                      color: isStarred ? Colors.amber : AppTheme.appleMusicRed,
-                    ),
-                    title: Text(
-                      isStarred ? 'Quitar de favoritos' : 'Agregar a favoritos',
-                      style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
-                    ),
-                    onTap: () {
-                      Navigator.pop(ctx);
-                      _toggleFavoriteArtist();
-                    },
-                  );
-                },
-              ),
-              const SizedBox(height: 8),
-            ],
+
+                // 5. Reproducir canciones
+                _buildMoreMenuItem(
+                  icon: CupertinoIcons.play_circle,
+                  title: 'Reproducir canciones',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _playTopSongs();
+                  },
+                ),
+
+                // 6. Reproducción aleatoria
+                _buildMoreMenuItem(
+                  icon: CupertinoIcons.shuffle,
+                  title: 'Reproducción aleatoria',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _playTopSongs(shuffle: true);
+                  },
+                ),
+
+                // 7. Agregar a Favoritos / Eliminar de Favoritos
+                AnimatedBuilder(
+                  animation: FavoriteArtistsService(),
+                  builder: (context, _) {
+                    final isStarred = FavoriteArtistsService().isFavorite(
+                      _artist!.id,
+                      artistName: _artist!.name,
+                    );
+                    return _buildMoreMenuItem(
+                      icon: isStarred ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                      iconColor: isStarred ? Colors.amber : appleRed,
+                      title: isStarred ? 'Eliminar de Favoritos' : 'Agregar a Favoritos',
+                      textColor: textColor,
+                      appleRed: appleRed,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _toggleFavoriteArtist();
+                      },
+                    );
+                  },
+                ),
+
+                const SizedBox(height: 12),
+              ],
+            ),
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMoreMenuItem({
+    required IconData icon,
+    Color? iconColor,
+    required String title,
+    required Color textColor,
+    required Color appleRed,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 13.0),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor ?? appleRed, size: 24),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                  color: textColor,
+                  letterSpacing: -0.2,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -963,7 +1255,6 @@ class _PlayButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final accent = Theme.of(context).colorScheme.primary;
     final btnBg = isDark
         ? const Color(0xFF2C2C2E)
         : const Color(0xFFF2F2F7);
@@ -979,12 +1270,12 @@ class _PlayButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: accent, size: 20),
+              Icon(icon, color: AppTheme.appleMusicRed, size: 20),
               const SizedBox(width: 8),
               Text(
                 label,
-                style: TextStyle(
-                  color: accent,
+                style: const TextStyle(
+                  color: AppTheme.appleMusicRed,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   letterSpacing: -0.2,

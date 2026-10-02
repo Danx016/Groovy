@@ -12,15 +12,42 @@ class ArtistImageService {
   static final Map<String, Future<String?>> _inFlight = {};
   static bool _prefsLoaded = false;
 
+  static String removeAccents(String text) {
+    return text
+        .replaceAll(RegExp(r'[áàäâ]', caseSensitive: false), 'a')
+        .replaceAll(RegExp(r'[éèëê]', caseSensitive: false), 'e')
+        .replaceAll(RegExp(r'[íìïî]', caseSensitive: false), 'i')
+        .replaceAll(RegExp(r'[óòöô]', caseSensitive: false), 'o')
+        .replaceAll(RegExp(r'[úùüû]', caseSensitive: false), 'u');
+  }
+
   /// Synchronous memory cache check
   static String? getCachedArtistImageUrl(String artistName) {
     if (artistName.trim().isEmpty) return null;
-    final key = artistName
-        .replaceAll(RegExp(r'^artist_|^local_artist_', caseSensitive: false), '')
-        .replaceAll('_', ' ')
-        .trim()
-        .toLowerCase();
-    return _memoryCache[key];
+    final key = normalize(artistName);
+    final cached = _memoryCache[key];
+    if (cached != null && cached.isNotEmpty && !_isLikelyAlbumCover(cached)) {
+      return cached;
+    }
+    final primaryKey = normalize(extractPrimaryArtist(artistName));
+    if (primaryKey != key) {
+      final primaryCached = _memoryCache[primaryKey];
+      if (primaryCached != null && primaryCached.isNotEmpty && !_isLikelyAlbumCover(primaryCached)) {
+        return primaryCached;
+      }
+    }
+    return null;
+  }
+
+  static bool _isLikelyAlbumCover(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('/album/') ||
+        lower.contains('i.ytimg.com/vi/') ||
+        lower.contains('sddefault') ||
+        lower.contains('hqdefault')) {
+      return true;
+    }
+    return false;
   }
 
   static final Dio _dio = Dio(BaseOptions(
@@ -45,7 +72,7 @@ class ArtistImageService {
         final decoded = json.decode(raw);
         if (decoded is Map) {
           decoded.forEach((k, v) {
-            if (k is String && v is String && v.isNotEmpty) {
+            if (k is String && v is String && v.isNotEmpty && !_isLikelyAlbumCover(v)) {
               _memoryCache[k] = v;
             }
           });
@@ -69,28 +96,36 @@ class ArtistImageService {
   }
 
   /// Normalize artist name for clean searching & caching
-  String _normalize(String name) {
-    return name
+  static String normalize(String name) {
+    final lower = name
         .replaceAll(RegExp(r'^artist_|^local_artist_', caseSensitive: false), '')
         .replaceAll('_', ' ')
         .trim()
         .toLowerCase();
+    return removeAccents(lower);
   }
 
+  String _normalize(String name) => normalize(name);
+
   /// Extract primary artist if artist name contains collaboration markers
-  String _extractPrimaryArtist(String name) {
+  static String extractPrimaryArtist(String name) {
     var clean = name
         .replaceAll(RegExp(r'^artist_|^local_artist_', caseSensitive: false), '')
         .replaceAll('_', ' ')
         .trim();
 
-    // Split on common collaboration tokens: &, feat, ft., vs, con, y (surrounded by spaces)
-    final splitRegex = RegExp(r'\s+(?:&|feat\.?|ft\.?|vs\.?|con|\/)\s+', caseSensitive: false);
+    // Split on common collaboration tokens: &, feat, ft., vs, con, with, y, e, x, comma, slash
+    final splitRegex = RegExp(
+      r'(\s+(?:&|feat\.?|ft\.?|vs\.?|con|with|y|e|x|\/)\s+|,\s*)',
+      caseSensitive: false,
+    );
     if (clean.contains(splitRegex)) {
       clean = clean.split(splitRegex).first.trim();
     }
     return clean;
   }
+
+  String _extractPrimaryArtist(String name) => extractPrimaryArtist(name);
 
   /// Resolves the best available artist image URL.
   /// First checks local cache, then queries Deezer API, followed by iTunes fallback.
@@ -101,7 +136,9 @@ class ArtistImageService {
     if (artistName.trim().isEmpty) return fallbackCoverArt;
 
     final key = _normalize(artistName);
-    if (_memoryCache.containsKey(key) && _memoryCache[key]!.isNotEmpty) {
+    if (_memoryCache.containsKey(key) &&
+        _memoryCache[key]!.isNotEmpty &&
+        !_isLikelyAlbumCover(_memoryCache[key]!)) {
       return _memoryCache[key];
     }
 
@@ -125,14 +162,18 @@ class ArtistImageService {
   }) async {
     await _ensureCacheLoaded();
 
-    if (_memoryCache.containsKey(key) && _memoryCache[key]!.isNotEmpty) {
+    if (_memoryCache.containsKey(key) &&
+        _memoryCache[key]!.isNotEmpty &&
+        !_isLikelyAlbumCover(_memoryCache[key]!)) {
       return _memoryCache[key];
     }
 
     // Also check primary artist key
     final primaryName = _extractPrimaryArtist(artistName);
     final primaryKey = _normalize(primaryName);
-    if (_memoryCache.containsKey(primaryKey) && _memoryCache[primaryKey]!.isNotEmpty) {
+    if (_memoryCache.containsKey(primaryKey) &&
+        _memoryCache[primaryKey]!.isNotEmpty &&
+        !_isLikelyAlbumCover(_memoryCache[primaryKey]!)) {
       return _memoryCache[primaryKey];
     }
 
@@ -147,16 +188,17 @@ class ArtistImageService {
     // 3. Fallback to iTunes song search to retrieve artist/track artwork
     resolvedUrl ??= await _queryItunes(primaryName);
 
-    // 4. Use provided fallback cover art if still unresolved
-    if (resolvedUrl == null && fallbackCoverArt != null && fallbackCoverArt.isNotEmpty) {
-      resolvedUrl = fallbackCoverArt;
-    }
-
-    if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
+    // Save strictly legitimate artist portraits, never fallback album covers
+    if (resolvedUrl != null && resolvedUrl.isNotEmpty && !_isLikelyAlbumCover(resolvedUrl)) {
       _memoryCache[key] = resolvedUrl;
       _memoryCache[primaryKey] = resolvedUrl;
       _saveCache();
       return resolvedUrl;
+    }
+
+    // Transient fallback only if requested, but DO NOT pollute memory/persistent cache
+    if (fallbackCoverArt != null && fallbackCoverArt.isNotEmpty) {
+      return fallbackCoverArt;
     }
 
     return null;
@@ -165,7 +207,8 @@ class ArtistImageService {
   /// Query Deezer artist search API with strict artist name verification
   Future<String?> _queryDeezer(String query) async {
     try {
-      final url = 'https://api.deezer.com/search/artist?q=${Uri.encodeComponent(query)}&limit=5';
+      final unaccentedQuery = removeAccents(query);
+      final url = 'https://api.deezer.com/search/artist?q=${Uri.encodeComponent(unaccentedQuery)}&limit=5';
       final response = await _dio.get(url);
 
       if (response.statusCode == 200 && response.data != null) {

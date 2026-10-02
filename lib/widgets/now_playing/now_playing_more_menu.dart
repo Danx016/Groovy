@@ -13,6 +13,7 @@ import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/offline_service.dart';
 import '../../services/theme_service.dart';
+import '../../services/artist_image_service.dart';
 import '../../utils/album_sanitizer.dart';
 import '../../utils/navigation_helper.dart';
 import '../multi_artist_widget.dart';
@@ -455,7 +456,7 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                         artist: Artist(
                           id: artistId,
                           name: currentSong.artist ?? artistId,
-                          coverArt: currentSong.coverArt,
+                          coverArt: ArtistImageService.getCachedArtistImageUrl(currentSong.artist ?? ''),
                         ),
                       ),
                     );

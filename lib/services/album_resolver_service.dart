@@ -446,7 +446,7 @@ class AlbumResolverService {
             duration: durationSec,
             track: i + 1,
             year: year,
-            coverArt: videoId,
+            coverArt: coverUrl ?? videoId,
           ),
         );
       }

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../models/song.dart';
 import '../models/playlist.dart';
+import '../models/album.dart';
 import 'youtube_service.dart';
 import 'ytdlp_service.dart';
 import 'lrclib_service.dart';
@@ -94,12 +95,14 @@ class OfflineService {
   static const String _keyDownloadedPlaylists = 'offline_downloaded_playlists';
   static const String _keyParallelDownloads = 'parallel_downloads_count';
   static const String _keyKeepScreenOn = 'offline_keep_screen_on';
+  static const String _keyDownloadedAlbumsData = 'offline_downloaded_albums_data';
 
   static const int _defaultParallelDownloads = 3;
   static const int _maxParallelDownloads = 5;
 
   Map<String, int> _expectedSizes = {};
   Map<String, Map<String, dynamic>> _downloadedSongsData = {};
+  Map<String, Map<String, dynamic>> _downloadedAlbumsData = {};
 
   /// Playlist IDs that have been queued for download but aren't fully done.
   /// Drives the outline-check badge in playlist list views.
@@ -149,6 +152,17 @@ class OfflineService {
       try {
         final raw = json.decode(songsDataJson) as Map<String, dynamic>;
         _downloadedSongsData = raw.map(
+          (k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)),
+        );
+      } catch (_) {}
+    }
+
+    // Load downloaded albums metadata map
+    final albumsDataJson = _prefs?.getString(_keyDownloadedAlbumsData);
+    if (albumsDataJson != null) {
+      try {
+        final raw = json.decode(albumsDataJson) as Map<String, dynamic>;
+        _downloadedAlbumsData = raw.map(
           (k, v) => MapEntry(k, Map<String, dynamic>.from(v as Map)),
         );
       } catch (_) {}
@@ -404,6 +418,36 @@ class OfflineService {
   Future<void> _removeDownloadedSongMetadata(String songId) async {
     _downloadedSongsData.remove(songId);
     await _prefs?.setString(_keyDownloadedSongsData, json.encode(_downloadedSongsData));
+  }
+
+  /// Persists a downloaded album's metadata so it can be viewed offline.
+  Future<void> saveDownloadedAlbum(Album album) async {
+    if (album.id.isEmpty) return;
+    _downloadedAlbumsData[album.id] = album.toJson();
+    await _prefs?.setString(
+      _keyDownloadedAlbumsData,
+      json.encode(_downloadedAlbumsData),
+    );
+  }
+
+  /// Removes an album from the offline registry.
+  Future<void> removeDownloadedAlbum(String albumId) async {
+    _downloadedAlbumsData.remove(albumId);
+    await _prefs?.setString(
+      _keyDownloadedAlbumsData,
+      json.encode(_downloadedAlbumsData),
+    );
+  }
+
+  /// Returns all explicitly saved downloaded albums.
+  List<Album> getDownloadedAlbums() {
+    final List<Album> list = [];
+    for (final data in _downloadedAlbumsData.values) {
+      try {
+        list.add(Album.fromJson(data));
+      } catch (_) {}
+    }
+    return list;
   }
 
   int getDownloadedCount() {
@@ -877,7 +921,9 @@ class OfflineService {
 
       await _prefs?.setStringList(_keyDownloadedSongs, []);
       await _prefs?.remove(_keyDownloadedSongsData);
+      await _prefs?.remove(_keyDownloadedAlbumsData);
       _downloadedSongsData = {};
+      _downloadedAlbumsData = {};
       await _prefs?.remove(_keyExpectedSizes);
       await _prefs?.remove(_keyQueuedPlaylists);
       await _prefs?.remove(_keyQueuedPlaylistData);

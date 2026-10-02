@@ -58,6 +58,9 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
     for (final a in libraryProvider.cachedAllAlbums) {
       map[a.id] = a;
     }
+    for (final a in OfflineService().getDownloadedAlbums()) {
+      map[a.id] = a;
+    }
 
     final list = map.values.toList();
     _applySort(list);

@@ -62,18 +62,103 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
     }
 
     final List<Song> dSongs = songMap.values.toList();
-    final Set<String> albumIds = {};
-    for (final song in dSongs) {
-      if (song.albumId != null) {
-        albumIds.add(song.albumId!);
-      }
-    }
-
     dSongs.sort((a, b) =>
         a.title.toLowerCase().compareTo(b.title.toLowerCase()));
 
-    final List<Album> dAlbums =
-        allAlbums.where((a) => albumIds.contains(a.id)).toList();
+    // ── INDEX KNOWN ALBUMS ────────────────────────────────────────────────
+    final Map<String, Album> knownAlbumsById = {};
+    final Map<String, Album> knownAlbumsByName = {};
+
+    void registerKnownAlbum(Album a) {
+      if (a.id.isNotEmpty) knownAlbumsById[a.id] = a;
+      final cleanName = a.name.trim().toLowerCase();
+      if (cleanName.isNotEmpty) knownAlbumsByName[cleanName] = a;
+    }
+
+    // 1. Explicitly saved albums from OfflineService
+    for (final album in offlineService.getDownloadedAlbums()) {
+      registerKnownAlbum(album);
+    }
+
+    // 2. Library cached albums
+    for (final album in allAlbums) {
+      registerKnownAlbum(album);
+    }
+
+    // 3. Group downloaded songs by album
+    final Map<String, List<Song>> albumGroups = {};
+    for (final song in dSongs) {
+      final albName = song.album?.trim();
+      final albId = song.albumId?.trim();
+      if ((albName == null || albName.isEmpty) && (albId == null || albId.isEmpty)) {
+        continue;
+      }
+
+      final groupKey = (albId != null && albId.isNotEmpty)
+          ? albId
+          : 'name_${albName!.toLowerCase()}_${(song.artist ?? '').trim().toLowerCase()}';
+      albumGroups.putIfAbsent(groupKey, () => []).add(song);
+    }
+
+    final List<Album> dAlbums = [];
+    final Set<String> processedAlbumKeys = {};
+
+    for (final entry in albumGroups.entries) {
+      final key = entry.key;
+      final songsForAlbum = entry.value;
+      final firstSong = songsForAlbum.first;
+      final albumName = (firstSong.album != null && firstSong.album!.trim().isNotEmpty)
+          ? firstSong.album!.trim()
+          : firstSong.title;
+
+      // Match against known albums
+      Album? matched;
+      if (firstSong.albumId != null && knownAlbumsById.containsKey(firstSong.albumId)) {
+        matched = knownAlbumsById[firstSong.albumId];
+      } else if (knownAlbumsById.containsKey(key)) {
+        matched = knownAlbumsById[key];
+      } else if (knownAlbumsByName.containsKey(albumName.toLowerCase())) {
+        matched = knownAlbumsByName[albumName.toLowerCase()];
+      }
+
+      final effectiveId = matched?.id ?? firstSong.albumId ?? 'offline_album_${albumName.hashCode.abs()}';
+      if (processedAlbumKeys.contains(effectiveId)) continue;
+      processedAlbumKeys.add(effectiveId);
+
+      // Best cover art
+      String? bestCover = matched?.coverArt;
+      if (bestCover == null || bestCover.isEmpty) {
+        for (final s in songsForAlbum) {
+          if (s.coverArt != null && s.coverArt!.isNotEmpty) {
+            bestCover = s.coverArt;
+            break;
+          }
+        }
+      }
+
+      // Best artist
+      final effectiveArtist = (matched?.artist != null && matched!.artist!.isNotEmpty)
+          ? matched.artist
+          : firstSong.artist;
+
+      // Best year
+      final effectiveYear = matched?.year ?? firstSong.year;
+
+      dAlbums.add(Album(
+        id: effectiveId,
+        name: (matched != null && matched.name.isNotEmpty) ? matched.name : albumName,
+        artist: effectiveArtist,
+        artistId: matched?.artistId ?? firstSong.artistId,
+        coverArt: bestCover,
+        songCount: songsForAlbum.length,
+        duration: matched?.duration ?? songsForAlbum.fold<int>(0, (sum, s) => sum + (s.duration ?? 0)),
+        year: effectiveYear,
+        genre: matched?.genre ?? firstSong.genre,
+        created: matched?.created,
+        isLocal: matched?.isLocal ?? false,
+      ));
+    }
+
     dAlbums.sort((a, b) =>
         a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
