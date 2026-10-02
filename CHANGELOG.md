@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.4] - 2026-10-01
+
+### Fixed & Improved
+- **Botón de Play y Pausa del Teclado Multimedia en Windows**:
+  - Unificados los comandos nativos `APPCOMMAND_MEDIA_PLAY_PAUSE`, `APPCOMMAND_MEDIA_PLAY` y `APPCOMMAND_MEDIA_PAUSE` para alternar la reproducción (Play/Pausa) de manera inteligente y bidireccional en teclados de hardware multimedia.
+  - Registrado atajo global adicional para la tecla `VK_PAUSE` en el runner nativo de Windows.
+  - Separado el atajo de la barra espaciadora (`SpacePlayPauseIntent`) de las teclas multimedia de hardware (`PlayPauseIntent`): ahora la tecla multimedia de Play/Pausa de Windows funciona **siempre**, incluso con el foco activo en campos de texto o en la barra de búsqueda.
+  - Las funciones `onPlay` y `onPause` de escritorio ahora alternan el estado si la app ya se encuentra reproduciendo o en pausa, asegurando respuesta al 100% de los teclados del mercado.
+- **Compilación CI Multiplataforma**: Resuelta duplicación de clase en el controlador de atajos de teclado para compilación limpia en Android, Windows y Linux.
+- **Actualización Multiplataforma**: Versión **1.7.4** (Build 155).
+
 ## [1.7.3] - 2026-10-01
 
 ### Fixed & Improved

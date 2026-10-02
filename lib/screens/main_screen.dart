@@ -40,10 +40,6 @@ class _ToggleFullScreenAction extends Action<ToggleFullScreenIntent> {
   }
 }
 
-class PlayPauseIntent extends Intent {
-  const PlayPauseIntent();
-}
-
 class SpacePlayPauseIntent extends Intent {
   const SpacePlayPauseIntent();
 }
