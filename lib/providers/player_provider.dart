@@ -31,6 +31,7 @@ import '../services/audio_handler.dart';
 
 import '../services/transcoding_service.dart';
 import '../services/groovy_connect_service.dart';
+import '../services/local_media_stream_service.dart';
 import '../providers/library_provider.dart';
 import 'package:volume_controller/volume_controller.dart';
 
@@ -50,6 +51,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   final CastService _castService;
   late final UpnpService _upnpService;
+  final LocalMediaStreamService _localMediaStreamService = LocalMediaStreamService();
 
   LibraryProvider? _libraryProvider;
   RecommendationService? _recommendationService;
@@ -2550,14 +2552,21 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       if (_castService.isConnected) {
         if (_audioPlayer.playing) await _audioPlayer.stop();
 
-        final playUrl = song.isLocal == true
-            ? Uri.file(song.path!).toString()
-            : await _youtubeService.resolveStreamUrlAsync(song);
+        String playUrl;
+        try {
+          playUrl = await _localMediaStreamService.getPlaybackUrlForTv(song);
+        } catch (e) {
+          debugPrint('Cast: fallback to direct stream resolution: $e');
+          playUrl = song.isLocal == true && song.path != null
+              ? Uri.file(song.path!).toString()
+              : await _youtubeService.resolveStreamUrlAsync(song);
+        }
         if (currentGen != _playGeneration) return;
 
-        final coverUrl = song.isLocal == true && song.coverArt != null
-            ? song.coverArt!
-            : _youtubeService.getCoverArtUrl(song.coverArt ?? song.id);
+        final coverUrl = _localMediaStreamService.getCoverArtUrlForTv(song) ??
+            (song.isLocal == true && song.coverArt != null
+                ? song.coverArt!
+                : _youtubeService.getCoverArtUrl(song.coverArt ?? song.id));
 
         await _castService.loadMedia(
           url: playUrl,
@@ -2581,22 +2590,30 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         );
         if (_audioPlayer.playing) await _audioPlayer.stop();
 
-        final playUrl = song.isLocal == true && song.path != null
-            ? Uri.file(song.path!).toString()
-            : await _youtubeService.resolveStreamUrlAsync(song);
+        String playUrl;
+        try {
+          playUrl = await _localMediaStreamService.getPlaybackUrlForTv(song);
+        } catch (e) {
+          debugPrint('UPnP: fallback to direct stream resolution: $e');
+          playUrl = song.isLocal == true && song.path != null
+              ? Uri.file(song.path!).toString()
+              : await _youtubeService.resolveStreamUrlAsync(song);
+        }
         if (currentGen != _playGeneration) return;
 
         try {
-          final mimeType =
-              song.contentType ?? UpnpService.mimeTypeFromSuffix(song.suffix);
+          final mimeType = _localMediaStreamService.getMimeTypeForTv(song);
+          final coverArt = _localMediaStreamService.getCoverArtUrlForTv(song) ??
+              (song.coverArt != null
+                  ? _youtubeService.getCoverArtUrl(song.coverArt, size: 0)
+                  : null);
+
           final success = await _upnpService.loadAndPlay(
             url: playUrl,
             title: song.title,
             artist: song.artist ?? 'Unknown Artist',
             album: song.album,
-            albumArtUrl: song.coverArt != null
-                ? _youtubeService.getCoverArtUrl(song.coverArt, size: 0)
-                : null,
+            albumArtUrl: coverArt,
             durationSecs: song.duration,
             contentType: mimeType,
           );

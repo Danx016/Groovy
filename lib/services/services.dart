@@ -21,3 +21,4 @@ export 'album_resolver_service.dart';
 export 'groovy_connect_service.dart';
 export 'display_mode_service.dart';
 export 'audio_cache_service.dart';
+export 'local_media_stream_service.dart';

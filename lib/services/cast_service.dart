@@ -247,7 +247,8 @@ class CastService extends ChangeNotifier {
         albumName: albumName,
         trackNumber: trackNumber,
         images: [
-          GoogleCastImage(url: Uri.parse(imageUrl), width: 1280, height: 720),
+          if (imageUrl.isNotEmpty && Uri.tryParse(imageUrl)?.hasScheme == true)
+            GoogleCastImage(url: Uri.parse(imageUrl), width: 1280, height: 720),
         ],
       );
 
@@ -294,10 +295,12 @@ class CastService extends ChangeNotifier {
     if (lower.endsWith('.opus')) return 'audio/ogg; codecs=opus';
     if (lower.endsWith('.wav')) return 'audio/wav';
     if (lower.endsWith('.aac')) return 'audio/aac';
-    if (lower.endsWith('.m4a')) return 'audio/mp4';
+    if (lower.endsWith('.m4a') || lower.endsWith('.mp4')) return 'audio/mp4';
     if (lower.endsWith('.mp3')) return 'audio/mpeg';
+    if (url.contains('/media/stream')) return 'audio/mp4';
+    if (url.contains('/media/local')) return 'audio/mpeg';
     
-    return 'audio/mpeg';
+    return 'audio/mp4';
   }
 
   Future<void> play() async {

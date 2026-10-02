@@ -91,7 +91,6 @@ class UpnpService extends ChangeNotifier {
   Future<List<UpnpDevice>> discover() async {
     if (_isDiscovering) return _devices;
     _isDiscovering = true;
-    _devices.clear();
     notifyListeners();
 
     try {
@@ -105,17 +104,29 @@ class UpnpService extends ChangeNotifier {
       socket.joinMulticast(InternetAddress(_ssdpAddress));
       socket.broadcastEnabled = true;
 
-      const mSearch =
-          'M-SEARCH * HTTP/1.1\r\n'
-          'HOST: 239.255.255.250:1900\r\n'
-          'MAN: "ssdp:discover"\r\n'
-          'MX: 3\r\n'
-          
-          'ST: urn:schemas-upnp-org:device:MediaRenderer:1\r\n'
-          '\r\n';
+      void sendSearch(String target) {
+        final mSearch =
+            'M-SEARCH * HTTP/1.1\r\n'
+            'HOST: 239.255.255.250:1900\r\n'
+            'MAN: "ssdp:discover"\r\n'
+            'MX: 2\r\n'
+            'ST: $target\r\n'
+            '\r\n';
+        final packet = mSearch.codeUnits;
+        socket.send(packet, InternetAddress(_ssdpAddress), _ssdpPort);
+      }
 
-      final packet = mSearch.codeUnits;
-      socket.send(packet, InternetAddress(_ssdpAddress), _ssdpPort);
+      // Send initial burst for MediaRenderer and AVTransport services
+      sendSearch('urn:schemas-upnp-org:device:MediaRenderer:1');
+      sendSearch('urn:schemas-upnp-org:service:AVTransport:1');
+
+      // Second burst after 120ms to overcome Wi-Fi packet drops
+      Future.delayed(const Duration(milliseconds: 120), () {
+        try {
+          sendSearch('urn:schemas-upnp-org:device:MediaRenderer:1');
+          sendSearch('urn:schemas-upnp-org:service:AVTransport:1');
+        } catch (_) {}
+      });
 
       final completer = Completer<void>();
       final timer = Timer(_discoveryTimeout, () {
@@ -135,7 +146,14 @@ class UpnpService extends ChangeNotifier {
         try {
           final device = await _fetchDeviceDescription(location);
           if (device != null) {
-            _devices.add(device);
+            final existingIdx = _devices.indexWhere(
+              (d) => d.location == device.location || d.friendlyName == device.friendlyName,
+            );
+            if (existingIdx >= 0) {
+              _devices[existingIdx] = device;
+            } else {
+              _devices.add(device);
+            }
             notifyListeners();
             debugPrint('UPnP: Found ${device.friendlyName}');
           }
@@ -166,29 +184,40 @@ class UpnpService extends ChangeNotifier {
   }
 
   Future<UpnpDevice?> _fetchDeviceDescription(String location) async {
-    final response = await _dio.get<String>(location);
-    final xml = response.data ?? '';
+    try {
+      final response = await _dio.get<String>(
+        location,
+        options: Options(
+          receiveTimeout: const Duration(milliseconds: 2500),
+          sendTimeout: const Duration(milliseconds: 2000),
+        ),
+      );
+      final xml = response.data ?? '';
 
-    final friendlyName = _xmlText(xml, 'friendlyName') ?? 'Unknown Device';
-    final manufacturer = _xmlText(xml, 'manufacturer') ?? '';
-    final modelName = _xmlText(xml, 'modelName') ?? '';
+      final friendlyName = _xmlText(xml, 'friendlyName') ?? 'Unknown Device';
+      final manufacturer = _xmlText(xml, 'manufacturer') ?? '';
+      final modelName = _xmlText(xml, 'modelName') ?? '';
 
-    final avTransportUrl = _extractAvTransportUrl(xml, location);
-    if (avTransportUrl == null) {
-      debugPrint('UPnP: No AVTransport service found at $location');
+      final avTransportUrl = _extractAvTransportUrl(xml, location);
+      if (avTransportUrl == null) {
+        debugPrint('UPnP: No AVTransport service found at $location');
+        return null;
+      }
+
+      final renderingControlUrl = _extractRenderingControlUrl(xml, location);
+
+      return UpnpDevice(
+        friendlyName: friendlyName,
+        location: location,
+        manufacturer: manufacturer,
+        modelName: modelName,
+        avTransportUrl: avTransportUrl,
+        renderingControlUrl: renderingControlUrl,
+      );
+    } catch (e) {
+      debugPrint('UPnP: Failed to fetch description from $location: $e');
       return null;
     }
-
-    final renderingControlUrl = _extractRenderingControlUrl(xml, location);
-
-    return UpnpDevice(
-      friendlyName: friendlyName,
-      location: location,
-      manufacturer: manufacturer,
-      modelName: modelName,
-      avTransportUrl: avTransportUrl,
-      renderingControlUrl: renderingControlUrl,
-    );
   }
 
   static String? _xmlText(String xml, String tag) {
@@ -419,10 +448,15 @@ class UpnpService extends ChangeNotifier {
     debugPrint('UPnP:   AVTransport: ${device.avTransportUrl}');
 
     try {
-      await _soap(device.avTransportUrl, 'Stop', '');
+      await _soap(
+        device.avTransportUrl,
+        'Stop',
+        '',
+        timeout: const Duration(milliseconds: 1000),
+      );
       debugPrint('UPnP: Stop OK');
     } catch (e) {
-      debugPrint('UPnP: Stop failed (ignoring): $e');
+      debugPrint('UPnP: Stop ignored: $e');
     }
 
     final didl = _didl(
@@ -440,51 +474,61 @@ class UpnpService extends ChangeNotifier {
       'SetAVTransportURI',
       '<CurrentURI>${_xmlEscapeAttr(url)}</CurrentURI>\n'
           '<CurrentURIMetaData>$didl</CurrentURIMetaData>',
+      timeout: const Duration(seconds: 4),
     );
     debugPrint('UPnP: SetAVTransportURI OK');
 
+    // Immediate attempt to play
     try {
-      await _soap(device.avTransportUrl, 'Play', '<Speed>1</Speed>');
+      await _soap(
+        device.avTransportUrl,
+        'Play',
+        '<Speed>1</Speed>',
+        timeout: const Duration(seconds: 2),
+      );
       debugPrint('UPnP: Playing "$title" on ${device.friendlyName} (instant)');
       return true;
     } catch (e) {
-      debugPrint('UPnP: Instant Play failed ($e), retrying with backoff…');
+      debugPrint('UPnP: Instant Play notice ($e), checking renderer readiness…');
     }
 
-    const maxAttempts = 5;
-    var delay = const Duration(milliseconds: 150);
+    // Fast reactive polling (150ms checks up to 12 times = ~1.8s max)
+    const maxAttempts = 12;
+    const interval = Duration(milliseconds: 150);
 
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      await Future.delayed(delay);
+      await Future.delayed(interval);
 
       try {
         final xml = await _soapQuery(
           device.avTransportUrl,
           'GetTransportInfo',
           '',
+          timeout: const Duration(milliseconds: 800),
         );
         final state = _xmlText(xml, 'CurrentTransportState') ?? '';
+        if (state == 'PLAYING') {
+          debugPrint('UPnP: TV is already PLAYING "$title" (attempt $attempt)');
+          return true;
+        }
         if (state == 'TRANSITIONING') {
-          debugPrint('UPnP: Renderer TRANSITIONING (attempt $attempt)');
-          delay = delay * 2 < const Duration(milliseconds: 2400)
-              ? delay * 2
-              : const Duration(milliseconds: 2400);
+          debugPrint('UPnP: Renderer TRANSITIONING (attempt $attempt/$maxAttempts)');
           continue;
         }
-      } catch (_) {
-        
-      }
+      } catch (_) {}
 
       try {
-        await _soap(device.avTransportUrl, 'Play', '<Speed>1</Speed>');
+        await _soap(
+          device.avTransportUrl,
+          'Play',
+          '<Speed>1</Speed>',
+          timeout: const Duration(milliseconds: 1500),
+        );
         debugPrint('UPnP: Playing "$title" on ${device.friendlyName} (attempt $attempt)');
         return true;
       } catch (e) {
-        debugPrint('UPnP: Play attempt $attempt/$maxAttempts failed: $e');
+        debugPrint('UPnP: Play attempt $attempt/$maxAttempts: $e');
         if (attempt == maxAttempts) return false;
-        delay = delay * 2 < const Duration(milliseconds: 2400)
-            ? delay * 2
-            : const Duration(milliseconds: 2400);
       }
     }
     return false;
@@ -535,7 +579,12 @@ class UpnpService extends ChangeNotifier {
     }
   }
 
-  Future<void> _soap(String controlUrl, String action, String body) async {
+  Future<void> _soap(
+    String controlUrl,
+    String action,
+    String body, {
+    Duration? timeout,
+  }) async {
     const serviceType = 'urn:schemas-upnp-org:service:AVTransport:1';
     final envelope =
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -559,6 +608,8 @@ class UpnpService extends ChangeNotifier {
           'Content-Type': 'text/xml; charset="utf-8"',
           'SOAPAction': '"$serviceType#$action"',
         },
+        sendTimeout: timeout,
+        receiveTimeout: timeout,
         validateStatus: (_) => true, 
         responseType: ResponseType.plain,
       ),
@@ -570,7 +621,6 @@ class UpnpService extends ChangeNotifier {
       'UPnP SOAP ← $action HTTP $status | ${responseBody.length} bytes',
     );
     if (responseBody.isNotEmpty) {
-      
       debugPrint(
         'UPnP SOAP body: ${responseBody.substring(0, responseBody.length.clamp(0, 600))}',
       );
@@ -584,7 +634,6 @@ class UpnpService extends ChangeNotifier {
     if (lowerBody.contains('<s:fault>') ||
         lowerBody.contains('<soap:fault>') ||
         lowerBody.contains('<fault>')) {
-      
       final code =
           RegExp(
             r'<errorCode>([^<]*)</errorCode>',
@@ -610,8 +659,9 @@ class UpnpService extends ChangeNotifier {
   Future<String> _soapQuery(
     String controlUrl,
     String action,
-    String body,
-  ) async {
+    String body, {
+    Duration? timeout,
+  }) async {
     const serviceType = 'urn:schemas-upnp-org:service:AVTransport:1';
     final envelope =
         '<?xml version="1.0" encoding="utf-8"?>\n'
@@ -633,6 +683,8 @@ class UpnpService extends ChangeNotifier {
           'Content-Type': 'text/xml; charset="utf-8"',
           'SOAPAction': '"$serviceType#$action"',
         },
+        sendTimeout: timeout,
+        receiveTimeout: timeout,
         validateStatus: (_) => true,
         responseType: ResponseType.plain,
       ),

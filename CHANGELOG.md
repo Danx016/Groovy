@@ -5,6 +5,24 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.6] - 2026-10-02
+
+### Fixed & Improved
+- **Servidor de Transmisión Local y Proxy para Televisores (`LocalMediaStreamService`)**:
+  - Implementado servidor HTTP local ligero con soporte completo de peticiones parciales (**HTTP 206 Partial Content**, `Accept-Ranges: bytes` y `Content-Range`) en la red Wi-Fi local.
+  - Soporte de reproducción en Smart TVs (Samsung Tizen, LG webOS, Roku, Chromecast, Google TV) para canciones locales y descargadas, resolviendo el problema de URLs inaccesibles tipo `file:///`.
+  - Proxy inteligente para flujos de YouTube: Groovy realiza las peticiones a la CDN con las cabeceras requeridas (`User-Agent`, `Referer`, `Origin`), eliminando los errores `403 Forbidden` en televisores y sirviendo audio en contenedor universal **AAC / MP4**.
+  - Servicio de carátulas locales (`/media/art`) para visualización de portadas de álbum en la pantalla del televisor.
+- **Aceleración de Conexión y Descubrimiento DLNA / UPnP**:
+  - Descubrimiento SSDP optimizado con ráfagas dobles en `MediaRenderer:1` y `AVTransport:1` para superar pérdidas de paquetes UDP por Wi-Fi.
+  - Caché no destructiva de dispositivos: los televisores previamente detectados permanecen visibles de inmediato en el selector sin pantallas en blanco.
+  - Sondeo reactivo cada 150 ms en lugar del retardo exponencial de hasta 2.4 s, iniciando la reproducción inmediatamente en cuanto el televisor completa su estado `TRANSITIONING`.
+  - Timeout rápido de 1 s en la orden `Stop` inicial para evitar bloqueos con televisores en estado inactivo.
+- **Blindaje en Google Cast**:
+  - Validación de carátulas para evitar excepciones por URLs malformadas en `GoogleCastImage`.
+  - Mapeo automático de MIME type a `audio/mp4` para flujos proxy remotos.
+- **Actualización Multiplataforma**: Versión **1.7.6** (Build 157) para Windows y Android.
+
 ## [1.7.5] - 2026-10-02
 
 ### Fixed & Improved
