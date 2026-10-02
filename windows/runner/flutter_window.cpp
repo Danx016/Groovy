@@ -9,6 +9,7 @@ constexpr int kHotkeyNextTrack = 101;
 constexpr int kHotkeyPrevTrack = 102;
 constexpr int kHotkeyPlayPause = 103;
 constexpr int kHotkeyStop = 104;
+constexpr int kHotkeyPause = 105;
 }  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
@@ -46,6 +47,7 @@ bool FlutterWindow::OnCreate() {
     RegisterHotKey(hwnd, kHotkeyPrevTrack, 0, VK_MEDIA_PREV_TRACK);
     RegisterHotKey(hwnd, kHotkeyPlayPause, 0, VK_MEDIA_PLAY_PAUSE);
     RegisterHotKey(hwnd, kHotkeyStop, 0, VK_MEDIA_STOP);
+    RegisterHotKey(hwnd, kHotkeyPause, 0, VK_PAUSE);
   }
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -67,6 +69,7 @@ void FlutterWindow::OnDestroy() {
     UnregisterHotKey(hwnd, kHotkeyPrevTrack);
     UnregisterHotKey(hwnd, kHotkeyPlayPause);
     UnregisterHotKey(hwnd, kHotkeyStop);
+    UnregisterHotKey(hwnd, kHotkeyPause);
   }
 
   media_channel_ = nullptr;
@@ -103,6 +106,7 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
             media_channel_->InvokeMethod("skipPrevious", nullptr);
             return 0;
           case kHotkeyPlayPause:
+          case kHotkeyPause:
             media_channel_->InvokeMethod("togglePlayPause", nullptr);
             return 0;
           case kHotkeyStop:
@@ -125,13 +129,9 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
             media_channel_->InvokeMethod("skipPrevious", nullptr);
             return TRUE;
           case APPCOMMAND_MEDIA_PLAY_PAUSE:
-            media_channel_->InvokeMethod("togglePlayPause", nullptr);
-            return TRUE;
           case APPCOMMAND_MEDIA_PLAY:
-            media_channel_->InvokeMethod("play", nullptr);
-            return TRUE;
           case APPCOMMAND_MEDIA_PAUSE:
-            media_channel_->InvokeMethod("pause", nullptr);
+            media_channel_->InvokeMethod("togglePlayPause", nullptr);
             return TRUE;
           case APPCOMMAND_MEDIA_STOP:
             media_channel_->InvokeMethod("stop", nullptr);

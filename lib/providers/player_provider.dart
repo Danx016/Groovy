@@ -806,8 +806,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> _initializeSystemServices() async {
     await _windowsService.initialize();
-    _windowsService.onPlay = play;
-    _windowsService.onPause = pause;
+    _windowsService.onPlay = () {
+      if (_isPlaying) {
+        pause();
+      } else {
+        play();
+      }
+    };
+    _windowsService.onPause = () {
+      if (_isPlaying) {
+        pause();
+      } else {
+        play();
+      }
+    };
     _windowsService.onStop = stop;
     _windowsService.onSkipNext = skipNext;
     _windowsService.onSkipPrevious = skipPrevious;

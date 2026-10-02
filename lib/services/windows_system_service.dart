@@ -96,7 +96,9 @@ class WindowsSystemService {
 
   bool _isPlayPauseKey(KeyEvent event) {
     return event.logicalKey == LogicalKeyboardKey.mediaPlayPause ||
-        event.physicalKey == PhysicalKeyboardKey.mediaPlayPause;
+        event.logicalKey == LogicalKeyboardKey.pause ||
+        event.physicalKey == PhysicalKeyboardKey.mediaPlayPause ||
+        event.physicalKey == PhysicalKeyboardKey.pause;
   }
 
   bool _isPlayKey(KeyEvent event) {
@@ -182,6 +184,8 @@ class WindowsSystemService {
                 onSkipPrevious?.call();
                 break;
               case 'togglePlayPause':
+              case 'play':
+              case 'pause':
                 if (_isActionThrottled('playPause')) return;
                 if (onTogglePlayPause != null) {
                   onTogglePlayPause!.call();
@@ -190,14 +194,6 @@ class WindowsSystemService {
                 } else {
                   onPlay?.call();
                 }
-                break;
-              case 'play':
-                if (_isActionThrottled('play')) return;
-                onPlay?.call();
-                break;
-              case 'pause':
-                if (_isActionThrottled('pause')) return;
-                onPause?.call();
                 break;
               case 'stop':
                 if (_isActionThrottled('stop')) return;

@@ -44,18 +44,43 @@ class PlayPauseIntent extends Intent {
   const PlayPauseIntent();
 }
 
-class _PlayPauseAction extends Action<PlayPauseIntent> {
+class SpacePlayPauseIntent extends Intent {
+  const SpacePlayPauseIntent();
+}
+
+class _SpacePlayPauseAction extends Action<SpacePlayPauseIntent> {
   final BuildContext context;
-  _PlayPauseAction(this.context);
+  _SpacePlayPauseAction(this.context);
 
   @override
-  bool isEnabled(PlayPauseIntent intent, [BuildContext? targetContext]) {
+  bool isEnabled(SpacePlayPauseIntent intent, [BuildContext? targetContext]) {
     final focus = FocusManager.instance.primaryFocus;
     if (focus != null && focus.context != null) {
       if (focus.context!.findAncestorWidgetOfExactType<EditableText>() != null) {
         return false;
       }
     }
+    return true;
+  }
+
+  @override
+  Object? invoke(SpacePlayPauseIntent intent, [BuildContext? targetContext]) {
+    final playerProvider = Provider.of<PlayerProvider>(context, listen: false);
+    playerProvider.togglePlayPause();
+    return null;
+  }
+}
+
+class PlayPauseIntent extends Intent {
+  const PlayPauseIntent();
+}
+
+class _PlayPauseAction extends Action<PlayPauseIntent> {
+  final BuildContext context;
+  _PlayPauseAction(this.context);
+
+  @override
+  bool isEnabled(PlayPauseIntent intent, [BuildContext? targetContext]) {
     return true;
   }
 
@@ -819,10 +844,11 @@ class _MainScreenState extends State<MainScreen> {
 
       return Shortcuts(
         shortcuts: <ShortcutActivator, Intent>{
-          const SingleActivator(LogicalKeyboardKey.space): const PlayPauseIntent(),
+          const SingleActivator(LogicalKeyboardKey.space): const SpacePlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaPlayPause): const PlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaPlay): const PlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaPause): const PlayPauseIntent(),
+          const SingleActivator(LogicalKeyboardKey.pause): const PlayPauseIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaTrackNext): const NextTrackIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaFastForward): const NextTrackIntent(),
           const SingleActivator(LogicalKeyboardKey.mediaSkipForward): const NextTrackIntent(),
@@ -833,6 +859,7 @@ class _MainScreenState extends State<MainScreen> {
         },
         child: Actions(
           actions: <Type, Action<Intent>>{
+            SpacePlayPauseIntent: _SpacePlayPauseAction(context),
             PlayPauseIntent: _PlayPauseAction(context),
             NextTrackIntent: _NextTrackAction(context),
             PreviousTrackIntent: _PreviousTrackAction(context),
