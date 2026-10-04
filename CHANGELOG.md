@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.8] - 2026-10-04
+
+### Fixed & Improved
+- **Estabilización de Reproducción Remota en la Nube y Groovy Connect**:
+  - Corregido el bucle infinito de salto descontrolado de canciones al reproducir de forma remota/cloud entre diferentes redes.
+  - Implementado límite estricto de auto-salto (2 intentos continuos máximo) en `PlayerProvider` para evitar vaciar o agotar la cola de reproducción ante errores de red o streaming.
+  - Deduplicación robusta de comandos de control remoto (`play_song`, `resume`, `pause`, `sync_state`) con ventana de idempotencia de 1200 ms en `GroovyConnectService`.
+  - Transferencia atómica de cola de reproducción para prevenir reintentos simultáneos y sobrescrituras de pista activa.
+- **Limpieza y Deduplicación en Groovy Cloud**:
+  - Implementada deduplicación automática y saneamiento de canciones duplicadas en las bibliotecas de usuarios de MySQL.
+  - Corrección de rutas de telemetría y sesiones de usuario para reflejar el inventario real y hardware de dispositivos conectados.
+- **Actualización Multiplataforma**: Versión **1.7.8** (Build 159) para Windows y Android.
+
 ## [1.7.7] - 2026-10-03
 
 ### Fixed & Improved

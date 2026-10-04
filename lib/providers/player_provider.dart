@@ -210,6 +210,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   double _pitch = 1.0;
   bool _pitchCorrection = true;
   bool _hasRetriedCurrentPlay = false;
+  int _consecutiveAutoSkipFailures = 0;
   int _playGeneration = 0;
   int _skipGeneration =
       0; // incremented on every skip to cancel in-flight skips when user skips rapidly
@@ -1828,6 +1829,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         if (state.playing || state.processingState == ProcessingState.ready) {
           _isLoading = false;
+          _consecutiveAutoSkipFailures = 0;
         }
 
         if (wasPlaying != _isPlaying && !_reactivatingSession) {
@@ -1910,16 +1912,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 ? Duration(seconds: _currentSong!.duration!)
                 : Duration.zero);
 
-        final bool isNearTrackEnd = effDur > const Duration(seconds: 5) &&
-            _position >= effDur - const Duration(milliseconds: 900);
+        final bool hasValidDuration = effDur > const Duration(seconds: 5);
+        final bool isNearTrackEnd = hasValidDuration &&
+            _position >= effDur - const Duration(milliseconds: 900) &&
+            _position > const Duration(seconds: 2);
 
         final bool naturalTrackEnd = (wasPlaying &&
             !state.playing &&
             isNearTrackEnd &&
             !userExplicitlyPaused);
 
-        final bool isGenuineTrackEnd = (effDur <= const Duration(seconds: 5)) ||
-            (_position >= effDur - const Duration(seconds: 3));
+        final bool isGenuineTrackEnd = hasValidDuration
+            ? (_position >= effDur - const Duration(seconds: 3) && _position > const Duration(seconds: 2))
+            : (_position > const Duration(seconds: 15));
 
         if (_activeAudioSongId == _currentSong?.id &&
             ((state.processingState == ProcessingState.completed &&
@@ -2800,6 +2805,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _activeAudioSongId = song.id;
 
       _hasRetriedCurrentPlay = false;
+      _consecutiveAutoSkipFailures = 0;
       _updateAndroidAuto();
 
       // Preload next track in background for instantaneous (0ms) transition
@@ -2856,19 +2862,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
       // Graceful queue auto-recovery: if there are subsequent tracks in the queue,
       // advance automatically ONLY if the user was NOT skipping manually (to avoid runaway skips).
+      // Limit to at most 2 consecutive auto-skips to avoid cascade skips through the entire playlist.
+      _consecutiveAutoSkipFailures++;
       final wasRecentlySkippedManually = _lastManualSkipTime != null &&
           DateTime.now().difference(_lastManualSkipTime!) < const Duration(seconds: 4);
 
       if (!wasRecentlySkippedManually &&
+          _consecutiveAutoSkipFailures <= 2 &&
           _queue.isNotEmpty &&
           _currentIndex < _queue.length - 1) {
         debugPrint(
-            '[Player] Song "${song.title}" unplayable. Auto-skipping to next track...');
+            '[Player] Song "${song.title}" unplayable (failure #$_consecutiveAutoSkipFailures). Auto-skipping to next track...');
         Future.delayed(const Duration(milliseconds: 600), () {
           if (currentGen == _playGeneration && !_isPlaying) {
             skipNext();
           }
         });
+      } else if (_consecutiveAutoSkipFailures > 2) {
+        debugPrint(
+            '[Player] Halting runaway auto-skip after $_consecutiveAutoSkipFailures consecutive failures.');
       }
     } finally {
       if (currentGen == _playGeneration) {
@@ -3185,6 +3197,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipNext() async {
     _hasRetriedCurrentPlay = false;
+    _consecutiveAutoSkipFailures = 0;
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition
     final skipGen = ++_skipGeneration; // capture before any await
@@ -3418,6 +3431,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   Future<void> skipPrevious() async {
     _hasRetriedCurrentPlay = false;
+    _consecutiveAutoSkipFailures = 0;
     _isTransitioningSong =
         false; // Bug 5 fix: manual skip wins over concurrent auto-transition
     final skipGen = ++_skipGeneration; // capture before any await

@@ -324,12 +324,18 @@ void main() async {
     groovyConnectService.disconnect();
     playerProvider.disableGroovyConnectRemote();
     // Immediately report heartbeat with new song to backend so controller sees it instantly
-    playerProvider.sendTelemetryHeartbeatNow(overridePlaying: isPlaying, overrideSong: song);
+    Duration? initialPos;
+    if (positionMs > 0) {
+      final totalMs = (song.duration != null && song.duration! > 0) ? song.duration! * 1000 : 0;
+      if (totalMs == 0 || positionMs < totalMs - 4000) {
+        initialPos = Duration(milliseconds: positionMs);
+      }
+    }
     await playerProvider.playSong(
       song,
       playlist: queue,
       startIndex: queueIndex,
-      initialPosition: positionMs > 0 ? Duration(milliseconds: positionMs) : null,
+      initialPosition: initialPos,
       forcePlay: isPlaying,
     );
     if (!isPlaying) {

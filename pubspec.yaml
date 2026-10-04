@@ -11,7 +11,7 @@ publish_to: 'none'
 # Read more about Android versioning at https://developer.android.com/studio/publish/versioning
 # In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
 # In Windows, build-name is used as the major, minor, and patch parts
-version: 1.7.7+158
+version: 1.7.8+159
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -150,7 +150,7 @@ msix_config:
   publisher_display_name: Groovy Music
   publisher: CN=Groovy Music
   identity_name: com.groovy.music
-  msix_version: 1.6.7.0
+  msix_version: 1.7.8.0
   logo_path: assets/app_icon_1024.png
   capabilities: internetClient, internetClientServer, privateNetworkClientServer
   execution_alias: groovy

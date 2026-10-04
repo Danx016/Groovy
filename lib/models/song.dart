@@ -60,6 +60,12 @@ class Song {
   factory Song.fromJson(Map<String, dynamic> json) {
     final replayGain = (json['replayGain'] as Map?)?.cast<String, dynamic>();
 
+    int? parseInt(dynamic val) {
+      if (val == null) return null;
+      if (val is num) return val.toInt();
+      return int.tryParse(val.toString());
+    }
+
     return Song(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? 'Unknown Title',
@@ -67,18 +73,18 @@ class Song {
       albumId: json['albumId']?.toString(),
       artist: json['artist']?.toString(),
       artistId: json['artistId']?.toString(),
-      track: json['track'] as int?,
-      year: json['year'] as int?,
+      track: parseInt(json['track']),
+      year: parseInt(json['year']),
       genre: json['genre']?.toString(),
       coverArt: json['coverArt']?.toString(),
-      duration: json['duration'] as int?,
-      bitRate: json['bitRate'] as int?,
+      duration: parseInt(json['duration']),
+      bitRate: parseInt(json['bitRate']),
       suffix: json['suffix']?.toString(),
       contentType: json['contentType']?.toString(),
-      size: json['size'] as int?,
+      size: parseInt(json['size']),
       path: json['path']?.toString(),
       starred: json['starred'] != null ? true : false,
-      userRating: json['userRating'] as int?,
+      userRating: parseInt(json['userRating']),
       isLocal: json['isLocal'] as bool? ?? false,
       replayGainTrackGain: (replayGain?['trackGain'] as num?)?.toDouble(),
       replayGainAlbumGain: (replayGain?['albumGain'] as num?)?.toDouble(),

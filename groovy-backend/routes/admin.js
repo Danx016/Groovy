@@ -698,7 +698,7 @@ router.patch('/users/:id/ban', async (req, res) => {
     // If banned, immediately wipe live playback and expire sessions so user gets disconnected immediately
     if (isBanned) {
       await pool.query('DELETE FROM user_live_playback WHERE user_id = ?', [id]).catch(() => {});
-      await pool.query('UPDATE user_sessions SET last_active_at = NOW() - INTERVAL 2 HOUR WHERE user_id = ?', [id]).catch(() => {});
+      await pool.query('UPDATE user_sessions SET session_duration_seconds = GREATEST(COALESCE(session_duration_seconds, 0), TIMESTAMPDIFF(SECOND, created_at, NOW())), last_active_at = NOW() WHERE user_id = ? AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 15 MINUTE', [id]).catch(() => {});
     }
 
     return res.json({
@@ -752,22 +752,24 @@ router.delete('/users/:id', async (req, res) => {
  */
 router.get('/sessions', async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit || '100', 10);
+    const limit = parseInt(req.query.limit || '250', 10);
     const pool = getPool();
 
+    // 1. Fetch recent raw sessions for connection audit log (LEFT JOIN so guest/anonymous sessions are not omitted)
     const [rows] = await pool.query(`
       SELECT 
         s.id, 
         s.user_id, 
-        u.name as user_name, 
-        u.email as user_email, 
+        COALESCE(u.name, 'Usuario Invitado') as user_name, 
+        COALESCE(u.email, 'Sin correo registrado') as user_email, 
         u.avatar_url,
+        COALESCE(u.role, 'user') as user_role,
         s.ip_address, 
         s.device_os, 
         s.browser, 
         s.device_type, 
         s.client_platform, 
-        s.device_model,
+        COALESCE(NULLIF(s.device_model, ''), s.device_type, 'Dispositivo') as device_model,
         s.os_version,
         s.browser_version,
         s.country,
@@ -779,15 +781,144 @@ router.get('/sessions', async (req, res) => {
         s.last_active_at, 
         s.session_duration_seconds
       FROM user_sessions s
-      JOIN users u ON s.user_id = u.id
+      LEFT JOIN users u ON s.user_id = u.id
       ORDER BY COALESCE(s.last_active_at, s.created_at) DESC
       LIMIT ?
-    `, [limit]);
+    `, [Math.min(limit, 500)]);
+
+    // 2. Fetch live playback records to detect real-time online status
+    const [liveRows] = await pool.query(`
+      SELECT user_id, device_name, platform, ip_address, last_ping_at 
+      FROM user_live_playback 
+      WHERE last_ping_at >= NOW() - INTERVAL 45 SECOND
+    `).catch(() => [[]]);
+
+    const isDeviceLive = (userId, ipAddress, deviceModel, lastActiveAt) => {
+      if (lastActiveAt && (Date.now() - new Date(lastActiveAt).getTime() < 45000)) {
+        return true;
+      }
+      return liveRows.some(lp => {
+        if (userId && lp.user_id === userId) return true;
+        if (ipAddress && lp.ip_address === ipAddress && (lp.device_name === deviceModel || !deviceModel)) return true;
+        return false;
+      });
+    };
+
+    // 3. Query all user sessions to build a consolidated device inventory per user
+    const [allSessions] = await pool.query(`
+      SELECT 
+        s.id,
+        s.user_id,
+        COALESCE(u.name, 'Usuario Invitado') as user_name,
+        COALESCE(u.email, 'Sin correo registrado') as user_email,
+        u.avatar_url,
+        COALESCE(u.role, 'user') as user_role,
+        s.ip_address,
+        s.device_os,
+        s.browser,
+        s.device_type,
+        s.client_platform,
+        COALESCE(NULLIF(s.device_model, ''), s.device_type, 'Dispositivo') as device_model,
+        s.os_version,
+        s.browser_version,
+        s.country,
+        s.country_code,
+        s.city,
+        s.region,
+        s.isp,
+        s.created_at,
+        s.last_active_at,
+        s.session_duration_seconds
+      FROM user_sessions s
+      LEFT JOIN users u ON s.user_id = u.id
+      ORDER BY COALESCE(s.last_active_at, s.created_at) DESC
+    `);
+
+    const deviceMap = new Map();
+    for (const row of allSessions) {
+      const uKey = row.user_id ? `uid_${row.user_id}` : `ip_${row.ip_address}`;
+      const dName = (row.device_model || 'Dispositivo').trim();
+      const pName = (row.client_platform || 'App').trim();
+      const groupKey = `${uKey}__${dName.toLowerCase()}__${pName.toLowerCase()}`;
+
+      const activeDate = row.last_active_at || row.created_at;
+
+      if (!deviceMap.has(groupKey)) {
+        deviceMap.set(groupKey, {
+          key: groupKey,
+          id: row.id,
+          userId: row.user_id,
+          userName: row.user_name,
+          userEmail: row.user_email,
+          userAvatar: row.avatar_url,
+          userRole: row.user_role,
+          deviceModel: dName,
+          clientPlatform: pName,
+          deviceOs: row.device_os,
+          osVersion: row.os_version,
+          browser: row.browser,
+          browserVersion: row.browser_version,
+          deviceType: row.device_type,
+          ipAddress: row.ip_address,
+          country: row.country,
+          countryCode: row.country_code,
+          city: row.city,
+          region: row.region,
+          isp: row.isp,
+          totalSessions: 1,
+          totalDurationSeconds: row.session_duration_seconds || 0,
+          firstSeen: row.created_at,
+          lastActiveAt: activeDate,
+          isOnline: isDeviceLive(row.user_id, row.ip_address, dName, row.last_active_at),
+        });
+      } else {
+        const item = deviceMap.get(groupKey);
+        item.totalSessions += 1;
+        item.totalDurationSeconds += (row.session_duration_seconds || 0);
+        if (new Date(row.created_at) < new Date(item.firstSeen)) {
+          item.firstSeen = row.created_at;
+        }
+        if (new Date(activeDate) > new Date(item.lastActiveAt)) {
+          item.lastActiveAt = activeDate;
+          item.ipAddress = row.ip_address || item.ipAddress;
+          item.country = row.country || item.country;
+          item.countryCode = row.country_code || item.countryCode;
+          item.city = row.city || item.city;
+          item.region = row.region || item.region;
+          item.isp = row.isp || item.isp;
+          item.osVersion = row.os_version || item.osVersion;
+          item.browserVersion = row.browser_version || item.browserVersion;
+        }
+        if (isDeviceLive(row.user_id, row.ip_address, dName, row.last_active_at)) {
+          item.isOnline = true;
+        }
+      }
+    }
+
+    const uniqueDevices = Array.from(deviceMap.values()).sort((a, b) => {
+      if (a.isOnline && !b.isOnline) return -1;
+      if (!a.isOnline && b.isOnline) return 1;
+      return new Date(b.lastActiveAt) - new Date(a.lastActiveAt);
+    });
+
+    const enrichedSessions = rows.map(r => ({
+      ...r,
+      is_online: isDeviceLive(r.user_id, r.ip_address, r.device_model, r.last_active_at),
+    }));
 
     return res.json({
       success: true,
-      count: rows.length,
-      sessions: rows,
+      count: enrichedSessions.length,
+      devices: uniqueDevices,
+      sessions: enrichedSessions,
+      stats: {
+        totalDevices: uniqueDevices.length,
+        totalSessions: allSessions.length,
+        onlineDevices: uniqueDevices.filter(d => d.isOnline).length,
+        androidCount: uniqueDevices.filter(d => (d.clientPlatform + d.deviceOs + d.deviceModel).toLowerCase().includes('android')).length,
+        windowsCount: uniqueDevices.filter(d => (d.clientPlatform + d.deviceOs + d.deviceModel).toLowerCase().includes('windows')).length,
+        webCount: uniqueDevices.filter(d => (d.clientPlatform + d.browser).toLowerCase().includes('web') || (d.clientPlatform).toLowerCase().includes('browser')).length,
+      }
     });
   } catch (err) {
     console.error('[Admin Get Sessions Error]:', err);

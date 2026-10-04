@@ -61,6 +61,8 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [metrics, setMetrics] = useState(null);
   const [users, setUsers] = useState([]);
   const [sessions, setSessions] = useState([]);
+  const [devices, setDevices] = useState([]);
+  const [deviceViewMode, setDeviceViewMode] = useState('devices'); // 'devices' | 'sessions'
   const [liveListeners, setLiveListeners] = useState([]);
   const [connectedUsers, setConnectedUsers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -108,11 +110,12 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     try {
       const [liveRes, sessionsRes] = await Promise.all([
         adminApi.getLivePlayback(),
-        adminApi.getSessions(100),
+        adminApi.getSessions(300),
       ]);
       setLiveListeners(liveRes?.listeners || []);
       setConnectedUsers(liveRes?.connectedUsers || []);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
+      if (sessionsRes?.devices) setDevices(sessionsRes.devices);
     } catch (e) {
       console.error('Error fetching live playback / sessions:', e);
       setDataError(`No se pudo actualizar la actividad en vivo: ${e.message}`);
@@ -128,13 +131,14 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       const [metricsRes, usersRes, sessionsRes, liveRes] = await Promise.all([
         adminApi.getMetrics(),
         adminApi.getUsers({ q: searchQuery, role: roleFilter, status: statusFilter }),
-        adminApi.getSessions(100),
+        adminApi.getSessions(300),
         adminApi.getLivePlayback(),
       ]);
 
       if (metricsRes?.metrics) setMetrics(metricsRes.metrics);
       if (usersRes?.users) setUsers(usersRes.users);
       if (sessionsRes?.sessions) setSessions(sessionsRes.sessions);
+      if (sessionsRes?.devices) setDevices(sessionsRes.devices);
       setLiveListeners(liveRes?.listeners || []);
       setConnectedUsers(liveRes?.connectedUsers || []);
     } catch (err) {
@@ -143,6 +147,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
       setMetrics(null);
       setUsers([]);
       setSessions([]);
+      setDevices([]);
       setLiveListeners([]);
       setConnectedUsers([]);
     } finally {
@@ -732,7 +737,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
               background: activeTab === 'sessions' ? '#FA243C' : '#181818',
               color: '#fff',
             }}>
-              {sessions.length}
+              {devices.length || sessions.length}
             </span>
           </button>
 
@@ -1578,35 +1583,62 @@ export const AdminPortal = ({ onBackToPlayer }) => {
             }}>
               <div style={{ padding: '18px 24px', borderBottom: '0.5px solid #282828', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
                 <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.3px' }}>Registro de Conexiones en Vivo</h3>
+                  <h3 style={{ fontSize: '16px', fontWeight: 700, letterSpacing: '-0.3px' }}>Registro de Conexiones & Dispositivos</h3>
                   <p style={{ fontSize: '13px', color: '#B3B3B3', marginTop: '3px' }}>
-                    Auditoría completa con marcas de tiempo exactas, duración de cada inicio de sesión, hardware real (Android / Windows) y dirección IP.
+                    Auditoría de hardware por usuario, sesiones activas, marcas de tiempo reales y red.
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plataforma:</span>
-                  {[
-                    { id: 'all', label: 'Todas las Conexiones' },
-                    { id: 'mobile', label: '📱 Solo Android' },
-                    { id: 'windows', label: '💻 Solo Windows' },
-                    { id: 'web', label: '🌐 Solo Web' },
-                  ].map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => setPlatformFilter(p.id)}
-                      style={{
-                        padding: '5px 12px', borderRadius: '16px', fontSize: '11px', fontWeight: 600,
-                        background: platformFilter === p.id ? '#FA243C' : '#282828',
-                        color: platformFilter === p.id ? '#fff' : '#B3B3B3',
-                        border: `0.5px solid ${platformFilter === p.id ? '#FA243C' : '#404040'}`,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  {/* Vista Switcher */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Vista:</span>
+                    {[
+                      { id: 'devices', label: `📱 Por Dispositivo (${devices.length})` },
+                      { id: 'sessions', label: `⏱️ Historial (${sessions.length})` },
+                    ].map(v => (
+                      <button
+                        key={v.id}
+                        onClick={() => setDeviceViewMode(v.id)}
+                        style={{
+                          padding: '5px 12px', borderRadius: '16px', fontSize: '11px', fontWeight: 600,
+                          background: deviceViewMode === v.id ? '#FA243C' : '#282828',
+                          color: deviceViewMode === v.id ? '#fff' : '#B3B3B3',
+                          border: `0.5px solid ${deviceViewMode === v.id ? '#FA243C' : '#404040'}`,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {v.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Plataforma Filter */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span style={{ fontSize: '11px', color: '#8E8E93', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Plataforma:</span>
+                    {[
+                      { id: 'all', label: 'Todas las Conexiones' },
+                      { id: 'mobile', label: '📱 Solo Android' },
+                      { id: 'windows', label: '💻 Solo Windows' },
+                      { id: 'web', label: '🌐 Solo Web' },
+                    ].map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => setPlatformFilter(p.id)}
+                        style={{
+                          padding: '5px 12px', borderRadius: '16px', fontSize: '11px', fontWeight: 600,
+                          background: platformFilter === p.id ? '#FA243C' : '#282828',
+                          color: platformFilter === p.id ? '#fff' : '#B3B3B3',
+                          border: `0.5px solid ${platformFilter === p.id ? '#FA243C' : '#404040'}`,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s',
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
@@ -1627,149 +1659,195 @@ export const AdminPortal = ({ onBackToPlayer }) => {
                 <div>Dispositivo</div>
                 <div>Sistema Operativo</div>
                 <div>Ubicación & ISP</div>
-                <div>Duración</div>
+                <div>{deviceViewMode === 'devices' ? 'Inicios' : 'Duración'}</div>
                 <div>Fecha y Hora</div>
               </div>
 
               {/* Sessions list */}
               {(() => {
-                const filteredSessions = sessions.filter(s => {
+                const sourceList = deviceViewMode === 'devices' && devices.length > 0 ? devices : sessions;
+                const searchLower = searchQuery.trim().toLowerCase();
+
+                const filtered = sourceList.filter(s => {
+                  const plat = (s.clientPlatform || s.client_platform || '').toLowerCase();
+                  const devOs = (s.deviceOs || s.device_os || '').toLowerCase();
+                  const devMod = (s.deviceModel || s.device_model || '').toLowerCase();
+                  const devTyp = (s.deviceType || s.device_type || '').toLowerCase();
+                  const browser = (s.browser || '').toLowerCase();
+
                   if (platformFilter === 'mobile') {
-                    const str = `${s.client_platform} ${s.device_os} ${s.device_model}`.toLowerCase();
-                    return str.includes('android') || str.includes('ios') || str.includes('iphone') || s.device_type === 'Mobile';
+                    const str = `${plat} ${devOs} ${devMod} ${devTyp}`;
+                    if (!str.includes('android') && !str.includes('ios') && !str.includes('iphone') && devTyp !== 'mobile') return false;
                   }
                   if (platformFilter === 'windows') {
-                    const str = `${s.client_platform} ${s.device_os} ${s.device_model}`.toLowerCase();
-                    return str.includes('windows');
+                    const str = `${plat} ${devOs} ${devMod}`;
+                    if (!str.includes('windows')) return false;
                   }
                   if (platformFilter === 'web') {
-                    return isWebClient(s.client_platform || s.device_os, s.device_model || s.device_os, s.browser);
+                    if (!isWebClient(plat || devOs, devMod || devOs, browser)) return false;
                   }
+
+                  if (searchLower) {
+                    const uName = (s.userName || s.user_name || '').toLowerCase();
+                    const uEmail = (s.userEmail || s.user_email || '').toLowerCase();
+                    const ip = (s.ipAddress || s.ip_address || '').toLowerCase();
+                    const city = (s.city || '').toLowerCase();
+                    if (!uName.includes(searchLower) && !uEmail.includes(searchLower) && !devMod.includes(searchLower) && !ip.includes(searchLower) && !city.includes(searchLower)) {
+                      return false;
+                    }
+                  }
+
                   return true;
                 });
 
-                if (filteredSessions.length === 0 && !isLoading) {
+                if (filtered.length === 0 && !isLoading) {
                   return (
                     <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6B6B6B' }}>
                       <Activity size={32} style={{ margin: '0 auto 12px', opacity: 0.4 }} />
                       <p style={{ fontSize: '15px', fontWeight: 600, color: '#B3B3B3' }}>Sin conexiones registradas para este filtro</p>
                       <p style={{ fontSize: '13px', marginTop: '4px' }}>
-                        Prueba cambiando el filtro de plataforma.
+                        Prueba cambiando el filtro de plataforma o búsqueda.
                       </p>
                     </div>
                   );
                 }
 
-                return filteredSessions.map((s) => (
-                <div
-                  key={s.id}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'minmax(160px, 1.3fr) 130px 160px 160px 180px 100px 140px',
-                    alignItems: 'center',
-                    padding: '14px 24px',
-                    borderBottom: '0.5px solid #202020',
-                    transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#202020'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                >
-                  {/* User */}
-                  <div style={{ minWidth: 0, paddingRight: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{
-                      width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
-                      overflow: 'hidden',
-                    }}>
-                      {s.avatar_url ? (
-                        <img src={s.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
-                      ) : (
-                        s.user_name?.charAt(0).toUpperCase() || 'U'
-                      )}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.user_name}
-                      </p>
-                      <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.user_email}
-                      </p>
-                    </div>
-                  </div>
+                return filtered.map((s, idx) => {
+                  const uName = s.userName || s.user_name || 'Usuario';
+                  const uEmail = s.userEmail || s.user_email || '';
+                  const uAvatar = s.userAvatar || s.avatar_url;
+                  const ip = s.ipAddress || s.ip_address || '—';
+                  const devMod = s.deviceModel || s.device_model || (s.deviceType === 'Mobile' ? 'Dispositivo Móvil' : 'PC / Laptop');
+                  const clientPlat = s.clientPlatform || s.client_platform || s.deviceType || 'App';
+                  const osVer = s.osVersion || s.os_version || s.deviceOs || s.device_os || 'Desconocido';
+                  const country = s.country;
+                  const countryCode = s.countryCode || s.country_code;
+                  const city = s.city;
+                  const isp = s.isp || s.region || 'Red Privada / LAN';
+                  const durationSec = s.sessionDurationSeconds ?? s.session_duration_seconds ?? 0;
+                  const lastActive = s.lastActiveAt || s.last_active_at || s.createdAt || s.created_at;
+                  const created = s.firstSeen || s.createdAt || s.created_at;
+                  const isOnline = !!(s.isOnline ?? s.is_online);
 
-                  {/* IP */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <span style={{
-                      fontFamily: 'monospace', fontSize: '12px', background: '#282828',
-                      padding: '3px 7px', borderRadius: '4px', color: '#fff',
-                    }}>
-                      {s.ip_address}
-                    </span>
-                    <button
-                      onClick={() => copyToClipboard(s.ip_address)}
-                      title="Copiar IP"
-                      style={{ color: '#6B6B6B', padding: '2px' }}
-                      onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                      onMouseLeave={e => e.currentTarget.style.color = '#6B6B6B'}
+                  return (
+                    <div
+                      key={s.id || s.key || idx}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'minmax(160px, 1.3fr) 130px 160px 160px 180px 100px 140px',
+                        alignItems: 'center',
+                        padding: '14px 24px',
+                        borderBottom: '0.5px solid #202020',
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#202020'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      {copiedIp === s.ip_address ? <Check size={12} style={{ color: '#FA243C' }} /> : <Copy size={12} />}
-                    </button>
-                  </div>
+                      {/* User */}
+                      <div style={{ minWidth: 0, paddingRight: '12px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div style={{
+                          width: '32px', height: '32px', borderRadius: '50%', background: '#FA243C',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '13px', fontWeight: 700, color: '#fff', flexShrink: 0,
+                          overflow: 'hidden',
+                        }}>
+                          {uAvatar ? (
+                            <img src={uAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none'; }} />
+                          ) : (
+                            uName.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: '14px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{uName}</span>
+                            {isOnline && (
+                              <span style={{ fontSize: '9px', color: '#34D399', background: 'rgba(52, 211, 153, 0.15)', padding: '1px 5px', borderRadius: '4px', fontWeight: 700 }}>
+                                ● En Línea
+                              </span>
+                            )}
+                          </p>
+                          <p style={{ fontSize: '12px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {uEmail}
+                          </p>
+                        </div>
+                      </div>
 
-                  {/* Device & Hardware */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-                    {getDeviceIcon(s.device_os, s.browser, s.device_type)}
-                    <div style={{ minWidth: 0 }}>
-                      <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.device_model || (s.device_type === 'Mobile' ? 'Dispositivo Móvil' : 'PC / Laptop')}
-                      </p>
-                      <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {s.client_platform || s.device_type || 'App'}
-                      </p>
+                      {/* IP */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span style={{
+                          fontFamily: 'monospace', fontSize: '12px', background: '#282828',
+                          padding: '3px 7px', borderRadius: '4px', color: '#fff',
+                        }}>
+                          {ip}
+                        </span>
+                        <button
+                          onClick={() => copyToClipboard(ip)}
+                          title="Copiar IP"
+                          style={{ color: '#6B6B6B', padding: '2px', background: 'none', border: 'none', cursor: 'pointer' }}
+                          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                          onMouseLeave={e => e.currentTarget.style.color = '#6B6B6B'}
+                        >
+                          {copiedIp === ip ? <Check size={12} style={{ color: '#FA243C' }} /> : <Copy size={12} />}
+                        </button>
+                      </div>
+
+                      {/* Device & Hardware */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                        {getDeviceIcon(s.device_os || s.deviceOs, s.browser, s.device_type || s.deviceType)}
+                        <div style={{ minWidth: 0 }}>
+                          <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {devMod}
+                          </p>
+                          <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {clientPlat}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* OS & Version */}
+                      <div style={{ minWidth: 0 }}>
+                        <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {osVer}
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {(clientPlat?.includes('Android') || (s.device_os || s.deviceOs) === 'Android') ? 'Groovy Android App' : (clientPlat?.includes('Windows') && (s.browser || '').includes('Native') ? 'Groovy Windows App' : `${s.browser || 'Web Client'} ${s.browser_version || s.browserVersion ? `v${s.browser_version || s.browserVersion}` : ''}`)}
+                        </p>
+                      </div>
+
+                      {/* Geolocation & ISP */}
+                      <div style={{ minWidth: 0, paddingRight: '8px' }}>
+                        <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center' }}>
+                          {renderCountryFlag(country, countryCode)}
+                          <span>{country ? `${formatCountryName(country)}${city ? ` · ${city}` : ''}` : 'Ubicación no reg.'}</span>
+                        </p>
+                        <p style={{ fontSize: '11px', color: '#8E8E93', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {isp}
+                        </p>
+                      </div>
+
+                      {/* Session Duration / Inicios */}
+                      <div style={{ fontSize: '13px', color: '#FA243C', fontWeight: 600 }}>
+                        {deviceViewMode === 'devices' && s.totalSessions
+                          ? `${s.totalSessions} ${s.totalSessions === 1 ? 'inicio' : 'inicios'}`
+                          : formatSessionDuration(durationSec)
+                        }
+                      </div>
+
+                      {/* Exact Timestamp */}
+                      <div style={{ fontSize: '12px' }}>
+                        <p style={{ color: '#fff', fontWeight: 500 }}>
+                          {formatDateTime(lastActive)}
+                        </p>
+                        {created && created !== lastActive && (
+                          <p style={{ fontSize: '10px', color: '#8E8E93', marginTop: '2px' }}>
+                            {deviceViewMode === 'devices' ? `Visto: ${formatDateTime(created)}` : `Inició: ${formatDateTime(created)}`}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  </div>
-
-                  {/* OS & Version */}
-                  <div style={{ minWidth: 0 }}>
-                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.os_version || s.device_os || 'Desconocido'}
-                    </p>
-                    <p style={{ fontSize: '11px', color: '#B3B3B3', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {(s.client_platform?.includes('Android') || s.device_os === 'Android') ? 'Groovy Android App' : (s.client_platform?.includes('Windows') && s.browser?.includes('Native') ? 'Groovy Windows App' : `${s.browser || 'Web Client'} ${s.browser_version ? `v${s.browser_version}` : ''}`)}
-                    </p>
-                  </div>
-
-                  {/* Geolocation & ISP */}
-                  <div style={{ minWidth: 0, paddingRight: '8px' }}>
-                    <p style={{ fontSize: '13px', fontWeight: 600, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center' }}>
-                      {renderCountryFlag(s.country, s.country_code)}
-                      <span>{s.country ? `${formatCountryName(s.country)}${s.city ? ` · ${s.city}` : ''}` : 'Ubicación no reg.'}</span>
-                    </p>
-                    <p style={{ fontSize: '11px', color: '#8E8E93', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {s.isp || s.region || 'Red Privada / LAN'}
-                    </p>
-                  </div>
-
-                  {/* Session Duration */}
-                  <div style={{ fontSize: '13px', color: '#FA243C', fontWeight: 600 }}>
-                    {formatSessionDuration(s.session_duration_seconds)}
-                  </div>
-
-                  {/* Exact Timestamp */}
-                  <div style={{ fontSize: '12px' }}>
-                    <p style={{ color: '#fff', fontWeight: 500 }}>
-                      {formatDateTime(s.last_active_at || s.created_at)}
-                    </p>
-                    {s.last_active_at && s.last_active_at !== s.created_at && (
-                      <p style={{ fontSize: '10px', color: '#8E8E93', marginTop: '2px' }}>
-                        Inició: {formatDateTime(s.created_at)}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ));
-            })()}
+                  );
+                });
+              })()}
             </div>
           )}
 

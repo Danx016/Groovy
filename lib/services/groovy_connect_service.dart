@@ -167,7 +167,7 @@ class GroovyConnectService extends ChangeNotifier {
     final now = DateTime.now();
     if (_lastReceivedTransferSongId == songId &&
         _lastReceivedTransferTime != null &&
-        now.difference(_lastReceivedTransferTime!) < const Duration(milliseconds: 400)) {
+        now.difference(_lastReceivedTransferTime!) < const Duration(milliseconds: 2000)) {
       debugPrint('[GroovyConnect] Deduplicating rapid repeat transfer for song: $songId');
       return true;
     }
@@ -688,7 +688,21 @@ class GroovyConnectService extends ChangeNotifier {
       );
       if (commands.isEmpty) return false;
 
-      for (final cmd in commands) {
+      // Consolidation: If a transfer is present in the batch, older playback/skip commands
+      // in the same batch are obsolete. Also keep only the latest transfer command.
+      final hasTransfer = commands.any((c) => c['action'] == 'transfer');
+      final Iterable<Map<String, dynamic>> consolidatedCommands;
+      if (hasTransfer) {
+        final lastTransferIndex = commands.lastIndexWhere((c) => c['action'] == 'transfer');
+        consolidatedCommands = commands.sublist(lastTransferIndex).where((c) {
+          final a = c['action']?.toString();
+          return a == 'transfer' || a == 'volume' || a == 'seek';
+        });
+      } else {
+        consolidatedCommands = commands;
+      }
+
+      for (final cmd in consolidatedCommands) {
         try {
           final action = cmd['action']?.toString() ?? '';
           final payload = cmd['payload'];
@@ -696,7 +710,10 @@ class GroovyConnectService extends ChangeNotifier {
           debugPrint('[GroovyConnect] Cloud command received: $action');
 
           if (action == 'transfer' && payload is Map) {
-            final songData = payload['song'] as Map<String, dynamic>?;
+            Map<String, dynamic>? songData;
+            if (payload['song'] is Map) {
+              songData = Map<String, dynamic>.from(payload['song'] as Map);
+            }
             final positionMs = (payload['positionMs'] as num?)?.toInt() ?? 0;
             final isPlaying = payload['isPlaying'] as bool? ?? true;
             final fromDevice = payload['fromDevice']?.toString() ?? 'Dispositivo Remoto';
@@ -707,9 +724,15 @@ class GroovyConnectService extends ChangeNotifier {
               List<Song>? queue;
               final queueData = payload['queue'] as List<dynamic>?;
               if (queueData != null) {
-                queue = queueData.map((s) {
-                  return Song.fromJson(s as Map<String, dynamic>).copyWith(isLocal: false);
-                }).toList();
+                queue = [];
+                for (final item in queueData) {
+                  try {
+                    if (item is Map) {
+                      final itemMap = Map<String, dynamic>.from(item);
+                      queue.add(Song.fromJson(itemMap).copyWith(isLocal: false));
+                    }
+                  } catch (_) {}
+                }
               }
               final queueIndex = (payload['queueIndex'] as num?)?.toInt();
 

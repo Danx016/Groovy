@@ -184,6 +184,30 @@ router.post('/command', authenticateToken, async (req, res) => {
           WHERE device_key = ?
         `, [clampedVol, targetDeviceId]).catch(() => {});
       }
+    } else if (action === 'transfer' && parsedPayload && parsedPayload.song) {
+      const s = parsedPayload.song;
+      const posSec = Math.max(0, Math.floor((parsedPayload.positionMs || 0) / 1000));
+      pool.query(`
+        UPDATE user_live_playback
+        SET song_id = ?,
+            title = ?,
+            artist = ?,
+            album = ?,
+            cover_art = ?,
+            duration = ?,
+            position = ?,
+            is_playing = 1
+        WHERE device_key = ?
+      `, [
+        s.id || '',
+        s.title || '',
+        s.artist || '',
+        s.album || '',
+        s.coverArt || '',
+        s.duration || 0,
+        posSec,
+        targetDeviceId
+      ]).catch(() => {});
     }
 
     return res.json({
@@ -222,9 +246,8 @@ router.get('/command', authenticateToken, async (req, res) => {
 
     // Construct alias patterns for target device matching
     const platformModel = (platform && model) ? `${platform}_${model}` : '';
-    const platformDevice = platform ? `${platform}_%` : '';
 
-    // Fetch pending commands for this target device (exact ID, platform composite, or user device)
+    // Fetch pending commands for this target device (exact ID, platform composite, or authenticated device)
     const [commands] = await pool.query(`
       SELECT id, user_id, sender_device_id, target_device_id, action, payload, created_at
       FROM device_commands
@@ -233,12 +256,11 @@ router.get('/command', authenticateToken, async (req, res) => {
         AND (
           target_device_id = ?
           OR (? != '' AND target_device_id = ?)
-          OR (? != '' AND target_device_id LIKE ?)
-          OR (? > 0 AND user_id = ? AND (target_device_id LIKE ? OR target_device_id = ?))
+          OR (? > 0 AND user_id = ? AND target_device_id = ?)
         )
       ORDER BY id ASC
       LIMIT 10
-    `, [deviceId, deviceId, platformModel, platformModel, platform, `${platform}%`, userId, userId, platformDevice, deviceId]);
+    `, [deviceId, deviceId, platformModel, platformModel, userId, userId, deviceId]);
 
     if (commands.length > 0) {
       const ids = commands.map(c => c.id);
@@ -286,8 +308,7 @@ router.get('/command', authenticateToken, async (req, res) => {
       if (resolved) return;
       const isTarget = event.targetDeviceId === deviceId ||
         (platformModel && event.targetDeviceId === platformModel) ||
-        (platform && event.targetDeviceId.startsWith(platform)) ||
-        (userId > 0 && event.userId === userId && (event.targetDeviceId.startsWith(platform) || event.targetDeviceId === deviceId));
+        (userId > 0 && event.userId === userId && event.targetDeviceId === deviceId);
 
       if (isTarget && event.senderDeviceId !== deviceId) {
         resolved = true;
@@ -434,19 +455,39 @@ router.post('/playback', async (req, res) => {
       `, [dbUserId, deviceKey, resolvedPlatform, resolvedDevice, client.deviceModel || '']).catch(() => {});
     }
 
-    // 2. Automatically log to playback_history if new song started
+    // 2. Automatically log to playback_history only once when a new song starts
     const delta = Math.min(Math.max(parseInt(listenDeltaSeconds, 10) || 0, 0), 60);
-    if (isPlaying && dbUserId) {
+    if (isPlaying && dbUserId && hasSong) {
       try {
-        const [recentHistory] = await pool.query(
-          'SELECT id FROM playback_history WHERE user_id = ? AND song_id = ? AND played_at >= NOW() - INTERVAL 45 SECOND LIMIT 1',
-          [dbUserId, String(songId)]
+        const songDur = parseInt(duration, 10) || 0;
+        const minGapForRepeat = Math.max(songDur > 0 ? songDur - 15 : 240, 240);
+
+        // Fetch the most recent history entry for this user
+        const [lastRow] = await pool.query(
+          'SELECT id, song_id, played_at, TIMESTAMPDIFF(SECOND, played_at, NOW()) as seconds_ago FROM playback_history WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+          [dbUserId]
         );
-        if (recentHistory.length === 0) {
-          await pool.query(
-            'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address, listen_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [dbUserId, String(songId), title, artist || '', album || '', resolvedCoverArt, parseInt(duration, 10) || 0, resolvedPlatform, resolvedDevice, client.ip, delta || 15]
+
+        const isSameSong = lastRow.length > 0 && lastRow[0].song_id === String(songId);
+
+        if (!isSameSong || (lastRow[0].seconds_ago > minGapForRepeat)) {
+          // Double-check no other insertion occurred in the last 20 seconds for this song (prevents race conditions)
+          const [recentDup] = await pool.query(
+            'SELECT id FROM playback_history WHERE user_id = ? AND song_id = ? AND played_at >= NOW() - INTERVAL 20 SECOND LIMIT 1',
+            [dbUserId, String(songId)]
           );
+          if (recentDup.length === 0) {
+            await pool.query(
+              'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address, listen_seconds) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [dbUserId, String(songId), title, artist || '', album || '', resolvedCoverArt, songDur, resolvedPlatform, resolvedDevice, client.ip, delta || 15]
+            );
+          }
+        } else if (isSameSong && lastRow.length > 0 && delta > 0) {
+          // Accumulate listen_seconds on the existing history record instead of creating duplicate rows
+          pool.query(
+            'UPDATE playback_history SET listen_seconds = listen_seconds + ? WHERE id = ?',
+            [delta, lastRow[0].id]
+          ).catch(() => {});
         }
       } catch (histErr) {
         console.warn('[Telemetry History Log Warning]:', histErr.message);
@@ -494,7 +535,9 @@ router.post('/playback', async (req, res) => {
             country = COALESCE(country, ?),
             city = COALESCE(city, ?),
             isp = COALESCE(isp, ?)
-        WHERE (user_id = ? OR ip_address = ?) AND client_platform = ?
+        WHERE (user_id = ? OR ip_address = ?) 
+          AND client_platform = ?
+          AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 15 MINUTE
         ORDER BY id DESC LIMIT 1
       `, [delta, client.deviceModel, client.osVersion, geo.country, geo.city, geo.isp, userId, client.ip, client.clientPlatform]);
     } else if (userId > 0) {
@@ -706,18 +749,26 @@ router.post('/leave', async (req, res) => {
       await pool.query('DELETE FROM user_live_playback WHERE ip_address = ? AND platform = ? AND device_name = ?', [client.ip, platform, deviceModel]);
     }
 
-    // 2. Expire active sessions only for this client platform / device
+    // 2. Expire active sessions only for this client platform / device (only recently active sessions!)
     if (userId > 0) {
       await pool.query(`
         UPDATE user_sessions 
-        SET last_active_at = NOW() - INTERVAL 1 HOUR 
-        WHERE user_id = ? AND (client_platform = ? OR device_model = ? OR device_os = ?)
+        SET session_duration_seconds = GREATEST(COALESCE(session_duration_seconds, 0), TIMESTAMPDIFF(SECOND, created_at, NOW())),
+            last_active_at = NOW()
+        WHERE user_id = ? 
+          AND (client_platform = ? OR device_model = ? OR device_os = ?)
+          AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 15 MINUTE
+        ORDER BY id DESC LIMIT 1
       `, [userId, client.clientPlatform, deviceModel, client.os]);
     } else {
       await pool.query(`
         UPDATE user_sessions 
-        SET last_active_at = NOW() - INTERVAL 1 HOUR 
-        WHERE ip_address = ? AND (client_platform = ? OR device_model = ?)
+        SET session_duration_seconds = GREATEST(COALESCE(session_duration_seconds, 0), TIMESTAMPDIFF(SECOND, created_at, NOW())),
+            last_active_at = NOW()
+        WHERE ip_address = ? 
+          AND (client_platform = ? OR device_model = ?)
+          AND COALESCE(last_active_at, created_at) >= NOW() - INTERVAL 15 MINUTE
+        ORDER BY id DESC LIMIT 1
       `, [client.ip, client.clientPlatform, deviceModel]);
     }
 

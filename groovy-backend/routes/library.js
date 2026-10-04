@@ -303,10 +303,24 @@ router.post('/history', async (req, res) => {
 
     const pool = getPool();
     const resolvedCoverArt = normalizeCoverArt(coverArt, songId);
-    await pool.query(
-      'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.user.id, songId, title, artist || '', album || '', resolvedCoverArt, duration || 0, clientPlatform, clientDevice, ip]
+    const songDur = parseInt(duration, 10) || 0;
+    const minGapForRepeat = Math.max(songDur > 0 ? songDur - 15 : 240, 240);
+
+    const [recent] = await pool.query(
+      `SELECT id FROM playback_history 
+       WHERE user_id = ? 
+         AND song_id = ? 
+         AND played_at >= NOW() - INTERVAL ? SECOND 
+       ORDER BY id DESC LIMIT 1`,
+      [req.user.id, String(songId), minGapForRepeat]
     );
+
+    if (recent.length === 0) {
+      await pool.query(
+        'INSERT INTO playback_history (user_id, song_id, title, artist, album, cover_art, duration, platform, device_name, ip_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [req.user.id, String(songId), title, artist || '', album || '', resolvedCoverArt, songDur, clientPlatform, clientDevice, ip]
+      );
+    }
 
     // Update user active timestamp and listening time (minimum 30s)
     const listenAdd = Math.max(parseInt(duration, 10) || 30, 30);
