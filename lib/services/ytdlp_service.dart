@@ -67,6 +67,8 @@ class YtDlpService {
   // Search Caches: query -> result
   final Map<String, Map<String, List<Map<String, dynamic>>>> _dualSearchCache = {};
   final Map<String, List<Map<String, dynamic>>> _searchCache = {};
+  final Map<String, List<Map<String, dynamic>>> _albumsCache = {};
+  final Map<String, List<Map<String, dynamic>>> _artistsCache = {};
 
   // Cached paths for detected binaries on desktop
   String? _detectedYtDlpPath;
@@ -291,9 +293,9 @@ class YtDlpService {
         }
       }
 
-      // Fetch continuation pages ultra-fast (up to 50-60 songs in < 500ms)
+      // Fetch continuation pages only if the first page yielded very few songs (< 15)
       int pages = 0;
-      while (results.length < limit && continuationToken != null && pages < 2) {
+      while (results.length < 15 && continuationToken != null && pages < 1) {
         pages++;
         try {
           final contReq = await _innertubeHttpClient.postUrl(
@@ -427,6 +429,11 @@ class YtDlpService {
 
   /// Queries official YouTube Music Innertube API (Albums filter) directly in pure Dart.
   Future<List<Map<String, dynamic>>> searchYtAlbumsInnertube(String query, {int limit = 20}) async {
+    final cleanQuery = query.trim().toLowerCase();
+    if (_albumsCache.containsKey(cleanQuery)) {
+      return _albumsCache[cleanQuery]!;
+    }
+
     try {
       final req = await _innertubeHttpClient.postUrl(
         Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
@@ -522,6 +529,10 @@ class YtDlpService {
         }
         if (results.length >= limit) break;
       }
+      if (cleanQuery.isNotEmpty && results.isNotEmpty) {
+        if (_albumsCache.length > 50) _albumsCache.remove(_albumsCache.keys.first);
+        _albumsCache[cleanQuery] = results;
+      }
       return results;
     } catch (e) {
       debugPrint('[yt-dlp] searchYtAlbumsInnertube error: $e');
@@ -531,6 +542,11 @@ class YtDlpService {
 
   /// Queries official YouTube Music Innertube API (Artists filter) directly in pure Dart.
   Future<List<Map<String, dynamic>>> searchYtArtistsInnertube(String query, {int limit = 20}) async {
+    final cleanQuery = query.trim().toLowerCase();
+    if (_artistsCache.containsKey(cleanQuery)) {
+      return _artistsCache[cleanQuery]!;
+    }
+
     try {
       final req = await _innertubeHttpClient.postUrl(
         Uri.parse('https://music.youtube.com/youtubei/v1/search?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU'),
@@ -589,6 +605,10 @@ class YtDlpService {
           if (results.length >= limit) break;
         }
         if (results.length >= limit) break;
+      }
+      if (cleanQuery.isNotEmpty && results.isNotEmpty) {
+        if (_artistsCache.length > 50) _artistsCache.remove(_artistsCache.keys.first);
+        _artistsCache[cleanQuery] = results;
       }
       return results;
     } catch (e) {

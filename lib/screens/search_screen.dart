@@ -113,6 +113,7 @@ class _SearchScreenState extends State<SearchScreen> {
         _autocompleteSuggestions = null;
         _showSuggestions = false;
         _query = '';
+        _isSearching = false;
       });
       return;
     }
@@ -123,17 +124,17 @@ class _SearchScreenState extends State<SearchScreen> {
       listen: false,
     );
     final instantLocal = libraryProvider.searchLocal(value);
-    if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
-      if (mounted && _searchController.text.trim() == value.trim()) {
-        setState(() {
-          _searchResult = instantLocal;
-          _query = value;
-        });
-      }
-    }
 
-    // 2. Smooth debounced online search (250ms)
-    _debounceTimer = Timer(const Duration(milliseconds: 250), () {
+    setState(() {
+      _query = value;
+      if (instantLocal.songs.isNotEmpty || instantLocal.artists.isNotEmpty || instantLocal.albums.isNotEmpty) {
+        _searchResult = instantLocal;
+      }
+      _isSearching = true; // Immediate feedback that live search is working
+    });
+
+    // 2. Ultra-snappy debounced online search (180ms)
+    _debounceTimer = Timer(const Duration(milliseconds: 180), () {
       if (!mounted || _searchController.text.trim() != value.trim()) return;
       if (_liveSearch) {
         _search(value);
@@ -144,18 +145,20 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _search(String query) async {
-    if (query.trim().isEmpty) {
+    final cleanQ = query.trim();
+    if (cleanQ.isEmpty) {
       setState(() {
         _searchResult = null;
         _query = '';
         _showSuggestions = false;
+        _isSearching = false;
       });
       return;
     }
 
     setState(() {
       _isSearching = true;
-      _query = query;
+      _query = cleanQ;
       _showSuggestions = false;
     });
 
@@ -164,8 +167,8 @@ class _SearchScreenState extends State<SearchScreen> {
         context,
         listen: false,
       );
-      final result = await libraryProvider.search(query, includeOnline: true);
-      if (mounted && _query == query) {
+      final result = await libraryProvider.search(cleanQ, includeOnline: true);
+      if (mounted && _searchController.text.trim() == cleanQ) {
         setState(() {
           _searchResult = result;
           _isSearching = false;
@@ -390,11 +393,17 @@ class _SearchScreenState extends State<SearchScreen> {
     final libraryProvider = Provider.of<LibraryProvider>(context);
     final player = Provider.of<PlayerProvider>(context, listen: false);
 
-    // Combine all songs (regular + youtube)
-    final allSongs = <Song>[
-      ...result.songs,
-      if (result.youtubeVideos != null) ...result.youtubeVideos!,
-    ];
+    // Combine all songs (already ranked by relevance) with strict deduplication
+    final allSongs = <Song>[];
+    final seenIds = <String>{};
+    for (final s in result.songs) {
+      if (seenIds.add(s.id)) allSongs.add(s);
+    }
+    if (result.youtubeVideos != null) {
+      for (final s in result.youtubeVideos!) {
+        if (seenIds.add(s.id)) allSongs.add(s);
+      }
+    }
 
     final slivers = <Widget>[];
 
@@ -508,103 +517,145 @@ class _SearchScreenState extends State<SearchScreen> {
       return slivers;
     }
 
-    // Filter: ALL ("Todo") - Unified Stream
+    // Filter: ALL ("Todo") - Unified Smart Stream
     if (_selectedFilter == SearchCategoryFilter.all) {
-      // 1. Top artists (up to 2)
-      if (result.artists.isNotEmpty) {
-        final topArtists = result.artists.take(2).toList();
-        slivers.add(
-          SliverList.builder(
-            itemCount: topArtists.length,
-            itemBuilder: (ctx, index) {
-              final artist = topArtists[index];
-              return _buildSpotifyItemTile(
-                title: artist.name,
-                subtitle: 'Artista',
-                imageUrl: artist.coverArt,
-                isCircular: true,
-                isDark: isDark,
-                primaryColor: primaryColor,
-                onTap: () {
-                  RecentSearchesService().addArtist(artist);
-                  NavigationHelper.push(
-                    context,
-                    ArtistScreen(artistId: artist.id, artist: artist),
-                  );
-                },
-              );
-            },
-          ),
+      final cleanQ = _query.toLowerCase().trim();
+      final hasDirectArtistMatch = result.artists.isNotEmpty &&
+          (result.artists.first.name.toLowerCase().trim() == cleanQ ||
+              cleanQ.startsWith(result.artists.first.name.toLowerCase().trim()));
+
+      // Helper to build artist items
+      Widget buildArtistTile(Artist artist) {
+        return _buildSpotifyItemTile(
+          title: artist.name,
+          subtitle: 'Artista',
+          imageUrl: artist.coverArt,
+          isCircular: true,
+          isDark: isDark,
+          primaryColor: primaryColor,
+          onTap: () {
+            RecentSearchesService().addArtist(artist);
+            NavigationHelper.push(
+              context,
+              ArtistScreen(artistId: artist.id, artist: artist),
+            );
+          },
         );
       }
 
-      // 2. Top albums (up to 2)
-      if (result.albums.isNotEmpty) {
-        final topAlbums = result.albums.take(2).toList();
-        slivers.add(
-          SliverList.builder(
-            itemCount: topAlbums.length,
-            itemBuilder: (ctx, index) {
-              final album = topAlbums[index];
-              return _buildSpotifyItemTile(
-                title: album.name,
-                subtitle: 'Álbum • ${album.artist ?? "Varios Artistas"}',
-                imageUrl: album.coverArt,
-                isCircular: false,
-                isDark: isDark,
-                primaryColor: primaryColor,
-                onTap: () {
-                  RecentSearchesService().addAlbum(album);
-                  NavigationHelper.push(
-                    context,
-                    AlbumScreen(albumId: album.id, album: album),
-                  );
-                },
-              );
-            },
-          ),
+      // Helper to build album items
+      Widget buildAlbumTile(Album album) {
+        return _buildSpotifyItemTile(
+          title: album.name,
+          subtitle: 'Álbum • ${album.artist ?? "Varios Artistas"}',
+          imageUrl: album.coverArt,
+          isCircular: false,
+          isDark: isDark,
+          primaryColor: primaryColor,
+          onTap: () {
+            RecentSearchesService().addAlbum(album);
+            NavigationHelper.push(
+              context,
+              AlbumScreen(albumId: album.id, album: album),
+            );
+          },
         );
       }
 
-      // 3. Songs list
-      if (allSongs.isNotEmpty) {
-        slivers.add(
-          SliverList.builder(
-            itemCount: allSongs.length,
-            itemBuilder: (ctx, index) {
-              final song = allSongs[index];
-              final isStarred = libraryProvider.isSongStarred(song.id) || (song.starred ?? false);
-              final isCurrentPlaying = player.currentSong?.id == song.id;
+      // Helper to build song tile
+      Widget buildSongTile(Song song, int index) {
+        final isStarred = libraryProvider.isSongStarred(song.id) || (song.starred ?? false);
+        final isCurrentPlaying = player.currentSong?.id == song.id;
 
-              return _buildSpotifyItemTile(
-                title: song.title,
-                subtitle: 'Canción • ${song.artist ?? "Desconocido"}',
-                imageUrl: song.coverArt,
-                isCircular: false,
-                isDark: isDark,
-                isStarred: isStarred,
-                isPlaying: isCurrentPlaying,
-                primaryColor: primaryColor,
-                onStarredToggle: () {
-                  libraryProvider.toggleStarSong(song);
-                },
-                onOptionsPressed: () {
-                  showModalBottomSheet(
-                    context: context,
-                    backgroundColor: Colors.transparent,
-                    isScrollControlled: true,
-                    useRootNavigator: true,
-                    builder: (ctx) => NowPlayingMoreMenu(song: song),
-                  );
-                },
-                onTap: () {
-                  RecentSearchesService().addSong(song);
-                  player.playSong(song, playlist: allSongs, startIndex: index);
-                },
-              );
-            },
+        return _buildSpotifyItemTile(
+          title: song.title,
+          subtitle: 'Canción • ${song.artist ?? "Desconocido"}',
+          imageUrl: song.coverArt,
+          isCircular: false,
+          isDark: isDark,
+          isStarred: isStarred,
+          isPlaying: isCurrentPlaying,
+          primaryColor: primaryColor,
+          onStarredToggle: () {
+            libraryProvider.toggleStarSong(song);
+          },
+          onOptionsPressed: () {
+            showModalBottomSheet(
+              context: context,
+              backgroundColor: Colors.transparent,
+              isScrollControlled: true,
+              useRootNavigator: true,
+              builder: (ctx) => NowPlayingMoreMenu(song: song),
+            );
+          },
+          onTap: () {
+            RecentSearchesService().addSong(song);
+            player.playSong(song, playlist: allSongs, startIndex: index);
+          },
+        );
+      }
+
+      if (hasDirectArtistMatch) {
+        // Query specifically matched artist (e.g. "Coldplay") -> show Artist at the top
+        final topArtist = result.artists.first;
+        slivers.add(
+          SliverToBoxAdapter(
+            child: buildArtistTile(topArtist),
           ),
         );
+
+        // Then songs
+        if (allSongs.isNotEmpty) {
+          slivers.add(
+            SliverList.builder(
+              itemCount: allSongs.length,
+              itemBuilder: (ctx, index) => buildSongTile(allSongs[index], index),
+            ),
+          );
+        }
+
+        // Then albums
+        if (result.albums.isNotEmpty) {
+          final topAlbums = result.albums.take(2).toList();
+          slivers.add(
+            SliverList.builder(
+              itemCount: topAlbums.length,
+              itemBuilder: (ctx, index) => buildAlbumTile(topAlbums[index]),
+            ),
+          );
+        }
+      } else {
+        // Normal song / keyword search -> PRIORITIZE SONGS AT THE VERY TOP!
+        if (allSongs.isNotEmpty) {
+          slivers.add(
+            SliverList.builder(
+              itemCount: allSongs.length,
+              itemBuilder: (ctx, index) => buildSongTile(allSongs[index], index),
+            ),
+          );
+        }
+
+        // Matching artists right after songs
+        if (result.artists.isNotEmpty) {
+          final topArtists = result.artists.take(2).toList();
+          slivers.add(
+            SliverList.builder(
+              itemCount: topArtists.length,
+              itemBuilder: (ctx, index) => buildArtistTile(topArtists[index]),
+            ),
+          );
+        }
+
+        // Matching albums
+        if (result.albums.isNotEmpty) {
+          final topAlbums = result.albums.take(2).toList();
+          slivers.add(
+            SliverList.builder(
+              itemCount: topAlbums.length,
+              itemBuilder: (ctx, index) => buildAlbumTile(topAlbums[index]),
+            ),
+          );
+        }
       }
     }
 
@@ -955,6 +1006,57 @@ class _SearchScreenState extends State<SearchScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_autocompleteSuggestions!.songs.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: Text(
+                          AppLocalizations.of(context)!.songs,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.lightSecondaryText,
+                          ),
+                        ),
+                      ),
+                      ..._autocompleteSuggestions!.songs.take(5).map(
+                        (song) => ListTile(
+                          dense: true,
+                          leading: Icon(
+                            CupertinoIcons.music_note,
+                            size: 20,
+                            color: primaryColor,
+                          ),
+                          title: Text(
+                            song.title,
+                            style: const TextStyle(fontSize: 14),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: song.artist != null
+                              ? Text(
+                                  song.artist!,
+                                  style: const TextStyle(fontSize: 12),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                )
+                              : null,
+                          onTap: () {
+                            RecentSearchesService().addSong(song);
+                            setState(() => _showSuggestions = false);
+                            final playerProvider = Provider.of<PlayerProvider>(
+                              context,
+                              listen: false,
+                            );
+                            playerProvider.playSong(
+                              song,
+                              playlist: _autocompleteSuggestions!.songs,
+                              startIndex: _autocompleteSuggestions!.songs
+                                  .indexOf(song),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                     if (_autocompleteSuggestions!.artists.isNotEmpty) ...[
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
@@ -967,7 +1069,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         ),
                       ),
-                      ..._autocompleteSuggestions!.artists.map(
+                      ..._autocompleteSuggestions!.artists.take(3).map(
                         (artist) => ListTile(
                           dense: true,
                           leading: Icon(
@@ -1004,7 +1106,7 @@ class _SearchScreenState extends State<SearchScreen> {
                           ),
                         ),
                       ),
-                      ..._autocompleteSuggestions!.albums.map(
+                      ..._autocompleteSuggestions!.albums.take(3).map(
                         (album) => ListTile(
                           dense: true,
                           leading: Icon(
@@ -1032,57 +1134,6 @@ class _SearchScreenState extends State<SearchScreen> {
                             NavigationHelper.push(
                               context,
                               AlbumScreen(albumId: album.id, album: album),
-                            );
-                          },
-                        ),
-                      ),
-                    ],
-                    if (_autocompleteSuggestions!.songs.isNotEmpty) ...[
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        child: Text(
-                          AppLocalizations.of(context)!.songs,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.lightSecondaryText,
-                          ),
-                        ),
-                      ),
-                      ..._autocompleteSuggestions!.songs.map(
-                        (song) => ListTile(
-                          dense: true,
-                          leading: Icon(
-                            CupertinoIcons.music_note,
-                            size: 20,
-                            color: primaryColor,
-                          ),
-                          title: Text(
-                            song.title,
-                            style: const TextStyle(fontSize: 14),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: song.artist != null
-                              ? Text(
-                                  song.artist!,
-                                  style: const TextStyle(fontSize: 12),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                )
-                              : null,
-                          onTap: () {
-                            RecentSearchesService().addSong(song);
-                            setState(() => _showSuggestions = false);
-                            final playerProvider = Provider.of<PlayerProvider>(
-                              context,
-                              listen: false,
-                            );
-                            playerProvider.playSong(
-                              song,
-                              playlist: _autocompleteSuggestions!.songs,
-                              startIndex: _autocompleteSuggestions!.songs
-                                  .indexOf(song),
                             );
                           },
                         ),

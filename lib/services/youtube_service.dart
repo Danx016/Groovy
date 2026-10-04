@@ -781,12 +781,167 @@ class YoutubeService {
 
   // ── Search ────────────────────────────────────────────────────────────────
 
+  static String _normalize(String input) {
+    var s = input.toLowerCase().trim();
+    s = s
+        .replaceAll(RegExp(r'[áàäâ]'), 'a')
+        .replaceAll(RegExp(r'[éèëê]'), 'e')
+        .replaceAll(RegExp(r'[íìïî]'), 'i')
+        .replaceAll(RegExp(r'[óòöô]'), 'o')
+        .replaceAll(RegExp(r'[úùüû]'), 'u')
+        .replaceAll(RegExp(r'[ñ]'), 'n');
+    s = s.replaceAll(RegExp(r'[^\w\s]'), ' ');
+    return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  static String _songFingerprint(Song song) {
+    final cleanTitle = _normalize(
+      song.title
+          .replaceAll(RegExp(r'\((official|video|audio|lyrics|letra|videoclip|hd|4k)[^)]*\)', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\[(official|video|audio|lyrics|letra|videoclip|hd|4k)[^\]]*\]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'(\bft\.?|\bfeat\.?).*$', caseSensitive: false), ''),
+    );
+    final cleanArtist = _normalize(song.artist ?? '');
+    return '$cleanTitle::$cleanArtist';
+  }
+
+  /// Calculates relevance score to prioritize original artist recordings, exact query matches, and official releases over covers and fan edits.
+  int scoreSongRelevance(Song song, String query, {int originalIndex = 0}) {
+    int score = 0;
+    final qClean = _normalize(query);
+    if (qClean.isEmpty) return 0;
+
+    final titleClean = _normalize(song.title);
+    final artistClean = _normalize(song.artist ?? '');
+    final albumClean = _normalize(song.album ?? '');
+    final combinedClean = '$titleClean $artistClean';
+
+    final qWords = qClean.split(' ').where((w) => w.length > 1).toList();
+
+    // 1. Exact or high-match Title scoring
+    if (titleClean == qClean) {
+      score += 420;
+    } else if (titleClean.startsWith(qClean)) {
+      score += 260;
+    } else if (qClean.contains(titleClean) && titleClean.length >= 3) {
+      score += 230;
+    } else if (titleClean.contains(qClean)) {
+      score += 180;
+    }
+
+    // 2. Query token matching across Title + Artist (e.g. "Coldplay Yellow" or "Feid Luna")
+    if (qWords.isNotEmpty) {
+      int matchedTokens = 0;
+      for (final w in qWords) {
+        if (combinedClean.contains(w)) {
+          matchedTokens++;
+        }
+      }
+      final ratio = matchedTokens / qWords.length;
+      if (ratio == 1.0) {
+        score += 320; // 100% of search terms match the title and/or artist
+      } else if (ratio >= 0.7) {
+        score += 190;
+      } else if (ratio >= 0.5) {
+        score += 100;
+      }
+    }
+
+    // 3. Artist match with search query
+    if (artistClean.isNotEmpty) {
+      if (artistClean == qClean) {
+        score += 220;
+      } else if (qClean.contains(artistClean) && artistClean.length >= 3) {
+        score += 170;
+      } else if (artistClean.contains(qClean)) {
+        score += 120;
+      }
+    }
+
+    // 4. Position bonus from original YouTube search ranking (YouTube already ranks by popularity/views)
+    if (originalIndex >= 0 && originalIndex < 30) {
+      score += (30 - originalIndex) * 3; // #1 gets +90, #2 gets +87, etc.
+    }
+
+    // 5. Verified official album release (slight boost)
+    if (song.album != null &&
+        song.album!.trim().isNotEmpty &&
+        albumClean != 'album' &&
+        albumClean != 'álbum' &&
+        albumClean != 'single') {
+      score += 40;
+    }
+
+    // 6. Official artist channel / topic channel / official release tags
+    if (artistClean.contains('topic') ||
+        artistClean.contains('official') ||
+        titleClean.contains('official audio') ||
+        titleClean.contains('official video') ||
+        titleClean.contains('audio oficial') ||
+        titleClean.contains('video oficial')) {
+      score += 40;
+    }
+
+    // 7. Demote unofficial / fan content (covers, karaoke, slowed+reverb, 8D audio, tributes)
+    const penalties = [
+      'cover',
+      'tributo',
+      'tribute',
+      'karaoke',
+      'instrumental',
+      'parodia',
+      'parody',
+      'slowed',
+      'reverb',
+      '8d audio',
+      '8d',
+      'nightcore',
+      'tutorial',
+      'como tocar',
+      'reaccion',
+      'reaction',
+      'clase',
+      'guitar lesson',
+      'bass boosted',
+      '10 hours',
+      '1 hour',
+    ];
+
+    for (final penalty in penalties) {
+      if (!qClean.contains(penalty)) {
+        if (titleClean.contains(penalty)) score -= 150;
+        if (artistClean.contains(penalty)) score -= 150;
+      }
+    }
+
+    // 8. Normal studio song duration reward (1:30 to 7:00) vs extremes (sample / long loops)
+    if (song.duration != null && song.duration! > 0) {
+      if (song.duration! < 45 || song.duration! > 900) {
+        score -= 90;
+      } else if (song.duration! >= 90 && song.duration! <= 420) {
+        score += 25;
+      }
+    }
+
+    return score;
+  }
+
+  // In-memory LRU search cache for instant (0ms) response on repeated / typing queries
+  final Map<String, SearchResult> _searchResultCache = {};
+
+  // ── Search ────────────────────────────────────────────────────────────────
+
   Future<SearchResult> search(
     String query, {
     int artistCount = 30,
     int albumCount = 30,
     int songCount = 100,
   }) async {
+    final cleanQuery = query.trim().toLowerCase();
+    if (_searchResultCache.containsKey(cleanQuery)) {
+      return _searchResultCache[cleanQuery]!;
+    }
+
     try {
       // 1. Concurrently query songs, official albums, and official artists via YouTube Music Innertube
       final futures = await Future.wait([
@@ -805,23 +960,40 @@ class YoutubeService {
       // 2. Query local matching songs
       final localSongs = await _db.searchSongs(query, limit: songCount);
 
-      // Merge online YouTube Music songs with local matches without duplicates
-      final mergedMusic = <Song>[...musicSongs];
-      final seenIds = musicSongs.map((s) => s.id).toSet();
+      // 3. Intelligently merge and deduplicate YouTube Music, YouTube Video, and local songs
+      final candidateSongs = <Song>[];
+      final seenIds = <String>{};
+      final seenFingerprints = <String>{};
+
+      // Local matches added first to check
       for (final ls in localSongs) {
-        if (!seenIds.contains(ls.id)) {
-          mergedMusic.add(ls);
-          seenIds.add(ls.id);
+        if (seenIds.add(ls.id)) {
+          final fp = _songFingerprint(ls);
+          if (fp.isNotEmpty) seenFingerprints.add(fp);
+          candidateSongs.add(ls);
         }
       }
 
-      // If YouTube Music official tracks returned empty, fallback to youtubeVideos
-      // so the user always sees search results instead of an empty songs list
-      if (mergedMusic.isEmpty && youtubeVideos.isNotEmpty) {
-        mergedMusic.addAll(youtubeVideos);
+      // Interleave music and youtube results so both are considered with their initial ranks
+      final maxLen = musicSongs.length > youtubeVideos.length ? musicSongs.length : youtubeVideos.length;
+      for (int i = 0; i < maxLen; i++) {
+        if (i < musicSongs.length) {
+          final s = musicSongs[i];
+          final fp = _songFingerprint(s);
+          if (seenIds.add(s.id) && (fp.isEmpty || seenFingerprints.add(fp))) {
+            candidateSongs.add(s);
+          }
+        }
+        if (i < youtubeVideos.length) {
+          final s = youtubeVideos[i];
+          final fp = _songFingerprint(s);
+          if (seenIds.add(s.id) && (fp.isEmpty || seenFingerprints.add(fp))) {
+            candidateSongs.add(s);
+          }
+        }
       }
 
-      // 3. Process official YouTube Music artists and albums
+      // 4. Process official YouTube Music artists and albums
       final artists = <Artist>[];
       final albums = <Album>[];
       final seenArtists = <String>{};
@@ -860,8 +1032,8 @@ class YoutubeService {
         }
       }
 
-      // 4. Supplement with any additional unique artists and albums from song metadata
-      for (final s in [...mergedMusic, ...youtubeVideos]) {
+      // 5. Supplement with any additional unique artists and albums from candidate song metadata
+      for (final s in candidateSongs) {
         final artistName = s.artist?.trim();
         if (artistName != null &&
             artistName.isNotEmpty &&
@@ -891,100 +1063,40 @@ class YoutubeService {
         }
       }
 
-      // 5. Prioritize official original artist songs first, pushing covers/fan edits down
-      mergedMusic.sort((a, b) => _scoreSongRelevance(b, query).compareTo(_scoreSongRelevance(a, query)));
-      youtubeVideos.sort((a, b) => _scoreSongRelevance(b, query).compareTo(_scoreSongRelevance(a, query)));
+      // 6. Rank candidate songs by comprehensive relevance score
+      final songScoreMap = <String, int>{};
+      for (int i = 0; i < candidateSongs.length; i++) {
+        final s = candidateSongs[i];
+        songScoreMap[s.id] = scoreSongRelevance(s, query, originalIndex: i);
+      }
 
-      return SearchResult(
+      candidateSongs.sort((a, b) {
+        final scoreA = songScoreMap[a.id] ?? 0;
+        final scoreB = songScoreMap[b.id] ?? 0;
+        return scoreB.compareTo(scoreA);
+      });
+
+      final finalSongs = candidateSongs.take(songCount).toList();
+
+      final res = SearchResult(
         artists: artists.take(artistCount).toList(),
         albums: albums.take(albumCount).toList(),
-        songs: mergedMusic.take(songCount).toList(),
-        youtubeVideos: youtubeVideos.take(songCount).toList(),
+        songs: finalSongs,
+        youtubeVideos: finalSongs,
       );
+
+      if (cleanQuery.isNotEmpty && finalSongs.isNotEmpty) {
+        if (_searchResultCache.length > 80) {
+          _searchResultCache.remove(_searchResultCache.keys.first);
+        }
+        _searchResultCache[cleanQuery] = res;
+      }
+
+      return res;
     } catch (e) {
       debugPrint('[YouTube] search error: $e');
       return SearchResult(artists: [], albums: [], songs: []);
     }
-  }
-
-  /// Calculates relevance score to prioritize original artist recordings and official releases over covers and unofficial edits.
-  int _scoreSongRelevance(Song song, String query) {
-    int score = 0;
-    final qLower = query.toLowerCase().trim();
-    final titleLower = song.title.toLowerCase();
-    final artistLower = (song.artist ?? '').toLowerCase();
-    final albumLower = (song.album ?? '').toLowerCase();
-
-    // 1. Verified official album release
-    if (song.album != null &&
-        song.album!.isNotEmpty &&
-        albumLower != 'album' &&
-        albumLower != 'álbum' &&
-        albumLower != 'single') {
-      score += 70;
-    }
-
-    // 2. Artist match with search query
-    if (artistLower.isNotEmpty) {
-      if (artistLower == qLower) {
-        score += 100;
-      } else if (artistLower.contains(qLower) || qLower.contains(artistLower)) {
-        score += 60;
-      }
-    }
-
-    // 3. Title match with search query
-    if (titleLower == qLower) {
-      score += 90;
-    } else if (titleLower.startsWith(qLower)) {
-      score += 50;
-    } else if (titleLower.contains(qLower)) {
-      score += 30;
-    }
-
-    // 4. Official release tags
-    if (artistLower.contains('topic') || artistLower.contains('official')) {
-      score += 40;
-    }
-
-    // 5. Demote unofficial / fan content (covers, karaoke, slowed+reverb, 8D audio, tributes)
-    const penalties = [
-      'cover',
-      'tributo',
-      'tribute',
-      'karaoke',
-      'instrumental',
-      'parodia',
-      'parody',
-      'slowed',
-      'reverb',
-      '8d audio',
-      '8d',
-      'nightcore',
-      'tutorial',
-      'como tocar',
-      'reacción',
-      'reaccion',
-      'reaction',
-    ];
-
-    for (final penalty in penalties) {
-      if (!qLower.contains(penalty)) {
-        if (titleLower.contains(penalty)) score -= 90;
-        if (artistLower.contains(penalty)) score -= 90;
-      }
-    }
-
-    // 6. Normal studio song duration reward (2 to 6 minutes) vs extremes (sample / long loops)
-    if (song.duration != null && song.duration! > 0) {
-      if (song.duration! < 45 || song.duration! > 900) {
-        score -= 60;
-      } else if (song.duration! >= 120 && song.duration! <= 360) {
-        score += 20;
-      }
-    }
-
-    return score;
   }
 
   // ── Random / Trending songs ───────────────────────────────────────────────

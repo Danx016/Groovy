@@ -1043,10 +1043,31 @@ class LibraryProvider extends ChangeNotifier {
     try {
       final ytResults = await _youtubeService.search(query, songCount: songCount);
 
-      final existingIds = localResult.songs.map((s) => s.id).toSet();
-      final extraSongs = ytResults.songs
-          .where((s) => !existingIds.contains(s.id))
-          .toList();
+      // Merge online songs and local songs intelligently
+      final allCandidateSongs = <Song>[];
+      final seenIds = <String>{};
+
+      for (final s in ytResults.songs) {
+        if (seenIds.add(s.id)) allCandidateSongs.add(s);
+      }
+      for (final s in localResult.songs) {
+        if (seenIds.add(s.id)) allCandidateSongs.add(s);
+      }
+
+      // Re-sort the combined candidate list by relevance so the best match is ALWAYS on top
+      final songScoreMap = <String, int>{};
+      for (int i = 0; i < allCandidateSongs.length; i++) {
+        final s = allCandidateSongs[i];
+        songScoreMap[s.id] = _youtubeService.scoreSongRelevance(s, query, originalIndex: i);
+      }
+
+      allCandidateSongs.sort((a, b) {
+        final scoreA = songScoreMap[a.id] ?? 0;
+        final scoreB = songScoreMap[b.id] ?? 0;
+        return scoreB.compareTo(scoreA);
+      });
+
+      final finalSongs = allCandidateSongs.take(songCount).toList();
 
       return SearchResult(
         artists: ytResults.artists.isNotEmpty
@@ -1055,11 +1076,8 @@ class LibraryProvider extends ChangeNotifier {
         albums: ytResults.albums.isNotEmpty
             ? ytResults.albums
             : localResult.albums,
-        songs: [
-          ...localResult.songs,
-          ...extraSongs,
-        ],
-        youtubeVideos: ytResults.youtubeVideos,
+        songs: finalSongs,
+        youtubeVideos: finalSongs,
       );
     } catch (e) {
       debugPrint('[Search] YouTube search error: $e');
@@ -1076,8 +1094,15 @@ class LibraryProvider extends ChangeNotifier {
               (s.artist?.toLowerCase().contains(q) ?? false) ||
               (s.album?.toLowerCase().contains(q) ?? false),
         )
-        .take(50)
         .toList();
+
+    // Sort local matches by relevance
+    songs.sort((a, b) =>
+      _youtubeService.scoreSongRelevance(b, query).compareTo(
+        _youtubeService.scoreSongRelevance(a, query),
+      ),
+    );
+
     final artists = _artists
         .where((a) => a.name.toLowerCase().contains(q))
         .take(20)
@@ -1090,7 +1115,11 @@ class LibraryProvider extends ChangeNotifier {
         )
         .take(20)
         .toList();
-    return SearchResult(songs: songs, artists: artists, albums: albums);
+    return SearchResult(
+      songs: songs.take(50).toList(),
+      artists: artists,
+      albums: albums,
+    );
   }
 
   Future<void> addSongToLibrary(Song song) async {

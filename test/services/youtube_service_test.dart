@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:groovy/services/youtube_service.dart';
+import 'package:groovy/models/song.dart';
 
 void main() {
   group('YoutubeService', () {
@@ -30,6 +31,59 @@ void main() {
     test('should return empty URL when coverArt is null', () {
       final url = service.getCoverArtUrl(null);
       expect(url, '');
+    });
+
+    test('scoreSongRelevance prioritizes exact match over cover or unrelated tracks', () {
+      final originalSong = Song(
+        id: '1',
+        title: 'Starboy',
+        artist: 'The Weeknd',
+        album: 'Starboy',
+        duration: 230,
+      );
+
+      final coverSong = Song(
+        id: '2',
+        title: 'Starboy (Acoustic Cover)',
+        artist: 'Fan Singer',
+        duration: 220,
+      );
+
+      final unrelatedSong = Song(
+        id: '3',
+        title: 'Random Track',
+        artist: 'Other',
+        album: 'Starboy Soundtrack',
+        duration: 200,
+      );
+
+      final originalScore = service.scoreSongRelevance(originalSong, 'Starboy');
+      final coverScore = service.scoreSongRelevance(coverSong, 'Starboy');
+      final unrelatedScore = service.scoreSongRelevance(unrelatedSong, 'Starboy');
+
+      expect(originalScore, greaterThan(coverScore));
+      expect(originalScore, greaterThan(unrelatedScore));
+    });
+
+    test('scoreSongRelevance correctly handles artist + title combination queries', () {
+      final targetSong = Song(
+        id: '10',
+        title: 'Yellow',
+        artist: 'Coldplay',
+        duration: 260,
+      );
+
+      final otherColdplaySong = Song(
+        id: '11',
+        title: 'Viva La Vida',
+        artist: 'Coldplay',
+        duration: 240,
+      );
+
+      final targetScore = service.scoreSongRelevance(targetSong, 'Coldplay Yellow');
+      final otherScore = service.scoreSongRelevance(otherColdplaySong, 'Coldplay Yellow');
+
+      expect(targetScore, greaterThan(otherScore));
     });
   });
 }

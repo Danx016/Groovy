@@ -5,6 +5,21 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.7] - 2026-10-03
+
+### Fixed & Improved
+- **Priorización y Relevancia Inteligente del Buscador**:
+  - Reestructurado el algoritmo de relevancia (`scoreSongRelevance`) para garantizar que las canciones oficiales deseadas aparezcan en el primer lugar de la búsqueda en lugar de quedar desplazadas al fondo.
+  - Soporte integral de coincidencias por tokens y búsquedas combinadas ("Artista Canción" / "Canción Artista").
+  - Unificación intercalada y deduplicación estricta entre fuentes de YouTube Music y YouTube Videos sin relegar los resultados de video al final.
+  - Normalización de tildes, caracteres latinos y penalización de covers no oficiales, parodias, karaokes y loops de 10 horas.
+  - En la pestaña "Todo" de la pantalla de búsqueda, las canciones ahora aparecen de primeras en el flujo principal.
+- **Búsqueda Instantánea en Tiempo Real (Live Search)**:
+  - Búsqueda en vivo hiperrápida mientras el usuario escribe con debounce optimizado a 180 ms e indicador visual inmediato.
+  - Reducción del tiempo de respuesta hasta 3 veces al eliminar peticiones de paginación redundantes cuando la primera página ya contiene resultados suficientes.
+  - Implementación de caché LRU en memoria (`_searchResultCache`, `_albumsCache`, `_artistsCache`) para respuestas en 0 ms en consultas previas y correcciones al escribir.
+- **Actualización Multiplataforma**: Versión **1.7.7** (Build 158) para Windows y Android.
+
 ## [1.7.6] - 2026-10-02
 
 ### Fixed & Improved
