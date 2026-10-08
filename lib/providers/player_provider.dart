@@ -2692,7 +2692,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (currentGen != _playGeneration) return;
           unawaited(_ensureAudioFocus(() async {}));
           unawaited(_applyReplayGain(song));
-          if (headers != null && headers.isNotEmpty) {
+          final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+          if (headers != null && headers.isNotEmpty && !isDesktop) {
             await _audioPlayer.setAudioSource(
               AudioSource.uri(
                 Uri.parse(playUrl),
@@ -3883,10 +3884,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Try resolving actual direct stream URL asynchronously
     try {
       final info = await _youtubeService.resolveStreamInfoAsync(song);
+      final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
       if (info.url.isNotEmpty && !info.url.contains('youtube.com/watch')) {
         return AudioSource.uri(
           Uri.parse(info.url),
-          headers: info.headers.isNotEmpty ? info.headers : null,
+          headers: (!isDesktop && info.headers.isNotEmpty) ? info.headers : null,
           tag: song.id,
         );
       }
@@ -4008,7 +4010,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _offlineService.getLocalPath(_currentSong!.id) != null ||
             (!kIsWeb &&
                 (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
-          if (headers != null && headers.isNotEmpty) {
+          final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
+          if (headers != null && headers.isNotEmpty && !isDesktop) {
             await _audioPlayer.setAudioSource(
               AudioSource.uri(
                 Uri.parse(playUrl),

@@ -29,6 +29,10 @@ abstract class _W {
 const _kDecayHalfLifeDays = 30.0;
 
 class RecommendationService extends ChangeNotifier {
+  static final RecommendationService _instance = RecommendationService._internal();
+  factory RecommendationService() => _instance;
+  RecommendationService._internal();
+
   static const _kDataKey = 'rec_data_v3';
   static const _kSkipKey = 'rec_skips_v3';
   static const _kTimeKey = 'rec_time_v3';
@@ -700,8 +704,9 @@ class RecommendationService extends ChangeNotifier {
 
   List<String> _getTopArtists(int limit) {
     if (_artistAffinity.isEmpty) return [];
-    return (_artistAffinity.entries.toList()
-          ..sort((a, b) => b.value.compareTo(a.value)))
+    final positive = _artistAffinity.entries.where((e) => e.value > 0).toList();
+    if (positive.isEmpty) return [];
+    return (positive..sort((a, b) => b.value.compareTo(a.value)))
         .take(limit)
         .map((e) => e.key)
         .toList();

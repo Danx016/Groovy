@@ -5,6 +5,20 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-08
+
+### Fixed & Improved
+- **Corrección Crítica de Streaming y Reproducción en Windows Desktop (`libmpv`)**:
+  - Eliminado el enrutamiento de encabezados HTTP a través del proxy local de Dart en plataformas de escritorio (`AudioSource.uri` / `_audioPlayer.setUrl`). En Windows/Linux/macOS, `libmpv` ahora transmite streams directamente a los servidores CDN de YouTube/Google CDN con soporte completo de rangos HTTP nativos sin fallos de proxy `127.0.0.1`.
+  - Mantenida la compatibilidad total y paridad con Android, que sigue utilizando `ExoPlayer` con chunks autenticados.
+- **Solución al Bloqueo Infinito de Carga en Pantalla de Inicio (Home Shimmer Loop)**:
+  - Convertido `RecommendationService` en Singleton para evitar instancias aisladas entre Provider y la interfaz de usuario.
+  - Corregida la contaminación de pistas locales en la pantalla de inicio: `loadRandomSongs` en `LibraryProvider` ahora realiza reintentos con listas globales de streaming en vez de recurrir a archivos locales filtrados.
+  - `HomeScreen`: añadido control de ciclo único para romper bucles infinitos de post-frame callback y nuevo estado vacío interactivo con botón de reintento.
+  - `RecommendationService`: `_getTopArtists` ahora filtra exclusivamente afinidades positivas (`> 0`) evitando consultas inválidas tras saltar canciones.
+  - `YoutubeService`: `getAlbumList` y `getRandomSongs` ahora cargan álbumes y temas populares en línea vía Innertube si la base de datos local solo contiene archivos propios.
+- **Actualización Multiplataforma**: Versión **1.8.0** (Build 161) para Windows y Android.
+
 ## [1.7.9] - 2026-10-07
 
 ### Fixed & Improved

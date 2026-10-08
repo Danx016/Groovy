@@ -333,16 +333,17 @@ class YoutubeService {
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       // Desktop (Windows, Linux, macOS) uses libmpv via just_audio_media_kit.
-      // Passing the stream URL with authentication headers directly to AudioSource.uri
-      // allows libmpv's native C++ FFmpeg demuxer to stream directly from Google CDN
-      // with full HTTP range support, avoiding loopback socket timeouts and demuxer truncation.
+      // We MUST NOT pass headers to AudioSource.uri on desktop, because just_audio
+      // wraps any AudioSource.uri with headers in an internal Dart 127.0.0.1 HTTP proxy server,
+      // which libmpv cannot open on Windows/Linux/macOS, causing playback to hang indefinitely.
+      // Passing the stream URL directly to AudioSource.uri without headers allows libmpv's native
+      // C++ FFmpeg engine to stream directly from Google CDN with full HTTP range support.
       try {
         final streamInfo = await _ytdlp.resolveStreamInfo(videoId);
         if (streamInfo.url.isNotEmpty) {
-          debugPrint('[YouTube] Desktop: streaming directly via libmpv with headers for $videoId');
+          debugPrint('[YouTube] Desktop: streaming directly via libmpv for $videoId');
           return AudioSource.uri(
             Uri.parse(streamInfo.url),
-            headers: streamInfo.headers,
             tag: song.id,
           );
         }
@@ -356,7 +357,6 @@ class YoutubeService {
             debugPrint('[YouTube] Desktop: resolved on retry for $videoId');
             return AudioSource.uri(
               Uri.parse(retryInfo.url),
-              headers: retryInfo.headers,
               tag: song.id,
             );
           }
@@ -528,15 +528,16 @@ class YoutubeService {
   }) async {
     try {
       final albums = await _db.getAllAlbums();
-      if (albums.isNotEmpty) {
-        return albums.skip(offset).take(size).toList();
+      final nonLocalAlbums = albums.where((a) => !a.isLocal && !a.id.startsWith('local_')).toList();
+      if (nonLocalAlbums.isNotEmpty) {
+        return nonLocalAlbums.skip(offset).take(size).toList();
       }
 
-      // If local albums table is empty, generate album groupings from saved songs
+      // If local albums table has no online albums, generate album groupings from saved online songs
       final songs = await _db.getAllSongs();
       final albumMap = <String, Album>{};
       for (final s in songs) {
-        if (s.album != null && s.album!.isNotEmpty && !albumMap.containsKey(s.album)) {
+        if (!s.isLocal && !s.id.startsWith('local_') && s.album != null && s.album!.isNotEmpty && !albumMap.containsKey(s.album)) {
           albumMap[s.album!] = Album(
             id: s.albumId ?? s.album!,
             name: s.album!,
@@ -545,7 +546,23 @@ class YoutubeService {
           );
         }
       }
-      return albumMap.values.skip(offset).take(size).toList();
+      if (albumMap.isNotEmpty) {
+        return albumMap.values.skip(offset).take(size).toList();
+      }
+
+      // If no online albums in SQLite, fetch popular albums from YouTube Music Innertube
+      final rawAlbums = await _ytdlp.searchYtAlbumsInnertube('top albumes exitos', limit: size);
+      if (rawAlbums.isNotEmpty) {
+        return rawAlbums.map((a) => Album(
+          id: a['id'] as String,
+          name: a['title'] as String? ?? 'Álbum',
+          artist: a['artist'] as String?,
+          year: a['year'] as int?,
+          coverArt: a['coverArt'] as String?,
+        )).toList();
+      }
+
+      return [];
     } catch (e) {
       debugPrint('[YouTube] getAlbumList error: $e');
       return [];
@@ -1118,7 +1135,10 @@ class YoutubeService {
           query = 'grandes exitos musica latina';
         }
       }
-      final rawResults = await _ytdlp.search(query, limit: size);
+      var rawResults = await _ytdlp.search(query, limit: size);
+      if (rawResults.isEmpty && query != 'grandes exitos musica latina') {
+        rawResults = await _ytdlp.search('grandes exitos musica latina', limit: size);
+      }
       final songs = rawResults.map(_mapDictToSong).toList();
       return songs;
     } catch (e) {

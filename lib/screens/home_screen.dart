@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Map<String, List<Song>> _cachedMixes = const {};
   List<Song> _cachedPersonalized = const [];
   String _lastRandomKey = '';
+  bool _hasTriggeredInitialLoad = false;
 
   @override
   void initState() {
@@ -226,15 +227,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   if (libraryProvider.isLoading) {
                     return _buildLoadingState(isDesktop, hPad);
                   }
-                  // Proactively trigger loading if still empty on fresh install
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      libraryProvider.loadRandomSongs();
-                      recommendationService.refreshStudiedRecommendations(force: true);
-                    }
-                  });
-                  return _buildLoadingState(isDesktop, hPad);
+                  if (!_hasTriggeredInitialLoad) {
+                    _hasTriggeredInitialLoad = true;
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      if (mounted) {
+                        libraryProvider.loadRandomSongs();
+                        recommendationService.refreshStudiedRecommendations(force: true);
+                      }
+                    });
+                    return _buildLoadingState(isDesktop, hPad);
+                  }
+                  return _buildEmptyState(context, libraryProvider, recommendationService, isDesktop, hPad);
                 }
+                _hasTriggeredInitialLoad = false;
 
                 return Padding(
                   padding: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 0),
@@ -377,6 +382,68 @@ class _HomeScreenState extends State<HomeScreen> {
           child: AlbumCardShimmer(size: isDesktop ? 180 : 145),
         ),
       ],
+    );
+  }
+
+  Widget _buildEmptyState(
+    BuildContext context,
+    LibraryProvider libraryProvider,
+    RecommendationService recommendationService,
+    bool isDesktop,
+    double hPad,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Center(
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 80),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.music_note_rounded,
+              size: 64,
+              color: isDark ? Colors.white38 : Colors.black26,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No se pudieron cargar recomendaciones',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: isDark ? Colors.white : Colors.black87,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Revisa tu conexión o explora música desde la búsqueda.',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white60 : Colors.black54,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _hasTriggeredInitialLoad = false;
+                });
+                libraryProvider.loadRandomSongs();
+                recommendationService.refreshStudiedRecommendations(force: true);
+              },
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

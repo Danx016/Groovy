@@ -836,18 +836,26 @@ class LibraryProvider extends ChangeNotifier {
         final fallbackRes = await _youtubeService.search('grandes exitos canciones mas escuchadas', songCount: 50);
         songs = fallbackRes.songs;
       }
+      if (songs.isEmpty) {
+        final fallbackRes = await _youtubeService.search('top hits canciones', songCount: 50);
+        songs = fallbackRes.songs;
+      }
       if (songs.isNotEmpty) {
         _randomSongs = songs;
-      } else if (cachedAllSongs.isNotEmpty) {
-        _randomSongs = cachedAllSongs.take(50).toList();
+      } else {
+        final onlineCached = cachedAllSongs.where((s) => !s.isLocal && !s.id.startsWith('local_')).toList();
+        if (onlineCached.isNotEmpty) {
+          _randomSongs = onlineCached.take(50).toList();
+        }
       }
       notifyListeners();
       _audioHandler
           .notifyAutoChildrenChanged([GroovyAudioHandler.mediaIdRecent]);
     } catch (e) {
       debugPrint('Error loading random songs: $e');
-      if (_randomSongs.isEmpty && cachedAllSongs.isNotEmpty) {
-        _randomSongs = cachedAllSongs.take(50).toList();
+      final onlineCached = cachedAllSongs.where((s) => !s.isLocal && !s.id.startsWith('local_')).toList();
+      if (_randomSongs.isEmpty && onlineCached.isNotEmpty) {
+        _randomSongs = onlineCached.take(50).toList();
         notifyListeners();
       }
     }
