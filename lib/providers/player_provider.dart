@@ -2676,6 +2676,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         } else if (_youtubeService.isYoutube) {
           _concatenatingSource = null;
           final String playUrl;
+          Map<String, String>? headers;
           if (song.isLocal == true && song.path != null) {
             playUrl = Uri.file(song.path!).toString();
           } else {
@@ -2683,14 +2684,27 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             if (offlinePath != null) {
               playUrl = 'file://$offlinePath';
             } else {
-              playUrl = await _youtubeService.resolveStreamUrlAsync(song);
+              final streamInfo = await _youtubeService.resolveStreamInfoAsync(song);
+              playUrl = streamInfo.url;
+              headers = streamInfo.headers;
             }
           }
           if (currentGen != _playGeneration) return;
           unawaited(_ensureAudioFocus(() async {}));
           unawaited(_applyReplayGain(song));
-          await _audioPlayer.setUrl(playUrl,
-              initialPosition: initialPosition ?? Duration.zero);
+          if (headers != null && headers.isNotEmpty) {
+            await _audioPlayer.setAudioSource(
+              AudioSource.uri(
+                Uri.parse(playUrl),
+                headers: headers,
+                tag: song.id,
+              ),
+              initialPosition: initialPosition ?? Duration.zero,
+            );
+          } else {
+            await _audioPlayer.setUrl(playUrl,
+                initialPosition: initialPosition ?? Duration.zero);
+          }
           if (currentGen != _playGeneration) return;
           unawaited(_audioPlayer.play().catchError((e) {
             debugPrint('[Player] Error during play(): $e');
@@ -3868,9 +3882,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Try resolving actual direct stream URL asynchronously
     try {
-      final playUrl = await _youtubeService.resolveStreamUrlAsync(song);
-      if (playUrl.isNotEmpty && !playUrl.contains('youtube.com/watch')) {
-        return AudioSource.uri(Uri.parse(playUrl), tag: song.id);
+      final info = await _youtubeService.resolveStreamInfoAsync(song);
+      if (info.url.isNotEmpty && !info.url.contains('youtube.com/watch')) {
+        return AudioSource.uri(
+          Uri.parse(info.url),
+          headers: info.headers.isNotEmpty ? info.headers : null,
+          tag: song.id,
+        );
       }
     } catch (_) {}
 
@@ -3968,6 +3986,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         await _buildAndSetConcatenatingSource(initialIndex: _currentIndex);
       } else {
         final String playUrl;
+        Map<String, String>? headers;
         if (_currentSong!.isLocal == true && _currentSong!.path != null) {
           playUrl = Uri.file(_currentSong!.path!).toString();
         } else {
@@ -3975,8 +3994,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           if (offlinePath != null) {
             playUrl = 'file://$offlinePath';
           } else {
-            playUrl =
-                await _youtubeService.resolveStreamUrlAsync(_currentSong!);
+            final streamInfo =
+                await _youtubeService.resolveStreamInfoAsync(_currentSong!);
+            playUrl = streamInfo.url;
+            headers = streamInfo.headers;
           }
         }
         if (playUrl.isEmpty || playUrl.contains('youtube.com/watch')) {
@@ -3987,7 +4008,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _offlineService.getLocalPath(_currentSong!.id) != null ||
             (!kIsWeb &&
                 (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
-          await _audioPlayer.setUrl(playUrl);
+          if (headers != null && headers.isNotEmpty) {
+            await _audioPlayer.setAudioSource(
+              AudioSource.uri(
+                Uri.parse(playUrl),
+                headers: headers,
+                tag: _currentSong!.id,
+              ),
+            );
+          } else {
+            await _audioPlayer.setUrl(playUrl);
+          }
         } else {
           final cacheDir = await getTemporaryDirectory();
           final cacheFile = File(

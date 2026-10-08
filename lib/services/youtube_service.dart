@@ -362,15 +362,19 @@ class YoutubeService {
           }
         } catch (_) {}
       }
-      try {
-        debugPrint('[YouTube] Desktop: trying buildAudioSource fallback for $videoId');
-        return await buildAudioSource(videoId);
-      } catch (e) {
-        debugPrint('[YouTube] Desktop buildAudioSource fallback error for $videoId: $e');
-      }
+      // Desktop uses just_audio_media_kit (libmpv), which does NOT support StreamAudioSource.
+      // We must NEVER return _YoutubeStreamAudioSource on desktop, as it causes an UnsupportedError.
       return null;
     }
     return buildAudioSource(videoId);
+  }
+
+  Future<YtStreamInfo> resolveStreamInfoAsync(Song song) async {
+    final videoId = await _resolvePlayableVideoId(song);
+    if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+      throw Exception('No playable YouTube video found for "${song.title}" (${song.id})');
+    }
+    return _ytdlp.resolveStreamInfo(videoId);
   }
 
   Future<String> resolveStreamUrlAsync(Song song) async {

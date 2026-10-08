@@ -5,6 +5,20 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.9] - 2026-10-07
+
+### Fixed & Improved
+- **Corrección Crítica de Reproducción en Windows (`just_audio_media_kit` & libmpv)**:
+  - Eliminado el fallback que retornaba `StreamAudioSource` (`_YoutubeStreamAudioSource`) en sistemas de escritorio, el cual provocaba un fallo fatal inmediato (`UnsupportedError: StreamAudioSource is currently not supported`) y saltaba canciones continuamente.
+  - Corregido el error HTTP 403 Forbidden en Windows: ahora `PlayerProvider` (`playSong`, `_prepareCurrentSong` y `_buildAudioSourceForSong`) resuelve e inyecta de forma obligatoria los encabezados HTTP de autenticación (`User-Agent`) a través de `AudioSource.uri(headers: streamInfo.headers)`.
+- **Estabilidad de Búsquedas y Pantalla de Inicio en Windows**:
+  - Aumentados los límites de tiempo de espera (timeouts) en `YtDlpService` (`searchDual` de 4s a 12s, y `search` de 3s a 10s) para evitar que pantallas iniciales o consultas de red estándar queden en blanco o vacías.
+  - Soporte de extracción para tarjetas de resultados principales (`musicCardShelfRenderer`) en búsquedas directas de YouTube Music.
+  - Verificación veloz no bloqueante de rutas ejecutables (`File.existsSync`) en Windows durante el inicio de la app.
+- **Paridad Multiplataforma Android & Windows**:
+  - Sincronizados los clientes de extracción de streams (`['android', 'ios', 'tv_embedded', 'web', 'mweb']`) en el helper Chaquopy de Android (`ytdlp_helper.py`) para evitar desafíos de bot y PO Tokens.
+- **Actualización Multiplataforma**: Versión **1.7.9** (Build 160) para Windows y Android.
+
 ## [1.7.8] - 2026-10-04
 
 ### Fixed & Improved

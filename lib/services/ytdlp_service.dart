@@ -279,6 +279,34 @@ class YtDlpService {
       String? continuationToken;
 
       for (final sec in sections) {
+        final cardShelf = sec['musicCardShelfRenderer'];
+        if (cardShelf != null) {
+          final cardTitleRuns = (cardShelf['title']?['runs'] as List<dynamic>?) ?? [];
+          final cardTitle = cardTitleRuns.isNotEmpty ? (cardTitleRuns[0]['text'] as String? ?? '') : '';
+          final cardContents = cardShelf['contents'] as List<dynamic>? ?? [];
+          if (cardContents.isNotEmpty) {
+            _parseInnertubeMusicItems(cardContents, results, limit);
+          }
+          final onTap = cardShelf['onTap'] ?? cardShelf['title']?['navigationEndpoint'];
+          final watchEndpoint = onTap?['watchEndpoint'];
+          final cardVid = watchEndpoint?['videoId']?.toString();
+          if (cardVid != null && cardVid.isNotEmpty && !results.any((x) => x['id'] == cardVid)) {
+            final thumbs = (cardShelf['thumbnail']?['musicThumbnailRenderer']?['thumbnail']?['thumbnails'] as List<dynamic>?) ?? [];
+            final thumb = thumbs.isNotEmpty ? _upgradeThumbnail(thumbs.last['url'] as String?) : '';
+            final subtitleRuns = (cardShelf['subtitle']?['runs'] as List<dynamic>?) ?? [];
+            final artist = subtitleRuns.isNotEmpty ? (subtitleRuns[0]['text'] as String? ?? 'Unknown Artist') : 'Unknown Artist';
+            results.insert(0, {
+              'id': cardVid,
+              'title': cardTitle,
+              'artist': artist,
+              'album': null,
+              'duration': 0,
+              'thumbnailUrl': thumb,
+              'coverArt': thumb.isNotEmpty ? thumb : cardVid,
+            });
+          }
+        }
+
         final musicShelf = sec['musicShelfRenderer'];
         if (musicShelf == null) continue;
         final contents = musicShelf['contents'] as List<dynamic>? ?? [];
@@ -881,6 +909,9 @@ class YtDlpService {
     ];
 
     for (final bin in ytDlpCandidates) {
+      if (bin.contains('/') || bin.contains('\\')) {
+        if (!File(bin).existsSync()) continue;
+      }
       try {
         final result = await Process.run(bin, ['--version']).timeout(
           const Duration(seconds: 3),
@@ -1002,22 +1033,33 @@ class YtDlpService {
         final result = await _runYtDlp([
           '-j',
           '-f',
-          'ba/b[acodec!=none]/best',
+          'ba/b[acodec!=none]/bestaudio/best',
           '--no-playlist',
           '--extractor-args',
-          'youtube:player_client=android,web,mweb;skip=translated_subs,comments,webpage,dash,hls',
+          'youtube:player_client=ios,tv_embedded,android,web;skip=translated_subs,comments,webpage,dash,hls',
           '--no-warnings',
           '--no-check-certificates',
           targetUrl,
-        ], timeout: const Duration(seconds: 20));
+        ], timeout: const Duration(seconds: 15));
 
         if (result != null && result.exitCode == 0) {
           final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
           final url = json['url'] as String?;
           if (url != null && url.isNotEmpty) {
             final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
-            // yt-dlp already sets the correct User-Agent in http_headers
             final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+            if (!headers.containsKey('User-Agent') || headers['User-Agent']!.isEmpty) {
+              final isAndroid = url.contains('c=ANDROID');
+              final isIos = url.contains('c=IOS');
+              final isTv = url.contains('c=TVHTML5');
+              headers['User-Agent'] = isAndroid
+                  ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+                  : isIos
+                      ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                      : isTv
+                          ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
+                          : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+            }
             final ext = json['ext'] as String? ?? 'mp4';
             final info = YtStreamInfo(url: url, headers: headers, ext: ext);
             _streamInfoCache[cleanId] = info;
@@ -1061,29 +1103,31 @@ class YtDlpService {
       }
     }
 
-    // Fallback: Pure-Dart Innertube via TV + Android clients
+    // Fallback: Pure-Dart Innertube via TV, iOS, and Android clients
     // (used when yt-dlp subprocess / Chaquopy not available)
     try {
       final manifest = await _fallbackClient.videos.streamsClient
           .getManifest(cleanId, ytClients: [
             yt.YoutubeApiClient.tv,
+            yt.YoutubeApiClient.ios,
             yt.YoutubeApiClient.android,
           ])
-          .timeout(const Duration(seconds: 6));
+          .timeout(const Duration(seconds: 12));
       final audioOnly = manifest.audioOnly;
       if (audioOnly.isNotEmpty) {
         final best = _selectBestAudioStream(audioOnly);
         final url = best.url.toString();
         if (url.isNotEmpty) {
-          // Match User-Agent to the client that signed the URL.
-          // YouTube CDN validates UA against the &c= param in the signed URL.
           final isAndroid = url.contains('&c=ANDROID') || url.contains('c=ANDROID');
           final isTv = url.contains('&c=TVHTML5') || url.contains('c=TVHTML5');
+          final isIos = url.contains('&c=IOS') || url.contains('c=IOS');
           final userAgent = isAndroid
               ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
-              : isTv
-                  ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
-                  : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+              : isIos
+                  ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                  : isTv
+                      ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
+                      : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
           final info = YtStreamInfo(
             url: url,
             headers: {
@@ -1095,7 +1139,7 @@ class YtDlpService {
           );
           _streamInfoCache[cleanId] = info;
           _streamCacheTime[cleanId] = DateTime.now();
-          debugPrint('[yt-dlp/FastDart] Resolved $cleanId (${isAndroid ? "Android" : isTv ? "TV" : "Web"} client UA) [fallback]');
+          debugPrint('[yt-dlp/FastDart] Resolved $cleanId (${isAndroid ? "Android" : isIos ? "iOS" : isTv ? "TV" : "Web"} client UA) [fallback]');
           return info;
         }
       }
@@ -1203,7 +1247,7 @@ class YtDlpService {
       final results = await Future.wait([
         searchYtMusicInnertube(query, limit: limit),
         searchYoutubeVideoInnertube(query, limit: 30),
-      ]).timeout(const Duration(seconds: 4));
+      ]).timeout(const Duration(seconds: 12));
       final musicTracks = results[0];
       final ytTracks = results[1];
 
@@ -1285,13 +1329,13 @@ class YtDlpService {
 
     // 1. Fast Innertube API first (200-400ms) - Instant on all platforms!
     try {
-      final musicItems = await searchYtMusicInnertube(query, limit: limit).timeout(const Duration(seconds: 3));
+      final musicItems = await searchYtMusicInnertube(query, limit: limit).timeout(const Duration(seconds: 10));
       if (musicItems.isNotEmpty) {
         debugPrint('[yt-dlp/Search] Fast Innertube "$query" returned ${musicItems.length} items');
         _searchCache[cleanQuery] = musicItems;
         return musicItems;
       }
-      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 3));
+      final ytItems = await searchYoutubeVideoInnertube(query, limit: limit).timeout(const Duration(seconds: 10));
       if (ytItems.isNotEmpty) {
         debugPrint('[yt-dlp/Innertube] Fast video search "$query" returned ${ytItems.length} items');
         _searchCache[cleanQuery] = ytItems;

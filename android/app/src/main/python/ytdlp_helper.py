@@ -50,8 +50,8 @@ def _get_stream_ydl():
             'youtube_include_hls_manifest': False,
             'extractor_args': {
                 'youtube': {
-                    # Android, Web and Mweb clients: tv_embedded is deprecated by YouTube and iOS formats require GVS PO Tokens
-                    'player_client': ['android', 'web', 'mweb'],
+                    # Android, iOS, TV, Web and Mweb clients for resilient stream extraction across all environments
+                    'player_client': ['android', 'ios', 'tv_embedded', 'web', 'mweb'],
                     'skip': ['translated_subs', 'comments', 'webpage', 'dash', 'hls']
                 }
             }
