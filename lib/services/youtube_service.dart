@@ -11,6 +11,7 @@ import 'ytdlp_service.dart';
 import 'album_resolver_service.dart';
 import 'audio_cache_service.dart';
 import 'offline_service.dart';
+import '../utils/song_title_utils.dart';
 
 class PingResult {
   final bool success;
@@ -433,8 +434,9 @@ class YoutubeService {
     }
     if (id.startsWith('http://') || id.startsWith('https://')) {
       var url = id;
-      // Upgrade Google User Content / YouTube Music album artwork to 800x800 quality
-      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w800-h800-l90-rj');
+      // Upgrade Google User Content / YouTube Music album artwork to requested size
+      final targetSize = size.clamp(120, 1200);
+      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w$targetSize-h$targetSize-l90-rj');
       // Ensure we use hqdefault.jpg which is guaranteed to exist on YouTube CDN
       // (sddefault.jpg 404s for many music tracks and video uploads)
       url = url.replaceAll('/sddefault.jpg', '/hqdefault.jpg');
@@ -1246,17 +1248,46 @@ class YoutubeService {
 
   Future<List<Song>> getSimilarSongs(String videoId, {int count = 50}) async {
     try {
-      final radioRaw = await _ytdlp.getRadioTracks(videoId, limit: count);
+      final cleanId = videoId.replaceFirst('ytmusic://', '');
+      final radioRaw = await _ytdlp.getRadioTracks(cleanId, limit: count);
       if (radioRaw.isNotEmpty) {
-        return radioRaw.map(_mapDictToSong).toList();
+        final songs = radioRaw.map(_mapDictToSong).toList();
+        final seenTitles = <String>{};
+        return songs.where((s) {
+          if (s.id == cleanId) return false;
+          final norm = SongTitleUtils.normalizeTitle(s.title);
+          return norm.isNotEmpty && seenTitles.add(norm);
+        }).toList();
       }
 
-      final info = await _ytdlp.getVideoInfo(videoId);
-      final query = info != null
-          ? '${info['artist'] ?? ''} ${info['title'] ?? ''} audio'
-          : 'recommended music';
+      // Fallback: If radio playlist failed, look up video info to discover artist
+      final info = await _ytdlp.getVideoInfo(cleanId);
+      final artistName = info?['artist'] ?? info?['uploader'];
+      final originalTitleNorm = SongTitleUtils.normalizeTitle(info?['title']);
+
+      // IMPORTANT: DO NOT search the song title! Searching the title brings back 20 versions of the same song!
+      // Instead, search for artist top songs / recommendations:
+      final query = (artistName != null &&
+              artistName.toString().trim().isNotEmpty &&
+              artistName != 'Unknown Artist')
+          ? '$artistName exitos'
+          : 'top canciones recomendadas';
+
       final rawResults = await _ytdlp.search(query, limit: count);
-      return rawResults.map(_mapDictToSong).toList();
+      final songs = rawResults.map(_mapDictToSong).toList();
+
+      final seenTitles = <String>{};
+      if (originalTitleNorm.isNotEmpty) {
+        seenTitles.add(originalTitleNorm);
+      }
+
+      return songs.where((s) {
+        if (s.id == cleanId) return false;
+        final norm = SongTitleUtils.normalizeTitle(s.title);
+        if (norm.isEmpty || seenTitles.contains(norm)) return false;
+        seenTitles.add(norm);
+        return true;
+      }).toList();
     } catch (e) {
       debugPrint('[YouTube] getSimilarSongs error: $e');
       return [];

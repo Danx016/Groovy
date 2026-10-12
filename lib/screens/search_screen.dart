@@ -6,9 +6,11 @@ import 'dart:async';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/youtube_service.dart';
+import '../services/ytdlp_service.dart';
 import '../services/recent_searches_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
+import '../utils/song_title_utils.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import '../models/album.dart';
@@ -173,6 +175,9 @@ class _SearchScreenState extends State<SearchScreen> {
           _searchResult = result;
           _isSearching = false;
         });
+        if (result.songs.isNotEmpty && !result.songs.first.isLocal) {
+          YtDlpService().warmUpStreamCache(result.songs.first.id);
+        }
       }
     } catch (e) {
       if (mounted) {
@@ -180,6 +185,49 @@ class _SearchScreenState extends State<SearchScreen> {
           _isSearching = false;
         });
       }
+    }
+  }
+
+  void _playSearchSong(
+    BuildContext context,
+    Song song,
+    List<Song> allSongs,
+    int index,
+  ) {
+    RecentSearchesService().addSong(song);
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+
+    // 1. Deduplicate search results by normalized title
+    final seenTitles = <String>{};
+    final deduplicated = <Song>[];
+    int targetIndex = -1;
+
+    for (final s in allSongs) {
+      final norm = SongTitleUtils.normalizeTitle(s.title);
+      if (norm.isEmpty || seenTitles.add(norm)) {
+        if (s.id == song.id) {
+          targetIndex = deduplicated.length;
+        }
+        deduplicated.add(s);
+      }
+    }
+
+    if (targetIndex < 0) {
+      targetIndex = deduplicated.indexWhere(
+        (s) =>
+            s.id == song.id ||
+            SongTitleUtils.areTitlesSame(s.title, song.title),
+      );
+      if (targetIndex < 0) targetIndex = 0;
+    }
+
+    // 2. If search results only contain 1 or 2 distinct songs (meaning the query was for
+    // a specific song and results were variations/duplicates of that song),
+    // launch Radio mode immediately so recommendations of that artist/genre take over.
+    if (deduplicated.length <= 2) {
+      player.playSongWithRadio(song);
+    } else {
+      player.playSong(song, playlist: deduplicated, startIndex: targetIndex);
     }
   }
 
@@ -506,8 +554,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   );
                 },
                 onTap: () {
-                  RecentSearchesService().addSong(song);
-                  player.playSong(song, playlist: allSongs, startIndex: index);
+                  _playSearchSong(context, song, allSongs, index);
                 },
               );
             },
@@ -589,8 +636,7 @@ class _SearchScreenState extends State<SearchScreen> {
             );
           },
           onTap: () {
-            RecentSearchesService().addSong(song);
-            player.playSong(song, playlist: allSongs, startIndex: index);
+            _playSearchSong(context, song, allSongs, index);
           },
         );
       }
@@ -1041,17 +1087,13 @@ class _SearchScreenState extends State<SearchScreen> {
                                 )
                               : null,
                           onTap: () {
-                            RecentSearchesService().addSong(song);
                             setState(() => _showSuggestions = false);
-                            final playerProvider = Provider.of<PlayerProvider>(
+                            final songs = _autocompleteSuggestions!.songs;
+                            _playSearchSong(
                               context,
-                              listen: false,
-                            );
-                            playerProvider.playSong(
                               song,
-                              playlist: _autocompleteSuggestions!.songs,
-                              startIndex: _autocompleteSuggestions!.songs
-                                  .indexOf(song),
+                              songs,
+                              songs.indexOf(song),
                             );
                           },
                         ),

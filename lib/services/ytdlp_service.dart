@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:youtube_explode_dart/youtube_explode_dart.dart' as yt;
+import '../utils/song_title_utils.dart';
 
 List<Map<String, dynamic>> _decodeJsonList(String jsonStr) {
   final list = jsonDecode(jsonStr) as List<dynamic>;
@@ -138,7 +139,7 @@ class YtDlpService {
   static String _upgradeThumbnail(String? url) {
     if (url == null || url.isEmpty) return '';
     var upgraded = url;
-    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w800-h800-l90-rj');
+    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-l90-rj');
     upgraded = upgraded.replaceAll('/sddefault.jpg', '/hqdefault.jpg');
     upgraded = upgraded.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
     upgraded = upgraded.replaceAll('/default.jpg', '/hqdefault.jpg');
@@ -1548,10 +1549,150 @@ class YtDlpService {
     }).toList();
   }
 
+  /// Queries official YouTube Music Innertube next endpoint directly in pure Dart (200-300ms).
+  /// Returns radio / recommended tracks seeded by [videoId].
+  Future<List<Map<String, dynamic>>> getRadioTracksInnertube(
+    String videoId, {
+    int limit = 50,
+  }) async {
+    final cleanId = videoId.replaceFirst('ytmusic://', '');
+    try {
+      final req = await _innertubeHttpClient.postUrl(
+        Uri.parse(
+          'https://music.youtube.com/youtubei/v1/next?prettyPrint=false&key=AIzaSyC9XL3ZjWddXya6X74dJoCTL-KLET5YdU',
+        ),
+      );
+      _innertubeHeaders.forEach((k, v) => req.headers.set(k, v));
+
+      req.write(jsonEncode({
+        'context': {
+          'client': {
+            'clientName': 'WEB_REMIX',
+            'clientVersion': '1.20240918.01.00',
+            'hl': 'es',
+            'gl': 'US',
+          }
+        },
+        'enablePersistentPlaylistPanel': true,
+        'isAudioOnly': true,
+        'playlistId': 'RDAMVM$cleanId',
+        'videoId': cleanId,
+      }));
+
+      final resp = await req.close().timeout(const Duration(seconds: 8));
+      if (resp.statusCode != 200) {
+        resp.drain<void>().catchError((_) {});
+        return [];
+      }
+
+      final jsonStr = await resp.transform(utf8.decoder).join();
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+
+      final results = <Map<String, dynamic>>[];
+      final seenIds = <String>{cleanId};
+      final seenTitles = <String>{};
+
+      void findTracks(dynamic obj) {
+        if (results.length >= limit) return;
+        if (obj is Map<String, dynamic>) {
+          if (obj.containsKey('playlistPanelVideoRenderer')) {
+            final item = obj['playlistPanelVideoRenderer'] as Map<String, dynamic>;
+            final vid = item['videoId'] as String?;
+            if (vid != null && vid.isNotEmpty && !seenIds.contains(vid)) {
+              seenIds.add(vid);
+
+              final titleRuns = item['title']?['runs'] as List<dynamic>?;
+              final title = (titleRuns != null && titleRuns.isNotEmpty)
+                  ? titleRuns.first['text']?.toString() ?? 'Unknown Title'
+                  : 'Unknown Title';
+
+              final normTitle = SongTitleUtils.normalizeTitle(title);
+              if (normTitle.isNotEmpty && seenTitles.contains(normTitle)) {
+                return;
+              }
+              if (normTitle.isNotEmpty) {
+                seenTitles.add(normTitle);
+              }
+
+              String artist = 'Unknown Artist';
+              final shortByline = item['shortBylineText']?['runs'] as List<dynamic>?;
+              if (shortByline != null && shortByline.isNotEmpty) {
+                artist = shortByline.first['text']?.toString() ?? 'Unknown Artist';
+              } else {
+                final longByline = item['longBylineText']?['runs'] as List<dynamic>?;
+                if (longByline != null && longByline.isNotEmpty) {
+                  artist = longByline.first['text']?.toString() ?? 'Unknown Artist';
+                }
+              }
+
+              int? durationSec;
+              final lengthRuns = item['lengthText']?['runs'] as List<dynamic>?;
+              if (lengthRuns != null && lengthRuns.isNotEmpty) {
+                final lenStr = lengthRuns.first['text']?.toString();
+                if (lenStr != null && lenStr.contains(':')) {
+                  final parts = lenStr.split(':').map((p) => int.tryParse(p) ?? 0).toList();
+                  if (parts.length == 2) {
+                    durationSec = parts[0] * 60 + parts[1];
+                  } else if (parts.length == 3) {
+                    durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                  }
+                }
+              }
+
+              String? thumbUrl;
+              final thumbs = item['thumbnail']?['thumbnails'] as List<dynamic>?;
+              if (thumbs != null && thumbs.isNotEmpty) {
+                final last = thumbs.last;
+                if (last is Map && last['url'] != null) {
+                  thumbUrl = _upgradeThumbnail(last['url'].toString());
+                }
+              }
+
+              results.add({
+                'id': vid,
+                'title': title,
+                'artist': artist,
+                'album': null,
+                'duration': durationSec,
+                'coverArt': vid,
+                'thumbnailUrl': thumbUrl ?? 'https://i.ytimg.com/vi/$vid/hqdefault.jpg',
+              });
+            }
+          } else {
+            obj.forEach((k, v) => findTracks(v));
+          }
+        } else if (obj is List) {
+          for (final it in obj) {
+            findTracks(it);
+          }
+        }
+      }
+
+      findTracks(map);
+      debugPrint('[yt-dlp/Innertube] getRadioTracksInnertube for $cleanId returned ${results.length} tracks');
+      return results;
+    } catch (e) {
+      debugPrint('[yt-dlp/Innertube] getRadioTracksInnertube error: $e');
+      return [];
+    }
+  }
+
   /// Fetches similar tracks / song radio using YouTube Music automatic radio playlist (RDAMVM / RD)
   Future<List<Map<String, dynamic>>> getRadioTracks(String videoId, {int limit = 50}) async {
-    final radioUrl = 'https://music.youtube.com/playlist?list=RDAMVM$videoId';
-    final fallbackRadioUrl = 'https://www.youtube.com/watch?v=$videoId&list=RD$videoId';
+    final cleanId = videoId.replaceFirst('ytmusic://', '');
+
+    // 0. Ultra-fast Native Dart Innertube REST (200-300ms) - Instant on all platforms (Android & Windows)!
+    try {
+      final innertubeResults = await getRadioTracksInnertube(cleanId, limit: limit);
+      if (innertubeResults.isNotEmpty) {
+        return innertubeResults;
+      }
+    } catch (e) {
+      debugPrint('[yt-dlp] getRadioTracksInnertube fast path fallback: $e');
+    }
+
+    final radioUrl = 'https://music.youtube.com/playlist?list=RDAMVM$cleanId';
+    final fallbackRadioUrl = 'https://www.youtube.com/watch?v=$cleanId&list=RD$cleanId';
 
     // 1. Android: Chaquopy Python
     if (Platform.isAndroid) {

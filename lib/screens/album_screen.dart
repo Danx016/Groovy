@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -319,6 +320,8 @@ class _AlbumScreenState extends State<AlbumScreen> {
           final cleanId = firstSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
           if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
             YtDlpService().warmUpStreamCache(cleanId);
+          } else if (songs.any((s) => s.id.startsWith('dz_'))) {
+            _preWarmDeezerTracks(songs);
           }
         }
       }
@@ -327,6 +330,29 @@ class _AlbumScreenState extends State<AlbumScreen> {
         setState(() => _isLoading = false);
       }
     }
+  }
+
+  void _preWarmDeezerTracks(List<Song> songs) {
+    if (!mounted || songs.isEmpty) return;
+    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+    unawaited(() async {
+      for (final s in songs) {
+        if (!mounted) break;
+        if (s.isLocal != true && s.id.startsWith('dz_')) {
+          try {
+            final ytId = await youtubeService.resolveVideoIdForSong(s);
+            if (ytId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(ytId) && mounted) {
+              setState(() {
+                final idx = _songs.indexWhere((x) => x.id == s.id);
+                if (idx != -1) {
+                  _songs[idx] = _songs[idx].copyWith(id: ytId);
+                }
+              });
+            }
+          } catch (_) {}
+        }
+      }
+    }());
   }
 
   String? get _resolvedCoverArt {

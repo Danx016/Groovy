@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
 import '../services/youtube_service.dart';
+import '../services/ytdlp_service.dart';
 import '../services/recommendation_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
@@ -240,6 +241,13 @@ class _HomeScreenState extends State<HomeScreen> {
                   return _buildEmptyState(context, libraryProvider, recommendationService, isDesktop, hPad);
                 }
                 _hasTriggeredInitialLoad = false;
+
+                // Pre-warm audio stream for first candidate track so clicking play is instantaneous (0ms)
+                if (recentSongs.isNotEmpty && !recentSongs.first.isLocal) {
+                  YtDlpService().warmUpStreamCache(recentSongs.first.id);
+                } else if (personalizedFeed.isNotEmpty && !personalizedFeed.first.isLocal) {
+                  YtDlpService().warmUpStreamCache(personalizedFeed.first.id);
+                }
 
                 return Padding(
                   padding: EdgeInsets.symmetric(horizontal: isDesktop ? 0 : 0),

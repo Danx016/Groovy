@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   Search, Download, Check, Play, Pause,
   AlertCircle, Copy, RefreshCw,
-  Clock, Eye, CheckCircle2, Film, Music2, ExternalLink, Disc3, Layers
+  Clock, Eye, CheckCircle2, Film, Music2, ExternalLink, Disc3, Layers, ArrowLeft
 } from "lucide-react";
 import { downloadApi } from "../../services/api";
 import logoImg from "../../assets/logo.png";
@@ -42,7 +42,7 @@ export function DownloaderView({ onBack }) {
       const topV = media?.vQ?.[0]?.q || "1080";
       setQual(topV);
     }
-  }, [fmt, media?.id]);
+  }, [fmt, media?.id, media?.vQ]);
 
   useEffect(() => {
     const a = audioRef.current; if (!a) return;
@@ -58,7 +58,7 @@ export function DownloaderView({ onBack }) {
   };
 
   const handlePaste = async () => {
-    try { const t = await navigator.clipboard.readText(); if (t?.trim()) { setQuery(t.trim()); analyze(t.trim()); } } catch {}
+    try { const t = await navigator.clipboard.readText(); if (t?.trim()) { setQuery(t.trim()); analyze(t.trim()); } } catch { /* ignore clipboard error */ }
   };
 
   const buildMedia = (item) => {
@@ -209,7 +209,7 @@ export function DownloaderView({ onBack }) {
         if (res && res.success && res.downloadUrl) {
           directUrl = res.downloadUrl;
         }
-      } catch (e) {
+      } catch {
         // Fallback silently if direct URL resolution times out
       }
 
@@ -243,7 +243,7 @@ export function DownloaderView({ onBack }) {
         localStorage.setItem("groovy_dl_h", JSON.stringify(u));
         return u;
       });
-    } catch (e) {
+    } catch {
       clearInterval(progressTimer);
       setDlState("error");
       setErr("Error al iniciar la descarga. Por favor intenta nuevamente.");
@@ -257,6 +257,11 @@ export function DownloaderView({ onBack }) {
 
       {/* NAV */}
       <nav style={{ background:WH, borderBottom:`1px solid ${BOR}`, boxShadow:"0 1px 4px rgba(0,0,0,0.05)", padding:"0 28px", height:"54px", display:"flex", alignItems:"center", gap:"10px" }}>
+        {onBack && (
+          <button onClick={onBack} aria-label="Volver" style={{ background:"none", border:"none", cursor:"pointer", padding:"4px", display:"flex", alignItems:"center", color:TX, marginRight:"4px" }}>
+            <ArrowLeft size={18} />
+          </button>
+        )}
         <img src={logoImg} alt="Groovy" style={{ width:"30px", height:"30px", borderRadius:"8px" }} />
         <span style={{ fontWeight:700, fontSize:"15px", color:TX }}>Groovy</span>
       </nav>

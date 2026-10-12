@@ -82,6 +82,14 @@ class LibraryDatabaseService {
     return openDatabase(
       dbPath,
       version: _dbVersion,
+      onConfigure: (db) async {
+        try {
+          await db.execute('PRAGMA journal_mode = WAL;');
+          await db.execute('PRAGMA synchronous = NORMAL;');
+          await db.execute('PRAGMA cache_size = -8000;');
+          await db.execute('PRAGMA temp_store = MEMORY;');
+        } catch (_) {}
+      },
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -209,11 +217,17 @@ class LibraryDatabaseService {
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_song_isLocal ON songs(isLocal)');
     await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_song_artist ON songs(artist)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_song_created ON songs(created)');
+    await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_album_artistId ON albums(artistId)');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_album_name ON albums(name)');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_album_isLocal ON albums(isLocal)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_album_created ON albums(created)');
   }
 
   // ── Batch inserts ───────────────────────────────────────────────────────

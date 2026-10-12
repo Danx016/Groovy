@@ -205,18 +205,9 @@ void main() async {
   final upnpService = UpnpService();
   final themeService = ThemeService();
 
-  DeviceInfoService().getDeviceInfo().catchError((e) {
-    debugPrint('Failed to initialize device info: $e');
-    return ClientDeviceInfo(
-      platform: 'Unknown',
-      deviceModel: 'Groovy Device',
-      osVersion: 'Unknown',
-      appVersion: UpdateService.currentVersion,
-      userAgent: 'GroovyApp/1.0',
-    );
-  });
-  BpmAnalyzerService().initialize().catchError((e) {
-    debugPrint('Failed to initialize BPM analyzer: $e');
+  // Core services needed for initial UI
+  localeService.loadSavedLocale().catchError((e) {
+    debugPrint('Failed to load saved locale: $e');
   });
   offlineService.initialize().catchError((e) {
     debugPrint('Failed to initialize offline service: $e');
@@ -227,28 +218,45 @@ void main() async {
   localMusicService.initialize().catchError((e) {
     debugPrint('Failed to initialize local music service: $e');
   });
-  localeService.loadSavedLocale().catchError((e) {
-    debugPrint('Failed to load saved locale: $e');
-  });
-  FavoritePlaylistsService().initialize().catchError((e) {
-    debugPrint('Failed to initialize favorite playlists service: $e');
-  });
-  AnalyticsService().initialize().catchError((e) {
-    debugPrint('Failed to initialize analytics: $e');
-  });
-  if (!kIsWeb && Platform.isAndroid) {
-    Permission.notification.request().catchError((_) => PermissionStatus.denied);
-  }
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
-    WindowsSystemService().initialize().catchError((e) {
-      debugPrint('Failed to initialize desktop system service: $e');
+
+  // Secondary/background services deferred by 1.5s so initial frame renders instantly
+  Future.delayed(const Duration(milliseconds: 1500), () {
+    DeviceInfoService().getDeviceInfo().catchError((e) {
+      debugPrint('Failed to initialize device info: $e');
+      return ClientDeviceInfo(
+        platform: 'Unknown',
+        deviceModel: 'Groovy Device',
+        osVersion: 'Unknown',
+        appVersion: UpdateService.currentVersion,
+        userAgent: 'GroovyApp/1.0',
+      );
     });
-  }
-  if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-    YtDlpService().ensureBinaryAvailable().catchError((e) {
-      debugPrint('Failed to ensure yt-dlp binary: $e');
+    BpmAnalyzerService().initialize().catchError((e) {
+      debugPrint('Failed to initialize BPM analyzer: $e');
     });
-  }
+    FavoritePlaylistsService().initialize().catchError((e) {
+      debugPrint('Failed to initialize favorite playlists service: $e');
+    });
+    AnalyticsService().initialize().catchError((e) {
+      debugPrint('Failed to initialize analytics: $e');
+    });
+    if (!kIsWeb && Platform.isAndroid) {
+      Permission.notification.request().catchError((_) => PermissionStatus.denied);
+    }
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
+      WindowsSystemService().initialize().catchError((e) {
+        debugPrint('Failed to initialize desktop system service: $e');
+      });
+    }
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      YtDlpService().ensureBinaryAvailable().catchError((e) {
+        debugPrint('Failed to ensure yt-dlp binary: $e');
+      });
+    }
+    if (!kIsWeb) {
+      AudioCacheService().initialize().catchError((_) {});
+    }
+  });
 
   // Parallel async initialization of core services to minimize startup time
   final initResults = await Future.wait([
@@ -289,10 +297,12 @@ void main() async {
   playerProvider.setLibraryProvider(libraryProvider);
 
   final groovyConnectService = GroovyConnectService();
-  groovyConnectService.initialize().catchError((e) {
-    debugPrint('Failed to initialize GroovyConnectService: $e');
-  });
   playerProvider.setGroovyConnectService(groovyConnectService);
+  Future.delayed(const Duration(milliseconds: 1500), () {
+    groovyConnectService.initialize().catchError((e) {
+      debugPrint('Failed to initialize GroovyConnectService: $e');
+    });
+  });
 
   void syncConnectAuth() {
     final hasAuth = authProvider.token != null && authProvider.token!.isNotEmpty;

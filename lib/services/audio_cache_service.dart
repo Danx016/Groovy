@@ -31,6 +31,13 @@ class AudioCacheService {
   static const int _minValidAudioSizeBytes = 100 * 1024; // 100 KB minimum
   static const int _maxCacheSizeBytes = 2 * 1024 * 1024 * 1024; // 2 GB soft limit
 
+  /// Pre-initializes the cache directory asynchronously in the background.
+  Future<void> initialize() async {
+    try {
+      await _ensureCacheDir();
+    } catch (_) {}
+  }
+
   Future<String> _ensureCacheDir() async {
     if (_cacheDirPath != null) return _cacheDirPath!;
     String tempPath;

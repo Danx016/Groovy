@@ -19,10 +19,15 @@ export const AlbumDetailView = ({ album, onBack, onSelectArtist }) => {
 
   const [albumData, setAlbumData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [prevAlbum, setPrevAlbum] = useState(album);
+  if (album !== prevAlbum) {
+    setPrevAlbum(album);
+    setIsLoading(true);
+    setAlbumData(null);
+  }
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
     const albumId = album?.id || '';
     const albumName = album?.name || album?.title || '';
     const artistName = album?.artist || '';

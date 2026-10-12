@@ -55,7 +55,6 @@ export const AdminView = () => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [userToToggleBan, setUserToToggleBan] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
   const [dataError, setDataError] = useState(null);
@@ -204,14 +203,14 @@ export const AdminView = () => {
 
   // Load deep user detail
   const handleOpenUserDetail = async (userId) => {
-    setIsLoadingDetail(true);
+    setIsSubmitting(true);
     try {
       const data = await adminApi.getUserDetails(userId);
       setSelectedUserDetail(data);
     } catch (err) {
       alert('Error al cargar detalle del usuario: ' + err.message);
     } finally {
-      setIsLoadingDetail(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -300,7 +299,7 @@ export const AdminView = () => {
   };
 
   // Device icon helper
-  const getDeviceIcon = (os = '', browser = '', deviceType = '') => {
+  const getDeviceIcon = (os = '', _browser = '', deviceType = '') => {
     const osLower = os.toLowerCase();
     if (osLower.includes('android') || osLower.includes('ios') || deviceType === 'Mobile') {
       return <Smartphone size={16} style={{ color: '#30D158' }} />;

@@ -15,22 +15,32 @@ const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
  *   error    – error message string or null
  */
 export function useGithubRelease() {
-    const [state, setState] = useState({ version: null, date: null, url: null, loading: true, error: null })
-
-    useEffect(() => {
-        // Check sessionStorage cache first
+    const [state, setState] = useState(() => {
         try {
             const cached = sessionStorage.getItem(CACHE_KEY)
             if (cached) {
                 const { data, timestamp } = JSON.parse(cached)
                 if (Date.now() - timestamp < CACHE_TTL_MS) {
-                    setState({ ...data, loading: false, error: null })
-                    return
+                    return { ...data, loading: false, error: null }
                 }
             }
         } catch (error) {
             console.warn('Unable to read cached GitHub release:', error)
         }
+        return { version: null, date: null, url: null, loading: true, error: null }
+    })
+
+    useEffect(() => {
+        // If valid cache is already present, no need to refetch
+        try {
+            const cached = sessionStorage.getItem(CACHE_KEY)
+            if (cached) {
+                const { timestamp } = JSON.parse(cached)
+                if (Date.now() - timestamp < CACHE_TTL_MS) {
+                    return
+                }
+            }
+        } catch { /* ignore */ }
 
         let cancelled = false
 

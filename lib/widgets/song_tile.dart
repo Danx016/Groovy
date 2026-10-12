@@ -44,10 +44,15 @@ class SongTile extends StatelessWidget {
     final theme = Theme.of(context);
 
     return RepaintBoundary(
-      child: Selector<PlayerProvider, String?>(
-        selector: (_, provider) => provider.currentSong?.id,
-        builder: (context, currentSongId, _) {
-          final isCurrentSong = currentSongId == song.id;
+      child: Selector<PlayerProvider, (String?, String?)>(
+        selector: (_, provider) =>
+            (provider.currentSong?.id, provider.currentSong?.title),
+        builder: (context, currentData, _) {
+          final (currentSongId, currentSongTitle) = currentData;
+          final isCurrentSong = currentSongId == song.id ||
+              (currentSongTitle != null &&
+                  currentSongTitle.toLowerCase().trim() ==
+                      song.title.toLowerCase().trim());
 
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(

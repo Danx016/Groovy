@@ -109,9 +109,13 @@ class AuthProvider extends ChangeNotifier {
         // Start real-time presence heartbeat
         _startSessionHeartbeat();
 
-        // Refresh user profile and cloud data in background
-        _refreshUserProfile();
-        syncUserDataFromCloud();
+        // Refresh user profile and cloud data in background (deferred to keep cold start silky smooth)
+        Future.delayed(const Duration(seconds: 2), () {
+          if (!_disposed && _state == AuthState.authenticated) {
+            _refreshUserProfile();
+            syncUserDataFromCloud();
+          }
+        });
       } else {
         _state = AuthState.unauthenticated;
         _isInitialLoading = false;

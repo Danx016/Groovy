@@ -233,6 +233,46 @@ class AlbumResolverService {
 
       void scanForAlbum(dynamic obj) {
         if (obj is Map<String, dynamic>) {
+          if (obj.containsKey('musicCardShelfRenderer')) {
+            final card = obj['musicCardShelfRenderer'] as Map<String, dynamic>;
+            final titleRuns = (card['title']?['runs'] as List<dynamic>?) ?? [];
+            final t = titleRuns.isNotEmpty ? titleRuns[0]['text'] as String? : null;
+            final nav = card['onTap'] ??
+                (titleRuns.isNotEmpty ? titleRuns[0]['navigationEndpoint'] : null);
+            final bId = nav?['browseEndpoint']?['browseId'] as String?;
+            final isSupportedBrowseId = bId != null &&
+                (bId.startsWith('MPREb_') || bId.startsWith('OLAK') || bId.startsWith('VLOLAK'));
+            if (isSupportedBrowseId && t != null && t.isNotEmpty) {
+              final normT = _normalize(t);
+              String itemArtist = '';
+              final subRuns = (card['subtitle']?['runs'] as List<dynamic>?) ?? [];
+              for (final r in subRuns) {
+                final txt = r['text'] as String? ?? '';
+                if (txt != ' • ' &&
+                    txt.toLowerCase() != 'album' &&
+                    txt.toLowerCase() != 'álbum' &&
+                    txt.toLowerCase() != 'ep' &&
+                    txt.toLowerCase() != 'single' &&
+                    !RegExp(r'^\d{4}$').hasMatch(txt.trim())) {
+                  itemArtist = _normalize(txt);
+                  break;
+                }
+              }
+              final bool isExactMatch = normT == normAlbum;
+              final bool isTitleMatch = isExactMatch ||
+                  (normAlbum.length >= 4 && (normT.startsWith(normAlbum) || normAlbum.startsWith(normT)));
+              final bool artistMatches = normArtist.isEmpty ||
+                  (itemArtist.isNotEmpty && (itemArtist.contains(normArtist) || normArtist.contains(itemArtist)));
+
+              if (isTitleMatch && artistMatches) {
+                if (matchedBrowseId == null || isExactMatch) {
+                  matchedBrowseId = bId;
+                  matchedTitle = t;
+                }
+              }
+            }
+          }
+
           if (obj.containsKey('musicResponsiveListItemRenderer')) {
             final item = obj['musicResponsiveListItemRenderer'] as Map<String, dynamic>;
             final flex = item['flexColumns'] as List<dynamic>? ?? [];
@@ -415,6 +455,9 @@ class AlbumResolverService {
         videoId ??= r['flexColumns']?[0]?['musicResponsiveListItemFlexColumnRenderer']?['text']
             ?['runs']?[0]?['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
         videoId ??= r['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+        videoId ??= r['doubleTapNavigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
+        videoId ??= r['onTap']?['watchEndpoint']?['videoId'] as String?;
+        videoId ??= r['menu']?['menuRenderer']?['items']?[0]?['menuNavigationItemRenderer']?['navigationEndpoint']?['watchEndpoint']?['videoId'] as String?;
 
         if (videoId != null) {
           videoId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '');

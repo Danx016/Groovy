@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2026-10-12
+
+### Fixed & Improved
+- **Radio Nativa y Recomendaciones Inteligentes sin Duplicados**:
+  - Implementado `SongTitleUtils` para normalizar canónicamente los títulos de las canciones, filtrando de forma inteligente sufijos de videos, audio, letra, karaoke, versiones en vivo y caracteres diacríticos.
+  - Implementada integración directa en Pure Dart con el endpoint nativo `/next` de YouTube Music Innertube (`RDAMVM$videoId`) en `YtDlpService.getRadioTracksInnertube`. Responde en ~200 ms con 50 recomendaciones de alta relevancia del artista y artistas afines.
+  - Modificado el flujo de búsqueda en `SearchScreen`: al reproducir una canción cuyos resultados son múltiples variaciones del mismo tema, el reproductor activa automáticamente el modo Radio (`playSongWithRadio`), continuando con los mejores temas recomendados del artista en lugar de reproducir copias de la misma canción.
+  - Protección estricta en `PlayerProvider`: la cola de reproducción y la radio filtran activamente títulos idénticos para evitar pistas repetidas o consecutivas.
+  - Desduplicación automática de las canciones populares en `ArtistScreen`.
+- **Actualización Multiplataforma**: Versión **1.8.1** (Build 162) para Windows y Android.
+
 ## [1.8.0] - 2026-10-08
 
 ### Fixed & Improved

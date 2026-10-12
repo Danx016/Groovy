@@ -43,8 +43,8 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
             ? const AndroidLoadControl(
                 minBufferDuration: Duration(seconds: 15),
                 maxBufferDuration: Duration(seconds: 30),
-                bufferForPlaybackDuration: Duration(milliseconds: 400),
-                bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1000),
+                bufferForPlaybackDuration: Duration(milliseconds: 250),
+                bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 600),
                 prioritizeTimeOverSizeThresholds: true,
               )
             : null,

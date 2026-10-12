@@ -232,7 +232,7 @@ class LrcLibService {
 
     final yt = YoutubeExplode();
     try {
-      final manifest = await yt.videos.closedCaptions.getManifest(cleanId).timeout(const Duration(seconds: 4));
+      final manifest = await yt.videos.closedCaptions.getManifest(cleanId).timeout(const Duration(seconds: 8));
       if (manifest.tracks.isEmpty) return null;
 
       final tracksToConsider = officialOnly
@@ -255,7 +255,7 @@ class LrcLibService {
         orElse: () => tracksToConsider.first,
       );
 
-      final track = await yt.videos.closedCaptions.get(selectedTrack).timeout(const Duration(seconds: 4));
+      final track = await yt.videos.closedCaptions.get(selectedTrack).timeout(const Duration(seconds: 8));
       if (track.captions.isEmpty) return null;
 
       final lines = <Map<String, dynamic>>[];

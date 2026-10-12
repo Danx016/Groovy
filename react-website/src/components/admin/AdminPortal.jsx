@@ -78,7 +78,6 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   const [userToDelete, setUserToDelete] = useState(null);
   const [userToToggleBan, setUserToToggleBan] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [actionMessage, setActionMessage] = useState(null);
   const [copiedIp, setCopiedIp] = useState(null);
   const [dataError, setDataError] = useState(null);
@@ -167,7 +166,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
   }, [isAuthorized, fetchData, fetchLivePlayback]);
 
   const handleOpenUserDetail = async (userId) => {
-    setIsLoadingDetail(true);
+    setIsSubmitting(true);
     setSelectedUser(null);
     try {
       const data = await adminApi.getUserDetails(userId);
@@ -175,7 +174,7 @@ export const AdminPortal = ({ onBackToPlayer }) => {
     } catch (err) {
       alert('Error al cargar información: ' + err.message);
     } finally {
-      setIsLoadingDetail(false);
+      setIsSubmitting(false);
     }
   };
 

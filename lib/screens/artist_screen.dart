@@ -11,6 +11,7 @@ import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import 'album_screen.dart';
 import '../utils/album_sanitizer.dart';
+import '../utils/song_title_utils.dart';
 import '../utils/screen_helper.dart';
 import '../services/services.dart';
 
@@ -199,6 +200,13 @@ class _ArtistScreenState extends State<ArtistScreen> {
           debugPrint('Online artist search error: $ytErr');
         }
       }
+
+      // Deduplicate topSongs so variations of the same track do not appear multiple times
+      final seenTopTitles = <String>{};
+      topSongs = topSongs.where((s) {
+        final norm = SongTitleUtils.normalizeTitle(s.title);
+        return norm.isEmpty || seenTopTitles.add(norm);
+      }).toList();
 
       // Final guarantee: always keep the reliable artist name and valid cover art
       artist = Artist(

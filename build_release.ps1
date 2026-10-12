@@ -36,23 +36,45 @@ if ($env:COUNTLY_APP_KEY) {
 
 # Build based on target
 $cmd = ""
+$buildArgs = @()
 switch ($Target.ToLower()) {
-    "apk" { $cmd = "flutter build apk --release" }
-    "appbundle" { $cmd = "flutter build appbundle --release" }
-    "ios" { $cmd = "flutter build ios --release" }
-    "windows" { $cmd = "flutter build windows --release" }
-    "linux" { $cmd = "flutter build linux --release" }
-    "macos" { $cmd = "flutter build macos --release" }
-    "web" { $cmd = "flutter build web --release" }
+    "apk" {
+        $buildArgs = @("apk", "--release")
+        $cmd = "flutter build apk --release"
+    }
+    "appbundle" {
+        $buildArgs = @("appbundle", "--release")
+        $cmd = "flutter build appbundle --release"
+    }
+    "ios" {
+        $buildArgs = @("ios", "--release")
+        $cmd = "flutter build ios --release"
+    }
+    "windows" {
+        $buildArgs = @("windows", "--release")
+        $cmd = "flutter build windows --release"
+    }
+    "linux" {
+        $buildArgs = @("linux", "--release")
+        $cmd = "flutter build linux --release"
+    }
+    "macos" {
+        $buildArgs = @("macos", "--release")
+        $cmd = "flutter build macos --release"
+    }
+    "web" {
+        $buildArgs = @("web", "--release")
+        $cmd = "flutter build web --release"
+    }
     default {
         Write-Error "Unknown target: $Target"
-        Write-Host "Valid targets: apk, appbundle, ios, windows, linux, macos, web"
+        Write-Host "Valid targets: apk, apk-fat, appbundle, ios, windows, linux, macos, web"
         exit 1
     }
 }
 
 Write-Host "Building: $cmd with dart-defines" -ForegroundColor Cyan
-& flutter build $Target --release @defines
+& flutter build @buildArgs @defines
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "Build completed successfully!" -ForegroundColor Green

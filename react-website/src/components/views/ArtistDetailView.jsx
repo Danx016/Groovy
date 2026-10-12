@@ -20,10 +20,15 @@ export const ArtistDetailView = ({ artistName, onBack, onSelectAlbum }) => {
   const [artistData, setArtistData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
+  const [prevArtist, setPrevArtist] = useState(artistName);
+  if (artistName !== prevArtist) {
+    setPrevArtist(artistName);
+    setIsLoading(true);
+    setArtistData(null);
+  }
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
     musicService.getArtistDetails(artistName).then(data => {
       if (isMounted) {
         setArtistData(data);

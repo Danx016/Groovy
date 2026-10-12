@@ -321,7 +321,6 @@ export const HomeView = ({ setActiveTab, onSelectArtist, onSelectAlbum }) => {
         }
       } catch (err) {
         console.warn('Feeds load failed:', err);
-      } finally {
       }
     };
     loadFeeds();

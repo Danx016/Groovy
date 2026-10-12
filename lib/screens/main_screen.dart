@@ -225,8 +225,10 @@ class _MainScreenState extends State<MainScreen> {
       libraryProvider.setLocalOnlyMode(false);
       libraryProvider.setServerOfflineMode(widget.isOfflineMode);
 
-      await localMusicService.initialize();
-      libraryProvider.initialize();
+      await Future.wait([
+        localMusicService.initialize(),
+        libraryProvider.initialize(),
+      ]);
 
       Future.delayed(const Duration(seconds: 2), () {
         if (mounted) _checkForUpdate();

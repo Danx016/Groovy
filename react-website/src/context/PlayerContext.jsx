@@ -83,6 +83,7 @@ export const PlayerProvider = ({ children }) => {
       }).catch(() => {});
     }, 8000);
 
+    const audioEl = audioRef.current;
     return () => {
       clearInterval(interval);
       telemetryApi.reportPlayback({
@@ -92,7 +93,7 @@ export const PlayerProvider = ({ children }) => {
         album: currentSong.album || '',
         coverArt: currentSong.coverArt || '',
         duration: Math.round(duration || currentSong.duration || 0),
-        position: Math.round(audioRef.current?.currentTime || 0),
+        position: Math.round(audioEl?.currentTime || 0),
         isPlaying: false,
         platform: 'Web',
         deviceName: 'Web Player',
@@ -114,6 +115,21 @@ export const PlayerProvider = ({ children }) => {
     }
   }, []);
 
+  // Track ending logic via ref to avoid listener churn
+  const trackEndedRef = useRef(() => {});
+  useEffect(() => {
+    trackEndedRef.current = () => {
+      if (repeatMode === 'one') {
+        if (audioRef.current) {
+          audioRef.current.currentTime = 0;
+          audioRef.current.play().catch(() => {});
+        }
+      } else {
+        nextTrack();
+      }
+    };
+  }, [repeatMode, nextTrack]);
+
   // Initialize Audio element handlers
   useEffect(() => {
     const audio = audioRef.current;
@@ -125,7 +141,7 @@ export const PlayerProvider = ({ children }) => {
         setDuration(audio.duration);
       }
     };
-    const handleEnded = () => handleTrackEnded();
+    const handleEnded = () => trackEndedRef.current();
     const handlePlay = () => setIsPlaying(true);
     const handlePause = () => setIsPlaying(false);
     const handleError = (e) => {
@@ -150,17 +166,6 @@ export const PlayerProvider = ({ children }) => {
     };
   }, [queue, queueIndex, repeatMode, isShuffle]);
 
-  // Handle track ending logic
-  const handleTrackEnded = () => {
-    if (repeatMode === 'one') {
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(() => {});
-      }
-    } else {
-      nextTrack();
-    }
-  };
 
   // Play a specific song or set queue
   const playSong = async (song, newQueue = null, startIndex = 0) => {
@@ -342,6 +347,13 @@ export const PlayerProvider = ({ children }) => {
     }
   };
 
+  const shortcutsRef = useRef({
+    togglePlay, nextTrack, prevTrack, seekTo, toggleMute, isFullPlayerOpen, activePlayerTab, setIsFullPlayerOpen, setActivePlayerTab
+  });
+  shortcutsRef.current = {
+    togglePlay, nextTrack, prevTrack, seekTo, toggleMute, isFullPlayerOpen, activePlayerTab, setIsFullPlayerOpen, setActivePlayerTab
+  };
+
   // Global Keyboard Shortcuts (Space, Arrows, M, L, F)
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -349,46 +361,46 @@ export const PlayerProvider = ({ children }) => {
       if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.isContentEditable) {
         return;
       }
-
+      const s = shortcutsRef.current;
       if (e.code === 'Space') {
         e.preventDefault();
-        togglePlay();
+        s.togglePlay();
       } else if (e.code === 'ArrowRight' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        nextTrack();
+        s.nextTrack();
       } else if (e.code === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
-        prevTrack();
+        s.prevTrack();
       } else if (e.code === 'ArrowRight') {
         e.preventDefault();
         if (audioRef.current) {
-          seekTo(audioRef.current.currentTime + 5);
+          s.seekTo(audioRef.current.currentTime + 5);
         }
       } else if (e.code === 'ArrowLeft') {
         e.preventDefault();
         if (audioRef.current) {
-          seekTo(audioRef.current.currentTime - 5);
+          s.seekTo(audioRef.current.currentTime - 5);
         }
       } else if (e.code === 'KeyM') {
         e.preventDefault();
-        toggleMute();
+        s.toggleMute();
       } else if (e.code === 'KeyL') {
         e.preventDefault();
-        if (isFullPlayerOpen && activePlayerTab === 'lyrics') {
-          setIsFullPlayerOpen(false);
+        if (s.isFullPlayerOpen && s.activePlayerTab === 'lyrics') {
+          s.setIsFullPlayerOpen(false);
         } else {
-          setActivePlayerTab('lyrics');
-          setIsFullPlayerOpen(true);
+          s.setActivePlayerTab('lyrics');
+          s.setIsFullPlayerOpen(true);
         }
       } else if (e.code === 'KeyF') {
         e.preventDefault();
-        setIsFullPlayerOpen(prev => !prev);
+        s.setIsFullPlayerOpen(prev => !prev);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [togglePlay, nextTrack, prevTrack, isFullPlayerOpen, activePlayerTab]);
+  }, []);
 
   const downloadSong = (song = currentSong) => {
     if (!song || !song.audioUrl) return;

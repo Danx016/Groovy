@@ -34,6 +34,7 @@ import '../services/groovy_connect_service.dart';
 import '../services/local_media_stream_service.dart';
 import '../providers/library_provider.dart';
 import 'package:volume_controller/volume_controller.dart';
+import '../utils/song_title_utils.dart';
 
 enum RepeatMode { off, all, one }
 
@@ -1827,9 +1828,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
 
-        if (state.playing || state.processingState == ProcessingState.ready) {
+        if (state.playing ||
+            state.processingState == ProcessingState.ready ||
+            state.processingState == ProcessingState.idle) {
           _isLoading = false;
-          _consecutiveAutoSkipFailures = 0;
+          if (state.playing || state.processingState == ProcessingState.ready) {
+            _consecutiveAutoSkipFailures = 0;
+          }
         }
 
         if (wasPlaying != _isPlaying && !_reactivatingSession) {
@@ -1853,7 +1858,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   _lastPolledPosition = pos;
                   if (_activeAudioSongId != null &&
                       _currentSong != null &&
-                      _activeAudioSongId != _currentSong!.id) {
+                      _activeAudioSongId != _currentSong!.id &&
+                      !_activeAudioSongId!.contains(_currentSong!.id) &&
+                      !_currentSong!.id.contains(_activeAudioSongId!)) {
                     return;
                   }
                   _position = pos;
@@ -2208,8 +2215,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         final moreSimilar =
             await _youtubeService.getSimilarSongs(completedSong.id, count: 20);
         final existingIds = _queue.map((s) => s.id).toSet();
-        final toAdd =
-            moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
+        final existingTitles =
+            _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
+        existingTitles.add(SongTitleUtils.normalizeTitle(completedSong.title));
+
+        final toAdd = <Song>[];
+        for (final s in moreSimilar) {
+          if (existingIds.contains(s.id)) continue;
+          final norm = SongTitleUtils.normalizeTitle(s.title);
+          if (norm.isNotEmpty && existingTitles.contains(norm)) continue;
+          if (norm.isNotEmpty) existingTitles.add(norm);
+          existingIds.add(s.id);
+          toAdd.add(s);
+        }
+
         if (toAdd.isNotEmpty) {
           _queue.addAll(toAdd);
           notifyListeners();
@@ -2249,6 +2268,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       nextIndex = _currentIndex + 1;
     } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
       nextIndex = 0;
+    }
+
+    // Skip over any consecutive tracks in queue that have the same song title as currentSong
+    while (nextIndex >= 0 &&
+        nextIndex < _queue.length &&
+        _currentSong != null &&
+        SongTitleUtils.areTitlesSame(_queue[nextIndex].title, _currentSong!.title)) {
+      debugPrint('[Player] Skipping duplicate title track in queue: "${_queue[nextIndex].title}"');
+      nextIndex++;
     }
 
     if (nextIndex >= 0 && nextIndex < _queue.length) {
@@ -2309,14 +2337,26 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final similar = await _youtubeService.getSimilarSongs(song.id, count: 25);
       if (similar.isNotEmpty && _currentSong?.id == song.id) {
         final existingIds = _queue.map((s) => s.id).toSet();
-        final toAdd =
-            similar.where((s) => !existingIds.contains(s.id)).toList();
+        final existingTitles =
+            _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
+        existingTitles.add(SongTitleUtils.normalizeTitle(song.title));
+
+        final toAdd = <Song>[];
+        for (final s in similar) {
+          if (existingIds.contains(s.id)) continue;
+          final norm = SongTitleUtils.normalizeTitle(s.title);
+          if (norm.isNotEmpty && existingTitles.contains(norm)) continue;
+          if (norm.isNotEmpty) existingTitles.add(norm);
+          existingIds.add(s.id);
+          toAdd.add(s);
+        }
+
         if (toAdd.isNotEmpty) {
           _queue.addAll(toAdd);
           notifyListeners();
           _saveQueueState();
           debugPrint(
-              '[Player] Radio queue populated with ${toAdd.length} similar songs for "${song.title}"');
+              '[Player] Radio queue populated with ${toAdd.length} distinct similar songs for "${song.title}"');
         }
       }
     } catch (e) {
@@ -2541,13 +2581,15 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   ? resolvedYtId
                   : song.coverArt,
             );
-            final qIdx = _queue.indexWhere((s) => s.id == song.id);
+            final oldId = song.id;
+            final qIdx = _queue.indexWhere((s) => s.id == oldId);
             if (qIdx != -1) {
               _queue[qIdx] = updatedSong;
             }
             song = updatedSong;
-            if (_currentSong?.id == song.id) {
+            if (_currentSong?.id == oldId || _currentSong?.id == updatedSong.id) {
               _currentSong = updatedSong;
+              notifyListeners();
             }
           }
         } catch (_) {}
@@ -2848,6 +2890,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           errorStr.contains('superseded')) {
         debugPrint(
             '[Player] Ignoring audio abort/cancellation error for "${song.title}": $e');
+        _isLoading = false;
+        notifyListeners();
         return;
       }
 
@@ -2864,8 +2908,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
       _hasRetriedCurrentPlay = false;
       _isPlaying = false;
+      _isLoading = false;
       _activeAudioSongId = null;
       _position = Duration.zero;
+      notifyListeners();
       // Expose the error to the UI so a SnackBar / toast can be shown.
       _lastPlaybackError =
           'No se pudo reproducir "${song.title}". Verifica tu conexión a internet.';
@@ -3265,8 +3311,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               .getSimilarSongs(_currentSong!.id, count: 20);
           if (skipGen != _skipGeneration) return; // another skip came in
           final existingIds = _queue.map((s) => s.id).toSet();
-          final toAdd =
-              moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
+          final existingTitles =
+              _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
+          if (_currentSong != null) {
+            existingTitles.add(SongTitleUtils.normalizeTitle(_currentSong!.title));
+          }
+          final toAdd = <Song>[];
+          for (final s in moreSimilar) {
+            if (existingIds.contains(s.id)) continue;
+            final norm = SongTitleUtils.normalizeTitle(s.title);
+            if (norm.isNotEmpty && existingTitles.contains(norm)) continue;
+            if (norm.isNotEmpty) existingTitles.add(norm);
+            existingIds.add(s.id);
+            toAdd.add(s);
+          }
           if (toAdd.isNotEmpty) {
             _queue.addAll(toAdd);
             _currentIndex++;
@@ -3373,8 +3431,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
       if (skipGen != _skipGeneration) return;
       final existingIds = _queue.map((s) => s.id).toSet();
-      final toAdd =
-          moreSimilar.where((s) => !existingIds.contains(s.id)).toList();
+      final existingTitles =
+          _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
+      if (_currentSong != null) {
+        existingTitles.add(SongTitleUtils.normalizeTitle(_currentSong!.title));
+      }
+      final toAdd = <Song>[];
+      for (final s in moreSimilar) {
+        if (existingIds.contains(s.id)) continue;
+        final norm = SongTitleUtils.normalizeTitle(s.title);
+        if (norm.isNotEmpty && existingTitles.contains(norm)) continue;
+        if (norm.isNotEmpty) existingTitles.add(norm);
+        existingIds.add(s.id);
+        toAdd.add(s);
+      }
       if (toAdd.isNotEmpty) {
         _queue.addAll(toAdd);
         final nextIndex = _currentIndex + 1;

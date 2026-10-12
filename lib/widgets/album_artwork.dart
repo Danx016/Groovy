@@ -19,9 +19,11 @@ class _ImageUrlCache {
 
   static String getUrl(YoutubeService service, String? coverArt, int size) {
     if (coverArt == null || coverArt.isEmpty) return '';
+    final targetSize = size <= 250 ? 300 : (size <= 500 ? 600 : 800);
+    final cacheKey = '${coverArt}_$targetSize';
     return _cache.putIfAbsent(
-      coverArt,
-      () => service.getCoverArtUrl(coverArt, size: 800),
+      cacheKey,
+      () => service.getCoverArtUrl(coverArt, size: targetSize),
     );
   }
 }

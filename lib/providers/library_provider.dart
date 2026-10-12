@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -20,6 +21,7 @@ class LibraryProvider extends ChangeNotifier {
   bool _mergeLocalLibrary = false;
   LocalMusicService? _localMusicService;
   final LibraryDatabaseService _db = LibraryDatabaseService();
+  Timer? _cleanupTimer;
 
   List<Artist> _artists = [];
   List<Album> _recentAlbums = [];
@@ -268,30 +270,38 @@ class LibraryProvider extends ChangeNotifier {
 
       _audioHandler.notifyAutoChildrenChanged();
 
-      try {
-        await Future.wait([
-          loadRecentAlbums(),
-          loadRandomSongs(),
-          loadPlaylists(),
-          loadArtists(),
-        ]);
-      } catch (e) {
-        debugPrint('Library initialization error: $e');
-      }
-
-      if (_randomSongs.isEmpty && cachedAllSongs.isNotEmpty) {
-        _randomSongs = cachedAllSongs.take(50).toList();
-      }
-      if (_recentAlbums.isEmpty && cachedAllAlbums.isNotEmpty) {
-        _recentAlbums = cachedAllAlbums.take(20).toList();
-      }
-      if (_artists.isEmpty && artists.isNotEmpty) {
-        _artists = artists.take(20).toList();
-      }
-
+      // Stale-While-Revalidate: Mark library initialized immediately with SQLite cache
+      // so HomeScreen renders in < 50ms without waiting for network.
       _isInitialized = true;
+      _isLoading = false;
+      notifyListeners();
       _preloadCoverArt();
-      _scheduleBackgroundRefresh();
+
+      // Refresh online library and trending songs in the background without blocking UI
+      unawaited(() async {
+        try {
+          await Future.wait([
+            loadRecentAlbums(),
+            loadRandomSongs(),
+            loadPlaylists(),
+            loadArtists(),
+          ]);
+        } catch (e) {
+          debugPrint('Library background refresh error: $e');
+        }
+
+        if (_randomSongs.isEmpty && cachedAllSongs.isNotEmpty) {
+          _randomSongs = cachedAllSongs.take(50).toList();
+        }
+        if (_recentAlbums.isEmpty && cachedAllAlbums.isNotEmpty) {
+          _recentAlbums = cachedAllAlbums.take(20).toList();
+        }
+        if (_artists.isEmpty && artists.isNotEmpty) {
+          _artists = artists.take(20).toList();
+        }
+
+        _scheduleBackgroundRefresh();
+      }());
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -330,8 +340,15 @@ class LibraryProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
-      // Clean up any unrequested media from SQLite DB
-      await _db.cleanupUnsavedLibraryData();
+      // Clean up unrequested media in the background so startup DB reads are instant
+      if (!kIsWeb && !Platform.environment.containsKey('FLUTTER_TEST')) {
+        _cleanupTimer?.cancel();
+        _cleanupTimer = Timer(const Duration(seconds: 4), () {
+          _db.cleanupUnsavedLibraryData().catchError((e) {
+            debugPrint('Background library cleanup error: $e');
+          });
+        });
+      }
       await prefs.remove(_artistsCacheKey);
 
       // 1. Load playlists from DB (fallback to SharedPreferences)
@@ -1458,6 +1475,7 @@ class LibraryProvider extends ChangeNotifier {
 
   @override
   void dispose() {
+    _cleanupTimer?.cancel();
     _localMusicService?.removeListener(_onLocalMusicServiceChanged);
     super.dispose();
   }
