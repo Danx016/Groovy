@@ -28,3 +28,12 @@
 
 # Google Play Core (deferred components not bundled)
 -dontwarn com.google.android.play.core.**
+
+# Resource identifiers for dynamic lookup by audio_service (getIdentifier)
+-keepclassmembers class **.R$* {
+    public static <fields>;
+}
+-keep class **.R$drawable { *; }
+-keep class **.R$mipmap { *; }
+-keep class **.R$raw { *; }
+

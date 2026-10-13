@@ -158,10 +158,15 @@ void main() async {
         JustAudioMediaKit.title = 'Groovy';
         JustAudioMediaKit.prefetchPlaylist = false;
         JustAudioMediaKit.protocolWhitelist = const [
+          'crypto',
+          'data',
+          'file',
           'http',
           'https',
-          'file',
-          'data',
+          'subfile',
+          'tcp',
+          'tls',
+          'udp',
         ];
         JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
       }

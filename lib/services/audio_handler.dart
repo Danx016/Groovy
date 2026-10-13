@@ -554,20 +554,28 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
         artUri = Uri.tryParse(artworkUrl);
       }
     }
-    mediaItem.add(
-      MediaItem(
-        id: id,
-        title: title,
-        artist: artist,
-        album: album,
-        artUri: artUri,
-        duration: duration,
-      ),
-    );
+    try {
+      mediaItem.add(
+        MediaItem(
+          id: id,
+          title: title,
+          artist: artist,
+          album: album,
+          artUri: artUri,
+          duration: duration,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[GroovyAudioHandler] updateNowPlaying error: $e');
+    }
   }
 
   void clearNowPlaying() {
-    mediaItem.add(const MediaItem(id: '', title: ''));
+    try {
+      mediaItem.add(const MediaItem(id: '', title: ''));
+    } catch (e) {
+      debugPrint('[GroovyAudioHandler] clearNowPlaying error: $e');
+    }
   }
 
   /// Pushes an explicit playback state while rendering on a remote target

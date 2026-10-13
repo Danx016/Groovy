@@ -5,6 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.3] - 2026-10-13
+
+### Fixed & Improved
+- **Corrección Crítica de Cierre Inesperado (Crash) al Reproducir en Android**:
+  - Resuelto el cierre repentino de la aplicación al reproducir canciones online. El optimizador de recursos (R8 Resource Shrinker) eliminaba el recurso dinámico `ic_notification`, causando una excepción fatal `IllegalArgumentException` al construirse la notificación en segundo plano.
+  - Creado `android/app/src/main/res/raw/keep.xml` y actualizadas las reglas de ProGuard (`proguard-rules.pro`) para garantizar la persistencia de todos los iconos de notificación y reproducción.
+  - Declarado explícitamente el meta-data de icono en `AndroidManifest.xml` para blindar la compilación frente a la poda de recursos.
+  - Protegido el envío de metadatos (`mediaItem.add`) con bloques `try-catch` para evitar caídas de aislamiento.
+- **Estabilidad de Streaming en Escritorio (Windows / Linux)**:
+  - Restaurada la lista completa de protocolos en `JustAudioMediaKit.protocolWhitelist` (`crypto`, `data`, `file`, `http`, `https`, `subfile`, `tcp`, `tls`, `udp`) para evitar fallos de socket o TLS en redirecciones de audio.
+- **Actualización Multiplataforma**: Versión **1.8.3** (Build 164) para Windows y Android.
+
 ## [1.8.2] - 2026-10-12
 
 - **Sincronización en Tiempo Real entre Dispositivos (Misma Cuenta)**:
