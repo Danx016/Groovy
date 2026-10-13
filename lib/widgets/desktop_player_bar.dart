@@ -151,8 +151,6 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
   Widget _buildRadioBar(BuildContext context, ThemeData theme, bool isDark,
       RadioStation station) {
     final barColor = isDark ? AppTheme.playerBarDark : AppTheme.playerBarLight;
-    final borderColor =
-        isDark ? AppTheme.playerBarBorder : const Color(0xFFDDDDDD);
     final iconColor =
         isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText;
 
@@ -160,8 +158,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
       height: 90,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: barColor,
-        border: Border(top: BorderSide(color: borderColor, width: 1)),
+        color: isDark ? const Color(0xFF000000) : barColor,
       ),
       child: Row(
         children: [
@@ -312,13 +309,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
       height: 90,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       decoration: BoxDecoration(
-        color: isDark ? AppTheme.playerBarDark : AppTheme.playerBarLight,
-        border: Border(
-          top: BorderSide(
-            color: isDark ? AppTheme.playerBarBorder : const Color(0xFFDDDDDD),
-            width: 1,
-          ),
-        ),
+        color: isDark ? const Color(0xFF000000) : AppTheme.playerBarLight,
       ),
       child: Row(
         children: [
@@ -354,9 +345,9 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: const Icon(
-                                    Icons.favorite_rounded,
-                                    size: 10,
-                                    color: AppTheme.appleMusicRed,
+                                    Icons.star_rounded,
+                                    size: 11,
+                                    color: Color(0xFFFFD60A),
                                   ),
                                 ),
                               ),
@@ -366,9 +357,10 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                     ),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
+                const SizedBox(width: 14),
+                Flexible(
                   child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -411,21 +403,23 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                     ],
                   ),
                 ),
+                const SizedBox(width: 8),
                 Consumer<LibraryProvider>(
                   builder: (context, lib, _) {
                     final isStarred = lib.isSongStarred(currentSong.id) || currentSong.starred == true;
                     return IconButton(
                       icon: Icon(
                         isStarred
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                        size: 20,
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 22,
                         color: isStarred
-                            ? AppTheme.appleMusicRed
+                            ? const Color(0xFFFFD60A)
                             : (isDark
                                 ? const Color(0xFFB3B3B3)
                                 : const Color(0xFF6B6B6B)),
                       ),
+                      splashRadius: 18,
                       onPressed: () {
                         Provider.of<PlayerProvider>(context, listen: false)
                             .toggleFavorite();

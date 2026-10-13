@@ -26,10 +26,31 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   void initState() {
     super.initState();
     _loadFavorites();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<LibraryProvider>(context, listen: false).addListener(_onLibraryChanged);
+      }
+    });
   }
 
-  Future<void> _loadFavorites() async {
-    setState(() => _isLoading = true);
+  void _onLibraryChanged() {
+    if (mounted) {
+      _loadFavorites(showLoading: false);
+    }
+  }
+
+  @override
+  void dispose() {
+    try {
+      Provider.of<LibraryProvider>(context, listen: false).removeListener(_onLibraryChanged);
+    } catch (_) {}
+    super.dispose();
+  }
+
+  Future<void> _loadFavorites({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
 
     final libraryProvider = Provider.of<LibraryProvider>(
       context,
@@ -129,7 +150,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.favorite_border, size: 64, color: Colors.grey),
+            Icon(Icons.star_outline_rounded, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text('No tienes canciones favoritas todavía'),
           ],
@@ -239,7 +260,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.favorite_border, size: 64, color: Colors.grey),
+            Icon(Icons.star_outline_rounded, size: 64, color: Colors.grey),
             SizedBox(height: 16),
             Text('No tienes álbumes favoritos todavía'),
           ],

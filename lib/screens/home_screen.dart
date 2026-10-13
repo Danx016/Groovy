@@ -2,11 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../models/models.dart';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
-import '../services/youtube_service.dart';
 import '../services/ytdlp_service.dart';
 import '../services/recommendation_service.dart';
 import '../theme/app_theme.dart';
@@ -63,7 +61,11 @@ class _HomeScreenState extends State<HomeScreen> {
             pinned: true,
             floating: true,
             expandedHeight: isDesktop ? 80 : 70,
-            backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+            backgroundColor: isDark
+                ? (isDesktop
+                    ? const Color(0xFF121212)
+                    : AppTheme.darkBackground)
+                : Colors.white,
             elevation: 0,
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: EdgeInsets.only(left: hPad, bottom: 14),
@@ -551,12 +553,6 @@ class _SongCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-    final coverUrl = song.coverArt != null
-        ? (isLocalFilePath(song.coverArt)
-            ? song.coverArt
-            : youtubeService.getCoverArtUrl(song.coverArt!, size: 400))
-        : null;
 
     return GestureDetector(
       onTap: () {
@@ -569,38 +565,10 @@ class _SongCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: isDark ? 0.35 : 0.1),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: coverUrl != null
-                    ? (isLocalFilePath(coverUrl)
-                        ? Image.file(
-                            File(coverUrl),
-                            fit: BoxFit.cover,
-                            errorBuilder: (ctx, e, _) => _placeholder(isDark),
-                          )
-                        : CachedNetworkImage(
-                            imageUrl: coverUrl,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 400,
-                            memCacheHeight: 400,
-                            placeholder: (ctx, e) => _placeholder(isDark),
-                            errorWidget: (ctx, e, _) => _placeholder(isDark),
-                          ))
-                    : _placeholder(isDark),
-              ),
+            AlbumArtwork(
+              coverArt: song.coverArt,
+              size: size,
+              borderRadius: 12,
             ),
             const SizedBox(height: 8),
             Text(
@@ -629,19 +597,6 @@ class _SongCard extends StatelessWidget {
       ),
     );
   }
-
-  Widget _placeholder(bool isDark) {
-    return Container(
-      color: isDark ? const Color(0xFF2C2C2E) : Colors.grey[200],
-      child: const Center(
-        child: Icon(
-          CupertinoIcons.music_note,
-          size: 36,
-          color: Colors.white24,
-        ),
-      ),
-    );
-  }
 }
 
 class _PlaylistCard extends StatelessWidget {
@@ -653,15 +608,7 @@ class _PlaylistCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final youtubeService = Provider.of<YoutubeService>(
-      context,
-      listen: false,
-    );
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final coverArtUrl = playlist.coverArt != null
-        ? youtubeService.getCoverArtUrl(playlist.coverArt!, size: 300)
-        : null;
-
     return GestureDetector(
       onTap: onTap,
       child: SizedBox(
@@ -669,64 +616,11 @@ class _PlaylistCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: size,
-              height: size,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: coverArtUrl != null
-                    ? CachedNetworkImage(
-                        imageUrl: coverArtUrl,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 300,
-                        memCacheHeight: 300,
-                        placeholder: (ctx, url) => Container(
-                          color: isDark
-                              ? const Color(0xFF2C2C2E)
-                              : Colors.grey[300],
-                          child: const Center(
-                            child: Icon(
-                              Icons.queue_music_rounded,
-                              size: 50,
-                              color: Colors.white30,
-                            ),
-                          ),
-                        ),
-                        errorWidget: (ctx, err, stack) => Container(
-                          color: isDark
-                              ? const Color(0xFF2C2C2E)
-                              : Colors.grey[300],
-                          child: const Center(
-                            child: Icon(
-                              Icons.queue_music_rounded,
-                              size: 50,
-                              color: Colors.white30,
-                            ),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        color:
-                            isDark ? const Color(0xFF2C2C2E) : Colors.grey[300],
-                        child: const Center(
-                          child: Icon(
-                            Icons.queue_music_rounded,
-                            size: 50,
-                            color: Colors.white30,
-                          ),
-                        ),
-                      ),
-              ),
+            AlbumArtwork(
+              coverArt: playlist.coverArt,
+              size: size,
+              borderRadius: 8,
+              placeholderIcon: Icons.queue_music_rounded,
             ),
             const SizedBox(height: 8),
             Text(

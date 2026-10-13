@@ -734,59 +734,92 @@ class _MainScreenState extends State<MainScreen> {
     final isLocalMode = authProvider.isLocalOnlyMode;
 
     if (_isDesktop) {
+      final isDark = Theme.of(context).brightness == Brightness.dark;
       final content = Scaffold(
+        backgroundColor:
+            isDark ? const Color(0xFF000000) : const Color(0xFFE5E5EA),
         body: Column(
           children: [
             Expanded(
-              child: Row(
-                children: [
-                  DesktopNavigationSidebar(
-                    selectedIndex: _currentIndex,
-                    onDestinationSelected: (index) {
-                      setState(() => _currentIndex = index);
-                      NavigationHelper.desktopNavigatorKey.currentState
-                          ?.popUntil((route) => route.isFirst);
-                    },
-                    navigatorKey: NavigationHelper.desktopNavigatorKey,
-                  ),
-                  Expanded(
-                    child: Navigator(
-                      key: NavigationHelper.desktopNavigatorKey,
-                      onGenerateRoute: (settings) {
-                        return PageRouteBuilder(
-                          pageBuilder: (ctx, anim, _) => LazyIndexedStack(
-                            index: _currentIndex,
-                            children: _screens,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DesktopNavigationSidebar(
+                      selectedIndex: _currentIndex,
+                      onDestinationSelected: (index) {
+                        setState(() => _currentIndex = index);
+                        NavigationHelper.desktopNavigatorKey.currentState
+                            ?.popUntil((route) => route.isFirst);
+                      },
+                      navigatorKey: NavigationHelper.desktopNavigatorKey,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? const Color(0xFF121212)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: Theme(
+                          data: Theme.of(context).copyWith(
+                            scaffoldBackgroundColor: isDark
+                                ? const Color(0xFF121212)
+                                : Colors.white,
                           ),
-                          transitionsBuilder: (ctx, animation, _, child) {
-                            return FadeTransition(
-                              opacity: animation,
-                              child: child,
-                            );
-                          },
-                        );
-                      },
+                          child: Navigator(
+                            key: NavigationHelper.desktopNavigatorKey,
+                            onGenerateRoute: (settings) {
+                              return PageRouteBuilder(
+                                pageBuilder: (ctx, anim, _) => LazyIndexedStack(
+                                  index: _currentIndex,
+                                  children: _screens,
+                                ),
+                                transitionsBuilder: (ctx, animation, _, child) {
+                                  return FadeTransition(
+                                    opacity: animation,
+                                    child: child,
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  if (_showRightSidebar)
-                    Selector<PlayerProvider, bool>(
-                      selector: (_, p) =>
-                          p.currentSong != null || p.isPlayingRadio,
-                      builder: (context, hasCurrentSong, _) {
-                        return hasCurrentSong
-                            ? RightSidebar(
-                                initialTab: _sidebarTab,
-                                onTabChanged: (tab) =>
-                                    setState(() => _sidebarTab = tab),
-                                onClose: () =>
-                                    setState(() => _showRightSidebar = false),
-                              )
-                            : const SizedBox.shrink();
-                      },
-                    ),
-                ],
+                    if (_showRightSidebar)
+                      Selector<PlayerProvider, bool>(
+                        selector: (_, p) =>
+                            p.currentSong != null || p.isPlayingRadio,
+                        builder: (context, hasCurrentSong, _) {
+                          return hasCurrentSong
+                              ? Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    const SizedBox(width: 8),
+                                    RightSidebar(
+                                      initialTab: _sidebarTab,
+                                      onTabChanged: (tab) =>
+                                          setState(() => _sidebarTab = tab),
+                                      onClose: () =>
+                                          setState(() => _showRightSidebar = false),
+                                    ),
+                                  ],
+                                )
+                              : const SizedBox.shrink();
+                        },
+                      ),
+                  ],
+                ),
               ),
             ),
+            const SizedBox(height: 8),
             Selector<PlayerProvider, bool>(
               selector: (_, p) => p.currentSong != null || p.isPlayingRadio,
               builder: (context, hasCurrentSong, _) {

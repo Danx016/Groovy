@@ -157,6 +157,12 @@ void main() async {
       if (Platform.isWindows || Platform.isLinux) {
         JustAudioMediaKit.title = 'Groovy';
         JustAudioMediaKit.prefetchPlaylist = false;
+        JustAudioMediaKit.protocolWhitelist = const [
+          'http',
+          'https',
+          'file',
+          'data',
+        ];
         JustAudioMediaKit.ensureInitialized(linux: true, windows: true);
       }
     } catch (e) {
@@ -298,6 +304,18 @@ void main() async {
 
   final groovyConnectService = GroovyConnectService();
   playerProvider.setGroovyConnectService(groovyConnectService);
+
+  groovyConnectService.onLibrarySyncReceived = (payload) {
+    libraryProvider.handleRemoteLibrarySync(payload);
+    final type = payload['type'];
+    final songId = payload['songId'];
+    if (type == 'favorite_add' && playerProvider.currentSong?.id == songId) {
+      playerProvider.setFavoriteLocally(true);
+    } else if (type == 'favorite_remove' && playerProvider.currentSong?.id == songId) {
+      playerProvider.setFavoriteLocally(false);
+    }
+  };
+
   Future.delayed(const Duration(milliseconds: 1500), () {
     groovyConnectService.initialize().catchError((e) {
       debugPrint('Failed to initialize GroovyConnectService: $e');

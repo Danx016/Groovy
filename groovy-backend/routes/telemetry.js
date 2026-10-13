@@ -28,6 +28,65 @@ const normalizeCoverArt = (coverArt, songId) => {
   return (coverArt && typeof coverArt === 'string') ? coverArt : '';
 };
 
+async function broadcastUserCommand(userId, senderDeviceId, action, payload) {
+  if (!userId || userId <= 0) return;
+  const pool = getPool();
+  if (!pool) return;
+  try {
+    const payloadStr = payload ? (typeof payload === 'string' ? payload : JSON.stringify(payload)) : null;
+
+    // Get active devices for this user (connected in the last 15 minutes)
+    const [devices] = await pool.query(`
+      SELECT DISTINCT device_key
+      FROM user_live_playback
+      WHERE user_id = ?
+        AND last_ping_at >= NOW() - INTERVAL 15 MINUTE
+        AND (? = '' OR device_key != ?)
+    `, [userId, senderDeviceId || '', senderDeviceId || '']);
+
+    for (const d of devices) {
+      const targetDeviceId = d.device_key;
+      if (!targetDeviceId) continue;
+
+      const [result] = await pool.query(`
+        INSERT INTO device_commands (user_id, sender_device_id, target_device_id, action, payload, status)
+        VALUES (?, ?, ?, ?, ?, 'pending')
+      `, [userId, senderDeviceId || 'system', targetDeviceId, action, payloadStr]);
+
+      const newCommand = {
+        id: result.insertId,
+        senderDeviceId: senderDeviceId || 'system',
+        action,
+        payload,
+        createdAt: new Date().toISOString(),
+      };
+
+      commandBus.emit('command_dispatch', {
+        targetDeviceId,
+        senderDeviceId: senderDeviceId || 'system',
+        userId,
+        command: newCommand,
+      });
+    }
+
+    // Also broadcast on commandBus for real-time long-poll listeners
+    commandBus.emit('command_dispatch', {
+      targetDeviceId: '*',
+      senderDeviceId: senderDeviceId || 'system',
+      userId,
+      command: {
+        id: 0,
+        senderDeviceId: senderDeviceId || 'system',
+        action,
+        payload,
+        createdAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error('[broadcastUserCommand error]:', err);
+  }
+}
+
 router.use(optionalAuth);
 
 /**
@@ -92,6 +151,7 @@ router.post('/command', authenticateToken, async (req, res) => {
       'volume',
       'togglePlayPause',
       'transfer',
+      'library_sync',
     ]);
 
     if (!targetDeviceId || !action) {
@@ -255,8 +315,10 @@ router.get('/command', authenticateToken, async (req, res) => {
         AND sender_device_id != ?
         AND (
           target_device_id = ?
+          OR target_device_id = '*'
+          OR target_device_id = 'broadcast'
           OR (? != '' AND target_device_id = ?)
-          OR (? > 0 AND user_id = ? AND target_device_id = ?)
+          OR (? > 0 AND user_id = ? AND (target_device_id = ? OR target_device_id = '*' OR target_device_id = 'broadcast'))
         )
       ORDER BY id ASC
       LIMIT 10
@@ -307,8 +369,10 @@ router.get('/command', authenticateToken, async (req, res) => {
     const onCommand = async (event) => {
       if (resolved) return;
       const isTarget = event.targetDeviceId === deviceId ||
+        event.targetDeviceId === '*' ||
+        event.targetDeviceId === 'broadcast' ||
         (platformModel && event.targetDeviceId === platformModel) ||
-        (userId > 0 && event.userId === userId && event.targetDeviceId === deviceId);
+        (userId > 0 && event.userId === userId && (event.targetDeviceId === deviceId || event.targetDeviceId === '*' || event.targetDeviceId === 'broadcast'));
 
       if (isTarget && event.senderDeviceId !== deviceId) {
         resolved = true;
@@ -779,4 +843,7 @@ router.post('/leave', async (req, res) => {
   }
 });
 
+router.broadcastUserCommand = broadcastUserCommand;
 module.exports = router;
+module.exports.broadcastUserCommand = broadcastUserCommand;
+

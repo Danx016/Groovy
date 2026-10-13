@@ -350,18 +350,6 @@ class YoutubeService {
         }
       } catch (e) {
         debugPrint('[YouTube] Desktop stream resolve error for $videoId: $e');
-        // In case initial yt-dlp setup was just finishing in the background, retry once
-        try {
-          await Future.delayed(const Duration(milliseconds: 600));
-          final retryInfo = await _ytdlp.resolveStreamInfo(videoId, forceRefresh: true);
-          if (retryInfo.url.isNotEmpty) {
-            debugPrint('[YouTube] Desktop: resolved on retry for $videoId');
-            return AudioSource.uri(
-              Uri.parse(retryInfo.url),
-              tag: song.id,
-            );
-          }
-        } catch (_) {}
       }
       // Desktop uses just_audio_media_kit (libmpv), which does NOT support StreamAudioSource.
       // We must NEVER return _YoutubeStreamAudioSource on desktop, as it causes an UnsupportedError.
@@ -436,7 +424,7 @@ class YoutubeService {
       var url = id;
       // Upgrade Google User Content / YouTube Music album artwork to requested size
       final targetSize = size.clamp(120, 1200);
-      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w$targetSize-h$targetSize-l90-rj');
+      url = url.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w$targetSize-h$targetSize-c-l90-rj');
       // Ensure we use hqdefault.jpg which is guaranteed to exist on YouTube CDN
       // (sddefault.jpg 404s for many music tracks and video uploads)
       url = url.replaceAll('/sddefault.jpg', '/hqdefault.jpg');

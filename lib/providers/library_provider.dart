@@ -57,6 +57,8 @@ class LibraryProvider extends ChangeNotifier {
   static const String _artistsCacheKey = 'cached_artists';
   static const String _lastUpdateKey = 'last_cache_update';
 
+  Timer? _cloudSyncTimer;
+
   LibraryProvider(this._youtubeService, this._audioHandler) {
     // Serve the Android Auto browse tree: audio_service pulls these lists on
     // demand, including from the headless engine when the car connects while
@@ -68,6 +70,8 @@ class LibraryProvider extends ChangeNotifier {
     // Tell the audio handler whether we are in YT Stream mode so it can
     // adapt the Android Auto root browse tree accordingly.
     _audioHandler.onIsYoutubeMode = () => _youtubeService.isYoutube;
+
+    startPeriodicCloudSync();
   }
   YoutubeService get youtubeService => _youtubeService;
   LibraryDatabaseService get database => _db;
@@ -474,9 +478,17 @@ class LibraryProvider extends ChangeNotifier {
         final token = await StorageService().getUserToken();
         if (token != null && token.isNotEmpty) {
           final cloudFavs = await GroovyApiService().getFavorites(token);
+          final cloudIds = cloudFavs.map((s) => s.id).toSet();
+          final currentDbStarred = await _db.getStarredSongs();
+          for (final s in currentDbStarred) {
+            if (!s.isLocal && !cloudIds.contains(s.id)) {
+              await _db.setSongStarred(s.id, false);
+            }
+          }
           for (final s in cloudFavs) {
             final songToAdd = s.copyWith(starred: true, created: s.created ?? DateTime.now());
             await _db.insertOrUpdateSong(songToAdd);
+            await _db.setSongStarred(s.id, true);
           }
         }
       } catch (e) {
@@ -824,6 +836,30 @@ class LibraryProvider extends ChangeNotifier {
       }
 
       _playlists = map.values.toList();
+
+      // Fetch Groovy Cloud playlists if authenticated
+      try {
+        final token = await StorageService().getUserToken();
+        if (token != null && token.isNotEmpty) {
+          final cloudLists = await GroovyApiService().getPlaylists(token);
+          for (final c in cloudLists) {
+            final id = c['id']?.toString() ?? '';
+            if (id.isNotEmpty) {
+              map['cloud_$id'] = Playlist(
+                id: 'cloud_$id',
+                name: c['name']?.toString() ?? 'Playlist',
+                comment: c['description']?.toString(),
+                coverArt: c['coverArt']?.toString(),
+                songCount: c['song_count'] is int
+                    ? c['song_count'] as int
+                    : int.tryParse(c['song_count']?.toString() ?? '0') ?? 0,
+              );
+            }
+          }
+          _playlists = map.values.toList();
+        }
+      } catch (_) {}
+
       _cachedPlaylists = _playlists;
       _saveCachedData();
       notifyListeners();
@@ -1349,6 +1385,20 @@ class LibraryProvider extends ChangeNotifier {
       final token = await StorageService().getUserToken();
       if (token != null && token.isNotEmpty) {
         final cloudFavs = await GroovyApiService().getFavorites(token);
+        final cloudIds = cloudFavs.map((s) => s.id).toSet();
+
+        // Detect songs removed from favorites on another device
+        for (final s in dbSongs) {
+          if (!s.isLocal && !cloudIds.contains(s.id)) {
+            starredMap.remove(s.id);
+            _db.setSongStarred(s.id, false).catchError((_) {});
+            final idx = _cachedAllSongs.indexWhere((c) => c.id == s.id);
+            if (idx >= 0) {
+              _cachedAllSongs[idx] = _cachedAllSongs[idx].copyWith(starred: false);
+            }
+          }
+        }
+
         for (final s in cloudFavs) {
           starredMap[s.id] = s;
           _db.insertOrUpdateSong(s).catchError((_) {});
@@ -1361,7 +1411,9 @@ class LibraryProvider extends ChangeNotifier {
 
     if (_starred != null && _starred!.songs.isNotEmpty) {
       for (final s in _starred!.songs) {
-        starredMap[s.id] = s;
+        if (starredMap.containsKey(s.id)) {
+          starredMap[s.id] = s;
+        }
       }
     }
     for (final s in _cachedAllSongs) {
@@ -1370,6 +1422,134 @@ class LibraryProvider extends ChangeNotifier {
       }
     }
     return starredMap.values.toList();
+  }
+
+  /// Handles real-time library synchronization notifications dispatched across devices.
+  Future<void> handleRemoteLibrarySync(Map<String, dynamic> payload) async {
+    final type = payload['type']?.toString();
+    final songId = payload['songId']?.toString();
+    debugPrint('[LibraryProvider] Handling remote library sync: $type for song $songId');
+
+    if (type == 'favorite_add' && songId != null && songId.isNotEmpty) {
+      final songData = payload['song'] is Map ? Map<String, dynamic>.from(payload['song'] as Map) : null;
+      final song = songData != null
+          ? Song.fromJson(songData).copyWith(starred: true)
+          : Song(id: songId, title: '', starred: true);
+
+      // 1. Update in _cachedAllSongs
+      final idx = _cachedAllSongs.indexWhere((s) => s.id == songId);
+      if (idx >= 0) {
+        _cachedAllSongs[idx] = _cachedAllSongs[idx].copyWith(starred: true);
+      } else {
+        _cachedAllSongs.insert(0, song);
+      }
+
+      // 2. Update in _starred
+      if (_starred != null) {
+        final currentSongs = List<Song>.from(_starred!.songs);
+        if (!currentSongs.any((s) => s.id == songId)) {
+          currentSongs.insert(0, song);
+        }
+        _starred = SearchResult(
+          artists: _starred!.artists,
+          albums: _starred!.albums,
+          songs: currentSongs,
+          youtubeVideos: _starred!.youtubeVideos,
+        );
+      }
+
+      // 3. Persist to local database
+      await _db.insertOrUpdateSong(song);
+      await _db.setSongStarred(songId, true);
+
+      await loadStarred();
+      notifyListeners();
+    } else if (type == 'favorite_remove' && songId != null && songId.isNotEmpty) {
+      // 1. Update in _cachedAllSongs
+      final idx = _cachedAllSongs.indexWhere((s) => s.id == songId);
+      if (idx >= 0) {
+        _cachedAllSongs[idx] = _cachedAllSongs[idx].copyWith(starred: false);
+      }
+
+      // 2. Update in _starred
+      if (_starred != null) {
+        final currentSongs = List<Song>.from(_starred!.songs);
+        currentSongs.removeWhere((s) => s.id == songId);
+        _starred = SearchResult(
+          artists: _starred!.artists,
+          albums: _starred!.albums,
+          songs: currentSongs,
+          youtubeVideos: _starred!.youtubeVideos,
+        );
+      }
+
+      // 3. Persist to local database
+      await _db.setSongStarred(songId, false);
+
+      await loadStarred();
+      notifyListeners();
+    } else if (type == 'playlists_change') {
+      await loadPlaylists();
+      notifyListeners();
+    }
+  }
+
+  void startPeriodicCloudSync() {
+    _cloudSyncTimer?.cancel();
+    _cloudSyncTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+      syncCloudFavorites();
+    });
+  }
+
+  Future<void> syncCloudFavorites() async {
+    try {
+      final token = await StorageService().getUserToken();
+      if (token == null || token.isEmpty) return;
+      final cloudFavs = await GroovyApiService().getFavorites(token);
+      final cloudIds = cloudFavs.map((s) => s.id).toSet();
+      final currentDbStarred = await _db.getStarredSongs();
+      bool changed = false;
+
+      // Unstar songs deleted on other devices
+      for (final s in currentDbStarred) {
+        if (!s.isLocal && !cloudIds.contains(s.id)) {
+          await _db.setSongStarred(s.id, false);
+          final idx = _cachedAllSongs.indexWhere((c) => c.id == s.id);
+          if (idx >= 0) {
+            _cachedAllSongs[idx] = _cachedAllSongs[idx].copyWith(starred: false);
+          }
+          if (_starred != null) {
+            _starred!.songs.removeWhere((item) => item.id == s.id);
+          }
+          changed = true;
+        }
+      }
+
+      // Star songs added on other devices
+      for (final s in cloudFavs) {
+        final inDb = currentDbStarred.any((d) => d.id == s.id);
+        if (!inDb) {
+          final songToAdd = s.copyWith(starred: true, created: s.created ?? DateTime.now());
+          await _db.insertOrUpdateSong(songToAdd);
+          await _db.setSongStarred(s.id, true);
+          final idx = _cachedAllSongs.indexWhere((c) => c.id == s.id);
+          if (idx >= 0) {
+            _cachedAllSongs[idx] = _cachedAllSongs[idx].copyWith(starred: true);
+          } else {
+            _cachedAllSongs.insert(0, songToAdd);
+          }
+          if (_starred != null && !_starred!.songs.any((item) => item.id == s.id)) {
+            _starred!.songs.insert(0, songToAdd);
+          }
+          changed = true;
+        }
+      }
+
+      if (changed) {
+        await loadStarred();
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   Future<void> star({String? songId, String? albumId, String? artistId}) async {

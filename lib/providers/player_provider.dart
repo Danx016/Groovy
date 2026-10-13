@@ -2706,8 +2706,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _concatenatingSource = null;
           unawaited(_ensureAudioFocus(() async {}));
           unawaited(_applyReplayGain(song));
-          await _audioPlayer.setAudioSource(youtubeSource,
-              initialPosition: initialPosition ?? Duration.zero);
+          await _audioPlayer
+              .setAudioSource(
+                youtubeSource,
+                initialPosition: initialPosition ?? Duration.zero,
+              )
+              .timeout(const Duration(seconds: 12));
           if (currentGen != _playGeneration) return;
           unawaited(_audioPlayer.play().catchError((e) {
             debugPrint('[Player] Error during play(): $e');
@@ -2736,17 +2740,23 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           unawaited(_applyReplayGain(song));
           final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
           if (headers != null && headers.isNotEmpty && !isDesktop) {
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(
-                Uri.parse(playUrl),
-                headers: headers,
-                tag: song.id,
-              ),
-              initialPosition: initialPosition ?? Duration.zero,
-            );
+            await _audioPlayer
+                .setAudioSource(
+                  AudioSource.uri(
+                    Uri.parse(playUrl),
+                    headers: headers,
+                    tag: song.id,
+                  ),
+                  initialPosition: initialPosition ?? Duration.zero,
+                )
+                .timeout(const Duration(seconds: 12));
           } else {
-            await _audioPlayer.setUrl(playUrl,
-                initialPosition: initialPosition ?? Duration.zero);
+            await _audioPlayer
+                .setUrl(
+                  playUrl,
+                  initialPosition: initialPosition ?? Duration.zero,
+                )
+                .timeout(const Duration(seconds: 12));
           }
           if (currentGen != _playGeneration) return;
           unawaited(_audioPlayer.play().catchError((e) {
@@ -2761,7 +2771,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               initialIndex: _currentIndex,
               initialPosition: initialPosition ?? Duration.zero,
               playGeneration: currentGen,
-            );
+            ).timeout(const Duration(seconds: 12));
           } catch (e) {
             if (!_hasPlayedOnce) {
               debugPrint(
@@ -2772,7 +2782,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 initialIndex: _currentIndex,
                 initialPosition: initialPosition ?? Duration.zero,
                 playGeneration: currentGen,
-              );
+              ).timeout(const Duration(seconds: 12));
               _hasPlayedOnce = true;
             } else {
               rethrow;
@@ -2812,23 +2822,29 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   (Platform.isWindows ||
                       Platform.isLinux ||
                       Platform.isMacOS))) {
-            await _audioPlayer.setUrl(playUrl,
-                initialPosition: initialPosition ?? Duration.zero);
+            await _audioPlayer
+                .setUrl(
+                  playUrl,
+                  initialPosition: initialPosition ?? Duration.zero,
+                )
+                .timeout(const Duration(seconds: 12));
           } else {
             final cacheDir = await getTemporaryDirectory();
             final cacheFile = File(
               '${cacheDir.path}/groovy_stream_${song.id.hashCode}.tmp',
             );
             // ignore: experimental_member_use
-            await _audioPlayer.setAudioSource(
-              // ignore: experimental_member_use
-              LockCachingAudioSource(
-                Uri.parse(playUrl),
-                cacheFile: cacheFile,
-                tag: song.id,
-              ),
-              initialPosition: initialPosition ?? Duration.zero,
-            );
+            await _audioPlayer
+                .setAudioSource(
+                  // ignore: experimental_member_use
+                  LockCachingAudioSource(
+                    Uri.parse(playUrl),
+                    cacheFile: cacheFile,
+                    tag: song.id,
+                  ),
+                  initialPosition: initialPosition ?? Duration.zero,
+                )
+                .timeout(const Duration(seconds: 12));
           }
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
@@ -2896,7 +2912,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       debugPrint('[Player] ✗ Error playing song "${song.title}": $e');
-      if (song.isLocal != true && !_hasRetriedCurrentPlay) {
+      final isTimeout =
+          errorStr.contains('timeout') || errorStr.contains('timed out');
+      if (song.isLocal != true && !_hasRetriedCurrentPlay && !isTimeout) {
         _hasRetriedCurrentPlay = true;
         YtDlpService().invalidateCache(song.id);
         debugPrint(
@@ -2917,7 +2935,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           'No se pudo reproducir "${song.title}". Verifica tu conexión a internet.';
       onPlaybackError?.call(_lastPlaybackError!);
       try {
-        await _audioPlayer.stop();
+        await _audioPlayer.stop().timeout(const Duration(seconds: 2));
       } catch (_) {}
       _updateAndroidAuto();
 
@@ -4031,12 +4049,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (playGeneration != null && playGeneration != _playGeneration) return;
 
     _concatenatingSource = ConcatenatingAudioSource(children: children);
-    await _audioPlayer.setAudioSource(
-      _concatenatingSource!,
-      initialIndex: _currentIndex,
-      initialPosition: initialPosition ?? Duration.zero,
-      preload: true,
-    );
+    await _audioPlayer
+        .setAudioSource(
+          _concatenatingSource!,
+          initialIndex: _currentIndex,
+          initialPosition: initialPosition ?? Duration.zero,
+          preload: true,
+        )
+        .timeout(const Duration(seconds: 12));
   }
 
   Future<void> _prepareCurrentSong() async {
@@ -4047,7 +4067,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           : null;
       if (ytSource != null) {
         _concatenatingSource = null;
-        await _audioPlayer.setAudioSource(ytSource);
+        await _audioPlayer
+            .setAudioSource(ytSource)
+            .timeout(const Duration(seconds: 10));
         _activeAudioSongId = _currentSong?.id;
         if (_position.inMilliseconds > 0) {
           await _audioPlayer.seek(_position);
@@ -4082,15 +4104,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 (Platform.isWindows || Platform.isLinux || Platform.isMacOS))) {
           final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
           if (headers != null && headers.isNotEmpty && !isDesktop) {
-            await _audioPlayer.setAudioSource(
-              AudioSource.uri(
-                Uri.parse(playUrl),
-                headers: headers,
-                tag: _currentSong!.id,
-              ),
-            );
+            await _audioPlayer
+                .setAudioSource(
+                  AudioSource.uri(
+                    Uri.parse(playUrl),
+                    headers: headers,
+                    tag: _currentSong!.id,
+                  ),
+                )
+                .timeout(const Duration(seconds: 10));
           } else {
-            await _audioPlayer.setUrl(playUrl);
+            await _audioPlayer
+                .setUrl(playUrl)
+                .timeout(const Duration(seconds: 10));
           }
         } else {
           final cacheDir = await getTemporaryDirectory();
@@ -4098,14 +4124,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             '${cacheDir.path}/groovy_stream_${_currentSong!.id.hashCode}.tmp',
           );
           // ignore: experimental_member_use
-          await _audioPlayer.setAudioSource(
-            // ignore: experimental_member_use
-            LockCachingAudioSource(
-              Uri.parse(playUrl),
-              cacheFile: cacheFile,
-              tag: _currentSong!.id,
-            ),
-          );
+          await _audioPlayer
+              .setAudioSource(
+                // ignore: experimental_member_use
+                LockCachingAudioSource(
+                  Uri.parse(playUrl),
+                  cacheFile: cacheFile,
+                  tag: _currentSong!.id,
+                ),
+              )
+              .timeout(const Duration(seconds: 10));
         }
       }
       // Seek to the restored position after the source is loaded
@@ -4227,6 +4255,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     } catch (e) {
       debugPrint('Error toggling favorite: $e');
       _currentSong = _currentSong!.copyWith(starred: isStarred);
+      notifyListeners();
+    }
+  }
+
+  void setFavoriteLocally(bool isFav) {
+    if (_currentSong != null && (_currentSong!.starred ?? false) != isFav) {
+      _currentSong = _currentSong!.copyWith(starred: isFav);
       notifyListeners();
     }
   }

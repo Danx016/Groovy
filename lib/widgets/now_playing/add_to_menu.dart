@@ -124,7 +124,10 @@ class AddToMenu extends StatelessWidget {
             },
           ),
           ListTile(
-            leading: Icon(isStarred ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: isStarred ? Colors.redAccent : null),
+            leading: Icon(
+              isStarred ? Icons.star_rounded : Icons.star_outline_rounded,
+              color: isStarred ? const Color(0xFFFFD60A) : null,
+            ),
             title: Text(isStarred ? AppLocalizations.of(context)!.removeFromFavorites : AppLocalizations.of(context)!.addToFavorites),
             onTap: () async {
               Navigator.of(context).pop();

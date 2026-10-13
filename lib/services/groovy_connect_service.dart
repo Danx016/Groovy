@@ -197,6 +197,8 @@ class GroovyConnectService extends ChangeNotifier {
     required double volume,
   })? onRemoteStatusUpdated;
 
+  void Function(Map<String, dynamic> payload)? onLibrarySyncReceived;
+
   List<GroovyRemoteDevice> get discoveredDevices => _discoveredDevices.values.toList();
   GroovyRemoteDevice? get connectedDevice => _connectedDevice;
   bool get isConnected => _connectedDevice != null;
@@ -329,6 +331,7 @@ class GroovyConnectService extends ChangeNotifier {
         await prefs.setString('groovy_cloud_device_id_v2', id);
       }
       _localDeviceId = id;
+      GroovyApiService().setDeviceId(_localDeviceId);
 
       final storedToken = await StorageService().getUserToken();
       if (storedToken != null && storedToken.isNotEmpty) {
@@ -761,6 +764,14 @@ class GroovyConnectService extends ChangeNotifier {
               } catch (e) {
                 debugPrint('[GroovyConnect] Error executing onCommandReceived: $e');
               }
+            }
+          } else if (action == 'library_sync' && payload is Map) {
+            final syncPayload = Map<String, dynamic>.from(payload);
+            debugPrint('[GroovyConnect] Real-time library sync received: ${syncPayload['type']}');
+            try {
+              onLibrarySyncReceived?.call(syncPayload);
+            } catch (e) {
+              debugPrint('[GroovyConnect] Error executing onLibrarySyncReceived: $e');
             }
           }
         } catch (cmdError) {

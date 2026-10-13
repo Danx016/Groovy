@@ -101,13 +101,17 @@ class _DesktopNavigationSidebarState extends State<DesktopNavigationSidebar> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
     final width = _isCollapsed ? 72.0 : 280.0;
-    final sidebarBg = isDark ? const Color(0xFF0C0D10) : const Color(0xFFF2F2F7);
+    final sidebarBg = isDark ? const Color(0xFF121212) : const Color(0xFFF2F2F7);
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       width: width,
-      color: sidebarBg,
+      decoration: BoxDecoration(
+        color: sidebarBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

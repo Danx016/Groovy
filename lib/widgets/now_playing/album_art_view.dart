@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 /// Ultra-lightweight album art widget for the Now Playing screen.
 ///
@@ -44,6 +45,45 @@ class AlbumArtView extends StatelessWidget {
       );
     }
 
+    Widget buildErrorFallback() {
+      debugPrint('[AlbumArtView] Image error for tag $tag');
+      final match = RegExp(r'([a-zA-Z0-9_-]{11})').firstMatch(tag);
+      final videoId = match?.group(1);
+      if (videoId != null && videoId.isNotEmpty) {
+        return ClipRect(
+          child: Transform.scale(
+            scale: 4.0 / 3.0,
+            alignment: Alignment.center,
+            child: Image.network(
+              'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              errorBuilder: (_, __, ___) => buildFallback(),
+            ),
+          ),
+        );
+      }
+      return buildFallback();
+    }
+
+    final String? imgUrl = image is CachedNetworkImageProvider
+        ? (image as CachedNetworkImageProvider).url
+        : (image is NetworkImage ? (image as NetworkImage).url : null);
+    final bool isYtDefault = imgUrl != null &&
+        imgUrl.contains('i.ytimg.com') &&
+        (imgUrl.contains('/hqdefault') ||
+         imgUrl.contains('/mqdefault') ||
+         imgUrl.contains('/sddefault') ||
+         imgUrl.contains('/default'));
+
+    final innerImage = Image(
+      image: image,
+      fit: BoxFit.cover,
+      gaplessPlayback: true,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) => buildErrorFallback(),
+    );
+
     // Inner image: clipped, Hero-wrapped, gapless, medium quality for speed, with cached deep shadow.
     final imageWidget = Container(
       decoration: BoxDecoration(
@@ -61,26 +101,15 @@ class AlbumArtView extends StatelessWidget {
         borderRadius: BorderRadius.circular(22.0),
         child: Hero(
           tag: tag,
-          child: Image(
-            image: image,
-            fit: BoxFit.cover,
-            gaplessPlayback: true,
-            filterQuality: FilterQuality.medium,
-            errorBuilder: (context, error, stackTrace) {
-              debugPrint('[AlbumArtView] Image error ($error) for tag $tag');
-              final match = RegExp(r'([a-zA-Z0-9_-]{11})').firstMatch(tag);
-              final videoId = match?.group(1);
-              if (videoId != null && videoId.isNotEmpty) {
-                return Image.network(
-                  'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.medium,
-                  errorBuilder: (_, __, ___) => buildFallback(),
-                );
-              }
-              return buildFallback();
-            },
-          ),
+          child: isYtDefault
+              ? ClipRect(
+                  child: Transform.scale(
+                    scale: 4.0 / 3.0,
+                    alignment: Alignment.center,
+                    child: innerImage,
+                  ),
+                )
+              : innerImage,
         ),
       ),
     );

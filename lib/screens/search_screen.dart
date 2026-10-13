@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'dart:async';
 import '../providers/library_provider.dart';
 import '../providers/player_provider.dart';
@@ -737,46 +736,18 @@ class _SearchScreenState extends State<SearchScreen> {
     VoidCallback? onOptionsPressed,
     required VoidCallback onTap,
   }) {
-    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
-    final coverUrl = imageUrl != null
-        ? (isLocalFilePath(imageUrl)
-            ? imageUrl
-            : youtubeService.getCoverArtUrl(imageUrl, size: 160))
-        : null;
-
-    Widget imageWidget;
-    if (isCircular) {
-      imageWidget = ClipOval(
-        child: SizedBox(
-          width: 50,
-          height: 50,
-          child: coverUrl != null
-              ? CachedNetworkImage(
-                  imageUrl: coverUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(color: const Color(0xFF242424)),
-                  errorWidget: (_, __, ___) => _defaultArtistAvatar(isDark),
-                )
-              : _defaultArtistAvatar(isDark),
-        ),
-      );
-    } else {
-      imageWidget = ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: SizedBox(
-          width: 50,
-          height: 50,
-          child: coverUrl != null
-              ? CachedNetworkImage(
-                  imageUrl: coverUrl,
-                  fit: BoxFit.cover,
-                  placeholder: (_, __) => Container(color: const Color(0xFF242424)),
-                  errorWidget: (_, __, ___) => _defaultCover(isDark),
-                )
-              : _defaultCover(isDark),
-        ),
-      );
-    }
+    final Widget imageWidget = isCircular
+        ? AlbumArtwork(
+            coverArt: imageUrl,
+            size: 50,
+            borderRadius: 25,
+            placeholderIcon: Icons.person_rounded,
+          )
+        : AlbumArtwork(
+            coverArt: imageUrl,
+            size: 50,
+            borderRadius: 6,
+          );
 
     return RepaintBoundary(
       child: InkWell(
@@ -985,24 +956,6 @@ class _SearchScreenState extends State<SearchScreen> {
         }),
         const SizedBox(height: 24),
       ],
-    );
-  }
-
-  Widget _defaultArtistAvatar(bool isDark) {
-    return Container(
-      color: isDark ? const Color(0xFF242424) : Colors.grey[300],
-      child: const Center(
-        child: Icon(CupertinoIcons.person_fill, color: Colors.white38, size: 26),
-      ),
-    );
-  }
-
-  Widget _defaultCover(bool isDark) {
-    return Container(
-      color: isDark ? const Color(0xFF242424) : Colors.grey[300],
-      child: const Center(
-        child: Icon(CupertinoIcons.music_note, color: Colors.white38, size: 26),
-      ),
     );
   }
 

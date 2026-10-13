@@ -294,7 +294,13 @@ class AlbumArtwork extends StatelessWidget {
           cacheSize,
         );
         if (imageUrl.isEmpty) return _buildPlaceholder(isDark);
-        return CachedNetworkImage(
+        final bool isYtDefault = imageUrl.contains('i.ytimg.com') &&
+            (imageUrl.contains('/hqdefault') ||
+             imageUrl.contains('/mqdefault') ||
+             imageUrl.contains('/sddefault') ||
+             imageUrl.contains('/default'));
+
+        Widget img = CachedNetworkImage(
           imageUrl: imageUrl,
           key: ValueKey('cover_$imageUrl'),
           fit: BoxFit.cover,
@@ -312,6 +318,18 @@ class AlbumArtwork extends StatelessWidget {
             return _buildNetworkImageFallback(imageUrl, isDark, BoxFit.cover);
           },
         );
+
+        if (isYtDefault) {
+          img = ClipRect(
+            child: Transform.scale(
+              scale: 4.0 / 3.0,
+              alignment: Alignment.center,
+              child: img,
+            ),
+          );
+        }
+
+        return img;
       },
     );
   }
@@ -324,7 +342,15 @@ class AlbumArtwork extends StatelessWidget {
     } else if (url.contains('=w800-h800') || url.contains('=w1200-h1200')) {
       fallbackUrl = url.replaceAll(RegExp(r'=w\d+-h\d+[^/]*'), '=w544-h544');
     }
-    return Image.network(
+
+    final bool urlWasAlreadyYt = url.contains('i.ytimg.com');
+    final bool fallbackIsYt = fallbackUrl.contains('i.ytimg.com') &&
+        (fallbackUrl.contains('/hqdefault') ||
+         fallbackUrl.contains('/mqdefault') ||
+         fallbackUrl.contains('/sddefault') ||
+         fallbackUrl.contains('/default'));
+
+    Widget img = Image.network(
       fallbackUrl,
       fit: fit,
       filterQuality: FilterQuality.medium,
@@ -335,16 +361,38 @@ class AlbumArtwork extends StatelessWidget {
         if (vid != null &&
             vid.isNotEmpty &&
             !fallbackUrl.contains('/vi/$vid/')) {
-          return Image.network(
+          Widget ytImg = Image.network(
             'https://i.ytimg.com/vi/$vid/hqdefault.jpg',
             fit: fit,
             filterQuality: FilterQuality.medium,
             errorBuilder: (_, __, ___) => _buildPlaceholder(isDark),
           );
+          if (fit == BoxFit.cover && !urlWasAlreadyYt) {
+            ytImg = ClipRect(
+              child: Transform.scale(
+                scale: 4.0 / 3.0,
+                alignment: Alignment.center,
+                child: ytImg,
+              ),
+            );
+          }
+          return ytImg;
         }
         return _buildPlaceholder(isDark);
       },
     );
+
+    if (fallbackIsYt && fit == BoxFit.cover && !urlWasAlreadyYt) {
+      img = ClipRect(
+        child: Transform.scale(
+          scale: 4.0 / 3.0,
+          alignment: Alignment.center,
+          child: img,
+        ),
+      );
+    }
+
+    return img;
   }
 
   Widget _buildPlaceholder(bool isDark) {

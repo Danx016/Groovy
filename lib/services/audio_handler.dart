@@ -174,11 +174,16 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
     // because pipe keeps an active addStream open. We use listen() instead.
     _playbackEventSubscription = _player.playbackEventStream
         .map(_buildPlaybackState)
-        .listen((state) {
-      if (!_remotePlayback) {
-        playbackState.add(state);
-      }
-    });
+        .listen(
+      (state) {
+        if (!_remotePlayback) {
+          playbackState.add(state);
+        }
+      },
+      onError: (e) {
+        debugPrint('[GroovyAudioHandler] playbackEventStream error: $e');
+      },
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -684,7 +689,7 @@ Future<GroovyAudioHandler> initAudioService() async {
         androidNotificationChannelDescription: 'Groovy Music Playback',
         androidNotificationOngoing: false,
         androidStopForegroundOnPause: false,
-        androidNotificationIcon: 'mipmap/ic_launcher',
+        androidNotificationIcon: 'drawable/ic_notification',
         notificationColor: Color(0xFFFA243C),
         preloadArtwork: true,
         androidResumeOnClick: true,

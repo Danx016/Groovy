@@ -111,6 +111,11 @@ class GroovyApiService {
     }
   }
 
+  String? _deviceId;
+  void setDeviceId(String id) {
+    _deviceId = id;
+  }
+
   Map<String, String> _headers([String? token]) {
     final dev = _cachedDeviceInfo;
     final platform = dev?.platform ?? _clientPlatformName;
@@ -124,6 +129,9 @@ class GroovyApiService {
       'X-App-Version': dev?.appVersion ?? '1.7.0',
       'User-Agent': dev?.userAgent ?? 'GroovyApp/1.0 ($platform; Flutter)',
     };
+    if (_deviceId != null && _deviceId!.isNotEmpty) {
+      map['X-Device-Id'] = _deviceId!;
+    }
     if (token != null && token.isNotEmpty) {
       map['Authorization'] = 'Bearer $token';
     }

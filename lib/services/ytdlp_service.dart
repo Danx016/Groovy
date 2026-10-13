@@ -139,7 +139,7 @@ class YtDlpService {
   static String _upgradeThumbnail(String? url) {
     if (url == null || url.isEmpty) return '';
     var upgraded = url;
-    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-l90-rj');
+    upgraded = upgraded.replaceAll(RegExp(r'=(w\d+-h\d+|s\d+)[^/]*'), '=w1200-h1200-c-l90-rj');
     upgraded = upgraded.replaceAll('/sddefault.jpg', '/hqdefault.jpg');
     upgraded = upgraded.replaceAll('/mqdefault.jpg', '/hqdefault.jpg');
     upgraded = upgraded.replaceAll('/default.jpg', '/hqdefault.jpg');
@@ -961,16 +961,45 @@ class YtDlpService {
     }
   }
 
-  // ── Process Execution Helper (Desktop) ──────────────────────────────────────
+  Future<ProcessResult?> _runProcessWithTimeout(
+    String executable,
+    List<String> args,
+    Duration timeout,
+  ) async {
+    Process? process;
+    try {
+      process = await Process.start(executable, args);
+      final stdoutFuture = process.stdout.transform(utf8.decoder).join();
+      final stderrFuture = process.stderr.transform(utf8.decoder).join();
 
-  Future<ProcessResult?> _runYtDlp(List<String> args, {Duration timeout = const Duration(seconds: 20)}) async {
+      final exitCode = await process.exitCode.timeout(timeout);
+      final stdout = await stdoutFuture;
+      final stderr = await stderrFuture;
+
+      return ProcessResult(process.pid, exitCode, stdout, stderr);
+    } on TimeoutException {
+      debugPrint('[yt-dlp] Process timed out ($timeout) for $executable. Killing PID ${process?.pid}...');
+      try {
+        process?.kill(ProcessSignal.sigkill);
+      } catch (_) {}
+      return null;
+    } catch (e) {
+      debugPrint('[yt-dlp] Process error for $executable: $e');
+      try {
+        process?.kill(ProcessSignal.sigkill);
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  Future<ProcessResult?> _runYtDlp(List<String> args, {Duration timeout = const Duration(seconds: 15)}) async {
     await _detectBinaries();
 
     // If binary not detected yet, but an initial download or update is in progress, wait for it!
     if (_detectedYtDlpPath == null && _detectedPythonPath == null && _ongoingUpdateCompleter != null) {
       debugPrint('[yt-dlp] Binary not ready yet; awaiting active download before running...');
       try {
-        await _ongoingUpdateCompleter!.future.timeout(const Duration(seconds: 20));
+        await _ongoingUpdateCompleter!.future.timeout(const Duration(seconds: 15));
       } catch (_) {}
       _detectionDone = false;
       await _detectBinaries();
@@ -978,15 +1007,15 @@ class YtDlpService {
 
     if (_detectedYtDlpPath != null) {
       try {
-        final result = await Process.run(_detectedYtDlpPath!, args).timeout(timeout);
-        if (result.exitCode == 0) return result;
+        final result = await _runProcessWithTimeout(_detectedYtDlpPath!, args, timeout);
+        if (result != null && result.exitCode == 0) return result;
       } catch (_) {}
     }
 
     if (_detectedPythonPath != null) {
       try {
-        final result = await Process.run(_detectedPythonPath!, ['-m', 'yt_dlp', ...args]).timeout(timeout);
-        if (result.exitCode == 0) return result;
+        final result = await _runProcessWithTimeout(_detectedPythonPath!, ['-m', 'yt_dlp', ...args], timeout);
+        if (result != null && result.exitCode == 0) return result;
       } catch (_) {}
     }
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const { getPool } = require('../database');
 const { authenticateToken } = require('../middleware/auth');
+const { broadcastUserCommand } = require('./telemetry');
 
 const router = express.Router();
 
@@ -70,6 +71,21 @@ router.post('/favorites', async (req, res) => {
       [req.user.id, songId, title, artist || '', album || '', resolvedCoverArt, duration || 0]
     );
 
+    // Real-time broadcast to other devices with same account
+    broadcastUserCommand(req.user.id, req.headers['x-device-id'] || '', 'library_sync', {
+      type: 'favorite_add',
+      songId: String(songId),
+      song: {
+        id: String(songId),
+        title,
+        artist: artist || '',
+        album: album || '',
+        coverArt: resolvedCoverArt,
+        duration: duration || 0,
+        starred: true,
+      },
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: 'Canción añadida a favoritos.',
@@ -88,6 +104,12 @@ router.delete('/favorites/:songId', async (req, res) => {
       'DELETE FROM favorites WHERE user_id = ? AND song_id = ?',
       [req.user.id, req.params.songId]
     );
+
+    // Real-time broadcast to other devices with same account
+    broadcastUserCommand(req.user.id, req.headers['x-device-id'] || '', 'library_sync', {
+      type: 'favorite_remove',
+      songId: String(req.params.songId),
+    }).catch(() => {});
 
     return res.json({
       success: true,
@@ -146,6 +168,13 @@ router.post('/playlists', async (req, res) => {
       [req.user.id, name.trim(), description || '', coverArt || '']
     );
 
+    // Broadcast playlist creation to other devices
+    broadcastUserCommand(req.user.id, req.headers['x-device-id'] || '', 'library_sync', {
+      type: 'playlists_change',
+      action: 'playlist_create',
+      playlistId: result.insertId,
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: 'Playlist creada exitosamente.',
@@ -160,6 +189,30 @@ router.post('/playlists', async (req, res) => {
   } catch (err) {
     console.error('[Playlists POST Error]:', err);
     return res.status(500).json({ success: false, error: 'Error al crear playlist.' });
+  }
+});
+
+// DELETE /api/library/playlists/:id
+router.delete('/playlists/:id', async (req, res) => {
+  try {
+    const pool = getPool();
+    await pool.query('DELETE FROM playlist_songs WHERE playlist_id = ?', [req.params.id]);
+    await pool.query('DELETE FROM playlists WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+
+    // Broadcast playlist deletion to other devices
+    broadcastUserCommand(req.user.id, req.headers['x-device-id'] || '', 'library_sync', {
+      type: 'playlists_change',
+      action: 'playlist_delete',
+      playlistId: req.params.id,
+    }).catch(() => {});
+
+    return res.json({
+      success: true,
+      message: 'Playlist eliminada exitosamente.',
+    });
+  } catch (err) {
+    console.error('[Playlist DELETE Error]:', err);
+    return res.status(500).json({ success: false, error: 'Error al eliminar playlist.' });
   }
 });
 
@@ -229,6 +282,14 @@ router.post('/playlists/:id/songs', async (req, res) => {
       [req.params.id]
     );
 
+    // Broadcast playlist change to other devices
+    broadcastUserCommand(req.user.id, req.headers['x-device-id'] || '', 'library_sync', {
+      type: 'playlists_change',
+      action: 'playlist_song_add',
+      playlistId: req.params.id,
+      songId: String(songId),
+    }).catch(() => {});
+
     return res.status(201).json({
       success: true,
       message: 'Canción añadida a la playlist.',
@@ -252,6 +313,14 @@ router.delete('/playlists/:id/songs/:songId', async (req, res) => {
       'UPDATE playlists SET updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [req.params.id]
     );
+
+    // Broadcast playlist change to other devices
+    broadcastUserCommand(req.user.id, req.headers['x-device-id'] || '', 'library_sync', {
+      type: 'playlists_change',
+      action: 'playlist_song_remove',
+      playlistId: req.params.id,
+      songId: String(req.params.songId),
+    }).catch(() => {});
 
     return res.json({
       success: true,

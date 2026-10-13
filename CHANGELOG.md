@@ -5,6 +5,27 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2026-10-12
+
+- **Sincronización en Tiempo Real entre Dispositivos (Misma Cuenta)**:
+  - Implementado sistema de sincronización instantánea en Groovy Cloud Relay: al marcar o desmarcar una canción como favorita en un dispositivo (o modificar playlists), el cambio se propaga inmediatamente mediante long-polling (`commandBus`) a todas las demás instancias activas de la misma cuenta.
+  - La pantalla de `Favoritos` y los botones de favoritos (estrella/corazón) se actualizan en vivo sin necesidad de recargar la aplicación ni reiniciar sesión.
+  - Resuelto el problema de desincronización de eliminaciones: ahora al eliminar una canción de favoritos en un dispositivo, el resto de dispositivos detecta la eliminación en la nube y la desmarca también de su base de datos local SQLite y caché en memoria.
+  - Añadido sincronizador periódico cada 30 segundos y al arranque para asegurar paridad 100% permanente entre todos los dispositivos del usuario.
+- **Corrección de Carátulas Estiradas y con Franjas (Letterboxing/Pillarboxing)**:
+  - Resuelto el problema donde miniaturas estándar de YouTube (`hqdefault`, `mqdefault`, `sddefault`) mostraban franjas negras superior/inferior y barras marrones/negras a los lados. Ahora en `AlbumArtwork` y en todas las vistas de carátula se detectan las miniaturas 4:3 de YouTube y se escalan automáticamente por factor 4:3 con recorte centrado exacto, eliminando al 100% las barras laterales y mostrando la carátula cuadrada completa sin distorsión.
+  - Estandarizado el uso de `AlbumArtwork` en `HomeScreen` (`_SongCard` y `_PlaylistCard`) y `SearchScreen`.
+  - Agregado el parámetro `-c-` (smart crop) para carátulas de Google User Content (`lh3.googleusercontent.com` y `yt3.googleusercontent.com`) en `YoutubeService` y `YtDlpService` para prevenir relleno de márgenes.
+- **Icono de Favoritos y Posición en Windows Desktop**:
+  - Reemplazado el icono de corazón por estrella dorada (`Icons.star_rounded`, `#FFD60A`) en la barra del reproductor de escritorio, barra lateral y pantallas relacionadas.
+  - Reposicionado el botón de favorito inmediatamente adyacente al título y artista de la canción, eliminando el espacio vacío excesivo.
+- **Estabilidad de Reproducción y Fin de Bloqueos de Carga**:
+  - Whitelist de protocolos en `JustAudioMediaKit` (`http`, `https`, `file`, `data`).
+  - Límite de tiempo estricto (timeout) en procesos de `yt-dlp.exe` con terminación forzada (`SIGKILL`) para prevenir procesos huérfanos bloqueando el motor de audio.
+  - Timeouts acotados en `setAudioSource` / `setUrl` (12s) y `stop()` (2s) en `PlayerProvider` para prevenir bloqueos infinitos del reproductor.
+  - Protección de errores de streaming en `AudioHandler` y timeouts de cierre de sockets en `AudioCacheService`.
+- **Actualización Multiplataforma**: Versión **1.8.2** (Build 163) para Windows y Android.
+
 ## [1.8.1] - 2026-10-12
 
 ### Fixed & Improved

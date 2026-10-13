@@ -120,7 +120,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final dividerColor = isDark ? Colors.white12 : Colors.black12;
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+      backgroundColor: isDark
+          ? (NavigationHelper.isDesktop
+              ? const Color(0xFF121212)
+              : AppTheme.darkBackground)
+          : Colors.white,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
         slivers: [
@@ -129,7 +133,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
             pinned: true,
             floating: true,
             expandedHeight: 56,
-            backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
+            backgroundColor: isDark
+                ? (NavigationHelper.isDesktop
+                    ? const Color(0xFF121212)
+                    : AppTheme.darkBackground)
+                : Colors.white,
             elevation: 0,
             actions: [
               IconButton(

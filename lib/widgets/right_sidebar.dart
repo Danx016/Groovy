@@ -440,13 +440,9 @@ class _RightSidebarState extends State<RightSidebar> {
           width: 350,
           decoration: BoxDecoration(
             color: isDark ? const Color(0xFF121212) : const Color(0xFFF9F9FB),
-            border: Border(
-              left: BorderSide(
-                color: isDark ? const Color(0xFF282828) : const Color(0xFFE5E5E5),
-                width: 1,
-              ),
-            ),
+            borderRadius: BorderRadius.circular(8),
           ),
+          clipBehavior: Clip.antiAlias,
           child: Column(
             children: [
               // Top Header (Context Title + Action Icons)
@@ -747,16 +743,16 @@ class _RightSidebarState extends State<RightSidebar> {
               ),
               const SizedBox(width: 8),
 
-              // Favorite Heart/Star Button
+              // Favorite Star Button
               Consumer<LibraryProvider>(
                 builder: (context, lib, _) {
                   final isFav = lib.isSongStarred(currentSong.id) ||
                       (currentSong.starred ?? false);
                   return IconButton(
                     icon: Icon(
-                      isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                      isFav ? Icons.star_rounded : Icons.star_outline_rounded,
                       color: isFav
-                          ? AppTheme.appleMusicRed
+                          ? const Color(0xFFFFD60A)
                           : (isDark ? Colors.white70 : Colors.black54),
                       size: 24,
                     ),

@@ -193,7 +193,7 @@ class AudioCacheService {
         req.headers.set(HttpHeaders.acceptHeader, '*/*');
         req.headers.set('Range', 'bytes=0-');
 
-        final resp = await req.close();
+        final resp = await req.close().timeout(const Duration(seconds: 15));
         if (resp.statusCode != 200 && resp.statusCode != 206) {
           await resp.drain<void>().catchError((_) {});
           debugPrint('[AudioCache] Preload HTTP ${resp.statusCode} for $videoId');
@@ -201,7 +201,7 @@ class AudioCacheService {
         }
 
         final sink = partFile.openWrite();
-        await resp.pipe(sink);
+        await resp.pipe(sink).timeout(const Duration(seconds: 45));
 
         final partLength = await partFile.length();
         if (partLength >= _minValidAudioSizeBytes) {
