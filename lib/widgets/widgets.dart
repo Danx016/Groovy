@@ -16,3 +16,5 @@ export 'gradient_header.dart';
 export 'lazy_indexed_stack.dart';
 export 'groovy_confirm_dialog.dart';
 export 'apple_music_toast.dart';
+export 'horizontal_carousel_view.dart';
+export 'groovy_custom_icons.dart';

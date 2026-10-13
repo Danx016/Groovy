@@ -157,6 +157,7 @@ void main() async {
       if (Platform.isWindows || Platform.isLinux) {
         JustAudioMediaKit.title = 'Groovy';
         JustAudioMediaKit.prefetchPlaylist = false;
+        JustAudioMediaKit.bufferSize = 32 * 1024 * 1024; // 32MB cache buffer to prevent stalling
         JustAudioMediaKit.protocolWhitelist = const [
           'crypto',
           'data',
@@ -217,7 +218,7 @@ void main() async {
   final themeService = ThemeService();
 
   // Core services needed for initial UI
-  localeService.loadSavedLocale().catchError((e) {
+  await localeService.loadSavedLocale().catchError((e) {
     debugPrint('Failed to load saved locale: $e');
   });
   offlineService.initialize().catchError((e) {
@@ -491,7 +492,7 @@ class GroovyApp extends StatelessWidget {
           themeMode: themeService.themeMode,
           scrollBehavior: AppScrollBehavior(),
           navigatorKey: navigatorKey,
-          locale: localeService.currentLocale ?? const Locale('es'),
+          locale: localeService.currentLocale,
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           localeResolutionCallback: (locale, supportedLocales) {

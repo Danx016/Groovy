@@ -1,9 +1,13 @@
 package com.groovy.music
 
 import android.content.ComponentName
+import android.content.ContentValues
 import android.content.Intent
+import android.media.MediaScannerConnection
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.KeyEvent
 import android.view.Surface
 import com.chaquo.python.Python
@@ -15,6 +19,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class MainActivity : AudioServiceFragmentActivity() {
     private val CHANNEL = "com.groovy.music/ytdlp"
@@ -260,6 +265,113 @@ class MainActivity : AudioServiceFragmentActivity() {
                     }
                 }
                 else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.groovy.music/downloads").setMethodCallHandler { call, result ->
+            CoroutineScope(Dispatchers.IO).launch {
+                when (call.method) {
+                    "saveToPublicDownloads" -> {
+                        val sourcePath = call.argument<String>("sourcePath")
+                        val fileName = call.argument<String>("fileName") ?: "song.mp3"
+                        val subfolder = call.argument<String>("subfolder") ?: "Groovy"
+                        val title = call.argument<String>("title") ?: ""
+                        val artist = call.argument<String>("artist") ?: ""
+                        val album = call.argument<String>("album") ?: ""
+
+                        if (sourcePath.isNullOrEmpty()) {
+                            withContext(Dispatchers.Main) { result.error("INVALID_PATH", "Source path is empty", null) }
+                            return@launch
+                        }
+                        val srcFile = File(sourcePath)
+                        if (!srcFile.exists()) {
+                            withContext(Dispatchers.Main) { result.error("NOT_FOUND", "Source file does not exist", null) }
+                            return@launch
+                        }
+
+                        try {
+                            var savedPath = ""
+                            // 1. Try direct copy to Download/subfolder first
+                            try {
+                                val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                val targetDir = if (subfolder.isEmpty()) downloadsDir else File(downloadsDir, subfolder)
+                                if (!targetDir.exists()) {
+                                    targetDir.mkdirs()
+                                }
+                                val destFile = File(targetDir, fileName)
+                                srcFile.copyTo(destFile, overwrite = true)
+                                savedPath = destFile.absolutePath
+
+                                MediaScannerConnection.scanFile(
+                                    applicationContext,
+                                    arrayOf(destFile.absolutePath),
+                                    arrayOf("audio/mpeg"),
+                                    null
+                                )
+                            } catch (_: Exception) {
+                                savedPath = ""
+                            }
+
+                            // 2. If direct write didn't succeed, use MediaStore (Android 10+)
+                            if (savedPath.isEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                val relativePath = if (subfolder.isEmpty()) {
+                                    Environment.DIRECTORY_DOWNLOADS + "/Groovy"
+                                } else if (subfolder.startsWith(Environment.DIRECTORY_DOWNLOADS)) {
+                                    subfolder
+                                } else {
+                                    Environment.DIRECTORY_DOWNLOADS + "/" + subfolder
+                                }
+
+                                val contentValues = ContentValues().apply {
+                                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                                    put(MediaStore.MediaColumns.MIME_TYPE, "audio/mpeg")
+                                    put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+                                    put(MediaStore.MediaColumns.IS_PENDING, 1)
+                                    if (title.isNotEmpty()) put(MediaStore.Audio.Media.TITLE, title)
+                                    if (artist.isNotEmpty()) put(MediaStore.Audio.Media.ARTIST, artist)
+                                    if (album.isNotEmpty()) put(MediaStore.Audio.Media.ALBUM, album)
+                                }
+
+                                val resolver = applicationContext.contentResolver
+                                val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                                    ?: resolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, contentValues)
+
+                                if (uri != null) {
+                                    resolver.openOutputStream(uri)?.use { out ->
+                                        srcFile.inputStream().use { input ->
+                                            input.copyTo(out)
+                                        }
+                                    }
+                                    contentValues.clear()
+                                    contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                                    resolver.update(uri, contentValues, null, null)
+                                    savedPath = uri.toString()
+                                } else {
+                                    throw Exception("Failed to create MediaStore entry for $fileName")
+                                }
+                            }
+
+                            if (savedPath.isEmpty()) {
+                                throw Exception("Could not save $fileName to public downloads")
+                            }
+
+                            withContext(Dispatchers.Main) { result.success(savedPath) }
+                        } catch (e: Exception) {
+                            withContext(Dispatchers.Main) {
+                                result.error("SAVE_FAILED", e.message, e.stackTraceToString())
+                            }
+                        }
+                    }
+                    "getDownloadsPath" -> {
+                        try {
+                            val path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath + "/Groovy"
+                            withContext(Dispatchers.Main) { result.success(path) }
+                        } catch (_: Exception) {
+                            withContext(Dispatchers.Main) { result.success("/storage/emulated/0/Download/Groovy") }
+                        }
+                    }
+                    else -> withContext(Dispatchers.Main) { result.notImplemented() }
+                }
             }
         }
     }

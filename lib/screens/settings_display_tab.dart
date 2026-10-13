@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
-import '../services/recommendation_service.dart';
-import '../services/player_ui_settings_service.dart';
 import '../services/theme_service.dart';
 import '../services/locale_service.dart';
-import '../services/storage_service.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import '../widgets/settings/settings_section_card.dart';
@@ -20,9 +17,6 @@ class SettingsDisplayTab extends StatefulWidget {
 }
 
 class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
-  final _playerUiSettings = PlayerUiSettingsService();
-  bool _liveSearch = true;
-
   ThemeMode _themeMode = ThemeMode.system;
   AccentColor _accentColor = AccentColor.red;
   bool _liquidGlass = false;
@@ -34,13 +28,10 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
   }
 
   Future<void> _loadSettings() async {
-    await _playerUiSettings.initialize();
-
     if (!mounted) return;
     final themeService = Provider.of<ThemeService>(context, listen: false);
 
     setState(() {
-      _liveSearch = _playerUiSettings.getLiveSearch();
       _themeMode = themeService.themeMode;
       _accentColor = themeService.accentColor;
       _liquidGlass = themeService.liquidGlass;
@@ -65,30 +56,6 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
           title: AppLocalizations.of(context)!.language.toUpperCase(),
           children: [
             _buildLanguageSelector(),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // 3. Búsqueda en vivo
-        SettingsSectionCard(
-          title: AppLocalizations.of(context)!.liveSearchSection.toUpperCase(),
-          children: [
-            _buildLiveSearchToggle(),
-          ],
-        ),
-        const SizedBox(height: 24),
-
-        // 4. Recomendaciones inteligentes
-        SettingsSectionCard(
-          title: AppLocalizations.of(
-            context,
-          )!.smartRecommendations.toUpperCase(),
-          children: [
-            _buildRecommendationsToggle(),
-            const SettingsDivider(),
-            _buildRecommendationsStats(),
-            const SettingsDivider(),
-            _buildClearRecommendationsButton(),
           ],
         ),
         const SizedBox(height: 40),
@@ -218,163 +185,20 @@ class _SettingsDisplayTabState extends State<SettingsDisplayTab> {
 
 
 
-  Widget _buildLiveSearchToggle() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: SettingsIconBadge(
-        gradientColors: const [Color(0xFFFF9500), Color(0xFFFFCC00)],
-        icon: CupertinoIcons.search,
-      ),
-      title: Text(
-        AppLocalizations.of(context)!.liveSearch,
-        style: const TextStyle(fontSize: 16),
-      ),
-      subtitle: Text(
-        AppLocalizations.of(context)!.liveSearchSubtitle,
-        style: TextStyle(
-          fontSize: 13,
-          color: context.isDark
-              ? AppTheme.darkSecondaryText
-              : AppTheme.lightSecondaryText,
-        ),
-      ),
-      trailing: CupertinoSwitch(
-        value: _liveSearch,
-        activeTrackColor: Theme.of(context).colorScheme.primary,
-        onChanged: (value) async {
-          setState(() => _liveSearch = value);
-          await _playerUiSettings.setLiveSearch(value);
-        },
-      ),
-    );
-  }
 
-  Widget _buildRecommendationsToggle() {
-    return Consumer<RecommendationService>(
-      builder: (context, service, _) {
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          leading: SettingsIconBadge(
-            gradientColors: const [Color(0xFFFF2D55), Color(0xFFFF6B6B)],
-            icon: CupertinoIcons.sparkles,
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.enableRecommendations,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.enableRecommendationsSubtitle,
-            style: TextStyle(
-              fontSize: 13,
-              color: context.isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: CupertinoSwitch(
-            value: service.enabled,
-            activeTrackColor: Theme.of(context).colorScheme.primary,
-            onChanged: (value) => service.setEnabled(value),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildRecommendationsStats() {
-    return Consumer<RecommendationService>(
-      builder: (context, service, _) {
-        final stats = service.getListeningStats();
-        final uniqueSongs = stats['uniqueSongs'] ?? 0;
-        final totalPlays = stats['totalPlays'] ?? 0;
-        return ListTile(
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 4,
-          ),
-          title: Text(
-            AppLocalizations.of(context)!.listeningData,
-            style: const TextStyle(fontSize: 16),
-          ),
-          subtitle: Text(
-            AppLocalizations.of(context)!.totalPlays(totalPlays),
-            style: TextStyle(
-              fontSize: 13,
-              color: context.isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-          trailing: Text(
-            AppLocalizations.of(context)!.songsCount(uniqueSongs),
-            style: TextStyle(
-              fontSize: 14,
-              color: context.isDark
-                  ? AppTheme.darkSecondaryText
-                  : AppTheme.lightSecondaryText,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildClearRecommendationsButton() {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      title: Text(
-        AppLocalizations.of(context)!.clearListeningHistory,
-        style: const TextStyle(fontSize: 16, color: Color(0xFFFF3B30)),
-      ),
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(AppLocalizations.of(context)!.clearListeningHistory),
-            content: Text(AppLocalizations.of(context)!.confirmClearHistory),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text(AppLocalizations.of(context)!.cancel),
-              ),
-              TextButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  StorageService().clearPlaybackHistory();
-                  Provider.of<RecommendationService>(
-                    context,
-                    listen: false,
-                  ).clearData();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        AppLocalizations.of(context)!.historyCleared,
-                      ),
-                    ),
-                  );
-                },
-                child: Text(
-                  AppLocalizations.of(context)!.delete,
-                  style: const TextStyle(color: Color(0xFFFF3B30)),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   Widget _buildLanguageSelector() {
     return Consumer<LocaleService>(
       builder: (context, localeService, _) {
         final currentLocale = localeService.currentLocale;
-        final currentLanguageCode = currentLocale?.languageCode ?? 'en';
-        final currentLanguageName =
-            LocaleService.supportedLanguages[currentLanguageCode] ?? 'English';
+        final String currentLanguageName;
+        if (currentLocale == null) {
+          currentLanguageName = AppLocalizations.of(context)!.systemDefault;
+        } else {
+          currentLanguageName =
+              LocaleService.supportedLanguages[currentLocale.languageCode] ??
+              'Español';
+        }
 
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(

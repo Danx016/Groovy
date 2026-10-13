@@ -12,6 +12,7 @@ import '../services/cache_settings_service.dart';
 import '../services/local_music_service.dart';
 import '../services/offline_service.dart';
 import '../services/audio_cache_service.dart';
+import '../services/device_download_service.dart';
 import '../services/ytdlp_service.dart';
 import '../theme/app_theme.dart';
 import 'download_playlist_status_screen.dart';
@@ -31,6 +32,12 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   final _cacheSettings = CacheSettingsService();
   final _offlineService = OfflineService();
   final _audioCache = AudioCacheService();
+  final _deviceDownloadService = DeviceDownloadService();
+
+  bool _saveToDeviceDownloads = false;
+  String _downloadsFolderPath = '';
+  bool _isExporting = false;
+  int _exportedCount = 0;
 
   bool _imageCacheEnabled = true;
   bool _musicCacheEnabled = true;
@@ -74,6 +81,8 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
   Future<void> _loadSettings() async {
     await _cacheSettings.initialize();
     await _offlineService.initialize();
+    await _deviceDownloadService.initialize();
+    final folder = await _deviceDownloadService.getPublicDownloadsDirectory();
     await _loadOfflineInfo();
 
     setState(() {
@@ -82,6 +91,8 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
       _bpmCacheEnabled = _cacheSettings.getBpmCacheEnabled();
       _parallelDownloads = _offlineService.getParallelDownloadsCount();
       _keepScreenOn = _offlineService.getKeepScreenOn();
+      _saveToDeviceDownloads = _deviceDownloadService.saveToDeviceDownloads;
+      _downloadsFolderPath = folder;
     });
 
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -149,6 +160,10 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         SettingsSectionCard(
           title: AppLocalizations.of(context)!.sectionOfflineDownloads,
           children: [
+            _buildSaveToDeviceDownloadsTile(),
+            const SettingsDivider(),
+            _buildExportToDeviceTile(),
+            if (_downloadedCount > 0) const SettingsDivider(),
             _buildParallelDownloadsTile(),
             const SettingsDivider(),
             _buildKeepScreenOnTile(),
@@ -497,6 +512,153 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
     );
   }
 
+  Widget _buildSaveToDeviceDownloadsTile() {
+    final isDark = context.isDark;
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF34C759), Color(0xFF30D158)],
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(CupertinoIcons.arrow_down_doc_fill, color: Colors.white, size: 18),
+      ),
+      title: const Text('Descargar en almacenamiento del teléfono', style: TextStyle(fontSize: 16)),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Guarda canciones y álbumes como archivos MP3 en la carpeta Descargas de tu teléfono o PC.',
+            style: TextStyle(
+              fontSize: 13,
+              color: isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
+            ),
+          ),
+          if (_downloadsFolderPath.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Carpeta: $_downloadsFolderPath',
+              style: TextStyle(
+                fontSize: 11,
+                fontFamily: 'monospace',
+                color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
+              ),
+            ),
+          ],
+        ],
+      ),
+      trailing: CupertinoSwitch(
+        value: _saveToDeviceDownloads,
+        activeTrackColor: Theme.of(context).colorScheme.primary,
+        onChanged: (value) async {
+          setState(() => _saveToDeviceDownloads = value);
+          await _deviceDownloadService.setSaveToDeviceDownloads(value);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  value
+                      ? 'Las descargas de canciones y álbumes se guardarán en tu carpeta Descargas.'
+                      : 'Las descargas se guardarán únicamente dentro de Groovy.',
+                ),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildExportToDeviceTile() {
+    if (_downloadedCount == 0) return const SizedBox.shrink();
+    final isDark = context.isDark;
+
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF007AFF), Color(0xFF5AC8FA)],
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(CupertinoIcons.square_arrow_up_fill, color: Colors.white, size: 18),
+      ),
+      title: const Text('Exportar descargadas a Descargas', style: TextStyle(fontSize: 16)),
+      subtitle: Text(
+        _isExporting
+            ? 'Exportando canciones... ($_exportedCount/$_downloadedCount)'
+            : 'Copia las $_downloadedCount canciones ya descargadas a la carpeta Descargas del teléfono',
+        style: TextStyle(
+          fontSize: 13,
+          color: isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
+        ),
+      ),
+      trailing: _isExporting
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(CupertinoIcons.chevron_right, size: 16),
+      onTap: _isExporting ? null : _handleExportOfflineSongs,
+    );
+  }
+
+  Future<void> _handleExportOfflineSongs() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Exportar a Descargas'),
+        content: Text(
+          '¿Deseas exportar las $_downloadedCount canciones descargadas a la carpeta Descargas de tu teléfono o PC como archivos MP3?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Exportar'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true || !mounted) return;
+
+    setState(() {
+      _isExporting = true;
+      _exportedCount = 0;
+    });
+
+    final total = await _deviceDownloadService.exportAllOfflineSongs(
+      onProgress: (current, _) {
+        if (mounted) {
+          setState(() => _exportedCount = current);
+        }
+      },
+    );
+
+    if (mounted) {
+      setState(() => _isExporting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Se exportaron $total canciones a la carpeta Descargas.'),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  }
+
   Widget _buildKeepScreenOnTile() {
     final l10n = AppLocalizations.of(context)!;
     return ListTile(
@@ -708,7 +870,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
             ? '${state.currentSong!.artist ?? ''} – ${state.currentSong!.title}  (${state.currentProgress}/${state.totalCount})'
             : state.isDownloading
                 ? '${state.currentProgress}/${state.totalCount}'
-                : 'No downloads in progress';
+                : 'No hay descargas en curso';
         return ListTile(
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: Container(
@@ -730,7 +892,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
               size: 18,
             ),
           ),
-          title: const Text('Active Downloads', style: TextStyle(fontSize: 16)),
+          title: const Text('Descargas activas', style: TextStyle(fontSize: 16)),
           subtitle: Text(
             subtitle,
             style: TextStyle(
@@ -758,9 +920,9 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
         gradientColors: const [Color(0xFF5856D6), Color(0xFF7B68EE)],
         icon: CupertinoIcons.music_note_list,
       ),
-          title: const Text('Playlist Downloads', style: TextStyle(fontSize: 16)),
+          title: const Text('Descargas de playlists', style: TextStyle(fontSize: 16)),
           subtitle: Text(
-            '${ids.length} songs downloaded',
+            '${ids.length} canciones descargadas',
             style: TextStyle(
               fontSize: 12,
               color: context.isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
@@ -856,7 +1018,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Loading library...'),
+            content: Text('Cargando biblioteca...'),
             duration: Duration(seconds: 1),
           ),
         );
@@ -880,7 +1042,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
           builder: (ctx) => AlertDialog(
             title: Text(AppLocalizations.of(context)!.noSongsAvailable),
             content: const Text(
-              'Library appears to be empty or failed to load. Make sure your server supports full library scanning.',
+              'La biblioteca parece estar vacía o no se pudo cargar. Asegúrate de tener conexión.',
             ),
             actions: [
               TextButton(
@@ -889,7 +1051,7 @@ class _SettingsStorageTabState extends State<SettingsStorageTab> {
               ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Retry'),
+                child: const Text('Reintentar'),
               ),
             ],
           ),

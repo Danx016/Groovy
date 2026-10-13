@@ -41,17 +41,17 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
       AudioLoadConfiguration(
         androidLoadControl: (!kIsWeb && Platform.isAndroid)
             ? const AndroidLoadControl(
-                minBufferDuration: Duration(seconds: 15),
-                maxBufferDuration: Duration(seconds: 30),
-                bufferForPlaybackDuration: Duration(milliseconds: 250),
-                bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 600),
+                minBufferDuration: Duration(seconds: 30),
+                maxBufferDuration: Duration(seconds: 60),
+                bufferForPlaybackDuration: Duration(milliseconds: 2000),
+                bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 4500),
                 prioritizeTimeOverSizeThresholds: true,
               )
             : null,
         darwinLoadControl: (!kIsWeb && (Platform.isIOS || Platform.isMacOS))
             ? const DarwinLoadControl(
-                automaticallyWaitsToMinimizeStalling: false,
-                preferredForwardBufferDuration: Duration(seconds: 10),
+                automaticallyWaitsToMinimizeStalling: true,
+                preferredForwardBufferDuration: Duration(seconds: 30),
               )
             : null,
       );

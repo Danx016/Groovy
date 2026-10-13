@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.4] - 2026-10-13
+
+### Fixed & Improved
+- **Pantalla Completa e Iconos Personalizados en Reproductor**:
+  - Ajustado el tamaño visual del icono diagonal de expandir pantalla completa para encajar armónicamente dentro del botón circular de vidrio.
+  - Implementado icono dedicado de contraer (`GroovyDiagonalCollapseIcon`) que cambia dinámicamente al entrar en pantalla completa, mostrando las flechas apuntando hacia el interior al momento de disminuir/salir de pantalla completa.
+- **Letras Dinámicas y Experiencia Visual**:
+  - Transiciones fluidas en letras sincronizadas con efecto de desvanecimiento suave estilo Apple Music.
+  - Optimización en el renderizado y animaciones de letras en vista horizontal y vertical.
+- **Almacenamiento y Descargas Locales**:
+  - Mejoras en la gestión de descargas directas en dispositivo y pestaña de almacenamiento.
+- **Actualización Multiplataforma**: Versión **1.8.4** (Build 165) para Windows y Android.
+
 ## [1.8.3] - 2026-10-13
 
 ### Fixed & Improved

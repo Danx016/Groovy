@@ -9,6 +9,7 @@ import '../services/offline_service.dart';
 import '../theme/app_theme.dart';
 import '../l10n/app_localizations.dart';
 import 'album_artwork.dart';
+import 'horizontal_carousel_view.dart';
 
 /// A horizontal scrolling section showing favorite playlists on the home screen
 class FavoritePlaylistsSection extends StatelessWidget {
@@ -75,30 +76,28 @@ class FavoritePlaylistsSection extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(
+                HorizontalCarouselView(
                   height: 180,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: favoritePlaylists.length,
-                    itemBuilder: (context, index) {
-                      final playlist = favoritePlaylists[index];
-                      return _PlaylistCard(
-                        playlist: playlist,
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => PlaylistScreen(
-                                playlistId: playlist.id,
-                                playlistName: playlist.name,
-                              ),
+                  cardSize: 130,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: favoritePlaylists.length,
+                  itemBuilder: (context, index) {
+                    final playlist = favoritePlaylists[index];
+                    return _PlaylistCard(
+                      playlist: playlist,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => PlaylistScreen(
+                              playlistId: playlist.id,
+                              playlistName: playlist.name,
                             ),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                          ),
+                        );
+                      },
+                    );
+                  },
                 ),
               ],
             );

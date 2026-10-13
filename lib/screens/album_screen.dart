@@ -407,11 +407,16 @@ class _AlbumScreenState extends State<AlbumScreen> {
 
     await offlineService.saveDownloadedAlbum(_album!);
     offlineService.queuePlaylistDownload(_album!.id, songsWithAlbum, youtubeService);
+    final willSaveToDevice = DeviceDownloadService().saveToDeviceDownloads;
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Descargando ${_songs.length} canciones del álbum "${_album!.name}"…'),
-          duration: const Duration(seconds: 2),
+          content: Text(
+            willSaveToDevice
+                ? 'Descargando ${_songs.length} canciones de "${_album!.name}" a la carpeta Descargas…'
+                : 'Descargando ${_songs.length} canciones del álbum "${_album!.name}"…',
+          ),
+          duration: const Duration(seconds: 3),
         ),
       );
     }
@@ -751,6 +756,36 @@ class _AlbumScreenState extends State<AlbumScreen> {
                     } else {
                       _downloadAlbum();
                     }
+                  },
+                ),
+
+                // 4b. Guardar álbum en Descargas del teléfono
+                _buildMoreMenuItem(
+                  icon: CupertinoIcons.arrow_down_doc_fill,
+                  title: 'Guardar álbum en Descargas del teléfono',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () async {
+                    Navigator.pop(ctx);
+                    final messenger = ScaffoldMessenger.of(context);
+                    final youtubeService = Provider.of<YoutubeService>(context, listen: false);
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Guardando álbum "${_album!.name}" en la carpeta Descargas...'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    await DeviceDownloadService().saveAlbumToDevice(
+                      _album!,
+                      _songs,
+                      youtubeService,
+                    );
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text('Álbum "${_album!.name}" guardado en la carpeta Descargas.'),
+                        duration: const Duration(seconds: 3),
+                      ),
+                    );
                   },
                 ),
 

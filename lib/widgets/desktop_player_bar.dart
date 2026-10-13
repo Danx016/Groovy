@@ -20,6 +20,7 @@ import '../services/upnp_service.dart';
 import '../services/groovy_connect_service.dart';
 import 'connect/groovy_connect_icon.dart';
 import 'connect/groovy_connect_modal.dart';
+import 'groovy_custom_icons.dart';
 
 
 class DesktopPlayerBar extends StatefulWidget {
@@ -450,8 +451,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 IconButton(
-                  icon: Icon(
-                    Icons.slideshow_rounded,
+                  icon: GroovySidebarPanelIcon(
                     size: 20,
                     color: widget.isNowPlayingOpen
                         ? theme.colorScheme.primary
@@ -463,8 +463,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   tooltip: 'Vista que suena',
                 ),
                 IconButton(
-                  icon: Icon(
-                    Icons.mic_none_rounded,
+                  icon: GroovyLyricsMicIcon(
                     size: 20,
                     color: widget.isLyricsOpen
                         ? theme.colorScheme.primary
@@ -476,8 +475,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   tooltip: 'Letras',
                 ),
                 IconButton(
-                  icon: Icon(
-                    Icons.queue_music_rounded,
+                  icon: GroovyQueueListIcon(
                     size: 20,
                     color: widget.isQueueOpen
                         ? theme.colorScheme.primary
@@ -492,7 +490,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   builder: (context, cs, us, gs, _) {
                     final isConn = cs.isConnected || us.isConnected || gs.isConnected;
                     return IconButton(
-                      icon: GroovyConnectIcon(
+                      icon: GroovyDeviceConnectIcon(
                         size: 20,
                         color: isConn
                             ? AppTheme.appleMusicRed
@@ -508,8 +506,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                   },
                 ),
                 IconButton(
-                  icon: Icon(
-                    Icons.open_in_full_rounded,
+                  icon: GroovyDiagonalExpandIcon(
                     size: 18,
                     color: isDark
                         ? const Color(0xFFB3B3B3)

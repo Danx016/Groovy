@@ -12,6 +12,7 @@ import '../../screens/album_screen.dart';
 import '../../screens/artist_screen.dart';
 import '../../services/youtube_service.dart';
 import '../../services/offline_service.dart';
+import '../../services/device_download_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/artist_image_service.dart';
 import '../../utils/album_sanitizer.dart';
@@ -256,7 +257,7 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
               ),
             ],
 
-            if (isDownloaded)
+            if (isDownloaded) ...[
               _buildMenuItem(
                 icon: CupertinoIcons.arrow_down_circle_fill,
                 iconColor: Colors.green,
@@ -288,8 +289,34 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                     );
                   }
                 },
-              )
-            else
+              ),
+              _buildMenuItem(
+                icon: CupertinoIcons.arrow_down_doc_fill,
+                title: 'Guardar en Descargas del teléfono',
+                textColor: textColor,
+                onTap: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  Navigator.of(context).pop();
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text('Guardando "${currentSong.title}" en Descargas...'),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                  final saved = await DeviceDownloadService().saveSongToDevice(currentSong);
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        saved != null
+                            ? 'Canción guardada en la carpeta Descargas'
+                            : 'No se pudo guardar la canción en Descargas',
+                      ),
+                      duration: const Duration(seconds: 3),
+                    ),
+                  );
+                },
+              ),
+            ] else
               _buildMenuItem(
                 icon: CupertinoIcons.arrow_down_circle,
                 title: 'Descargar canción',
@@ -297,9 +324,14 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 onTap: () {
                   final messenger = ScaffoldMessenger.of(context);
                   Navigator.of(context).pop();
+                  final willSaveToDevice = DeviceDownloadService().saveToDeviceDownloads;
                   messenger.showSnackBar(
                     SnackBar(
-                      content: Text('Descargando "${currentSong.title}"...'),
+                      content: Text(
+                        willSaveToDevice
+                            ? 'Descargando "${currentSong.title}" (se guardará en Descargas)...'
+                            : 'Descargando "${currentSong.title}"...',
+                      ),
                       duration: const Duration(seconds: 2),
                     ),
                   );
@@ -311,7 +343,9 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                       SnackBar(
                         content: Text(
                           success
-                              ? 'Descargada para modo offline (audio y letras)'
+                              ? (willSaveToDevice
+                                  ? 'Descargada en la carpeta Descargas y en modo offline'
+                                  : 'Descargada para modo offline (audio y letras)')
                               : 'No se pudo descargar la canción',
                         ),
                         duration: const Duration(seconds: 3),

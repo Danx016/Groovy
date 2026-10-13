@@ -12,6 +12,7 @@ import 'youtube_service.dart';
 import 'ytdlp_service.dart';
 import 'lrclib_service.dart';
 import 'audio_cache_service.dart';
+import 'device_download_service.dart';
 
 enum DownloadStatus { queued, downloading, done, failed }
 
@@ -129,6 +130,7 @@ class OfflineService {
 
   Future<void> _doInitialize() async {
     _prefs ??= await SharedPreferences.getInstance();
+    await DeviceDownloadService().initialize();
     final dir = await getApplicationDocumentsDirectory();
     _offlineDir = '${dir.path}/offline_music';
 
@@ -324,6 +326,8 @@ class OfflineService {
     await _prefs?.setString(_keyExpectedSizes, json.encode(_expectedSizes));
   }
 
+  String getSongPath(String songId) => _getSongPath(songId);
+
   String _getSongPath(String songId) {
     return '$_offlineDir/$songId.mp3';
   }
@@ -504,6 +508,12 @@ class OfflineService {
     if (await targetFile.exists() && await targetFile.length() >= 65536) {
       downloadedSongIds.value = {...downloadedSongIds.value, song.id};
       await _saveDownloadedSongMetadata(song);
+      if (DeviceDownloadService().isDeviceDownloadEnabled) {
+        DeviceDownloadService().saveSongToDevice(song, cachedFile: targetFile).catchError((e) {
+          debugPrint('[OfflineService] Error saving to device downloads: $e');
+          return null;
+        });
+      }
       onProgress?.call(1.0);
       return true;
     }
@@ -599,6 +609,13 @@ class OfflineService {
       }
       await _saveDownloadedSongMetadata(song);
       downloadedSongIds.value = {...downloadedSongIds.value, song.id};
+
+      if (DeviceDownloadService().isDeviceDownloadEnabled) {
+        DeviceDownloadService().saveSongToDevice(song, cachedFile: targetFile).catchError((e) {
+          debugPrint('[OfflineService] Error saving to device downloads: $e');
+          return null;
+        });
+      }
 
       // 5. Download Cover Art
       try {

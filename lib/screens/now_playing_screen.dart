@@ -33,6 +33,7 @@ import '../services/lrclib_service.dart';
 import '../services/groovy_connect_service.dart';
 import '../widgets/connect/groovy_connect_modal.dart';
 import '../theme/app_theme.dart';
+import '../widgets/groovy_custom_icons.dart';
 
 class NowPlayingScreen extends StatefulWidget {
   final ImageProvider image;
@@ -1295,10 +1296,10 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _GlassIconButton(
-                    icon: _isWindowFullScreen
-                        ? Icons.close_fullscreen_rounded
-                        : Icons.fullscreen_rounded,
-                    size: 18,
+                    customIcon: _isWindowFullScreen
+                        ? const GroovyDiagonalCollapseIcon(size: 14, color: Colors.white)
+                        : const GroovyDiagonalExpandIcon(size: 14, color: Colors.white),
+                    size: 14,
                     tooltip: _isWindowFullScreen
                         ? 'Salir de pantalla completa (F11)'
                         : 'Pantalla completa (F11)',
@@ -1307,7 +1308,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                   const SizedBox(width: 8),
                   _GlassIconButton(
                     icon: Icons.close_rounded,
-                    size: 20,
+                    size: 18,
                     tooltip: 'Cerrar (Esc)',
                     onTap: _exitFullScreen,
                   ),
@@ -1898,13 +1899,15 @@ class _VolumePopupButton extends StatelessWidget {
 }
 
 class _GlassIconButton extends StatefulWidget {
-  final IconData icon;
+  final IconData? icon;
+  final Widget? customIcon;
   final double size;
   final String tooltip;
   final VoidCallback onTap;
 
   const _GlassIconButton({
-    required this.icon,
+    this.icon,
+    this.customIcon,
     this.size = 18,
     required this.tooltip,
     required this.onTap,
@@ -1937,13 +1940,14 @@ class _GlassIconButtonState extends State<_GlassIconButton> {
                   ? Colors.white.withValues(alpha: 0.28)
                   : Colors.white.withValues(alpha: 0.12),
             ),
-            child: Icon(
-              widget.icon,
-              size: widget.size,
-              color: _isHovered
-                  ? Colors.white
-                  : Colors.white.withValues(alpha: 0.75),
-            ),
+            child: widget.customIcon ??
+                Icon(
+                  widget.icon,
+                  size: widget.size,
+                  color: _isHovered
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.75),
+                ),
           ),
         ),
       ),

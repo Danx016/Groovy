@@ -24,6 +24,7 @@ import 'album_artwork.dart';
 import 'now_playing/marquee_text.dart';
 import 'now_playing/now_playing_more_menu.dart';
 import 'lyrics/lyrics_list_view.dart';
+import 'groovy_custom_icons.dart';
 
 enum RightSidebarTab {
   nowPlaying,
@@ -524,8 +525,7 @@ class _RightSidebarState extends State<RightSidebar> {
               visualDensity: VisualDensity.compact,
             ),
             IconButton(
-              icon: Icon(
-                Icons.open_in_full_rounded,
+              icon: GroovyDiagonalExpandIcon(
                 size: 18,
                 color: isDark ? AppTheme.darkSecondaryText : AppTheme.lightSecondaryText,
               ),
@@ -768,7 +768,7 @@ class _RightSidebarState extends State<RightSidebar> {
               // Options Menu Button
               IconButton(
                 icon: Icon(
-                  Icons.more_vert_rounded,
+                  Icons.more_horiz_rounded,
                   color: isDark ? Colors.white70 : Colors.black54,
                   size: 22,
                 ),
@@ -820,70 +820,54 @@ class _RightSidebarState extends State<RightSidebar> {
                   ],
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  children: [
-                    // Artist Avatar
-                    _ArtistCardAvatar(
-                      artistName: currentSong.artist ?? '',
-                      fallbackCover: currentSong.coverArt,
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            currentSong.artist ?? 'Artista Principal',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white : Colors.black87,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: () => _navigateToArtist(context, currentSong),
+                    child: Row(
+                      children: [
+                        // Artist Avatar
+                        _ArtistCardAvatar(
+                          artistName: currentSong.artist ?? '',
+                          fallbackCover: currentSong.coverArt,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                currentSong.artist ?? 'Artista Principal',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: isDark ? Colors.white : Colors.black87,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Artista Principal',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: isDark
+                                      ? const Color(0xFFB3B3B3)
+                                      : const Color(0xFF757575),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 2),
-                          Text(
-                            'Artista Principal',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: isDark
-                                  ? const Color(0xFFB3B3B3)
-                                  : const Color(0xFF757575),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 8),
+                        // "Seguir" Button (Spotify Style Pill)
+                        _ArtistFollowPillButton(
+                          artistName: currentSong.artist ?? '',
+                          onTap: () => _navigateToArtist(context, currentSong),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    // "Seguir" / "Ver artista" Button
-                    OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: isDark ? Colors.white38 : Colors.black26,
-                          width: 1,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 6,
-                        ),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      onPressed: () => _navigateToArtist(context, currentSong),
-                      child: Text(
-                        'Ver artista',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -1676,6 +1660,68 @@ class _SidebarMiniLyricsState extends State<_SidebarMiniLyrics> {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _ArtistFollowPillButton extends StatefulWidget {
+  final String artistName;
+  final VoidCallback onTap;
+
+  const _ArtistFollowPillButton({
+    required this.artistName,
+    required this.onTap,
+  });
+
+  @override
+  State<_ArtistFollowPillButton> createState() => _ArtistFollowPillButtonState();
+}
+
+class _ArtistFollowPillButtonState extends State<_ArtistFollowPillButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _isHovered ? 1.04 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: _isHovered
+                  ? (isDark
+                      ? Colors.white.withValues(alpha: 0.12)
+                      : Colors.black.withValues(alpha: 0.08))
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withValues(alpha: _isHovered ? 0.6 : 0.3)
+                    : Colors.black.withValues(alpha: _isHovered ? 0.4 : 0.2),
+                width: 1,
+              ),
+            ),
+            child: Text(
+              'Seguir',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: isDark ? Colors.white : Colors.black87,
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

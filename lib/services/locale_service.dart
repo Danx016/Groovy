@@ -38,7 +38,11 @@ class LocaleService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final localeCode = prefs.getString(_localeKey);
     if (localeCode != null) {
-      _currentLocale = Locale(localeCode);
+      if (localeCode == 'system') {
+        _currentLocale = null;
+      } else {
+        _currentLocale = Locale(localeCode);
+      }
     } else {
       _currentLocale = const Locale('es');
     }
@@ -46,7 +50,7 @@ class LocaleService extends ChangeNotifier {
   }
 
   Future<void> setLocale(Locale? locale) async {
-    debugPrint('LocaleService: Setting locale to ${locale?.languageCode}');
+    debugPrint('LocaleService: Setting locale to ${locale?.languageCode ?? "system"}');
     _currentLocale = locale;
     notifyListeners();
 
@@ -55,10 +59,8 @@ class LocaleService extends ChangeNotifier {
       await prefs.setString(_localeKey, locale.languageCode);
       debugPrint('LocaleService: Saved locale ${locale.languageCode} to prefs');
     } else {
-      await prefs.remove(_localeKey);
-      debugPrint(
-        'LocaleService: Removed locale from prefs (using system default)',
-      );
+      await prefs.setString(_localeKey, 'system');
+      debugPrint('LocaleService: Saved system locale preference');
     }
   }
 

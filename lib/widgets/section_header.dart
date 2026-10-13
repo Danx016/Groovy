@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
+import 'horizontal_carousel_view.dart';
 
 class HorizontalScrollSection extends StatelessWidget {
   final String title;
@@ -66,15 +67,12 @@ class HorizontalScrollSection extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        SizedBox(
+        HorizontalCarouselView.fromList(
+          children: children,
           height: listHeight,
-          child: ListView.separated(
-            padding: padding,
-            scrollDirection: Axis.horizontal,
-            itemCount: children.length,
-            separatorBuilder: (context, index) => SizedBox(width: itemSpacing),
-            itemBuilder: (context, index) => children[index],
-          ),
+          padding: padding,
+          itemSpacing: itemSpacing,
+          cardSize: cardSize,
         ),
       ],
     );

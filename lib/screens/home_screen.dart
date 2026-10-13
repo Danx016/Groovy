@@ -515,19 +515,17 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
         ),
-        SizedBox(
+        HorizontalCarouselView(
+          itemCount: topSongs.length,
           height: cardSize + 54,
-          child: ListView.separated(
-            padding: EdgeInsets.symmetric(horizontal: hPad),
-            scrollDirection: Axis.horizontal,
-            itemCount: topSongs.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 14),
-            itemBuilder: (ctx, index) => _SongCard(
-              song: topSongs[index],
-              playlist: songs,
-              index: index,
-              size: cardSize,
-            ),
+          cardSize: cardSize,
+          padding: EdgeInsets.symmetric(horizontal: hPad),
+          separatorBuilder: (_, __) => const SizedBox(width: 14),
+          itemBuilder: (ctx, index) => _SongCard(
+            song: topSongs[index],
+            playlist: songs,
+            index: index,
+            size: cardSize,
           ),
         ),
         const SizedBox(height: 18),
