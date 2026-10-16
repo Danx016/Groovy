@@ -3,7 +3,7 @@ import 'package:flutter/widgets.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' show Random;
+import 'dart:math' show Random, min;
 
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
@@ -91,6 +91,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _recentlySkippedOldSongId;
   String? _recentlySkippedOldSongTitle;
   DateTime? _recentlySkippedOldSongUntil;
+  Timer? _loadingWatchdogTimer;
 
   String? _resolvedArtworkUrl;
   String? _resolvedArtworkSongId;
@@ -2440,10 +2441,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }) async {
     final currentGen = ++_playGeneration;
 
+    final bool hasValidLoadedSource = _audioPlayer.audioSource != null &&
+        _audioPlayer.processingState != ProcessingState.idle &&
+        _lastPlaybackError == null;
     if (!forcePlay &&
         _activeAudioSongId == song.id &&
         !_isPlayingRadio &&
-        initialPosition == null) {
+        initialPosition == null &&
+        hasValidLoadedSource) {
       await togglePlayPause();
       return;
     }
@@ -2559,10 +2564,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _lastPlaybackError = null; // clear previous error on new play attempt
     _lastUserPauseTime = null; // clear pause intent on new song play
     _consecutiveAutoSkipFailures = 0; // reset consecutive failure counter on manual track play
+    _hasRetriedCurrentPlay = false;
     _lastManualSkipTime = DateTime.now();
     _recordSongPlayback(song);
     notifyListeners();
     _saveQueueState();
+
+    // Arm self-healing watchdog timer to ensure player never hangs in loading state
+    _loadingWatchdogTimer?.cancel();
+    _loadingWatchdogTimer = Timer(const Duration(seconds: 14), () {
+      if (currentGen == _playGeneration && _isLoading && !_isPlaying) {
+        debugPrint('[Player Watchdog] ⚠️ Playback stalled in loading state for 14s. Auto-recovering...');
+        _isLoading = false;
+        notifyListeners();
+        if (_queue.isNotEmpty && hasNext) {
+          skipNext();
+        }
+      }
+    });
 
     // Cancel any previous stream extraction so old processes do not waste CPU or starve UI
     YtDlpService().cancelCurrentExtraction();
@@ -2733,22 +2752,33 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           return;
         }
 
+        bool loadedSuccessfully = false;
         if (youtubeSource != null) {
           _concatenatingSource = null;
           unawaited(_ensureAudioFocus(() async {}));
           unawaited(_applyReplayGain(song));
-          await _audioPlayer
-              .setAudioSource(
-                youtubeSource,
-                initialPosition: initialPosition ?? Duration.zero,
-              )
-              .timeout(const Duration(seconds: 12));
+          try {
+            await _audioPlayer
+                .setAudioSource(
+                  youtubeSource,
+                  initialPosition: initialPosition ?? Duration.zero,
+                )
+                .timeout(const Duration(seconds: 12));
+            loadedSuccessfully = true;
+          } catch (sourceErr) {
+            debugPrint('[Player] Primary youtubeSource error ($sourceErr), trying direct stream fallback...');
+            if (currentGen != _playGeneration) return;
+          }
+        }
+
+        if (loadedSuccessfully) {
           if (currentGen != _playGeneration) return;
           unawaited(_audioPlayer.play().catchError((e) {
             debugPrint('[Player] Error during play(): $e');
           }));
           _isPlaying = true;
           _isLoading = false;
+          _loadingWatchdogTimer?.cancel();
           notifyListeners();
         } else if (_youtubeService.isYoutube) {
           _concatenatingSource = null;
@@ -2795,6 +2825,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }));
           _isPlaying = true;
           _isLoading = false;
+          _loadingWatchdogTimer?.cancel();
           notifyListeners();
         } else if (_gaplessEnabled) {
           try {
@@ -2942,9 +2973,22 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           errorStr.contains('idle');
       if (isInterrupted) {
         debugPrint(
-            '[Player] Ignoring audio interruption/transition error for "${song.title}": $e');
+            '[Player] Audio interruption/transition error for "${song.title}": $e');
         if (currentGen == _playGeneration) {
+          if (!_hasRetriedCurrentPlay) {
+            _hasRetriedCurrentPlay = true;
+            debugPrint('[Player] Player engine was busy during rapid transition. Re-arming and retrying "${song.title}"...');
+            await Future.delayed(const Duration(milliseconds: 250));
+            if (currentGen != _playGeneration) return;
+            try {
+              await _audioPlayer.stop().timeout(const Duration(milliseconds: 200));
+            } catch (_) {}
+            if (currentGen != _playGeneration) return;
+            await playSong(song, playlist: playlist, startIndex: startIndex, forcePlay: true);
+            return;
+          }
           _isLoading = false;
+          _loadingWatchdogTimer?.cancel();
           notifyListeners();
         }
         return;
@@ -2964,6 +3008,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _hasRetriedCurrentPlay = false;
       _isPlaying = false;
       _isLoading = false;
+      _loadingWatchdogTimer?.cancel();
       _activeAudioSongId = null;
       _position = Duration.zero;
       notifyListeners();
@@ -2977,30 +3022,38 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _updateAndroidAuto();
 
       // Graceful queue auto-recovery: advance to next track in queue so playback never freezes dead.
-      // Limit to at most 2 consecutive failures and avoid interfering with active manual skipping.
       _consecutiveAutoSkipFailures++;
       final wasRecentlySkippedManually = _lastManualSkipTime != null &&
           DateTime.now().difference(_lastManualSkipTime!) < const Duration(seconds: 2);
       if (!wasRecentlySkippedManually &&
-          _consecutiveAutoSkipFailures <= 2 &&
           _queue.isNotEmpty &&
           hasNext) {
-        debugPrint(
-            '[Player] Song "${song.title}" unplayable (failure #$_consecutiveAutoSkipFailures). Auto-skipping to next track...');
-        Future.delayed(const Duration(milliseconds: 400), () {
-          if (currentGen == _playGeneration && !_isPlaying) {
-            skipNext();
-          }
-        });
-      } else if (_consecutiveAutoSkipFailures > 2) {
-        debugPrint(
-            '[Player] Halting auto-skip after $_consecutiveAutoSkipFailures consecutive failures.');
+        final maxAutoSkips = min(8, _queue.length);
+        if (_consecutiveAutoSkipFailures <= maxAutoSkips) {
+          debugPrint(
+              '[Player] Song "${song.title}" unplayable (failure #$_consecutiveAutoSkipFailures). Auto-skipping to next track...');
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (currentGen == _playGeneration && !_isPlaying) {
+              skipNext();
+            }
+          });
+        } else {
+          debugPrint(
+              '[Player] Halting auto-skip after $_consecutiveAutoSkipFailures consecutive failures.');
+          _isLoading = false;
+          _isPlaying = false;
+          _consecutiveAutoSkipFailures = 0;
+          notifyListeners();
+        }
+      } else if (wasRecentlySkippedManually) {
+        _consecutiveAutoSkipFailures = 0;
         _isLoading = false;
         _isPlaying = false;
         notifyListeners();
       }
     } finally {
       if (currentGen == _playGeneration) {
+        _loadingWatchdogTimer?.cancel();
         _isLoading = false;
         notifyListeners();
       }
@@ -4396,6 +4449,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isDisposed = true;
     WidgetsBinding.instance
         .removeObserver(this); // single removal — was duplicated before
+    _loadingWatchdogTimer?.cancel();
     _telemetryTimer?.cancel();
     _remoteVolumeDebounceTimer?.cancel();
     _sleepTimer?.cancel();
