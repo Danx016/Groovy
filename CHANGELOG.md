@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2026-10-16
+
+### Fixed & Improved
+- **Reproducción a Prueba de Fallos y Cero Bloqueos (Bulletproof Playback Engine)**:
+  - **Eliminación Total de Consultas Pesadas de Carátulas en Vivo**: Se removió la resolución de carátulas externas en el hilo de reproducción y búsqueda. Las canciones cargan al instante con su portada nativa directa sin retrasos ni colapsos.
+  - **Re-armado y Reintento Automático ante Transiciones Rápidas**: Si el motor de audio (`just_audio`) arroja errores de colisión por saltos continuos (`busy`, `abort`, `interrupted`), el reproductor detiene limpiamente la tarea anterior y reintenta reproducir la pista seleccionada de forma transparente.
+  - **Watchdog Anticolgado de 14 Segundos**: Temporizador guardián que detecta si una conexión se queda colgada cargando indefinidamente, liberando el estado y avanzando a la siguiente pista automáticamente.
+  - **Salto Seguro de Canciones No Disponibles**: Auto-recuperación de hasta 8 canciones rotas seguidas en la cola sin congelar la app ni bloquear el reproductor.
+  - **Recarga de Pistas Fallidas**: Al presionar de nuevo una canción con error, el reproductor fuerza una nueva extracción en lugar de ignorar la pulsación.
+
 ## [1.8.9] - 2026-10-16
 
 ### Fixed & Improved
