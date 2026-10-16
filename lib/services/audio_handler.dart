@@ -41,17 +41,17 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
       AudioLoadConfiguration(
         androidLoadControl: (!kIsWeb && Platform.isAndroid)
             ? const AndroidLoadControl(
-                minBufferDuration: Duration(seconds: 30),
-                maxBufferDuration: Duration(seconds: 60),
-                bufferForPlaybackDuration: Duration(milliseconds: 2000),
-                bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 4500),
+                minBufferDuration: Duration(seconds: 10),
+                maxBufferDuration: Duration(seconds: 40),
+                bufferForPlaybackDuration: Duration(milliseconds: 350),
+                bufferForPlaybackAfterRebufferDuration: Duration(milliseconds: 1200),
                 prioritizeTimeOverSizeThresholds: true,
               )
             : null,
         darwinLoadControl: (!kIsWeb && (Platform.isIOS || Platform.isMacOS))
             ? const DarwinLoadControl(
-                automaticallyWaitsToMinimizeStalling: true,
-                preferredForwardBufferDuration: Duration(seconds: 30),
+                automaticallyWaitsToMinimizeStalling: false,
+                preferredForwardBufferDuration: Duration(seconds: 20),
               )
             : null,
       );
@@ -554,11 +554,13 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
         artUri = Uri.tryParse(artworkUrl);
       }
     }
+    final safeTitle = title.trim().isNotEmpty ? title : 'Unknown';
+    final safeId = id.trim().isNotEmpty ? id : 'unknown_id';
     try {
       mediaItem.add(
         MediaItem(
-          id: id,
-          title: title,
+          id: safeId,
+          title: safeTitle,
           artist: artist,
           album: album,
           artUri: artUri,
@@ -572,7 +574,7 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
 
   void clearNowPlaying() {
     try {
-      mediaItem.add(const MediaItem(id: '', title: ''));
+      mediaItem.add(const MediaItem(id: 'idle', title: 'Groovy'));
     } catch (e) {
       debugPrint('[GroovyAudioHandler] clearNowPlaying error: $e');
     }
@@ -586,34 +588,38 @@ class GroovyAudioHandler extends BaseAudioHandler with SeekHandler {
     required Duration position,
   }) {
     _remotePlayback = true;
-    playbackState.add(
-      playbackState.value.copyWith(
-        controls: [
-          MediaControl.skipToPrevious,
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {
-          MediaAction.play,
-          MediaAction.pause,
-          MediaAction.playPause,
-          MediaAction.stop,
-          MediaAction.skipToNext,
-          MediaAction.skipToPrevious,
-          MediaAction.fastForward,
-          MediaAction.rewind,
-          MediaAction.seek,
-          MediaAction.seekForward,
-          MediaAction.seekBackward,
-          MediaAction.playFromMediaId,
-          MediaAction.playFromSearch,
-        },
-        androidCompactActionIndices: const [0, 1, 2],
-        processingState: AudioProcessingState.ready,
-        playing: playing,
-        updatePosition: position,
-      ),
-    );
+    try {
+      playbackState.add(
+        playbackState.value.copyWith(
+          controls: [
+            MediaControl.skipToPrevious,
+            if (playing) MediaControl.pause else MediaControl.play,
+            MediaControl.skipToNext,
+          ],
+          systemActions: const {
+            MediaAction.play,
+            MediaAction.pause,
+            MediaAction.playPause,
+            MediaAction.stop,
+            MediaAction.skipToNext,
+            MediaAction.skipToPrevious,
+            MediaAction.fastForward,
+            MediaAction.rewind,
+            MediaAction.seek,
+            MediaAction.seekForward,
+            MediaAction.seekBackward,
+            MediaAction.playFromMediaId,
+            MediaAction.playFromSearch,
+          },
+          androidCompactActionIndices: const [0, 1, 2],
+          processingState: AudioProcessingState.ready,
+          playing: playing,
+          updatePosition: position,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[GroovyAudioHandler] updateRemotePlaybackState error: $e');
+    }
   }
 
   // ---------------------------------------------------------------------------

@@ -58,18 +58,25 @@ Widget createTestApp({
       ChangeNotifierProvider<RecommendationService>(
         create: (_) => RecommendationService(),
       ),
-      ChangeNotifierProvider<AuthProvider>(
-        create: (_) => authProvider ?? AuthProvider(storage),
-      ),
-      ChangeNotifierProvider<PlayerProvider>(
-        create: (_) =>
-            playerProvider ??
-            PlayerProvider(service, storage, FakeCastService(), UpnpService(),
-                GroovyAudioHandler(), TranscodingService()),
-      ),
-      ChangeNotifierProvider<LibraryProvider>(
-        create: (_) => libraryProvider ?? LibraryProvider(service, GroovyAudioHandler()),
-      ),
+      if (authProvider != null)
+        ChangeNotifierProvider<AuthProvider>.value(value: authProvider)
+      else
+        ChangeNotifierProvider<AuthProvider>(
+          create: (_) => AuthProvider(storage),
+        ),
+      if (playerProvider != null)
+        ChangeNotifierProvider<PlayerProvider>.value(value: playerProvider)
+      else
+        ChangeNotifierProvider<PlayerProvider>(
+          create: (_) => PlayerProvider(service, storage, FakeCastService(),
+              UpnpService(), GroovyAudioHandler(), TranscodingService()),
+        ),
+      if (libraryProvider != null)
+        ChangeNotifierProvider<LibraryProvider>.value(value: libraryProvider)
+      else
+        ChangeNotifierProvider<LibraryProvider>(
+          create: (_) => LibraryProvider(service, GroovyAudioHandler()),
+        ),
       ChangeNotifierProvider<TranscodingService>(
           create: (_) => TranscodingService()),
       ChangeNotifierProvider<RecentSearchesService>(

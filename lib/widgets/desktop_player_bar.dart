@@ -677,11 +677,11 @@ class _ProgressBarState extends State<_ProgressBar> {
       color: isDark ? Colors.grey[400] : Colors.grey[600],
     );
 
-    return Selector<PlayerProvider, (Duration, Duration)>(
-      selector: (_, p) => (p.position, p.duration),
-      builder: (context, data, _) {
-        final (providerPos, duration) = data;
+    return Selector<PlayerProvider, Duration>(
+      selector: (_, p) => p.duration,
+      builder: (context, duration, _) {
         final provider = context.read<PlayerProvider>();
+        final providerPos = provider.position;
 
         // Resync if track changed or position leaped significantly
         if (!_isDragging) {

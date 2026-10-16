@@ -31,6 +31,10 @@ void main() {
       );
     });
 
+    tearDown(() {
+      playerProvider.dispose();
+    });
+
     testWidgets('should display song information', (tester) async {
       final song = Song(
         id: '1',

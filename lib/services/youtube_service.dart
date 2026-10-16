@@ -54,6 +54,12 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   final String _videoId;
   final YtDlpService _ytdlp;
 
+  static final HttpClient _sharedStreamClient = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 12)
+    ..idleTimeout = const Duration(seconds: 30)
+    ..maxConnectionsPerHost = 6
+    ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+
   _YoutubeStreamAudioSource(this._videoId, this._ytdlp) : super(tag: _videoId);
 
   @override
@@ -62,10 +68,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     final streamInfo = await _ytdlp.resolveStreamInfo(cleanId);
 
     final s = start ?? 0;
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 15)
-      ..idleTimeout = const Duration(seconds: 15)
-      ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
+    final client = _sharedStreamClient;
 
     void applyHeaders(HttpClientRequest req, Map<String, String> headers) {
       bool hasUserAgent = false;
@@ -113,7 +116,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
         final retryResp = await retryReq.close();
-        return _buildResponse(retryResp, s, freshInfo.ext, client);
+        return _buildResponse(retryResp, s, freshInfo.ext);
       }
 
       if (resp.statusCode >= 400) {
@@ -121,9 +124,8 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         throw Exception('GoogleVideo stream error: HTTP ${resp.statusCode}');
       }
 
-      return _buildResponse(resp, s, streamInfo.ext, client);
+      return _buildResponse(resp, s, streamInfo.ext);
     } catch (e) {
-      client.close(force: true);
       debugPrint('[YouTube] StreamAudioSource request error for $cleanId: $e');
       rethrow;
     }
@@ -133,7 +135,6 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     HttpClientResponse resp,
     int start,
     String ext,
-    HttpClient client,
   ) {
     int? sourceLength;
     final contentRange = resp.headers.value('content-range');
@@ -158,14 +159,12 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
           responseController.add,
           onError: responseController.addError,
           onDone: () {
-            client.close(force: false);
             responseController.close();
           },
         );
       },
       onCancel: () async {
-        await responseSubscription.cancel();
-        client.close(force: true);
+        await responseSubscription.cancel().catchError((_) {});
       },
     );
 

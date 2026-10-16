@@ -1656,6 +1656,8 @@ class LibraryProvider extends ChangeNotifier {
   @override
   void dispose() {
     _cleanupTimer?.cancel();
+    _cloudSyncTimer?.cancel();
+    _cloudSyncTimer = null;
     _localMusicService?.removeListener(_onLocalMusicServiceChanged);
     super.dispose();
   }

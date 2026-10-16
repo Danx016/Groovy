@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'dart:async';
+import 'dart:ui';
 import 'package:window_manager/window_manager.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:just_audio_media_kit/just_audio_media_kit.dart';
@@ -125,6 +125,18 @@ class GroovyHttpOverrides extends HttpOverrides {
 }
 
 void main() async {
+  // Global Crash Guard: Catch any unhandled Flutter or asynchronous errors
+  // so the OS does not terminate the app process on network/platform glitches.
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('[CrashGuard/Flutter] Handled: ${details.exceptionAsString()}');
+  };
+
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('[CrashGuard/Async] Handled unhandled async error: $error');
+    return true; // Mark as handled to prevent sudden process exit
+  };
+
   WidgetsFlutterBinding.ensureInitialized();
 
   if (!kIsWeb) {

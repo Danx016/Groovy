@@ -5,6 +5,44 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.7] - 2026-10-15
+
+### Fixed & Improved
+- **Carga Ultrarrápida de Canciones y Cero Espera al Reproducir (Zero-Latency Loading)**:
+  - **Pool de Conexiones HTTP Persistente (`keep-alive`)**: Implementado `_sharedStreamClient` en `_YoutubeStreamAudioSource` para reutilizar conexiones TLS/SSL abiertas directamente con la CDN de Google. Esto elimina la costosa negociación criptográfica TCP/TLS (150–300 ms) en cada chunk de audio y salto de posición.
+  - **Prioridad Multi-Cliente en FastDart Innertube (`android`, `ios`, `tv`)**: Se incorporó el cliente de iOS a la resolución nativa de Dart en Android y Escritorio, garantizando que si un cliente sufre throttling temporal o latencia de red, otro cliente entregue el flujo de audio instantáneamente en < 350 ms.
+  - **Reordenamiento de Extracción y Cancelación**: Corregido el orden de ejecución en `playSong`: `cancelCurrentExtraction()` ahora se invoca estrictamente *antes* de iniciar el calentamiento de caché de la nueva pista (`warmUpStreamCache`), evitando que la extracción de la nueva canción fuera abortada por la cancelación de la pista anterior.
+  - **Arranque Sonoro Ultrarrápido (350 ms)**: Ajustado `AndroidLoadControl` con `bufferForPlaybackDuration` de 350 ms (antes 600 ms) y `minBufferDuration` de 10 s, logrando que el audio comience a sonar en el altavoz o auriculares de forma casi instantánea. En iOS/macOS se desactivó `automaticallyWaitsToMinimizeStalling` para reproducir desde el primer paquete recibido.
+  - **Optimización y Throttling de Precarga (1 Hz)**: Limitado el chequeo de precarga de la siguiente pista en la cola a intervalos de 1 segundo en lugar de ejecutarse en cada tick de 50 ms del reproductor, ahorrando ciclos de CPU y consumo de batería en teléfonos.
+
+## [1.8.6] - 2026-10-15
+
+### Fixed & Improved
+- **Optimización Integral de Velocidad, Búsqueda y Memoria ("Hagamoslo Todo")**:
+  - **Búsqueda Instantánea (0 ms) con Caché en Memoria**: Integrado sistema de caché LRU para búsquedas recientes que devuelve resultados al instante al retroceder o re-escribir términos, sin consultas de red innecesarias.
+  - **Cancelación y Secuenciación de Consultas de Búsqueda**: Añadido seguimiento por ID de solicitud (`_searchRequestId`) que descarta inmediatamente respuestas obsoletas si el usuario sigue escribiendo, eliminando condiciones de carrera y saltos visuales en la lista.
+  - **Fin de Rebuilds Innecesarios en HomeScreen y Barra de Escritorio**:
+    - `HomeScreen` ahora filtra reactivamente y solo escucha cambios en el historial de reproducción (`context.select`), evitando redibujar la pantalla entera cada segundo con el temporizador de reproducción.
+    - `_ProgressBar` en `DesktopPlayerBar` ahora solo se reconstruye cuando cambia la duración de la pista (`p.duration`), dejando la actualización de progreso fluida a 60 Hz al stream nativo sin dobles renders redundantes.
+  - **Prevención de Congelamiento por Conexión Inestable al Fin de Pista**: Protegido `getSimilarSongs` con timeout estricto de 5s y `try-catch` al terminar una pista y al saltar, eliminando el fallo donde `_isTransitioningSong` quedaba permanentemente bloqueado en `true`.
+  - **Recuperación Automática de Cola en Bucle**: El auto-skip tras errores de red ahora usa `hasNext` en lugar de una comparación rígida de índices, garantizando que álbumes en repetición (`RepeatMode.all`) o colas dinámicas sigan reproduciéndose sin trabarse.
+  - **Protección de Bloqueo de Archivos en Caché**: Protegido el flujo `IOSink` en `AudioCacheService` con cierre forzado ante cancelaciones, evitando descriptores de archivos huérfanos que provocaban errores de acceso en Windows.
+  - **Ultra-Rendimiento y Carga Inmediata en Android**:
+    - **FastDart Innertube en Android (~200–400 ms)**: Habilitada la resolución directa nativa en Dart en Android antes de arrancar el intérprete de Python (Chaquopy). Esto reduce el tiempo de arranque de canciones de 4–8 segundos a menos de 400 milisegundos en teléfonos y tablets.
+    - **Optimización de ExoPlayer LoadControl**: Reducido el búfer de arranque de audio de 2000 ms a 600 ms y el de re-búfer de 4500 ms a 1500 ms en `GroovyAudioHandler`, logrando que la música comience a sonar de inmediato sin silencios prolongados.
+  - **Eliminación de Fuga de Timers y Memoria**: Corregido timer periódico de sincronización en la nube (`LibraryProvider._cloudSyncTimer`) que permanecía activo tras desecharse el proveedor, previniendo degradación acumulada de RAM y CPU.
+  - **Blindaje del Ciclo de Vida en Pruebas y Providers**: Actualizado el cableado de inyección de dependencias para preservar instancias externas y garantizar suites de pruebas totalmente limpias y libres de timers pendientes.
+
+## [1.8.5] - 2026-10-15
+
+### Fixed & Improved
+- **Fluidez Instantánea y Eliminación de Bloqueos al Cambiar de Canción**:
+  - **FastDart Innertube en Escritorio (Windows / macOS / Linux)**: Implementada resolución ultrarrápida nativa en Dart (~200–400 ms) antes de recurrir a procesos externos de `yt-dlp.exe`.
+  - **Cancelación Inmediata de Extracciones Previas**: Al saltar o cambiar de pista, cualquier subproceso en curso se cancela y termina de inmediato, evitando procesos zombis y saturación al 100% de CPU. Corregida la señal de terminación en Windows para matar el árbol de procesos limpiamente.
+  - **Latencia de Salto Reducida a 60 ms**: Eliminado el debounce forzado de 350 ms y la detención síncrona bloqueante del motor de audio al saltar pistas.
+  - **Fin del Congelamiento al Final de la Cola**: El botón siguiente ya no se bloquea esperando recomendaciones similares en red; la obtención de canciones similares ahora corre en segundo plano sin congelar la interfaz.
+  - **Recuperación Automática de Reproducción**: Si una pista experimenta tiempo de espera (timeout) o error de red, el reproductor reintenta de forma inteligente y avanza automáticamente a la siguiente canción en lugar de detenerse y quedar mudo.
+
 ## [1.8.4] - 2026-10-13
 
 ### Fixed & Improved

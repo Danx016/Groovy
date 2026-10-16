@@ -144,8 +144,9 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
           SliverToBoxAdapter(
-            child: Consumer3<LibraryProvider, RecommendationService, PlayerProvider>(
-              builder: (context, libraryProvider, recommendationService, playerProvider, _) {
+            child: Consumer2<LibraryProvider, RecommendationService>(
+              builder: (context, libraryProvider, recommendationService, _) {
+                final playerHistory = context.select<PlayerProvider, List<Song>>((p) => p.playbackHistory);
                 if (libraryProvider.isLoading &&
                     !libraryProvider.isInitialized) {
                   return _buildLoadingState(isDesktop, hPad);
@@ -214,8 +215,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     .map((id) => cachedSongMap[id]!)
                     .where((s) => !s.isLocal && !s.id.startsWith('local_'))
                     .toList();
-                final recentSongs = (playerProvider.playbackHistory.isNotEmpty
-                    ? playerProvider.playbackHistory
+                final recentSongs = (playerHistory.isNotEmpty
+                    ? playerHistory
                     : recentSongsFromProfiles)
                     .where((s) => !s.isLocal && !s.id.startsWith('local_'))
                     .toList();

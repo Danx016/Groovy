@@ -48,6 +48,9 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _liveSearch = true;
   SearchCategoryFilter _selectedFilter = SearchCategoryFilter.all;
 
+  int _searchRequestId = 0;
+  static final Map<String, SearchResult> _memorySearchCache = {};
+
   @override
   void initState() {
     super.initState();
@@ -71,7 +74,8 @@ class _SearchScreenState extends State<SearchScreen> {
   }
 
   Future<void> _loadAutocomplete(String query) async {
-    if (query.trim().isEmpty) {
+    final cleanQ = query.trim();
+    if (cleanQ.isEmpty) {
       setState(() {
         _autocompleteSuggestions = null;
         _showSuggestions = false;
@@ -79,6 +83,7 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
+    final requestId = ++_searchRequestId;
     setState(() {
       _isLoadingSuggestions = true;
       _showSuggestions = true;
@@ -89,15 +94,15 @@ class _SearchScreenState extends State<SearchScreen> {
         context,
         listen: false,
       );
-      final result = await libraryProvider.search(query, includeOnline: true);
-      if (mounted && _searchController.text.trim() == query.trim()) {
+      final result = await libraryProvider.search(cleanQ, includeOnline: true);
+      if (mounted && requestId == _searchRequestId && _searchController.text.trim() == cleanQ) {
         setState(() {
           _autocompleteSuggestions = result;
           _isLoadingSuggestions = false;
         });
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && requestId == _searchRequestId) {
         setState(() {
           _isLoadingSuggestions = false;
         });
@@ -108,7 +113,9 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onSearchChanged(String value) {
     _debounceTimer?.cancel();
 
-    if (value.trim().isEmpty) {
+    final clean = value.trim();
+    if (clean.isEmpty) {
+      _searchRequestId++;
       setState(() {
         _searchResult = null;
         _autocompleteSuggestions = null;
@@ -119,7 +126,19 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
-    // 1. Instant local match (0ms latency)
+    // Check memory cache first for instant 0ms recall
+    final cached = _memorySearchCache[clean.toLowerCase()];
+    if (cached != null) {
+      _searchRequestId++;
+      setState(() {
+        _query = value;
+        _searchResult = cached;
+        _isSearching = false;
+      });
+      return;
+    }
+
+    // Instant local match (0ms latency)
     final libraryProvider = Provider.of<LibraryProvider>(
       context,
       listen: false,
@@ -134,7 +153,7 @@ class _SearchScreenState extends State<SearchScreen> {
       _isSearching = true; // Immediate feedback that live search is working
     });
 
-    // 2. Ultra-snappy debounced online search (180ms)
+    // Snappy debounced online search (180ms)
     _debounceTimer = Timer(const Duration(milliseconds: 180), () {
       if (!mounted || _searchController.text.trim() != value.trim()) return;
       if (_liveSearch) {
@@ -148,6 +167,7 @@ class _SearchScreenState extends State<SearchScreen> {
   Future<void> _search(String query) async {
     final cleanQ = query.trim();
     if (cleanQ.isEmpty) {
+      _searchRequestId++;
       setState(() {
         _searchResult = null;
         _query = '';
@@ -157,6 +177,20 @@ class _SearchScreenState extends State<SearchScreen> {
       return;
     }
 
+    final cacheKey = cleanQ.toLowerCase();
+    final cached = _memorySearchCache[cacheKey];
+    if (cached != null) {
+      _searchRequestId++;
+      setState(() {
+        _searchResult = cached;
+        _isSearching = false;
+        _query = cleanQ;
+        _showSuggestions = false;
+      });
+      return;
+    }
+
+    final requestId = ++_searchRequestId;
     setState(() {
       _isSearching = true;
       _query = cleanQ;
@@ -169,7 +203,13 @@ class _SearchScreenState extends State<SearchScreen> {
         listen: false,
       );
       final result = await libraryProvider.search(cleanQ, includeOnline: true);
-      if (mounted && _searchController.text.trim() == cleanQ) {
+      if (mounted && requestId == _searchRequestId && _searchController.text.trim() == cleanQ) {
+        // Keep memory cache bounded to 60 queries
+        if (_memorySearchCache.length >= 60) {
+          _memorySearchCache.remove(_memorySearchCache.keys.first);
+        }
+        _memorySearchCache[cacheKey] = result;
+
         setState(() {
           _searchResult = result;
           _isSearching = false;
@@ -179,7 +219,7 @@ class _SearchScreenState extends State<SearchScreen> {
         }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && requestId == _searchRequestId) {
         setState(() {
           _isSearching = false;
         });

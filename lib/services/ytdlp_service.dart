@@ -82,6 +82,7 @@ class YtDlpService {
   }
 
   void dispose() {
+    cancelCurrentExtraction();
     _fallbackYt?.close();
     _fallbackYt = null;
     _streamInfoCache.clear();
@@ -961,14 +962,43 @@ class YtDlpService {
     }
   }
 
+  Process? _activeExtractionProcess;
+
+  /// Immediately cancels and terminates any running background extraction subprocess.
+  /// Called when skipping tracks so old yt-dlp instances do not hog CPU or cause UI freezing.
+  void cancelCurrentExtraction() {
+    if (_activeExtractionProcess != null) {
+      _killProcess(_activeExtractionProcess);
+      _activeExtractionProcess = null;
+    }
+  }
+
+  void _killProcess(Process? process) {
+    if (process == null) return;
+    try {
+      if (!kIsWeb && Platform.isWindows) {
+        process.kill();
+        Process.run('taskkill', ['/F', '/T', '/PID', '${process.pid}']).catchError((_) => ProcessResult(0, -1, '', ''));
+      } else {
+        process.kill(ProcessSignal.sigkill);
+      }
+    } catch (_) {
+      try {
+        process.kill();
+      } catch (_) {}
+    }
+  }
+
   Future<ProcessResult?> _runProcessWithTimeout(
     String executable,
     List<String> args,
     Duration timeout,
   ) async {
+    cancelCurrentExtraction();
     Process? process;
     try {
       process = await Process.start(executable, args);
+      _activeExtractionProcess = process;
       final stdoutFuture = process.stdout.transform(utf8.decoder).join();
       final stderrFuture = process.stderr.transform(utf8.decoder).join();
 
@@ -976,18 +1006,23 @@ class YtDlpService {
       final stdout = await stdoutFuture;
       final stderr = await stderrFuture;
 
+      if (_activeExtractionProcess == process) {
+        _activeExtractionProcess = null;
+      }
       return ProcessResult(process.pid, exitCode, stdout, stderr);
     } on TimeoutException {
       debugPrint('[yt-dlp] Process timed out ($timeout) for $executable. Killing PID ${process?.pid}...');
-      try {
-        process?.kill(ProcessSignal.sigkill);
-      } catch (_) {}
+      _killProcess(process);
+      if (_activeExtractionProcess == process) {
+        _activeExtractionProcess = null;
+      }
       return null;
     } catch (e) {
       debugPrint('[yt-dlp] Process error for $executable: $e');
-      try {
-        process?.kill(ProcessSignal.sigkill);
-      } catch (_) {}
+      _killProcess(process);
+      if (_activeExtractionProcess == process) {
+        _activeExtractionProcess = null;
+      }
       return null;
     }
   }
@@ -1053,11 +1088,44 @@ class YtDlpService {
   }
 
   Future<YtStreamInfo> _doResolveStreamInfo(String cleanId) async {
-    // ── DESKTOP (Windows / macOS / Linux): yt-dlp subprocess FIRST ──────────
-    // Diagnosis confirmed: yt-dlp subprocess gives HTTP 206 for all songs.
-    // youtube_explode_dart FastDart sometimes generates URLs that give 403
-    // in the live app, so we prefer the subprocess which is always reliable.
+    // ── DESKTOP (Windows / macOS / Linux) ──────────────────────────────────
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      // 1. FAST-PATH: Pure-Dart Innertube via TV/Android client first (200-400ms!)
+      // Pure Dart does not spawn an external OS process, consumes virtually 0 CPU/RAM,
+      // and produces direct Google CDN URLs that return HTTP 206 for libmpv.
+      try {
+        final manifest = await _fallbackClient.videos.streamsClient
+            .getManifest(cleanId, ytClients: [
+              yt.YoutubeApiClient.tv,
+              yt.YoutubeApiClient.android,
+              yt.YoutubeApiClient.ios,
+            ])
+            .timeout(const Duration(milliseconds: 3500));
+        final audioOnly = manifest.audioOnly;
+        if (audioOnly.isNotEmpty) {
+          final best = _selectBestAudioStream(audioOnly);
+          final url = best.url.toString();
+          if (url.isNotEmpty) {
+            final info = YtStreamInfo(
+              url: url,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
+                'Origin': 'https://www.youtube.com',
+                'Referer': 'https://www.youtube.com/',
+              },
+              ext: best.container.name,
+            );
+            _streamInfoCache[cleanId] = info;
+            _streamCacheTime[cleanId] = DateTime.now();
+            debugPrint('[yt-dlp/Desktop] ⚡ Resolved $cleanId via FastDart Innertube (fast path)');
+            return info;
+          }
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Desktop] FastDart note for $cleanId: $e, falling back to subprocess...');
+      }
+
+      // 2. SUBPROCESS PATH: yt-dlp binary (if FastDart was blocked or timed out)
       final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
       try {
         final result = await _runYtDlp([
@@ -1070,7 +1138,7 @@ class YtDlpService {
           '--no-warnings',
           '--no-check-certificates',
           targetUrl,
-        ], timeout: const Duration(seconds: 15));
+        ], timeout: const Duration(seconds: 7));
 
         if (result != null && result.exitCode == 0) {
           final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
@@ -1106,14 +1174,53 @@ class YtDlpService {
       }
     }
 
-    // ── ANDROID: Chaquopy Python yt-dlp FIRST (same logic as Desktop) ─────────
-    // yt-dlp (via Chaquopy) generates reliable URLs with correct headers.
-    // FastDart Innertube sometimes gives 403 in the live app on Android too.
+    // ── ANDROID: FastDart Innertube FAST-PATH first (~200–400 ms), then Chaquopy ───
     if (!kIsWeb && Platform.isAndroid) {
+      // 1. FAST-PATH: Pure-Dart Innertube via Android, iOS & TV clients (200–400ms!)
+      try {
+        final manifest = await _fallbackClient.videos.streamsClient
+            .getManifest(cleanId, ytClients: [
+              yt.YoutubeApiClient.android,
+              yt.YoutubeApiClient.ios,
+              yt.YoutubeApiClient.tv,
+            ])
+            .timeout(const Duration(milliseconds: 3500));
+        final audioOnly = manifest.audioOnly;
+        if (audioOnly.isNotEmpty) {
+          final best = _selectBestAudioStream(audioOnly);
+          final url = best.url.toString();
+          if (url.isNotEmpty) {
+            final isAndroid = url.contains('c=ANDROID');
+            final isIos = url.contains('c=IOS');
+            final userAgent = isAndroid
+                ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+                : isIos
+                    ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                    : 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
+            final info = YtStreamInfo(
+              url: url,
+              headers: {
+                'User-Agent': userAgent,
+                'Origin': 'https://www.youtube.com',
+                'Referer': 'https://www.youtube.com/',
+              },
+              ext: best.container.name,
+            );
+            _streamInfoCache[cleanId] = info;
+            _streamCacheTime[cleanId] = DateTime.now();
+            debugPrint('[yt-dlp/Android] ⚡ Resolved $cleanId via FastDart Innertube (fast path)');
+            return info;
+          }
+        }
+      } catch (e) {
+        debugPrint('[yt-dlp/Android] FastDart note for $cleanId: $e, falling back to Chaquopy...');
+      }
+
+      // 2. Reliable Fallback: Chaquopy Python yt-dlp
       try {
         final jsonStr = await _androidChannel
             .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
-            .timeout(const Duration(seconds: 20));
+            .timeout(const Duration(seconds: 8));
         if (jsonStr != null && jsonStr.isNotEmpty) {
           final data = jsonDecode(jsonStr) as Map<String, dynamic>;
           final url = data['url'] as String? ?? '';
@@ -1124,7 +1231,7 @@ class YtDlpService {
             final info = YtStreamInfo(url: url, headers: headers, ext: ext);
             _streamInfoCache[cleanId] = info;
             _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Android Python] ✅ Resolved $cleanId via Chaquopy (reliable path)');
+            debugPrint('[yt-dlp/Android Python] ✅ Resolved $cleanId via Chaquopy (fallback)');
             return info;
           }
         }

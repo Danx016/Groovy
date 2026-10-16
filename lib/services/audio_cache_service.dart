@@ -200,8 +200,16 @@ class AudioCacheService {
           return null;
         }
 
-        final sink = partFile.openWrite();
-        await resp.pipe(sink).timeout(const Duration(seconds: 45));
+        IOSink? sink;
+        try {
+          sink = partFile.openWrite();
+          await resp.pipe(sink).timeout(const Duration(seconds: 45));
+        } catch (e) {
+          try {
+            await sink?.close();
+          } catch (_) {}
+          rethrow;
+        }
 
         final partLength = await partFile.length();
         if (partLength >= _minValidAudioSizeBytes) {

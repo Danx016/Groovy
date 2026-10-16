@@ -119,7 +119,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _lastCompletedSongId;
   DateTime? _lastManualSkipTime;
   DateTime? _lastPreviousPressTime;
-  static const Duration _skipDebounceDuration = Duration(milliseconds: 350);
+  static const Duration _skipDebounceDuration = Duration(milliseconds: 60);
 
   /// Last playback error message, set when a song fails to load after all retries.
   /// Cleared automatically when a new song starts successfully.
@@ -1448,11 +1448,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   // Preloading state: tracks the last preloaded song ID to avoid redundant work
   String? _lastPreloadedSongId;
+  DateTime? _lastPreloadCheckTime;
 
   /// Checks if the currently playing song is nearing its end, and if so,
   /// triggers background preloading for the next song in the queue.
   void _checkAndPreloadNextSong(Duration position) {
     if (_queue.isEmpty || _currentSong == null || _isRenderingRemotely) return;
+
+    final now = DateTime.now();
+    if (_lastPreloadCheckTime != null &&
+        now.difference(_lastPreloadCheckTime!) < const Duration(milliseconds: 1000)) {
+      return;
+    }
+    _lastPreloadCheckTime = now;
+
     final totalSeconds = _duration.inSeconds > 0
         ? _duration.inSeconds
         : (_currentSong?.duration ?? 0);
@@ -2212,8 +2221,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         }
         await _playNextSongAutomatic();
       } else if (_youtubeService.isYoutube && completedSong != null) {
-        final moreSimilar =
-            await _youtubeService.getSimilarSongs(completedSong.id, count: 20);
+        List<Song> moreSimilar = [];
+        try {
+          moreSimilar = await _youtubeService
+              .getSimilarSongs(completedSong.id, count: 20)
+              .timeout(const Duration(seconds: 5), onTimeout: () => []);
+        } catch (_) {}
         final existingIds = _queue.map((s) => s.id).toSet();
         final existingTitles =
             _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
@@ -2538,6 +2551,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
     _saveQueueState();
 
+    // Cancel any previous stream extraction so old processes do not waste CPU or starve UI
+    YtDlpService().cancelCurrentExtraction();
+
     // Fast-start: immediately launch background stream resolution for YouTube IDs
     // so network and extraction run in parallel while Flutter stops previous audio and prepares playback
     if (song.isLocal != true) {
@@ -2556,9 +2572,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAndroidAuto();
     _refreshArtworkUrl().catchError((_) {});
 
-    // Ensure any previously active audio or faulted stream is completely stopped and detached
+    // Ensure any previously active audio or faulted stream is detached without blocking UI
     try {
-      await _audioPlayer.stop().timeout(const Duration(milliseconds: 500));
+      await _audioPlayer.stop().timeout(const Duration(milliseconds: 80));
     } catch (_) {}
     if (currentGen != _playGeneration) return;
 
@@ -2912,14 +2928,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       debugPrint('[Player] ✗ Error playing song "${song.title}": $e');
-      final isTimeout =
-          errorStr.contains('timeout') || errorStr.contains('timed out');
-      if (song.isLocal != true && !_hasRetriedCurrentPlay && !isTimeout) {
+      if (song.isLocal != true && !_hasRetriedCurrentPlay) {
         _hasRetriedCurrentPlay = true;
         YtDlpService().invalidateCache(song.id);
         debugPrint(
             '[Player] Retrying playSong for "${song.title}" once with fresh cache...');
-        await Future.delayed(const Duration(milliseconds: 500));
+        await Future.delayed(const Duration(milliseconds: 300));
         if (currentGen != _playGeneration) return;
         await playSong(song, playlist: playlist, startIndex: startIndex);
         return;
@@ -2935,31 +2949,32 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           'No se pudo reproducir "${song.title}". Verifica tu conexión a internet.';
       onPlaybackError?.call(_lastPlaybackError!);
       try {
-        await _audioPlayer.stop().timeout(const Duration(seconds: 2));
+        await _audioPlayer.stop().timeout(const Duration(milliseconds: 500));
       } catch (_) {}
       _updateAndroidAuto();
 
-      // Graceful queue auto-recovery: if there are subsequent tracks in the queue,
-      // advance automatically ONLY if the user was NOT skipping manually (to avoid runaway skips).
-      // Limit to at most 2 consecutive auto-skips to avoid cascade skips through the entire playlist.
+      // Graceful queue auto-recovery: advance to next track in queue so playback never freezes dead.
+      // Limit to at most 2 consecutive failures and avoid interfering with active manual skipping.
       _consecutiveAutoSkipFailures++;
       final wasRecentlySkippedManually = _lastManualSkipTime != null &&
-          DateTime.now().difference(_lastManualSkipTime!) < const Duration(seconds: 4);
-
+          DateTime.now().difference(_lastManualSkipTime!) < const Duration(seconds: 2);
       if (!wasRecentlySkippedManually &&
           _consecutiveAutoSkipFailures <= 2 &&
           _queue.isNotEmpty &&
-          _currentIndex < _queue.length - 1) {
+          hasNext) {
         debugPrint(
             '[Player] Song "${song.title}" unplayable (failure #$_consecutiveAutoSkipFailures). Auto-skipping to next track...');
-        Future.delayed(const Duration(milliseconds: 600), () {
+        Future.delayed(const Duration(milliseconds: 400), () {
           if (currentGen == _playGeneration && !_isPlaying) {
             skipNext();
           }
         });
       } else if (_consecutiveAutoSkipFailures > 2) {
         debugPrint(
-            '[Player] Halting runaway auto-skip after $_consecutiveAutoSkipFailures consecutive failures.');
+            '[Player] Halting auto-skip after $_consecutiveAutoSkipFailures consecutive failures.');
+        _isLoading = false;
+        _isPlaying = false;
+        notifyListeners();
       }
     } finally {
       if (currentGen == _playGeneration) {
@@ -3386,15 +3401,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     if (_autoDjService.shouldAddSongs(_currentIndex, _queue.length)) {
-      await _addAutoDjSongs();
-      if (skipGen != _skipGeneration) {
-        return; // another skip came in while fetching
-      }
+      unawaited(_addAutoDjSongs());
     }
 
     _activeAudioSongId = null;
     _lastManualSkipTime = DateTime.now();
-    _audioPlayer.stop().catchError((_) {});
+    YtDlpService().cancelCurrentExtraction();
 
     if (_shuffleEnabled && _queue.length > 1) {
       _shuffleHistory.add(_currentSong?.id ?? '');
@@ -3444,47 +3456,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (skipGen != _skipGeneration) return;
         skipToIndex(nextIndex, skipGen: skipGen);
       });
-    } else if (_youtubeService.isYoutube && _currentSong != null) {
-      final moreSimilar =
-          await _youtubeService.getSimilarSongs(_currentSong!.id, count: 20);
-      if (skipGen != _skipGeneration) return;
-      final existingIds = _queue.map((s) => s.id).toSet();
-      final existingTitles =
-          _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
-      if (_currentSong != null) {
-        existingTitles.add(SongTitleUtils.normalizeTitle(_currentSong!.title));
-      }
-      final toAdd = <Song>[];
-      for (final s in moreSimilar) {
-        if (existingIds.contains(s.id)) continue;
-        final norm = SongTitleUtils.normalizeTitle(s.title);
-        if (norm.isNotEmpty && existingTitles.contains(norm)) continue;
-        if (norm.isNotEmpty) existingTitles.add(norm);
-        existingIds.add(s.id);
-        toAdd.add(s);
-      }
-      if (toAdd.isNotEmpty) {
-        _queue.addAll(toAdd);
-        final nextIndex = _currentIndex + 1;
-        _currentIndex = nextIndex;
-        _currentSong = _queue[nextIndex];
-        _position = Duration.zero;
-        _duration = _currentSong!.duration != null
-            ? Duration(seconds: _currentSong!.duration!)
-            : Duration.zero;
-        _isLoading = true;
-        _lastPlaybackError = null;
-        notifyListeners();
-        _saveQueueState();
-        _refreshArtworkUrl().catchError((_) {});
-        _updateAndroidAuto();
-
-        _skipDebounceTimer?.cancel();
-        _skipDebounceTimer = Timer(_skipDebounceDuration, () {
-          if (skipGen != _skipGeneration) return;
-          skipToIndex(nextIndex, skipGen: skipGen);
-        });
-      }
     } else if (_repeatMode == RepeatMode.all && _queue.isNotEmpty) {
       if (_queue.length == 1) {
         await seek(Duration.zero);
@@ -3508,6 +3479,60 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           skipToIndex(0, skipGen: skipGen);
         });
       }
+    } else if (_youtubeService.isYoutube && _currentSong != null) {
+      // Near end of queue or single track: show loading state immediately and fetch similar tracks without blocking UI
+      _isLoading = true;
+      notifyListeners();
+      unawaited(() async {
+        try {
+          final moreSimilar = await _youtubeService
+              .getSimilarSongs(_currentSong!.id, count: 20)
+              .timeout(const Duration(seconds: 5), onTimeout: () => []);
+          if (skipGen != _skipGeneration) return;
+          final existingIds = _queue.map((s) => s.id).toSet();
+          final existingTitles =
+              _queue.map((s) => SongTitleUtils.normalizeTitle(s.title)).toSet();
+          if (_currentSong != null) {
+            existingTitles.add(SongTitleUtils.normalizeTitle(_currentSong!.title));
+          }
+          final toAdd = <Song>[];
+          for (final s in moreSimilar) {
+            if (existingIds.contains(s.id)) continue;
+            final norm = SongTitleUtils.normalizeTitle(s.title);
+            if (norm.isNotEmpty && existingTitles.contains(norm)) continue;
+            if (norm.isNotEmpty) existingTitles.add(norm);
+            existingIds.add(s.id);
+            toAdd.add(s);
+          }
+          if (toAdd.isNotEmpty) {
+            _queue.addAll(toAdd);
+            final nextIndex = _currentIndex + 1;
+            if (nextIndex < _queue.length) {
+              _currentIndex = nextIndex;
+              _currentSong = _queue[nextIndex];
+              _position = Duration.zero;
+              _duration = _currentSong!.duration != null
+                  ? Duration(seconds: _currentSong!.duration!)
+                  : Duration.zero;
+              _isLoading = true;
+              _lastPlaybackError = null;
+              notifyListeners();
+              _saveQueueState();
+              _refreshArtworkUrl().catchError((_) {});
+              _updateAndroidAuto();
+              skipToIndex(nextIndex, skipGen: skipGen);
+              return;
+            }
+          }
+          _isLoading = false;
+          notifyListeners();
+        } catch (_) {
+          if (skipGen == _skipGeneration) {
+            _isLoading = false;
+            notifyListeners();
+          }
+        }
+      }());
     }
   }
 
@@ -3634,7 +3659,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _activeAudioSongId = null;
     _lastManualSkipTime = DateTime.now();
-    _audioPlayer.stop().catchError((_) {});
+    YtDlpService().cancelCurrentExtraction();
 
     if (_shuffleEnabled && _shuffleHistory.isNotEmpty) {
       final prevId = _shuffleHistory.removeLast();
