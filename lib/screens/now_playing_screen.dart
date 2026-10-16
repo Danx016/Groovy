@@ -31,7 +31,6 @@ import '../widgets/now_playing/track_navigation_sheet.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../services/lrclib_service.dart';
 import '../services/groovy_connect_service.dart';
-import '../services/apple_music_artwork_service.dart';
 import '../widgets/connect/groovy_connect_modal.dart';
 import '../theme/app_theme.dart';
 import '../widgets/groovy_custom_icons.dart';
@@ -139,14 +138,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
       return const AssetImage('assets/default_cover.png');
     }
 
-    // 0. Check if Apple Music HD original studio artwork is already cached
-    if (!song.isLocal) {
-      final cachedApple = AppleMusicArtworkService.getCachedArtwork(song.title, song.artist);
-      if (cachedApple != null && cachedApple.artworkUrl.isNotEmpty) {
-        return CachedNetworkImageProvider(cachedApple.artworkUrl);
-      }
-    }
-
     // 1. Check if PlayerProvider resolved an artwork URL (from disk cache or directUrl)
     final resolvedUrl = _playerProvider?.resolvedArtworkUrl;
     if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
@@ -206,14 +197,6 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
     _fetchedLyrics = widget.lyrics;
     _currentImageProvider = widget.image;
     _lastSong = widget.song;
-
-    // 0. Instant Apple Music HD studio artwork cache check
-    if (widget.song != null && !widget.song!.isLocal) {
-      final cachedApple = AppleMusicArtworkService.getCachedArtwork(widget.song!.title, widget.song!.artist);
-      if (cachedApple != null && cachedApple.artworkUrl.isNotEmpty) {
-        _currentImageProvider = CachedNetworkImageProvider(cachedApple.artworkUrl);
-      }
-    }
 
     // 1. Instant synchronous color lookup from cache
     final songId = widget.song?.id ?? widget.heroTag;

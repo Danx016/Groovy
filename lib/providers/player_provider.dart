@@ -22,7 +22,6 @@ import '../services/ytdlp_service.dart';
 import '../services/lrclib_service.dart';
 import '../services/palette_service.dart';
 import '../services/audio_cache_service.dart';
-import '../services/apple_music_artwork_service.dart';
 
 import '../services/storage_service.dart';
 import '../services/groovy_api_service.dart';
@@ -121,7 +120,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   String? _lastCompletedSongId;
   DateTime? _lastManualSkipTime;
   DateTime? _lastPreviousPressTime;
-  static const Duration _skipDebounceDuration = Duration(milliseconds: 60);
+  static const Duration _skipDebounceDuration = Duration(milliseconds: 180);
 
   /// Last playback error message, set when a song fails to load after all retries.
   /// Cleared automatically when a new song starts successfully.
@@ -1269,28 +1268,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         ? song.coverArt!
         : song.id;
 
-    final cachedApple = !song.isLocal
-        ? AppleMusicArtworkService.getCachedArtwork(song.title, song.artist)
-        : null;
-
-    final directUrl = (cachedApple != null && cachedApple.artworkUrl.isNotEmpty)
-        ? cachedApple.artworkUrl
-        : _youtubeService.getCoverArtUrl(rawArt, size: 800);
-
-    if (!song.isLocal && cachedApple == null) {
-      unawaited(
-        AppleMusicArtworkService().resolveArtworkForSong(song).then((res) {
-          if (res != null &&
-              res.artworkUrl.isNotEmpty &&
-              _currentSong?.id == song.id) {
-            _resolvedArtworkUrl = res.artworkUrl;
-            _resolvedArtworkSongId = song.id;
-            _updateAndroidAuto();
-            notifyListeners();
-          }
-        }).catchError((_) {}),
-      );
-    }
+    final directUrl = _youtubeService.getCoverArtUrl(rawArt, size: 800);
 
     if (directUrl.isNotEmpty) {
       _resolvedArtworkUrl = directUrl;
@@ -2580,6 +2558,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _isLoading = true;
     _lastPlaybackError = null; // clear previous error on new play attempt
     _lastUserPauseTime = null; // clear pause intent on new song play
+    _consecutiveAutoSkipFailures = 0; // reset consecutive failure counter on manual track play
+    _lastManualSkipTime = DateTime.now();
     _recordSongPlayback(song);
     notifyListeners();
     _saveQueueState();
@@ -2607,7 +2587,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Ensure any previously active audio or faulted stream is detached without blocking UI
     try {
-      await _audioPlayer.stop().timeout(const Duration(milliseconds: 80));
+      if (_audioPlayer.playing || _audioPlayer.processingState != ProcessingState.idle) {
+        await _audioPlayer.stop().timeout(const Duration(milliseconds: 200));
+      }
     } catch (_) {}
     if (currentGen != _playGeneration) return;
 
@@ -2946,17 +2928,25 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         return;
       }
 
-      // Ignore normal audio cancellation/abort exceptions caused by user skipping tracks or stopping
+      // Ignore normal audio cancellation/abort/interruption exceptions caused by rapid skipping or stopping
       final errorStr = e.toString().toLowerCase();
-      if (errorStr.contains('abort') ||
+      final isInterrupted = errorStr.contains('abort') ||
           errorStr.contains('interrupted') ||
           errorStr.contains('cancelled') ||
           errorStr.contains('canceled') ||
-          errorStr.contains('superseded')) {
+          errorStr.contains('superseded') ||
+          errorStr.contains('busy') ||
+          errorStr.contains('stopped') ||
+          errorStr.contains('loading') ||
+          errorStr.contains('bad state') ||
+          errorStr.contains('idle');
+      if (isInterrupted) {
         debugPrint(
-            '[Player] Ignoring audio abort/cancellation error for "${song.title}": $e');
-        _isLoading = false;
-        notifyListeners();
+            '[Player] Ignoring audio interruption/transition error for "${song.title}": $e');
+        if (currentGen == _playGeneration) {
+          _isLoading = false;
+          notifyListeners();
+        }
         return;
       }
 
@@ -3439,7 +3429,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _activeAudioSongId = null;
     _lastManualSkipTime = DateTime.now();
+    _consecutiveAutoSkipFailures = 0;
     YtDlpService().cancelCurrentExtraction();
+    _audioPlayer.stop().catchError((_) {});
 
     if (_shuffleEnabled && _queue.length > 1) {
       _shuffleHistory.add(_currentSong?.id ?? '');
@@ -3692,7 +3684,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _activeAudioSongId = null;
     _lastManualSkipTime = DateTime.now();
+    _consecutiveAutoSkipFailures = 0;
     YtDlpService().cancelCurrentExtraction();
+    _audioPlayer.stop().catchError((_) {});
 
     if (_shuffleEnabled && _shuffleHistory.isNotEmpty) {
       final prevId = _shuffleHistory.removeLast();

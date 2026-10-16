@@ -21,7 +21,6 @@ import '../services/groovy_connect_service.dart';
 import 'connect/groovy_connect_icon.dart';
 import 'connect/groovy_connect_modal.dart';
 import 'groovy_custom_icons.dart';
-import '../services/apple_music_artwork_service.dart';
 
 
 class DesktopPlayerBar extends StatefulWidget {
@@ -76,14 +75,10 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
         ? song.coverArt!
         : song.id;
     final coverUrl = youtubeService.getCoverArtUrl(rawArt, size: 800);
-    final cachedApple = !song.isLocal
-        ? AppleMusicArtworkService.getCachedArtwork(song.title, song.artist)
-        : null;
     final player = Provider.of<PlayerProvider>(context, listen: false);
-    final effectiveCoverUrl = cachedApple?.artworkUrl ??
-        ((player.resolvedArtworkSongId == song.id && player.resolvedArtworkUrl != null)
-            ? player.resolvedArtworkUrl!
-            : coverUrl);
+    final effectiveCoverUrl = (player.resolvedArtworkSongId == song.id && player.resolvedArtworkUrl != null)
+        ? player.resolvedArtworkUrl!
+        : coverUrl;
     ImageProvider imageProvider;
     if (effectiveCoverUrl.isNotEmpty) {
       if (song.isLocal || isLocalFilePath(effectiveCoverUrl)) {
@@ -343,10 +338,7 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                                     ? p.resolvedArtworkUrl
                                     : null,
                                 builder: (context, resolvedArt, _) {
-                                  final cachedApple = !currentSong.isLocal
-                                      ? AppleMusicArtworkService.getCachedArtwork(currentSong.title, currentSong.artist)
-                                      : null;
-                                  final effectiveArt = cachedApple?.artworkUrl ?? (resolvedArt ?? currentSong.coverArt);
+                                  final effectiveArt = resolvedArt ?? currentSong.coverArt;
                                   return AlbumArtwork(
                                     coverArt: effectiveArt,
                                     size: 56,

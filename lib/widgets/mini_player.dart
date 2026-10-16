@@ -17,7 +17,6 @@ import '../services/upnp_service.dart';
 import '../services/groovy_connect_service.dart';
 import 'connect/groovy_connect_icon.dart';
 import 'connect/groovy_connect_modal.dart';
-import '../services/apple_music_artwork_service.dart';
 
 class MiniPlayer extends StatelessWidget {
   final VoidCallback? onTap;
@@ -47,13 +46,9 @@ class MiniPlayer extends StatelessWidget {
                 ? currentSong.coverArt!
                 : currentSong.id;
             final coverUrl = youtubeService.getCoverArtUrl(rawArt, size: 800);
-            final cachedApple = !currentSong.isLocal
-                ? AppleMusicArtworkService.getCachedArtwork(currentSong.title, currentSong.artist)
-                : null;
-            final effectiveCoverUrl = cachedApple?.artworkUrl ??
-                ((resolvedArtworkUrl != null && resolvedArtworkUrl.isNotEmpty)
-                    ? resolvedArtworkUrl
-                    : coverUrl);
+            final effectiveCoverUrl = (resolvedArtworkUrl != null && resolvedArtworkUrl.isNotEmpty)
+                ? resolvedArtworkUrl
+                : coverUrl;
 
             ImageProvider imageProvider;
             if (effectiveCoverUrl.isNotEmpty) {
@@ -119,13 +114,9 @@ class MiniPlayer extends StatelessWidget {
                   currentSong.artistParticipants!.isNotEmpty
               ? currentSong.artistParticipants!.map((a) => a.name).join(', ')
               : currentSong.artist;
-          final cachedApple = !currentSong.isLocal
-              ? AppleMusicArtworkService.getCachedArtwork(currentSong.title, currentSong.artist)
-              : null;
-          coverArt = cachedApple?.artworkUrl ??
-              ((resolvedArtworkUrl != null && resolvedArtworkUrl.isNotEmpty)
-                  ? resolvedArtworkUrl
-                  : currentSong.coverArt);
+          coverArt = (resolvedArtworkUrl != null && resolvedArtworkUrl.isNotEmpty)
+              ? resolvedArtworkUrl
+              : currentSong.coverArt;
         } else {
           return const SizedBox.shrink();
         }
