@@ -352,9 +352,16 @@ class _AllSongsScreenState extends State<AllSongsScreen> {
                           const SizedBox(width: 8),
                           Consumer<PlayerProvider>(
                             builder: (context, playerProvider, _) {
-                              final isCurrentSongInList =
-                                  playerProvider.currentSong != null &&
-                                      _songIds.contains(playerProvider.currentSong!.id);
+                              final currentId = playerProvider.currentSong?.id;
+                              final cleanCurrentId = currentId
+                                  ?.replaceFirst('ytmusic://', '')
+                                  .replaceFirst('yt_', '');
+                              final isCurrentSongInList = currentId != null &&
+                                  (_songIds.contains(currentId) ||
+                                      (cleanCurrentId != null &&
+                                          _songIds.any((id) =>
+                                              id.contains(cleanCurrentId) ||
+                                              cleanCurrentId.contains(id))));
                               final isPlaying =
                                   isCurrentSongInList && playerProvider.isPlaying;
 

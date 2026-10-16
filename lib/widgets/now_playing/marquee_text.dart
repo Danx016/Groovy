@@ -24,6 +24,8 @@ class _MarqueeTextState extends State<MarqueeText> {
   Timer? _timer;
   bool _needsScroll = false;
   bool _isDisposed = false;
+  int _currentCycleId = 0;
+  double _lastKnownWidth = 0.0;
 
   @override
   void initState() {
@@ -37,11 +39,11 @@ class _MarqueeTextState extends State<MarqueeText> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.text != widget.text || oldWidget.style != widget.style) {
       _stopScroll();
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkNeedScroll());
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkNeedScroll(_lastKnownWidth));
     }
   }
 
-  void _checkNeedScroll() {
+  void _checkNeedScroll([double? availableWidth]) {
     if (!mounted || _isDisposed) return;
     
     final TextPainter textPainter = TextPainter(
@@ -51,10 +53,14 @@ class _MarqueeTextState extends State<MarqueeText> {
     )..layout(minWidth: 0, maxWidth: double.infinity);
     
     final textWidth = textPainter.width;
+    textPainter.dispose();
     
-    if (context.size != null) {
-      final containerWidth = context.size!.width;
-      final shouldScroll = textWidth > (containerWidth + 4);
+    final double width = (availableWidth != null && availableWidth > 0)
+        ? availableWidth
+        : (context.size?.width ?? 0.0);
+
+    if (width > 0) {
+      final shouldScroll = textWidth > (width + 4);
       
       if (shouldScroll != _needsScroll) {
         setState(() {
@@ -72,16 +78,15 @@ class _MarqueeTextState extends State<MarqueeText> {
 
   void _startScrollCycle() {
     _stopScroll();
-    
-    if (_scrollController.hasClients) {
-      _scrollController.jumpTo(0.0);
-    }
-
-    _timer = Timer(Duration(milliseconds: (widget.pauseDuration * 1000).toInt()), _runScrollCycle);
+    final cycleId = _currentCycleId;
+    _timer = Timer(
+      Duration(milliseconds: (widget.pauseDuration * 1000).toInt()),
+      () => _runScrollCycle(cycleId),
+    );
   }
 
-  void _runScrollCycle() async {
-    if (!mounted || _isDisposed || !_scrollController.hasClients || !_needsScroll) return;
+  void _runScrollCycle(int cycleId) async {
+    if (!mounted || _isDisposed || cycleId != _currentCycleId || !_scrollController.hasClients || !_needsScroll) return;
 
     final maxScroll = _scrollController.position.maxScrollExtent;
     if (maxScroll <= 0) return;
@@ -99,11 +104,11 @@ class _MarqueeTextState extends State<MarqueeText> {
       return;
     }
 
-    if (!mounted || _isDisposed) return;
+    if (!mounted || _isDisposed || cycleId != _currentCycleId) return;
 
     // 2. Pause at the end
     await Future.delayed(const Duration(milliseconds: 2600));
-    if (!mounted || _isDisposed || !_scrollController.hasClients) return;
+    if (!mounted || _isDisposed || cycleId != _currentCycleId || !_scrollController.hasClients) return;
 
     // 3. Smooth scroll back to start
     try {
@@ -116,13 +121,17 @@ class _MarqueeTextState extends State<MarqueeText> {
       return;
     }
 
-    if (!mounted || _isDisposed) return;
+    if (!mounted || _isDisposed || cycleId != _currentCycleId || !_needsScroll) return;
 
     // 4. Repeat cycle after initial pause
-    _timer = Timer(Duration(milliseconds: (widget.pauseDuration * 1000).toInt()), _runScrollCycle);
+    _timer = Timer(
+      Duration(milliseconds: (widget.pauseDuration * 1000).toInt()),
+      () => _runScrollCycle(cycleId),
+    );
   }
 
   void _stopScroll() {
+    _currentCycleId++;
     _timer?.cancel();
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0.0);
@@ -132,6 +141,7 @@ class _MarqueeTextState extends State<MarqueeText> {
   @override
   void dispose() {
     _isDisposed = true;
+    _currentCycleId++;
     _timer?.cancel();
     _scrollController.dispose();
     super.dispose();
@@ -141,6 +151,7 @@ class _MarqueeTextState extends State<MarqueeText> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
+        _lastKnownWidth = constraints.maxWidth;
         Widget content = SingleChildScrollView(
           controller: _scrollController,
           scrollDirection: Axis.horizontal,

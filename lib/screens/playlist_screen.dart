@@ -161,6 +161,9 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
   }
 
   Future<void> _onSongReorderedItem(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
     if (oldIndex == newIndex) return;
 
     final youtubeService = Provider.of<YoutubeService>(

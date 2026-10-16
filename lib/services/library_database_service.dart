@@ -39,7 +39,7 @@ String? _fixEncodingNullable(String? s) {
 /// millions of rows can be written without spikes in memory usage.
 class LibraryDatabaseService {
   static const String _dbName = 'groovy_library.db';
-  static const int _dbVersion = 3; // bumped from 2 for resolved_video_ids table
+  static const int _dbVersion = 4; // bumped from 3 for artist & album performance indexes
   static const int _batchSize = 1000;
 
   Database? _db;
@@ -120,6 +120,20 @@ class LibraryDatabaseService {
             resolved_at INTEGER NOT NULL
           )
         ''');
+      } catch (_) {}
+    }
+    if (oldVersion < 4) {
+      try {
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_album_artistId ON albums(artistId)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_album_name ON albums(name)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_album_isLocal ON albums(isLocal)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_artist_name ON artists(name)');
+        await db.execute(
+            'CREATE INDEX IF NOT EXISTS idx_artist_isLocal ON artists(isLocal)');
       } catch (_) {}
     }
   }
@@ -228,6 +242,10 @@ class LibraryDatabaseService {
         'CREATE INDEX IF NOT EXISTS idx_album_isLocal ON albums(isLocal)');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_album_created ON albums(created)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_artist_name ON artists(name)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_artist_isLocal ON artists(isLocal)');
   }
 
   // ── Batch inserts ───────────────────────────────────────────────────────

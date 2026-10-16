@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 
 /// Ultra-lightweight album art widget for the Now Playing screen.
 ///
@@ -50,31 +49,15 @@ class AlbumArtView extends StatelessWidget {
       final match = RegExp(r'([a-zA-Z0-9_-]{11})').firstMatch(tag);
       final videoId = match?.group(1);
       if (videoId != null && videoId.isNotEmpty) {
-        return ClipRect(
-          child: Transform.scale(
-            scale: 4.0 / 3.0,
-            alignment: Alignment.center,
-            child: Image.network(
-              'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
-              fit: BoxFit.cover,
-              filterQuality: FilterQuality.medium,
-              errorBuilder: (_, __, ___) => buildFallback(),
-            ),
-          ),
+        return Image.network(
+          'https://i.ytimg.com/vi/$videoId/hqdefault.jpg',
+          fit: BoxFit.cover,
+          filterQuality: FilterQuality.medium,
+          errorBuilder: (_, __, ___) => buildFallback(),
         );
       }
       return buildFallback();
     }
-
-    final String? imgUrl = image is CachedNetworkImageProvider
-        ? (image as CachedNetworkImageProvider).url
-        : (image is NetworkImage ? (image as NetworkImage).url : null);
-    final bool isYtDefault = imgUrl != null &&
-        imgUrl.contains('i.ytimg.com') &&
-        (imgUrl.contains('/hqdefault') ||
-         imgUrl.contains('/mqdefault') ||
-         imgUrl.contains('/sddefault') ||
-         imgUrl.contains('/default'));
 
     final innerImage = Image(
       image: image,
@@ -97,19 +80,26 @@ class AlbumArtView extends StatelessWidget {
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22.0),
-        child: Hero(
-          tag: tag,
-          child: isYtDefault
-              ? ClipRect(
-                  child: Transform.scale(
-                    scale: 4.0 / 3.0,
-                    alignment: Alignment.center,
-                    child: innerImage,
-                  ),
-                )
-              : innerImage,
+      child: Hero(
+        tag: tag,
+        flightShuttleBuilder: (flightContext, animation, flightDirection, fromHeroContext, toHeroContext) {
+          final isPush = flightDirection == HeroFlightDirection.push;
+          final startRadius = isPush ? 8.0 : 22.0;
+          final endRadius = isPush ? 22.0 : 8.0;
+          return AnimatedBuilder(
+            animation: animation,
+            builder: (context, _) {
+              final r = startRadius + (endRadius - startRadius) * animation.value;
+              return ClipRRect(
+                borderRadius: BorderRadius.circular(r),
+                child: isPush ? toHeroContext.widget : fromHeroContext.widget,
+              );
+            },
+          );
+        },
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22.0),
+          child: innerImage,
         ),
       ),
     );

@@ -123,10 +123,6 @@ class _HorizontalCarouselViewState extends State<HorizontalCarouselView> {
 
   @override
   Widget build(BuildContext context) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _updateScrollButtons();
-    });
-
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isDesktop = _isDesktop;
 
@@ -138,6 +134,79 @@ class _HorizontalCarouselViewState extends State<HorizontalCarouselView> {
     const double buttonSize = 38.0;
     final double buttonTop = (buttonCenterY - (buttonSize / 2))
         .clamp(4.0, widget.height - buttonSize - 4.0);
+
+    Widget listContent = ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+          PointerDeviceKind.stylus,
+        },
+      ),
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _updateScrollButtons();
+          return false;
+        },
+        child: ListView.separated(
+          controller: _scrollController,
+          padding: widget.padding,
+          scrollDirection: Axis.horizontal,
+          physics: const BouncingScrollPhysics(
+            parent: AlwaysScrollableScrollPhysics(),
+          ),
+          itemCount: widget.itemCount,
+          separatorBuilder: widget.separatorBuilder ??
+              (_, __) => const SizedBox(width: 14),
+          itemBuilder: widget.itemBuilder,
+        ),
+      ),
+    );
+
+    // Only apply GPU-heavy ShaderMask on desktop when the list is actively scrolled away from borders
+    if (isDesktop && (_canScrollLeft || _canScrollRight)) {
+      listContent = ShaderMask(
+        shaderCallback: (Rect bounds) {
+          if (bounds.width <= 0) {
+            return const LinearGradient(
+              colors: [Color(0xFF000000), Color(0xFF000000)],
+            ).createShader(bounds);
+          }
+          const fadeWidth = 36.0;
+          final leftFrac = (_canScrollLeft ? fadeWidth / bounds.width : 0.0)
+              .clamp(0.0, 0.2);
+          final rightFrac =
+              (1.0 - (_canScrollRight ? fadeWidth / bounds.width : 0.0))
+                  .clamp(0.8, 1.0);
+
+          return LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              if (_canScrollLeft)
+                Colors.transparent
+              else
+                const Color(0xFF000000),
+              const Color(0xFF000000),
+              const Color(0xFF000000),
+              if (_canScrollRight)
+                Colors.transparent
+              else
+                const Color(0xFF000000),
+            ],
+            stops: [
+              0.0,
+              leftFrac,
+              rightFrac,
+              1.0,
+            ],
+          ).createShader(bounds);
+        },
+        blendMode: BlendMode.dstIn,
+        child: listContent,
+      );
+    }
 
     return MouseRegion(
       onEnter: (_) {
@@ -157,73 +226,7 @@ class _HorizontalCarouselViewState extends State<HorizontalCarouselView> {
           children: [
             // List with mouse-drag support & edge fade
             Positioned.fill(
-              child: ShaderMask(
-                shaderCallback: (Rect bounds) {
-                  if (bounds.width <= 0) {
-                    return const LinearGradient(
-                      colors: [Color(0xFF000000), Color(0xFF000000)],
-                    ).createShader(bounds);
-                  }
-                  const fadeWidth = 36.0;
-                  final leftFrac = (_canScrollLeft ? fadeWidth / bounds.width : 0.0)
-                      .clamp(0.0, 0.2);
-                  final rightFrac =
-                      (1.0 - (_canScrollRight ? fadeWidth / bounds.width : 0.0))
-                          .clamp(0.8, 1.0);
-
-                  return LinearGradient(
-                    begin: Alignment.centerLeft,
-                    end: Alignment.centerRight,
-                    colors: [
-                      if (_canScrollLeft)
-                        Colors.transparent
-                      else
-                        const Color(0xFF000000),
-                      const Color(0xFF000000),
-                      const Color(0xFF000000),
-                      if (_canScrollRight)
-                        Colors.transparent
-                      else
-                        const Color(0xFF000000),
-                    ],
-                    stops: [
-                      0.0,
-                      leftFrac,
-                      rightFrac,
-                      1.0,
-                    ],
-                  ).createShader(bounds);
-                },
-                blendMode: BlendMode.dstIn,
-                child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context).copyWith(
-                    dragDevices: {
-                      PointerDeviceKind.touch,
-                      PointerDeviceKind.mouse,
-                      PointerDeviceKind.trackpad,
-                      PointerDeviceKind.stylus,
-                    },
-                  ),
-                  child: NotificationListener<ScrollNotification>(
-                    onNotification: (notification) {
-                      _updateScrollButtons();
-                      return false;
-                    },
-                    child: ListView.separated(
-                      controller: _scrollController,
-                      padding: widget.padding,
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(
-                        parent: AlwaysScrollableScrollPhysics(),
-                      ),
-                      itemCount: widget.itemCount,
-                      separatorBuilder: widget.separatorBuilder ??
-                          (_, __) => const SizedBox(width: 14),
-                      itemBuilder: widget.itemBuilder,
-                    ),
-                  ),
-                ),
-              ),
+              child: listContent,
             ),
 
             // Left navigation button (<)

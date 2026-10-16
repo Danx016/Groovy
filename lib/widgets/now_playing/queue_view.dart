@@ -203,7 +203,7 @@ class QueueView extends StatelessWidget {
                   onReorderItem: (oldIndex, newIndex) {
                     final actualOldIndex = currentIndex + 1 + oldIndex;
                     final actualNewIndex = currentIndex + 1 + newIndex;
-                    provider.moveQueueItem(actualOldIndex, actualNewIndex);
+                    provider.reorderQueue(actualOldIndex, actualNewIndex);
                   },
                   itemBuilder: (context, index) {
                     final song = upcomingSongs[index];

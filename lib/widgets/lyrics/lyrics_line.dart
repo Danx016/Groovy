@@ -13,16 +13,16 @@ class LyricsLineWidget extends StatefulWidget {
   final LyricLine line;
   final LyricLineState state;
   final VoidCallback onTap;
-  final int distance;
   final bool isUnsynced;
+  final int distance;
 
   const LyricsLineWidget({
     super.key,
     required this.line,
     required this.state,
     required this.onTap,
-    this.distance = 0,
     this.isUnsynced = false,
+    this.distance = 0,
   });
 
   @override
@@ -67,8 +67,9 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
     // Fluid Apple Music style animation: smooth scale up on active line
     // and smooth opacity cross-fade between active and dimmed lines.
-    // RepaintBoundary isolates the text raster on its own GPU layer so scale animations
-    // execute as hardware matrix transforms at 120 FPS without re-rasterizing text glyphs.
+    // A single RepaintBoundary isolates the text raster on its own GPU layer so scale animations
+    // execute as hardware matrix transforms at 120 FPS without re-rasterizing text glyphs
+    // and without nested GPU compositing layer thrashing.
     Widget content = AnimatedScale(
       scale: isCurrent ? 1.025 : 1.0,
       alignment: Alignment.centerLeft,
@@ -89,30 +90,26 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
     // On mobile (Android/iOS) skip MouseRegion entirely — no hover on touch
     if (_isMobilePlatform) {
-      return RepaintBoundary(
-        child: GestureDetector(
-          onTap: widget.onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-            child: content,
-          ),
+      return GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+          child: content,
         ),
       );
     }
 
-    return RepaintBoundary(
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _isHovered = true),
-        onExit: (_) => setState(() => _isHovered = false),
-        child: GestureDetector(
-          onTap: widget.onTap,
-          behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
-            child: content,
-          ),
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
+          child: content,
         ),
       ),
     );

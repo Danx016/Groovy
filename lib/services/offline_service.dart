@@ -68,6 +68,7 @@ class OfflineService {
 
   SharedPreferences? _prefs;
   String? _offlineDir;
+  final Dio _dio = Dio();
 
   bool _offlineMode = false;
   bool get isOfflineMode => _offlineMode;
@@ -622,11 +623,10 @@ class OfflineService {
         if (song.coverArt != null && song.coverArt!.isNotEmpty) {
           final coverUrl = musicService.getCoverArtUrl(song.coverArt!, size: 600);
           if (coverUrl.isNotEmpty) {
-            final dioCover = Dio();
             final songCoverPath = _getCoverArtPath(song.id);
-            await dioCover.download(coverUrl, songCoverPath);
+            await _dio.download(coverUrl, songCoverPath);
             final artIdPath = _getCoverArtByArtIdPath(song.coverArt!);
-            if (!File(artIdPath).existsSync()) {
+            if (!await File(artIdPath).exists()) {
               await File(songCoverPath).copy(artIdPath);
             }
           }

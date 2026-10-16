@@ -22,6 +22,7 @@ import '../services/ytdlp_service.dart';
 import '../services/lrclib_service.dart';
 import '../services/palette_service.dart';
 import '../services/audio_cache_service.dart';
+import '../services/apple_music_artwork_service.dart';
 
 import '../services/storage_service.dart';
 import '../services/groovy_api_service.dart';
@@ -94,6 +95,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   String? _resolvedArtworkUrl;
   String? _resolvedArtworkSongId;
+  String? get resolvedArtworkSongId => _resolvedArtworkSongId;
   String? get resolvedArtworkUrl {
     if (_currentSong == null || _resolvedArtworkSongId != _currentSong!.id) {
       return null;
@@ -1266,7 +1268,29 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     final rawArt = (song.coverArt != null && song.coverArt!.isNotEmpty)
         ? song.coverArt!
         : song.id;
-    final directUrl = _youtubeService.getCoverArtUrl(rawArt, size: 800);
+
+    final cachedApple = !song.isLocal
+        ? AppleMusicArtworkService.getCachedArtwork(song.title, song.artist)
+        : null;
+
+    final directUrl = (cachedApple != null && cachedApple.artworkUrl.isNotEmpty)
+        ? cachedApple.artworkUrl
+        : _youtubeService.getCoverArtUrl(rawArt, size: 800);
+
+    if (!song.isLocal && cachedApple == null) {
+      unawaited(
+        AppleMusicArtworkService().resolveArtworkForSong(song).then((res) {
+          if (res != null &&
+              res.artworkUrl.isNotEmpty &&
+              _currentSong?.id == song.id) {
+            _resolvedArtworkUrl = res.artworkUrl;
+            _resolvedArtworkSongId = song.id;
+            _updateAndroidAuto();
+            notifyListeners();
+          }
+        }).catchError((_) {}),
+      );
+    }
 
     if (directUrl.isNotEmpty) {
       _resolvedArtworkUrl = directUrl;
@@ -1963,10 +1987,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint(
               '[Player] ⚠️ Premature stream EOF at $_position of $effDur for "${_currentSong?.title}". Auto-recovering playback...');
           final resumePos = _position;
+          final songToResume = _currentSong;
           Future.microtask(() async {
-            if (_isPlaying && _currentSong != null) {
-              await seek(resumePos);
-              await play();
+            if (_currentSong?.id == songToResume?.id && !userExplicitlyPaused) {
+              try {
+                await seek(resumePos);
+                await play();
+              } catch (e) {
+                debugPrint(
+                    '[Player] Standard resume failed ($e), reloading stream at position...');
+                if (_currentSong?.id == songToResume?.id && songToResume != null) {
+                  await playSong(songToResume, initialPosition: resumePos, forcePlay: true);
+                }
+              }
             }
           });
         }

@@ -17,6 +17,7 @@ import '../services/upnp_service.dart';
 import '../services/groovy_connect_service.dart';
 import 'connect/groovy_connect_icon.dart';
 import 'connect/groovy_connect_modal.dart';
+import '../services/apple_music_artwork_service.dart';
 
 class MiniPlayer extends StatelessWidget {
   final VoidCallback? onTap;
@@ -29,11 +30,11 @@ class MiniPlayer extends StatelessWidget {
         !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
     if (isDesktop) return const SizedBox.shrink();
 
-    return Selector<PlayerProvider, (Song?, RadioStation?, bool)>(
+    return Selector<PlayerProvider, (Song?, RadioStation?, bool, String?)>(
       selector: (_, p) =>
-          (p.currentSong, p.currentRadioStation, p.isPlayingRadio),
+          (p.currentSong, p.currentRadioStation, p.isPlayingRadio, p.resolvedArtworkUrl),
       builder: (context, data, _) {
-        final (currentSong, currentRadioStation, isPlayingRadio) = data;
+        final (currentSong, currentRadioStation, isPlayingRadio, resolvedArtworkUrl) = data;
 
         void handleTap() {
           if (onTap != null) {
@@ -46,24 +47,27 @@ class MiniPlayer extends StatelessWidget {
                 ? currentSong.coverArt!
                 : currentSong.id;
             final coverUrl = youtubeService.getCoverArtUrl(rawArt, size: 800);
+            final cachedApple = !currentSong.isLocal
+                ? AppleMusicArtworkService.getCachedArtwork(currentSong.title, currentSong.artist)
+                : null;
+            final effectiveCoverUrl = cachedApple?.artworkUrl ??
+                ((resolvedArtworkUrl != null && resolvedArtworkUrl.isNotEmpty)
+                    ? resolvedArtworkUrl
+                    : coverUrl);
+
             ImageProvider imageProvider;
-            if (coverUrl.isNotEmpty) {
-              if (currentSong.isLocal || isLocalFilePath(coverUrl)) {
+            if (effectiveCoverUrl.isNotEmpty) {
+              if (currentSong.isLocal || isLocalFilePath(effectiveCoverUrl)) {
                 try {
-                  final filePath = coverUrl.startsWith('file://')
-                      ? Uri.parse(coverUrl).toFilePath()
-                      : coverUrl;
-                  final f = File(filePath);
-                  if (f.existsSync()) {
-                    imageProvider = FileImage(f);
-                  } else {
-                    imageProvider = CachedNetworkImageProvider(coverUrl);
-                  }
+                  final filePath = effectiveCoverUrl.startsWith('file://')
+                      ? Uri.parse(effectiveCoverUrl).toFilePath()
+                      : effectiveCoverUrl;
+                  imageProvider = FileImage(File(filePath));
                 } catch (_) {
                   imageProvider = const AssetImage('assets/default_cover.png');
                 }
               } else {
-                imageProvider = CachedNetworkImageProvider(coverUrl);
+                imageProvider = CachedNetworkImageProvider(effectiveCoverUrl);
               }
             } else {
               imageProvider = const AssetImage('assets/default_cover.png');
@@ -115,7 +119,13 @@ class MiniPlayer extends StatelessWidget {
                   currentSong.artistParticipants!.isNotEmpty
               ? currentSong.artistParticipants!.map((a) => a.name).join(', ')
               : currentSong.artist;
-          coverArt = currentSong.coverArt;
+          final cachedApple = !currentSong.isLocal
+              ? AppleMusicArtworkService.getCachedArtwork(currentSong.title, currentSong.artist)
+              : null;
+          coverArt = cachedApple?.artworkUrl ??
+              ((resolvedArtworkUrl != null && resolvedArtworkUrl.isNotEmpty)
+                  ? resolvedArtworkUrl
+                  : currentSong.coverArt);
         } else {
           return const SizedBox.shrink();
         }

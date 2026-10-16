@@ -30,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Song> _cachedPersonalized = const [];
   String _lastRandomKey = '';
   bool _hasTriggeredInitialLoad = false;
+  String? _lastWarmedSongId;
 
   @override
   void initState() {
@@ -245,11 +246,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
                 _hasTriggeredInitialLoad = false;
 
-                // Pre-warm audio stream for first candidate track so clicking play is instantaneous (0ms)
-                if (recentSongs.isNotEmpty && !recentSongs.first.isLocal) {
-                  YtDlpService().warmUpStreamCache(recentSongs.first.id);
-                } else if (personalizedFeed.isNotEmpty && !personalizedFeed.first.isLocal) {
-                  YtDlpService().warmUpStreamCache(personalizedFeed.first.id);
+                // Pre-warm audio stream for first candidate track once after build
+                final candidateSong = (recentSongs.isNotEmpty && !recentSongs.first.isLocal)
+                    ? recentSongs.first
+                    : (personalizedFeed.isNotEmpty && !personalizedFeed.first.isLocal
+                        ? personalizedFeed.first
+                        : null);
+                if (candidateSong != null && candidateSong.id != _lastWarmedSongId) {
+                  _lastWarmedSongId = candidateSong.id;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    YtDlpService().warmUpStreamCache(candidateSong.id);
+                  });
                 }
 
                 return Padding(

@@ -21,6 +21,7 @@ import '../services/groovy_connect_service.dart';
 import 'connect/groovy_connect_icon.dart';
 import 'connect/groovy_connect_modal.dart';
 import 'groovy_custom_icons.dart';
+import '../services/apple_music_artwork_service.dart';
 
 
 class DesktopPlayerBar extends StatefulWidget {
@@ -75,24 +76,32 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
         ? song.coverArt!
         : song.id;
     final coverUrl = youtubeService.getCoverArtUrl(rawArt, size: 800);
+    final cachedApple = !song.isLocal
+        ? AppleMusicArtworkService.getCachedArtwork(song.title, song.artist)
+        : null;
+    final player = Provider.of<PlayerProvider>(context, listen: false);
+    final effectiveCoverUrl = cachedApple?.artworkUrl ??
+        ((player.resolvedArtworkSongId == song.id && player.resolvedArtworkUrl != null)
+            ? player.resolvedArtworkUrl!
+            : coverUrl);
     ImageProvider imageProvider;
-    if (coverUrl.isNotEmpty) {
-      if (song.isLocal || isLocalFilePath(coverUrl)) {
+    if (effectiveCoverUrl.isNotEmpty) {
+      if (song.isLocal || isLocalFilePath(effectiveCoverUrl)) {
         try {
-          final filePath = coverUrl.startsWith('file://')
-              ? Uri.parse(coverUrl).toFilePath()
-              : coverUrl;
+          final filePath = effectiveCoverUrl.startsWith('file://')
+              ? Uri.parse(effectiveCoverUrl).toFilePath()
+              : effectiveCoverUrl;
           final f = File(filePath);
           if (f.existsSync()) {
             imageProvider = FileImage(f);
           } else {
-            imageProvider = CachedNetworkImageProvider(coverUrl);
+            imageProvider = CachedNetworkImageProvider(effectiveCoverUrl);
           }
         } catch (_) {
           imageProvider = const AssetImage('assets/default_cover.png');
         }
       } else {
-        imageProvider = CachedNetworkImageProvider(coverUrl);
+        imageProvider = CachedNetworkImageProvider(effectiveCoverUrl);
       }
     } else {
       imageProvider = const AssetImage('assets/default_cover.png');
@@ -329,10 +338,21 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                           children: [
                             Hero(
                               tag: 'desktop_bar_fs_${currentSong.id}',
-                              child: AlbumArtwork(
-                                coverArt: currentSong.coverArt,
-                                size: 56,
-                                borderRadius: 4,
+                              child: Selector<PlayerProvider, String?>(
+                                selector: (_, p) => (p.resolvedArtworkSongId == currentSong.id && p.resolvedArtworkUrl != null)
+                                    ? p.resolvedArtworkUrl
+                                    : null,
+                                builder: (context, resolvedArt, _) {
+                                  final cachedApple = !currentSong.isLocal
+                                      ? AppleMusicArtworkService.getCachedArtwork(currentSong.title, currentSong.artist)
+                                      : null;
+                                  final effectiveArt = cachedApple?.artworkUrl ?? (resolvedArt ?? currentSong.coverArt);
+                                  return AlbumArtwork(
+                                    coverArt: effectiveArt,
+                                    size: 56,
+                                    borderRadius: 4,
+                                  );
+                                },
                               ),
                             ),
                             if (isFav)
@@ -631,6 +651,7 @@ class _ProgressBarState extends State<_ProgressBar> {
   StreamSubscription<Duration>? _positionSub;
   Duration _currentPosition = Duration.zero;
   PlayerProvider? _playerProvider;
+  int _lastUpdateMillis = 0;
 
   @override
   void didChangeDependencies() {
@@ -641,7 +662,9 @@ class _ProgressBarState extends State<_ProgressBar> {
       _positionSub?.cancel();
       _currentPosition = provider.position;
       _positionSub = provider.positionStream.listen((pos) {
-        if (!_isDragging && mounted) {
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (!_isDragging && mounted && (now - _lastUpdateMillis >= 100 || pos == Duration.zero)) {
+          _lastUpdateMillis = now;
           setState(() {
             _currentPosition = pos;
           });

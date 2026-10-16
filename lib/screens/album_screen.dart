@@ -1040,26 +1040,28 @@ class _AlbumScreenState extends State<AlbumScreen> {
                           // 1. Ambient Blurred Backdrop
                           if (cover != null && cover.isNotEmpty)
                             Positioned.fill(
-                              child: Opacity(
-                                opacity: isDark ? 0.36 : 0.28,
-                                child: ImageFiltered(
-                                  imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
-                                  child: cover.startsWith('http')
-                                      ? CachedNetworkImage(
-                                          imageUrl: cover,
-                                          fit: BoxFit.cover,
-                                          errorWidget: (_, __, ___) => const SizedBox.shrink(),
-                                        )
-                                      : isLocalFilePath(cover)
-                                          ? Image.file(
-                                              File(cover),
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                                            )
-                                          : AlbumArtwork(
-                                              coverArt: cover,
-                                              size: 320,
-                                            ),
+                              child: RepaintBoundary(
+                                child: Opacity(
+                                  opacity: isDark ? 0.36 : 0.28,
+                                  child: ImageFiltered(
+                                    imageFilter: ImageFilter.blur(sigmaX: 55, sigmaY: 55),
+                                    child: cover.startsWith('http')
+                                        ? CachedNetworkImage(
+                                            imageUrl: cover,
+                                            fit: BoxFit.cover,
+                                            errorWidget: (_, __, ___) => const SizedBox.shrink(),
+                                          )
+                                        : isLocalFilePath(cover)
+                                            ? Image.file(
+                                                File(cover),
+                                                fit: BoxFit.cover,
+                                                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                                              )
+                                            : AlbumArtwork(
+                                                coverArt: cover,
+                                                size: 320,
+                                              ),
+                                  ),
                                 ),
                               ),
                             ),

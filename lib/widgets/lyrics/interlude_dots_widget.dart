@@ -55,72 +55,83 @@ class _InterludeDotsWidgetState extends State<InterludeDotsWidget>
     super.dispose();
   }
 
-  Widget _buildStaticDots() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(3, (index) {
-          return Container(
-            margin: const EdgeInsets.only(right: 14.0),
-            child: Transform.scale(
-              scale: 0.88,
-              child: Container(
-                width: 11,
-                height: 11,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.30),
-                  shape: BoxShape.circle,
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     if (!widget.isAnimating) {
-      return _buildStaticDots();
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+        child: SizedBox(
+          width: 61,
+          height: 27,
+          child: CustomPaint(
+            painter: _StaticDotsPainter(),
+          ),
+        ),
+      );
     }
 
-    return RepaintBoundary(
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-        final t = _controller.value * 2 * math.pi;
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: List.generate(3, (index) {
-              final phase = index * (math.pi / 2.5);
-              final wave = (math.sin(t + phase) + 1.0) / 2.0;
-              final opacity = 0.35 + (0.55 * wave);
-              final scale = 0.88 + (0.22 * wave);
-
-              return Container(
-                margin: const EdgeInsets.only(right: 14.0),
-                child: Transform.scale(
-                  scale: scale,
-                  child: Container(
-                    width: 11,
-                    height: 11,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: opacity),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        );
-      },
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      child: SizedBox(
+        width: 61,
+        height: 27,
+        child: CustomPaint(
+          painter: _AnimatedDotsPainter(animation: _controller),
+        ),
       ),
     );
   }
+}
+
+class _StaticDotsPainter extends CustomPainter {
+  const _StaticDotsPainter();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.30)
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    const baseRadius = 5.5 * 0.88;
+    final centerY = size.height / 2;
+
+    canvas.drawCircle(Offset(5.5, centerY), baseRadius, paint);
+    canvas.drawCircle(Offset(30.5, centerY), baseRadius, paint);
+    canvas.drawCircle(Offset(55.5, centerY), baseRadius, paint);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _AnimatedDotsPainter extends CustomPainter {
+  final Animation<double> animation;
+
+  _AnimatedDotsPainter({required this.animation}) : super(repaint: animation);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
+
+    final t = animation.value * 2 * math.pi;
+    final centerY = size.height / 2;
+    const double baseRadius = 5.5;
+
+    for (int index = 0; index < 3; index++) {
+      final phase = index * (math.pi / 2.5);
+      final wave = (math.sin(t + phase) + 1.0) / 2.0;
+      final opacity = 0.35 + (0.55 * wave);
+      final scale = 0.88 + (0.22 * wave);
+
+      paint.color = Colors.white.withValues(alpha: opacity);
+      final centerX = 5.5 + (index * 25.0);
+      canvas.drawCircle(Offset(centerX, centerY), baseRadius * scale, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _AnimatedDotsPainter oldDelegate) => true;
 }

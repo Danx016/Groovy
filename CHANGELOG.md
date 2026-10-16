@@ -5,6 +5,24 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.9] - 2026-10-16
+
+### Fixed & Improved
+- **Optimización Integral de Letras a 120Hz (Cero Jitter y Mínimo Consumo de CPU)**:
+  - **Mapeo O(1) de Índices en `LyricsListView`**: Reemplazado el costoso escaneo lineal $O(N)$ por un mapa indexado directo y reutilización estática de `TextPainter`, eliminando recálculos de layout por frame.
+  - **Protección de Auto-Scroll**: Eliminadas excepciones de colisión de scroll durante la animación con `addPostFrameCallback`.
+  - **Pintor Personalizado en Puntos de Interludio**: Sustituido el pesado `AnimatedBuilder` por un `CustomPainter` acelerado por hardware sin asignaciones de widgets por frame.
+- **Overhaul de Carátulas y Calidad Visual (Resolución Oficial de Estudio HD)**:
+  - **Eliminación del Zoom Excesivo**: Removido el `Transform.scale(4/3)` que provocaba doble recorte y severo pixelado en portadas.
+  - **Integración de Apple Music HD (1400x1400)**: Conectado `AppleMusicArtworkService` directamente a la reproducción activa, reemplazando automáticamente miniaturas borrosas de YouTube por carátulas oficiales de estudio en ultra-alta definición con caché local persistente.
+  - **Sincronización en Tiempo Real**: Reflejadas las portadas HD en `NowPlayingScreen`, `MiniPlayer` y `DesktopPlayerBar`, con re-extracción armónica de la paleta de colores ambiental.
+- **Correcciones de Cola y Playlist**:
+  - **Drag and Drop sin Crashes ni Desfases**: Corregido el bug de desplazamiento de índice al arrastrar canciones al final de la cola y de listas de reproducción.
+  - **Normalización de IDs en Reproducción**: Corregida la alternancia de play/pause en listas de canciones con prefijos de streaming.
+- **Rendimiento de Base de Datos y Modo Offline**:
+  - **Nuevos Índices SQLite (Schema v4)**: Aceleradas las consultas de artistas y álbumes locales y remotos.
+  - **Pool de Conexiones en Descargas**: Instancia compartida de cliente Dio y operaciones asíncronas de sistema de archivos para evitar micro-bloqueos en la interfaz.
+
 ## [1.8.8] - 2026-10-16
 
 ### Fixed & Improved

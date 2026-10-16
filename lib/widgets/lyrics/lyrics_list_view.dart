@@ -51,6 +51,7 @@ class LyricsListView extends StatefulWidget {
 class _LyricsListViewState extends State<LyricsListView> {
   late ScrollController _scrollController;
   late List<LyricsItem> _items;
+  final Map<int, int> _lyricIndexToItemIndex = {};
   int _currentIndex = -1;
   int _currentLyricIndex = -1;
   bool _isManualScrolling = false;
@@ -58,7 +59,6 @@ class _LyricsListViewState extends State<LyricsListView> {
   Timer? _resumeAutoScrollTimer;
   StreamSubscription<Duration>? _posSub;
   Duration _currentPosition = Duration.zero;
-
 
   @override
   void initState() {
@@ -113,6 +113,7 @@ class _LyricsListViewState extends State<LyricsListView> {
 
   void _buildItems() {
     _items = [];
+    _lyricIndexToItemIndex.clear();
     if (widget.lyrics.isEmpty) {
       _isUnsynced = false;
       return;
@@ -145,6 +146,7 @@ class _LyricsListViewState extends State<LyricsListView> {
         endTime: hasMajorInstrumentalSolo ? estimatedLineEnd : nextTime,
         lyricIndex: i,
       ));
+      _lyricIndexToItemIndex[i] = _items.length - 1;
 
       // Major instrumental solo dots for genuine long musical breaks
       if (hasMajorInstrumentalSolo) {
@@ -217,7 +219,11 @@ class _LyricsListViewState extends State<LyricsListView> {
           _currentLyricIndex = -1;
         }
       });
-      _scrollToCurrentLine();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _scrollToCurrentLine();
+        }
+      });
     }
   }
 
@@ -234,6 +240,14 @@ class _LyricsListViewState extends State<LyricsListView> {
           'sans-serif',
         ];
 
+  static final TextStyle _measureTextStyle = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+    height: 1.25,
+    fontFamilyFallback: _fontFallback,
+  );
+
   double _lastViewportWidth = 0;
   double _lastViewportHeight = 0;
   List<double> _itemOffsets = [];
@@ -241,7 +255,7 @@ class _LyricsListViewState extends State<LyricsListView> {
   double _computedForWidth = 0;
 
   /// Accurately compute prefix-sum offsets and item heights using Flutter's TextPainter engine.
-  /// This eliminates all guesswork, preventing cumulative drift on all screen sizes.
+  /// Reuses a single TextPainter instance and static TextStyle to eliminate GC pauses and memory spikes.
   void _recomputeItemHeights(double maxWidth) {
     if ((maxWidth - _computedForWidth).abs() < 2.0 &&
         _itemOffsets.length == _items.length &&
@@ -257,6 +271,11 @@ class _LyricsListViewState extends State<LyricsListView> {
     final availableTextWidth = (maxWidth - 56.0).clamp(80.0, 3000.0);
     double accumulated = 0.0;
 
+    final tp = TextPainter(
+      textDirection: TextDirection.ltr,
+      maxLines: 8,
+    );
+
     for (int i = 0; i < _items.length; i++) {
       _itemOffsets[i] = accumulated;
       final item = _items[i];
@@ -269,28 +288,19 @@ class _LyricsListViewState extends State<LyricsListView> {
         if (text.isEmpty) {
           h = 40.0;
         } else {
-          final tp = TextPainter(
-            text: TextSpan(
-              text: text,
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-                height: 1.25,
-                fontFamilyFallback: _fontFallback,
-              ),
-            ),
-            textDirection: TextDirection.ltr,
-            maxLines: 8,
-          )..layout(maxWidth: availableTextWidth);
+          tp.text = TextSpan(
+            text: text,
+            style: _measureTextStyle,
+          );
+          tp.layout(maxWidth: availableTextWidth);
           // 26.0 is vertical padding (13.0 top + 13.0 bottom)
           h = tp.height + 26.0;
-          tp.dispose();
         }
       }
       _itemHeights[i] = h;
       accumulated += h;
     }
+    tp.dispose();
   }
 
   void _scrollToCurrentLine({Duration? duration, bool animate = true}) {
@@ -300,6 +310,17 @@ class _LyricsListViewState extends State<LyricsListView> {
         !_scrollController.hasClients ||
         _currentIndex < 0 ||
         _currentIndex >= _items.length) {
+      return;
+    }
+
+    // Guard against unattached or unlaid-out scroll position to prevent assertion errors
+    if (!_scrollController.position.hasContentDimensions ||
+        !_scrollController.position.hasPixels) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _scrollToCurrentLine(duration: duration, animate: animate);
+        }
+      });
       return;
     }
 
@@ -338,7 +359,7 @@ class _LyricsListViewState extends State<LyricsListView> {
         }
 
         // Smooth Apple-style ease-out curve:
-        // Stanza transitions glide immediately with zero initial lag or jerk
+        // Stanza transitions glide immediately with zero initial lag or jerk at 120 FPS
         final effectiveDuration = duration ??
             (scrollDelta > 140
                 ? const Duration(milliseconds: 400)
@@ -350,7 +371,9 @@ class _LyricsListViewState extends State<LyricsListView> {
           curve: Curves.easeOutCubic,
         );
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('[LyricsListView] _scrollToCurrentLine error: $e');
+    }
   }
 
   void _onUserScroll() {
@@ -437,7 +460,7 @@ class _LyricsListViewState extends State<LyricsListView> {
                   } else if (v.startsWith('lyric_')) {
                     final lIdx = int.tryParse(v.substring(6));
                     if (lIdx == null) return null;
-                    return _items.indexWhere((it) => it.lyricIndex == lIdx);
+                    return _lyricIndexToItemIndex[lIdx];
                   }
                 }
                 return null;
@@ -472,16 +495,10 @@ class _LyricsListViewState extends State<LyricsListView> {
               }
             }
 
-            // Clamping distance to 0, 1, or 2 stops rebuilds and animation tweens on the other 90+ lines
-            final distance = _currentLyricIndex != -1 
-                ? (lyricIndex - _currentLyricIndex).abs().clamp(0, 2) 
-                : 2;
-
             return LyricsLineWidget(
               key: ValueKey('lyric_$lyricIndex'),
               line: line,
               state: state,
-              distance: distance,
               isUnsynced: isUnsynced,
               onTap: () {
                 HapticFeedback.selectionClick();
@@ -493,7 +510,11 @@ class _LyricsListViewState extends State<LyricsListView> {
                   _currentLyricIndex = lyricIndex;
                 });
                 _resumeAutoScrollTimer?.cancel();
-                _scrollToCurrentLine();
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _scrollToCurrentLine();
+                  }
+                });
               },
             );
           },

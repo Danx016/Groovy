@@ -1157,12 +1157,11 @@ class LibraryProvider extends ChangeNotifier {
         )
         .toList();
 
-    // Sort local matches by relevance
-    songs.sort((a, b) =>
-      _youtubeService.scoreSongRelevance(b, query).compareTo(
-        _youtubeService.scoreSongRelevance(a, query),
-      ),
-    );
+    // Sort local matches by relevance using Schwartzian transform (score each once)
+    final scoredSongs = songs
+        .map((s) => (song: s, score: _youtubeService.scoreSongRelevance(s, query)))
+        .toList();
+    scoredSongs.sort((a, b) => b.score.compareTo(a.score));
 
     final artists = _artists
         .where((a) => a.name.toLowerCase().contains(q))
@@ -1177,7 +1176,7 @@ class LibraryProvider extends ChangeNotifier {
         .take(20)
         .toList();
     return SearchResult(
-      songs: songs.take(50).toList(),
+      songs: scoredSongs.take(50).map((e) => e.song).toList(),
       artists: artists,
       albums: albums,
     );

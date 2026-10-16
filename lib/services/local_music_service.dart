@@ -472,7 +472,9 @@ class LocalMusicService extends ChangeNotifier {
           final ext = _mimeToExt(pic.mimetype);
           final artFile = File('$_artCacheDir/$albumId$ext');
           try {
-            await artFile.writeAsBytes(pic.bytes);
+            if (!await artFile.exists()) {
+              await artFile.writeAsBytes(pic.bytes);
+            }
             coverArtPath = artFile.path;
             _albumArtCache[albumId] = coverArtPath;
           } catch (e) {
