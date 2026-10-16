@@ -1090,154 +1090,172 @@ class YtDlpService {
   Future<YtStreamInfo> _doResolveStreamInfo(String cleanId) async {
     // ── DESKTOP (Windows / macOS / Linux) ──────────────────────────────────
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-      // 1. FAST-PATH: Pure-Dart Innertube via TV/Android client first (200-400ms!)
-      // Pure Dart does not spawn an external OS process, consumes virtually 0 CPU/RAM,
-      // and produces direct Google CDN URLs that return HTTP 206 for libmpv.
-      try {
-        final manifest = await _fallbackClient.videos.streamsClient
-            .getManifest(cleanId, ytClients: [
-              yt.YoutubeApiClient.tv,
-              yt.YoutubeApiClient.android,
-              yt.YoutubeApiClient.ios,
-            ])
-            .timeout(const Duration(milliseconds: 3500));
-        final audioOnly = manifest.audioOnly;
-        if (audioOnly.isNotEmpty) {
-          final best = _selectBestAudioStream(audioOnly);
-          final url = best.url.toString();
-          if (url.isNotEmpty) {
-            final info = YtStreamInfo(
-              url: url,
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
-                'Origin': 'https://www.youtube.com',
-                'Referer': 'https://www.youtube.com/',
-              },
-              ext: best.container.name,
-            );
-            _streamInfoCache[cleanId] = info;
-            _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Desktop] ⚡ Resolved $cleanId via FastDart Innertube (fast path)');
-            return info;
+      final completer = Completer<YtStreamInfo>();
+
+      // 1. FAST-PATH: Pure-Dart Innertube attempt (1200ms timeout)
+      unawaited(() async {
+        try {
+          final manifest = await _fallbackClient.videos.streamsClient
+              .getManifest(cleanId, ytClients: [
+                yt.YoutubeApiClient.tv,
+                yt.YoutubeApiClient.android,
+                yt.YoutubeApiClient.ios,
+              ])
+              .timeout(const Duration(milliseconds: 1200));
+          final audioOnly = manifest.audioOnly;
+          if (audioOnly.isNotEmpty) {
+            final best = _selectBestAudioStream(audioOnly);
+            final url = best.url.toString();
+            if (url.isNotEmpty && !completer.isCompleted) {
+              final info = YtStreamInfo(
+                url: url,
+                headers: {
+                  'User-Agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
+                  'Origin': 'https://www.youtube.com',
+                  'Referer': 'https://www.youtube.com/',
+                },
+                ext: best.container.name,
+              );
+              _streamInfoCache[cleanId] = info;
+              _streamCacheTime[cleanId] = DateTime.now();
+              debugPrint('[yt-dlp/Desktop] ⚡ Resolved $cleanId via FastDart (fast path)');
+              completer.complete(info);
+              return;
+            }
+          }
+        } catch (_) {}
+      }());
+
+      // 2. SUBPROCESS PATH: yt-dlp binary (runs concurrently from millisecond 0!)
+      unawaited(() async {
+        final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
+        try {
+          final result = await _runYtDlp([
+            '-j',
+            '-f',
+            'ba/b[acodec!=none]/bestaudio/best',
+            '--no-playlist',
+            '--extractor-args',
+            'youtube:player_client=android,web;skip=translated_subs,comments,webpage,dash,hls',
+            '--no-warnings',
+            '--no-check-certificates',
+            targetUrl,
+          ], timeout: const Duration(seconds: 7));
+
+          if (result != null && result.exitCode == 0 && !completer.isCompleted) {
+            final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
+            final url = json['url'] as String?;
+            if (url != null && url.isNotEmpty) {
+              final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
+              final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+              if (!headers.containsKey('User-Agent') || headers['User-Agent']!.isEmpty) {
+                headers['User-Agent'] = 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip';
+              }
+              final ext = json['ext'] as String? ?? 'mp4';
+              final info = YtStreamInfo(url: url, headers: headers, ext: ext);
+              _streamInfoCache[cleanId] = info;
+              _streamCacheTime[cleanId] = DateTime.now();
+              debugPrint('[yt-dlp/Desktop] ✅ Resolved $cleanId via subprocess in parallel');
+              completer.complete(info);
+              return;
+            }
+          }
+        } catch (_) {}
+
+        if (!completer.isCompleted) {
+          _triggerAutoRecovery();
+          try {
+            final fallback = await _fallbackClient.videos.streamsClient.getManifest(cleanId).timeout(const Duration(seconds: 5));
+            if (fallback.audioOnly.isNotEmpty && !completer.isCompleted) {
+              final best = _selectBestAudioStream(fallback.audioOnly);
+              final info = YtStreamInfo(url: best.url.toString(), headers: {}, ext: best.container.name);
+              completer.complete(info);
+              return;
+            }
+          } catch (_) {}
+          if (!completer.isCompleted) {
+            completer.completeError(Exception('All Desktop stream extraction methods exhausted for $cleanId'));
           }
         }
-      } catch (e) {
-        debugPrint('[yt-dlp/Desktop] FastDart note for $cleanId: $e, falling back to subprocess...');
-      }
+      }());
 
-      // 2. SUBPROCESS PATH: yt-dlp binary (if FastDart was blocked or timed out)
-      final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
-      try {
-        final result = await _runYtDlp([
-          '-j',
-          '-f',
-          'ba/b[acodec!=none]/bestaudio/best',
-          '--no-playlist',
-          '--extractor-args',
-          'youtube:player_client=ios,tv_embedded,android,web;skip=translated_subs,comments,webpage,dash,hls',
-          '--no-warnings',
-          '--no-check-certificates',
-          targetUrl,
-        ], timeout: const Duration(seconds: 7));
+      return completer.future;
+    }
 
-        if (result != null && result.exitCode == 0) {
-          final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
-          final url = json['url'] as String?;
-          if (url != null && url.isNotEmpty) {
-            final rawHeaders = json['http_headers'] as Map<String, dynamic>? ?? {};
-            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
-            if (!headers.containsKey('User-Agent') || headers['User-Agent']!.isEmpty) {
+    // ── ANDROID: FastDart + Chaquopy in PARALLEL RACE (Zero dead wait!) ───
+    if (!kIsWeb && Platform.isAndroid) {
+      final completer = Completer<YtStreamInfo>();
+
+      // 1. FAST-PATH: Pure-Dart Innertube attempt (1200ms timeout)
+      unawaited(() async {
+        try {
+          final manifest = await _fallbackClient.videos.streamsClient
+              .getManifest(cleanId, ytClients: [
+                yt.YoutubeApiClient.android,
+                yt.YoutubeApiClient.ios,
+                yt.YoutubeApiClient.tv,
+              ])
+              .timeout(const Duration(milliseconds: 1200));
+          final audioOnly = manifest.audioOnly;
+          if (audioOnly.isNotEmpty) {
+            final best = _selectBestAudioStream(audioOnly);
+            final url = best.url.toString();
+            if (url.isNotEmpty && !completer.isCompleted) {
               final isAndroid = url.contains('c=ANDROID');
               final isIos = url.contains('c=IOS');
-              final isTv = url.contains('c=TVHTML5');
-              headers['User-Agent'] = isAndroid
+              final userAgent = isAndroid
                   ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
                   : isIos
                       ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
-                      : isTv
-                          ? 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1'
-                          : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+                      : 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
+              final info = YtStreamInfo(
+                url: url,
+                headers: {
+                  'User-Agent': userAgent,
+                  'Origin': 'https://www.youtube.com',
+                  'Referer': 'https://www.youtube.com/',
+                },
+                ext: best.container.name,
+              );
+              _streamInfoCache[cleanId] = info;
+              _streamCacheTime[cleanId] = DateTime.now();
+              debugPrint('[yt-dlp/Android] ⚡ Resolved $cleanId via FastDart');
+              completer.complete(info);
+              return;
             }
-            final ext = json['ext'] as String? ?? 'mp4';
-            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
-            _streamInfoCache[cleanId] = info;
-            _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Desktop] ✅ Resolved $cleanId via subprocess (reliable path)');
-            return info;
           }
-        } else {
-          _triggerAutoRecovery();
-        }
-      } catch (e) {
-        debugPrint('[yt-dlp/Desktop] Subprocess error, falling back to Dart: $e');
-        _triggerAutoRecovery();
-      }
-    }
+        } catch (_) {}
+      }());
 
-    // ── ANDROID: FastDart Innertube FAST-PATH first (~200–400 ms), then Chaquopy ───
-    if (!kIsWeb && Platform.isAndroid) {
-      // 1. FAST-PATH: Pure-Dart Innertube via Android, iOS & TV clients (200–400ms!)
-      try {
-        final manifest = await _fallbackClient.videos.streamsClient
-            .getManifest(cleanId, ytClients: [
-              yt.YoutubeApiClient.android,
-              yt.YoutubeApiClient.ios,
-              yt.YoutubeApiClient.tv,
-            ])
-            .timeout(const Duration(milliseconds: 3500));
-        final audioOnly = manifest.audioOnly;
-        if (audioOnly.isNotEmpty) {
-          final best = _selectBestAudioStream(audioOnly);
-          final url = best.url.toString();
-          if (url.isNotEmpty) {
-            final isAndroid = url.contains('c=ANDROID');
-            final isIos = url.contains('c=IOS');
-            final userAgent = isAndroid
-                ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
-                : isIos
-                    ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
-                    : 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
-            final info = YtStreamInfo(
-              url: url,
-              headers: {
-                'User-Agent': userAgent,
-                'Origin': 'https://www.youtube.com',
-                'Referer': 'https://www.youtube.com/',
-              },
-              ext: best.container.name,
-            );
-            _streamInfoCache[cleanId] = info;
-            _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Android] ⚡ Resolved $cleanId via FastDart Innertube (fast path)');
-            return info;
+      // 2. CHAQUOPY PYTHON: starts at millisecond 0 concurrently!
+      unawaited(() async {
+        try {
+          final jsonStr = await _androidChannel
+              .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
+              .timeout(const Duration(seconds: 8));
+          if (jsonStr != null && jsonStr.isNotEmpty && !completer.isCompleted) {
+            final data = jsonDecode(jsonStr) as Map<String, dynamic>;
+            final url = data['url'] as String? ?? '';
+            if (url.isNotEmpty && url.startsWith('http')) {
+              final rawHeaders = (data['headers'] ?? data['http_headers']) as Map<String, dynamic>? ?? {};
+              final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+              final ext = data['ext'] as String? ?? 'mp4';
+              final info = YtStreamInfo(url: url, headers: headers, ext: ext);
+              _streamInfoCache[cleanId] = info;
+              _streamCacheTime[cleanId] = DateTime.now();
+              debugPrint('[yt-dlp/Android Python] ✅ Resolved $cleanId via Chaquopy');
+              completer.complete(info);
+              return;
+            }
           }
-        }
-      } catch (e) {
-        debugPrint('[yt-dlp/Android] FastDart note for $cleanId: $e, falling back to Chaquopy...');
-      }
+        } catch (_) {}
 
-      // 2. Reliable Fallback: Chaquopy Python yt-dlp
-      try {
-        final jsonStr = await _androidChannel
-            .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})
-            .timeout(const Duration(seconds: 8));
-        if (jsonStr != null && jsonStr.isNotEmpty) {
-          final data = jsonDecode(jsonStr) as Map<String, dynamic>;
-          final url = data['url'] as String? ?? '';
-          if (url.isNotEmpty && url.startsWith('http')) {
-            final rawHeaders = (data['headers'] ?? data['http_headers']) as Map<String, dynamic>? ?? {};
-            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
-            final ext = data['ext'] as String? ?? 'mp4';
-            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
-            _streamInfoCache[cleanId] = info;
-            _streamCacheTime[cleanId] = DateTime.now();
-            debugPrint('[yt-dlp/Android Python] ✅ Resolved $cleanId via Chaquopy (fallback)');
-            return info;
-          }
+        if (!completer.isCompleted) {
+          completer.completeError(Exception('Failed to resolve Android stream for $cleanId'));
         }
-      } catch (e) {
-        debugPrint('[yt-dlp/Android Python] Chaquopy error, falling back to Dart: $e');
-      }
+      }());
+
+      return completer.future;
     }
 
     // Fallback: Pure-Dart Innertube via TV, iOS, and Android clients
