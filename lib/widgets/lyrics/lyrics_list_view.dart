@@ -53,7 +53,8 @@ class _LyricsListViewState extends State<LyricsListView> {
   late List<LyricsItem> _items;
   final Map<int, int> _lyricIndexToItemIndex = {};
   int _currentIndex = -1;
-  int _currentLyricIndex = -1;
+  final ValueNotifier<int> _currentIndexNotifier = ValueNotifier<int>(-1);
+  final ValueNotifier<int> _currentLyricIndexNotifier = ValueNotifier<int>(-1);
   bool _isManualScrolling = false;
   bool _isUnsynced = false;
   Timer? _resumeAutoScrollTimer;
@@ -91,7 +92,9 @@ class _LyricsListViewState extends State<LyricsListView> {
     
     if (oldWidget.lyrics != widget.lyrics) {
       _buildItems();
+      _computedForWidth = 0;
       _updateIndexForPosition(_currentPosition, force: true);
+      setState(() {});
     }
     
     if (oldWidget.positionStream != widget.positionStream) {
@@ -168,15 +171,9 @@ class _LyricsListViewState extends State<LyricsListView> {
 
     if (_isUnsynced) {
       if (_currentIndex != -1) {
-        if (widget.isActive) {
-          setState(() {
-            _currentIndex = -1;
-            _currentLyricIndex = -1;
-          });
-        } else {
-          _currentIndex = -1;
-          _currentLyricIndex = -1;
-        }
+        _currentIndex = -1;
+        _currentIndexNotifier.value = -1;
+        _currentLyricIndexNotifier.value = -1;
       }
       return;
     }
@@ -198,29 +195,20 @@ class _LyricsListViewState extends State<LyricsListView> {
       }
     }
 
-    // ONLY rebuild when the active line actually changes!
+    // ONLY update and animate when the active line actually changes!
     if (newIndex != _currentIndex || force) {
+      _currentIndex = newIndex;
+      final newLyricIndex = (newIndex >= 0 && newIndex < _items.length)
+          ? (_items[newIndex].lyricIndex ?? -1)
+          : -1;
+      _currentIndexNotifier.value = newIndex;
+      _currentLyricIndexNotifier.value = newLyricIndex;
+
       if (!widget.isActive) {
-        // When screen is inactive, update state silently without rebuilds/animations
-        _currentIndex = newIndex;
-        if (newIndex >= 0 && newIndex < _items.length) {
-          _currentLyricIndex = _items[newIndex].lyricIndex ?? -1;
-        } else {
-          _currentLyricIndex = -1;
-        }
         return;
       }
 
-      setState(() {
-        _currentIndex = newIndex;
-        if (newIndex >= 0 && newIndex < _items.length) {
-          _currentLyricIndex = _items[newIndex].lyricIndex ?? -1;
-        } else {
-          _currentLyricIndex = -1;
-        }
-      });
-      // Start scroll animation immediately in lockstep with the text highlight animation
-      // on the exact same VSync tick, eliminating the 1-2 frame freeze/stutter
+      // Smooth scroll animation in lockstep with the highlight, without rebuilding the whole list
       if (_scrollController.hasClients &&
           _scrollController.position.hasContentDimensions &&
           _scrollController.position.hasPixels) {
@@ -290,7 +278,7 @@ class _LyricsListViewState extends State<LyricsListView> {
       double h = 66.0;
 
       if (item.type == ItemType.interlude) {
-        h = 51.0;
+        h = 67.0; // 27px height + 16px inner vertical padding + 24px outer vertical padding
       } else if (item.line != null) {
         final text = item.line!.text;
         if (text.isEmpty) {
@@ -366,17 +354,19 @@ class _LyricsListViewState extends State<LyricsListView> {
           return;
         }
 
-        // Fluid Apple ProMotion quintic curve:
-        // Glides seamlessly across stanzas at 120 FPS with zero initial jerk or hitch
+        // Fluid continuous motion:
+        // When jumping across stanzas/paragraphs (large scrollDelta), allow sufficient time
+        // and an ease-out cubic curve so the motion glides across 120 FPS without sudden snaps.
+        final bool isLargeJump = scrollDelta > 120.0;
         final effectiveDuration = duration ??
-            (scrollDelta > 140
-                ? const Duration(milliseconds: 420)
-                : const Duration(milliseconds: 320));
+            (isLargeJump
+                ? const Duration(milliseconds: 650)
+                : const Duration(milliseconds: 400));
 
         _scrollController.animateTo(
           clamped,
           duration: effectiveDuration,
-          curve: const Cubic(0.22, 1.0, 0.36, 1.0),
+          curve: Curves.easeOutCubic,
         );
       }
     } catch (e) {
@@ -400,6 +390,8 @@ class _LyricsListViewState extends State<LyricsListView> {
     _posSub?.cancel();
     _scrollController.dispose();
     _resumeAutoScrollTimer?.cancel();
+    _currentIndexNotifier.dispose();
+    _currentLyricIndexNotifier.dispose();
     super.dispose();
   }
 
@@ -451,12 +443,11 @@ class _LyricsListViewState extends State<LyricsListView> {
               }
               return false;
             },
-            // ListView.builder: cacheExtent pre-renders 1400px so subsequent stanzas/paragraphs
-            // are already laid out and cached in GPU memory before scrolling to them,
-            // preventing layout spikes and dropped frames at 120Hz.
+            // ListView.builder: cacheExtent pre-renders 400px so subsequent stanzas/paragraphs
+            // are ready without overloading memory or compositor layers.
             child: ListView.builder(
               controller: _scrollController,
-              cacheExtent: 1400.0,
+              cacheExtent: 400.0,
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: EdgeInsets.only(
                 top: topPadding,
@@ -480,58 +471,67 @@ class _LyricsListViewState extends State<LyricsListView> {
             final item = _items[index];
             
             if (item.type == ItemType.interlude) {
-              final isCurrentInterlude = _currentIndex == index && widget.isActive;
-              return Padding(
-                key: ValueKey('interlude_$index'),
-                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
-                child: InterludeDotsWidget(
-                  isAnimating: isCurrentInterlude,
-                ),
+              return ValueListenableBuilder<int>(
+                valueListenable: _currentIndexNotifier,
+                builder: (context, activeIdx, _) {
+                  final isCurrentInterlude = activeIdx == index && widget.isActive;
+                  return Padding(
+                    key: ValueKey('interlude_$index'),
+                    padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+                    child: InterludeDotsWidget(
+                      isAnimating: isCurrentInterlude,
+                    ),
+                  );
+                },
               );
             }
 
             final line = item.line!;
             final lyricIndex = item.lyricIndex!;
             
-            LyricLineState state = LyricLineState.future;
-            if (_currentLyricIndex != -1) {
-              if (lyricIndex < _currentLyricIndex) {
-                state = LyricLineState.past;
-              } else if (lyricIndex == _currentLyricIndex) {
-                state = LyricLineState.current;
-              }
-            } else {
-              if (item.endTime <= _currentPosition) {
-                state = LyricLineState.past;
-              }
-            }
-
-            return LyricsLineWidget(
-              key: ValueKey('lyric_$lyricIndex'),
-              line: line,
-              state: state,
-              isUnsynced: isUnsynced,
-              onTap: () {
-                HapticFeedback.selectionClick();
-                widget.onSeek(line.startTime);
-                
-                setState(() {
-                  _isManualScrolling = false;
-                  _currentIndex = index;
-                  _currentLyricIndex = lyricIndex;
-                });
-                _resumeAutoScrollTimer?.cancel();
-                if (_scrollController.hasClients &&
-                    _scrollController.position.hasContentDimensions &&
-                    _scrollController.position.hasPixels) {
-                  _scrollToCurrentLine();
+            return ValueListenableBuilder<int>(
+              valueListenable: _currentLyricIndexNotifier,
+              builder: (context, activeLyricIdx, _) {
+                LyricLineState state = LyricLineState.future;
+                if (activeLyricIdx != -1) {
+                  if (lyricIndex < activeLyricIdx) {
+                    state = LyricLineState.past;
+                  } else if (lyricIndex == activeLyricIdx) {
+                    state = LyricLineState.current;
+                  }
                 } else {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (mounted) {
-                      _scrollToCurrentLine();
-                    }
-                  });
+                  if (item.endTime <= _currentPosition) {
+                    state = LyricLineState.past;
+                  }
                 }
+
+                return LyricsLineWidget(
+                  key: ValueKey('lyric_$lyricIndex'),
+                  line: line,
+                  state: state,
+                  isUnsynced: isUnsynced,
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    widget.onSeek(line.startTime);
+                    
+                    _isManualScrolling = false;
+                    _currentIndex = index;
+                    _currentIndexNotifier.value = index;
+                    _currentLyricIndexNotifier.value = lyricIndex;
+                    _resumeAutoScrollTimer?.cancel();
+                    if (_scrollController.hasClients &&
+                        _scrollController.position.hasContentDimensions &&
+                        _scrollController.position.hasPixels) {
+                      _scrollToCurrentLine();
+                    } else {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) {
+                          _scrollToCurrentLine();
+                        }
+                      });
+                    }
+                  },
+                );
               },
             );
           },

@@ -67,23 +67,19 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
 
     // Fluid Apple Music style animation: smooth scale up on active line
     // and smooth opacity cross-fade between active and dimmed lines.
-    // Clean single-layer RepaintBoundary isolates the text raster on GPU cache so scale animations
-    // and opacity execute as hardware transforms at 120 FPS without re-rasterizing text glyphs
-    // or thrashing nested compositing layers.
-    Widget content = RepaintBoundary(
-      child: AnimatedScale(
-        scale: isCurrent ? 1.025 : 1.0,
-        alignment: Alignment.centerLeft,
-        duration: const Duration(milliseconds: 320),
-        curve: const Cubic(0.22, 1.0, 0.36, 1.0),
-        child: AnimatedOpacity(
-          opacity: targetOpacity,
-          duration: const Duration(milliseconds: 320),
-          curve: const Cubic(0.22, 1.0, 0.36, 1.0),
-          child: Text(
-            widget.line.text,
-            style: _lyricTextStyle,
-          ),
+    // Clean single raster layer inside ListView without per-line compositing layer thrashing.
+    Widget content = AnimatedScale(
+      scale: isCurrent ? 1.025 : 1.0,
+      alignment: Alignment.centerLeft,
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOutCubic,
+      child: AnimatedOpacity(
+        opacity: targetOpacity,
+        duration: const Duration(milliseconds: 380),
+        curve: Curves.easeOutCubic,
+        child: Text(
+          widget.line.text,
+          style: _lyricTextStyle,
         ),
       ),
     );

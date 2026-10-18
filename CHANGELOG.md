@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2026-10-18
+
+### Fixed & Improved
+- **Fluidez Absoluta de Letras a 120Hz (Cero Tirones al Cambiar de Párrafo)**:
+  - **Aislamiento de Estado con `ValueNotifier`**: El cambio de línea activa ya no reconstruye toda la lista ni el `LayoutBuilder`, eliminando el lag y las congelaciones de fotogramas al avanzar la canción.
+  - **Curva de Desplazamiento Suave**: Reemplazada la curva con salto brusco por `Curves.easeOutCubic` con duración optimizada (650 ms en saltos largos de estrofa/párrafo y 400 ms en saltos de línea), permitiendo un deslizamiento continuo y sedoso a 120 FPS.
+  - **Eliminación de Capas GPU Redundantes**: Removidos los `RepaintBoundary` anidados en cada renglón individual que saturaban el rasterizador Skia/Impeller al hacer scroll; ahora la lista se renderiza limpiamente en una única textura acelerada por hardware.
+  - **Ajuste de Pre-renderizado**: Optimizado `cacheExtent` a 400 px y ajustada la altura de interludios a 67 px exactos para prevenir desalineaciones y tirones.
+
 ## [1.9.1] - 2026-10-17
 
 ### Fixed & Improved
