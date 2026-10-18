@@ -219,11 +219,19 @@ class _LyricsListViewState extends State<LyricsListView> {
           _currentLyricIndex = -1;
         }
       });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          _scrollToCurrentLine();
-        }
-      });
+      // Start scroll animation immediately in lockstep with the text highlight animation
+      // on the exact same VSync tick, eliminating the 1-2 frame freeze/stutter
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions &&
+          _scrollController.position.hasPixels) {
+        _scrollToCurrentLine();
+      } else {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _scrollToCurrentLine();
+          }
+        });
+      }
     }
   }
 
@@ -358,17 +366,17 @@ class _LyricsListViewState extends State<LyricsListView> {
           return;
         }
 
-        // Smooth Apple-style ease-out curve:
-        // Stanza transitions glide immediately with zero initial lag or jerk at 120 FPS
+        // Fluid Apple ProMotion quintic curve:
+        // Glides seamlessly across stanzas at 120 FPS with zero initial jerk or hitch
         final effectiveDuration = duration ??
             (scrollDelta > 140
-                ? const Duration(milliseconds: 400)
+                ? const Duration(milliseconds: 420)
                 : const Duration(milliseconds: 320));
 
         _scrollController.animateTo(
           clamped,
           duration: effectiveDuration,
-          curve: Curves.easeOutCubic,
+          curve: const Cubic(0.22, 1.0, 0.36, 1.0),
         );
       }
     } catch (e) {
@@ -443,9 +451,12 @@ class _LyricsListViewState extends State<LyricsListView> {
               }
               return false;
             },
-            // ListView.builder: only builds visible items + a small buffer.
+            // ListView.builder: cacheExtent pre-renders 1400px so subsequent stanzas/paragraphs
+            // are already laid out and cached in GPU memory before scrolling to them,
+            // preventing layout spikes and dropped frames at 120Hz.
             child: ListView.builder(
               controller: _scrollController,
+              cacheExtent: 1400.0,
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: EdgeInsets.only(
                 top: topPadding,
@@ -510,11 +521,17 @@ class _LyricsListViewState extends State<LyricsListView> {
                   _currentLyricIndex = lyricIndex;
                 });
                 _resumeAutoScrollTimer?.cancel();
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (mounted) {
-                    _scrollToCurrentLine();
-                  }
-                });
+                if (_scrollController.hasClients &&
+                    _scrollController.position.hasContentDimensions &&
+                    _scrollController.position.hasPixels) {
+                  _scrollToCurrentLine();
+                } else {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (mounted) {
+                      _scrollToCurrentLine();
+                    }
+                  });
+                }
               },
             );
           },

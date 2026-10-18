@@ -5,6 +5,22 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2026-10-17
+
+### Fixed & Improved
+- **Corrección de Audio en Transición Automática**:
+  - Resuelto el problema donde la siguiente canción comenzaba a reproducirse sin audio al terminar la pista previa.
+  - Implementado retardo de vaciado de 150 ms para permitir que el pipeline nativo de audio libmpv cierre la pista anterior limpiamente sin desconectar pistas de audio (`--aid=no`).
+  - Aplicación síncrona y refuerzo del volumen efectivo y ReplayGain tras la carga de la nueva fuente de audio.
+- **Prevención de Reproducción Inesperada en Pausa / Inactividad**:
+  - Cancelación inmediata del watchdog de 14 segundos al pausar o detener la reproducción.
+  - Comprobación estricta del estado de pausa durante la resolución asíncrona de streams, recuperación de fin de flujo (EOF) e interrupciones del sistema, evitando que la música se active sola de la nada.
+- **Fluidez Extrema de Letras a 120Hz (Cero Tirones entre Párrafos)**:
+  - Eliminado el retraso de 1 fotograma (`addPostFrameCallback`) sincronizando el scroll y la animación de escala/iluminación en el mismo pulso VSync.
+  - Integrada la curva de resorte ProMotion (`Cubic(0.22, 1.0, 0.36, 1.0)`) para transiciones de estrofas sin sacudidas bruscas.
+  - Añadido `cacheExtent: 1400.0` para mantener los párrafos subsiguientes pre-renderizados en GPU, evitando micro-congelamientos de layout al desplazarse.
+  - Optimizado el aislamiento de capas `RepaintBoundary` para prevenir recálculos innecesarios en la GPU.
+
 ## [1.9.0] - 2026-10-16
 
 ### Fixed & Improved

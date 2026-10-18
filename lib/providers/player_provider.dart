@@ -1961,6 +1961,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             !isGenuineTrackEnd &&
             _currentSong != null &&
             !userExplicitlyPaused &&
+            _isPlaying &&
             wasPlaying) {
           // Premature EOF due to network/proxy chunk boundary in middle of track: auto-recover without restarting to 0
           debugPrint(
@@ -1968,14 +1969,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           final resumePos = _position;
           final songToResume = _currentSong;
           Future.microtask(() async {
-            if (_currentSong?.id == songToResume?.id && !userExplicitlyPaused) {
+            if (_isPlaying && !userExplicitlyPaused && _currentSong?.id == songToResume?.id) {
               try {
                 await seek(resumePos);
                 await play();
               } catch (e) {
                 debugPrint(
                     '[Player] Standard resume failed ($e), reloading stream at position...');
-                if (_currentSong?.id == songToResume?.id && songToResume != null) {
+                if (_isPlaying && !userExplicitlyPaused && _currentSong?.id == songToResume?.id && songToResume != null) {
                   await playSong(songToResume, initialPosition: resumePos, forcePlay: true);
                 }
               }
@@ -2323,9 +2324,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // Reset previous playback away from completed to prevent duplicate completion events
+      _activeAudioSongId = null;
       try {
         await _audioPlayer.stop();
       } catch (_) {}
+      // Brief delay to allow native libmpv/audio pipeline to cleanly tear down old track
+      await Future.delayed(const Duration(milliseconds: 150));
 
       await playSong(nextSong, startIndex: nextIndex, forcePlay: true);
     } else {
@@ -2573,7 +2577,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Arm self-healing watchdog timer to ensure player never hangs in loading state
     _loadingWatchdogTimer?.cancel();
     _loadingWatchdogTimer = Timer(const Duration(seconds: 14), () {
-      if (currentGen == _playGeneration && _isLoading && !_isPlaying) {
+      final bool userPaused = !_isPlaying ||
+          (_lastUserPauseTime != null &&
+              DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 30));
+      if (currentGen == _playGeneration && _isLoading && !userPaused) {
         debugPrint('[Player Watchdog] ⚠️ Playback stalled in loading state for 14s. Auto-recovering...');
         _isLoading = false;
         notifyListeners();
@@ -2756,7 +2763,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (youtubeSource != null) {
           _concatenatingSource = null;
           unawaited(_ensureAudioFocus(() async {}));
-          unawaited(_applyReplayGain(song));
           try {
             await _audioPlayer
                 .setAudioSource(
@@ -2771,8 +2777,24 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
 
+        final bool userPausedDuringLoad = !_isPlaying ||
+            (_lastUserPauseTime != null &&
+                DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 15));
+
         if (loadedSuccessfully) {
           if (currentGen != _playGeneration) return;
+          if (userPausedDuringLoad && !forcePlay) {
+            debugPrint('[Player] User paused while loading "${song.title}". Leaving paused.');
+            _isLoading = false;
+            _loadingWatchdogTimer?.cancel();
+            notifyListeners();
+            return;
+          }
+
+          // Await ReplayGain and restore effective volume on the newly loaded audio track
+          await _applyReplayGain(song);
+          await _audioPlayer.setVolume(_effectiveVolume);
+
           unawaited(_audioPlayer.play().catchError((e) {
             debugPrint('[Player] Error during play(): $e');
           }));
@@ -2780,6 +2802,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _isLoading = false;
           _loadingWatchdogTimer?.cancel();
           notifyListeners();
+
+          // Re-enforce volume shortly after play begins so libmpv/audio device never remains at volume 0
+          Future.delayed(const Duration(milliseconds: 60), () {
+            if (currentGen == _playGeneration && _isPlaying) {
+              _audioPlayer.setVolume(_effectiveVolume).catchError((_) {});
+            }
+          });
         } else if (_youtubeService.isYoutube) {
           _concatenatingSource = null;
           final String playUrl;
@@ -2798,7 +2827,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
           if (currentGen != _playGeneration) return;
           unawaited(_ensureAudioFocus(() async {}));
-          unawaited(_applyReplayGain(song));
           final isDesktop = !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
           if (headers != null && headers.isNotEmpty && !isDesktop) {
             await _audioPlayer
@@ -2820,6 +2848,19 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 .timeout(const Duration(seconds: 12));
           }
           if (currentGen != _playGeneration) return;
+
+          if (userPausedDuringLoad && !forcePlay) {
+            debugPrint('[Player] User paused while loading "${song.title}". Leaving paused.');
+            _isLoading = false;
+            _loadingWatchdogTimer?.cancel();
+            notifyListeners();
+            return;
+          }
+
+          // Await ReplayGain and restore effective volume on the newly loaded audio stream
+          await _applyReplayGain(song);
+          await _audioPlayer.setVolume(_effectiveVolume);
+
           unawaited(_audioPlayer.play().catchError((e) {
             debugPrint('[Player] Error during play(): $e');
           }));
@@ -2827,6 +2868,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _isLoading = false;
           _loadingWatchdogTimer?.cancel();
           notifyListeners();
+
+          // Re-enforce volume shortly after play begins
+          Future.delayed(const Duration(milliseconds: 60), () {
+            if (currentGen == _playGeneration && _isPlaying) {
+              _audioPlayer.setVolume(_effectiveVolume).catchError((_) {});
+            }
+          });
         } else if (_gaplessEnabled) {
           try {
             await _buildAndSetConcatenatingSource(
@@ -3033,7 +3081,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint(
               '[Player] Song "${song.title}" unplayable (failure #$_consecutiveAutoSkipFailures). Auto-skipping to next track...');
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (currentGen == _playGeneration && !_isPlaying) {
+            if (currentGen == _playGeneration && _isPlaying && !wasRecentlySkippedManually) {
               skipNext();
             }
           });
@@ -3212,6 +3260,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Future<void> pause() async {
     // 1. Instant optimistic UI toggle (0ms latency)
     _isPlaying = false;
+    _isLoading = false;
+    _loadingWatchdogTimer?.cancel();
+    _loadingWatchdogTimer = null;
+    _wasPlayingBeforeInterruption = false;
     _lastUserPauseTime = DateTime.now();
     _optimisticLocalPlayPauseState = false;
     _optimisticLocalPlayPauseTime = DateTime.now();
@@ -3267,6 +3319,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
     _telemetryTimer?.cancel();
     _sendTelemetryHeartbeat(overridePlaying: false);
+    _isLoading = false;
+    _loadingWatchdogTimer?.cancel();
+    _loadingWatchdogTimer = null;
+    _wasPlayingBeforeInterruption = false;
+    _activeAudioSongId = null;
     if (_castService.isConnected) {
       await _castService.stop();
     } else if (_upnpService.isConnected) {
@@ -4428,9 +4485,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // Wait a bit for the audio session to stabilize
         await Future.delayed(const Duration(milliseconds: 100));
 
-        // If there's a current song and audio is not playing, resume it
+        // If there's a current song and audio was actively playing, resume it
         // This handles the case where iOS pauses audio when dismissing the player
-        if (_currentSong != null && !_audioPlayer.playing) {
+        if (_currentSong != null && !_audioPlayer.playing && _isPlaying) {
           debugPrint(
               '[Player] iOS: Resuming playback after audio session reactivation (song: ${_currentSong!.title})');
           await _audioPlayer.play();
