@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import '../../l10n/app_localizations.dart';
 import 'package:flutter/material.dart';
@@ -246,6 +247,9 @@ class _LyricsListViewState extends State<LyricsListView> {
 
   double _lastViewportWidth = 0;
   double _lastViewportHeight = 0;
+  double _lastTopPadding = 0;
+  double _lastBottomPadding = 0;
+  double _totalContentHeight = 0;
   List<double> _itemOffsets = [];
   List<double> _itemHeights = [];
   double _computedForWidth = 0;
@@ -296,6 +300,7 @@ class _LyricsListViewState extends State<LyricsListView> {
       _itemHeights[i] = h;
       accumulated += h;
     }
+    _totalContentHeight = accumulated;
     tp.dispose();
   }
 
@@ -336,15 +341,26 @@ class _LyricsListViewState extends State<LyricsListView> {
       final double targetOffset;
       if (isMobile) {
         final focalPoint = _lastViewportHeight > 0 ? _lastViewportHeight * 0.38 : 220.0;
-        const topPadding = 24.0;
-        targetOffset = (itemOffset - (focalPoint - topPadding)).clamp(0.0, double.infinity);
+        final topPad = _lastTopPadding > 0 ? _lastTopPadding : 24.0;
+        targetOffset = (itemOffset - (focalPoint - topPad)).clamp(0.0, double.infinity);
       } else {
         targetOffset = itemOffset;
       }
 
+      // Compute true maximum scrollable extent from entire parsed lyrics height,
+      // so we never clamp prematurely before lazy sliver renders upcoming stanzas.
+      final trueMaxExtent = _totalContentHeight > 0 && _lastViewportHeight > 0
+          ? (_totalContentHeight + _lastTopPadding + _lastBottomPadding - _lastViewportHeight).clamp(0.0, double.infinity)
+          : double.infinity;
+
+      final double maxExtent = math.max(
+        _scrollController.position.maxScrollExtent,
+        trueMaxExtent,
+      );
+
       final clamped = targetOffset.clamp(
         _scrollController.position.minScrollExtent,
-        _scrollController.position.maxScrollExtent,
+        maxExtent,
       );
       final scrollDelta = (_scrollController.offset - clamped).abs();
 
@@ -354,14 +370,13 @@ class _LyricsListViewState extends State<LyricsListView> {
           return;
         }
 
-        // Fluid continuous motion:
-        // When jumping across stanzas/paragraphs (large scrollDelta), allow sufficient time
-        // and an ease-out cubic curve so the motion glides across 120 FPS without sudden snaps.
+        // Fluid and snappy 120 FPS transitions:
+        // 380ms for stanza jumps, 280ms for line jumps with smooth easeOutCubic curve.
         final bool isLargeJump = scrollDelta > 120.0;
         final effectiveDuration = duration ??
             (isLargeJump
-                ? const Duration(milliseconds: 650)
-                : const Duration(milliseconds: 400));
+                ? const Duration(milliseconds: 380)
+                : const Duration(milliseconds: 280));
 
         _scrollController.animateTo(
           clamped,
@@ -435,6 +450,9 @@ class _LyricsListViewState extends State<LyricsListView> {
           bottomPadding = constraints.maxHeight * 0.55;
         }
 
+        _lastTopPadding = topPadding;
+        _lastBottomPadding = bottomPadding;
+
         return RepaintBoundary(
           child: NotificationListener<ScrollNotification>(
             onNotification: (scrollNotification) {
@@ -443,11 +461,11 @@ class _LyricsListViewState extends State<LyricsListView> {
               }
               return false;
             },
-            // ListView.builder: cacheExtent pre-renders 400px so subsequent stanzas/paragraphs
-            // are ready without overloading memory or compositor layers.
+            // ListView.builder: cacheExtent pre-renders 1400px so subsequent stanzas/paragraphs
+            // are ready without layout spikes or premature extent clamping.
             child: ListView.builder(
               controller: _scrollController,
-              cacheExtent: 400.0,
+              cacheExtent: 1400.0,
               physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
               padding: EdgeInsets.only(
                 top: topPadding,

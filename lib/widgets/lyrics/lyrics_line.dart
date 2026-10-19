@@ -71,11 +71,11 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
     Widget content = AnimatedScale(
       scale: isCurrent ? 1.025 : 1.0,
       alignment: Alignment.centerLeft,
-      duration: const Duration(milliseconds: 380),
+      duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutCubic,
       child: AnimatedOpacity(
         opacity: targetOpacity,
-        duration: const Duration(milliseconds: 380),
+        duration: const Duration(milliseconds: 320),
         curve: Curves.easeOutCubic,
         child: Text(
           widget.line.text,

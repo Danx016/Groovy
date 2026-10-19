@@ -5,6 +5,14 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3] - 2026-10-19
+
+### Fixed & Improved
+- **Pase Instantáneo y Fluido a la Siguiente Estrofa (Cero Congelamientos)**:
+  - **Eliminación del Truncamiento de Scroll**: Corregido el error crítico donde `targetOffset` se recortaba prematuramente contra el `maxScrollExtent` parcial de la lista perezosa, impidiendo que la vista avanzara a la siguiente estrofa. Ahora se calcula el `trueMaxExtent` del documento completo para garantizar que el scroll alcance siempre la nueva estrofa.
+  - **Curva y Duración Snappy**: Calibrada la transición a 380 ms en saltos de estrofa y 280 ms en líneas, eliminando la sensación pesada y logrando una respuesta ágil a 120 FPS.
+  - **Pre-renderizado de Estrofas (`cacheExtent: 1400.0`)**: Mantiene las estrofas subsiguientes pre-medidas en memoria para una llegada inmediata sin caídas de cuadros.
+
 ## [1.9.2] - 2026-10-18
 
 ### Fixed & Improved
