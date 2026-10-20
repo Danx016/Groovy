@@ -90,7 +90,27 @@ class YtDlpService {
     _inFlightResolutions.clear();
   }
 
-  yt.AudioStreamInfo _selectBestAudioStream(Iterable<yt.AudioStreamInfo> audioStreams) {
+  yt.AudioStreamInfo _selectBestAudioStream(Iterable<yt.AudioStreamInfo> audioStreams, {bool preferTv = false}) {
+    if (preferTv) {
+      final tvStreams = audioStreams.where((s) => s.url.toString().contains('c=TVHTML5'));
+      if (tvStreams.isNotEmpty) {
+        final mp4Tv = tvStreams.where((s) =>
+            s.container.name.toLowerCase() == 'mp4' ||
+            s.container.name.toLowerCase() == 'm4a');
+        if (mp4Tv.isNotEmpty) return mp4Tv.withHighestBitrate();
+        return tvStreams.withHighestBitrate();
+      }
+      final nonMobileStreams = audioStreams.where((s) =>
+          !s.url.toString().contains('c=ANDROID') &&
+          !s.url.toString().contains('c=IOS'));
+      if (nonMobileStreams.isNotEmpty) {
+        final mp4NonMobile = nonMobileStreams.where((s) =>
+            s.container.name.toLowerCase() == 'mp4' ||
+            s.container.name.toLowerCase() == 'm4a');
+        if (mp4NonMobile.isNotEmpty) return mp4NonMobile.withHighestBitrate();
+        return nonMobileStreams.withHighestBitrate();
+      }
+    }
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux)) {
       final mp4Streams = audioStreams.where((s) =>
           s.container.name.toLowerCase() == 'mp4' ||
@@ -1092,25 +1112,32 @@ class YtDlpService {
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final completer = Completer<YtStreamInfo>();
 
-      // 1. FAST-PATH: Pure-Dart Innertube attempt (1200ms timeout)
+      // 1. FAST-PATH: Pure-Dart Innertube attempt (Android & iOS clients) - 1500ms fast race
       unawaited(() async {
         try {
           final manifest = await _fallbackClient.videos.streamsClient
               .getManifest(cleanId, ytClients: [
-                yt.YoutubeApiClient.tv,
                 yt.YoutubeApiClient.android,
                 yt.YoutubeApiClient.ios,
+                yt.YoutubeApiClient.tv,
               ])
-              .timeout(const Duration(milliseconds: 1200));
+              .timeout(const Duration(milliseconds: 1500));
           final audioOnly = manifest.audioOnly;
           if (audioOnly.isNotEmpty) {
-            final best = _selectBestAudioStream(audioOnly);
+            final best = _selectBestAudioStream(audioOnly, preferTv: true);
             final url = best.url.toString();
             if (url.isNotEmpty && !completer.isCompleted) {
+              final isAndroid = url.contains('c=ANDROID');
+              final isIos = url.contains('c=IOS');
+              final userAgent = isAndroid
+                  ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+                  : isIos
+                      ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                      : 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1';
               final info = YtStreamInfo(
                 url: url,
                 headers: {
-                  'User-Agent': 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1',
+                  'User-Agent': userAgent,
                   'Origin': 'https://www.youtube.com',
                   'Referer': 'https://www.youtube.com/',
                 },
@@ -1119,6 +1146,7 @@ class YtDlpService {
               _streamInfoCache[cleanId] = info;
               _streamCacheTime[cleanId] = DateTime.now();
               debugPrint('[yt-dlp/Desktop] ⚡ Resolved $cleanId via FastDart (fast path)');
+              cancelCurrentExtraction();
               completer.complete(info);
               return;
             }
@@ -1136,11 +1164,11 @@ class YtDlpService {
             'ba/b[acodec!=none]/bestaudio/best',
             '--no-playlist',
             '--extractor-args',
-            'youtube:player_client=android,web;skip=translated_subs,comments,webpage,dash,hls',
+            'youtube:player_client=android,web;skip=translated_subs,comments,webpage,dash,hls,storyboards,thumbnails',
             '--no-warnings',
             '--no-check-certificates',
             targetUrl,
-          ], timeout: const Duration(seconds: 7));
+          ], timeout: const Duration(seconds: 8));
 
           if (result != null && result.exitCode == 0 && !completer.isCompleted) {
             final json = jsonDecode(result.stdout.toString().trim()) as Map<String, dynamic>;
@@ -1165,10 +1193,26 @@ class YtDlpService {
         if (!completer.isCompleted) {
           _triggerAutoRecovery();
           try {
-            final fallback = await _fallbackClient.videos.streamsClient.getManifest(cleanId).timeout(const Duration(seconds: 5));
+            final fallback = await _fallbackClient.videos.streamsClient.getManifest(cleanId).timeout(const Duration(seconds: 6));
             if (fallback.audioOnly.isNotEmpty && !completer.isCompleted) {
-              final best = _selectBestAudioStream(fallback.audioOnly);
-              final info = YtStreamInfo(url: best.url.toString(), headers: {}, ext: best.container.name);
+              final best = _selectBestAudioStream(fallback.audioOnly, preferTv: true);
+              final url = best.url.toString();
+              final isAndroid = url.contains('c=ANDROID');
+              final isIos = url.contains('c=IOS');
+              final userAgent = isAndroid
+                  ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+                  : isIos
+                      ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                      : 'Mozilla/5.0 (SMART-TV; LINUX; Tizen 6.0) AppleWebKit/538.1 (KHTML, like Gecko) Version/6.0 TV Safari/538.1';
+              final info = YtStreamInfo(
+                url: url,
+                headers: {
+                  'User-Agent': userAgent,
+                  'Origin': 'https://www.youtube.com',
+                  'Referer': 'https://www.youtube.com/',
+                },
+                ext: best.container.name,
+              );
               completer.complete(info);
               return;
             }
@@ -1186,16 +1230,16 @@ class YtDlpService {
     if (!kIsWeb && Platform.isAndroid) {
       final completer = Completer<YtStreamInfo>();
 
-      // 1. FAST-PATH: Pure-Dart Innertube attempt (1200ms timeout)
+      // 1. FAST-PATH: Pure-Dart Innertube attempt (3500ms timeout)
       unawaited(() async {
         try {
           final manifest = await _fallbackClient.videos.streamsClient
               .getManifest(cleanId, ytClients: [
                 yt.YoutubeApiClient.android,
-                yt.YoutubeApiClient.ios,
                 yt.YoutubeApiClient.tv,
+                yt.YoutubeApiClient.ios,
               ])
-              .timeout(const Duration(milliseconds: 1200));
+              .timeout(const Duration(milliseconds: 3500));
           final audioOnly = manifest.audioOnly;
           if (audioOnly.isNotEmpty) {
             final best = _selectBestAudioStream(audioOnly);
@@ -1251,7 +1295,38 @@ class YtDlpService {
         } catch (_) {}
 
         if (!completer.isCompleted) {
-          completer.completeError(Exception('Failed to resolve Android stream for $cleanId'));
+          try {
+            final fallback = await _fallbackClient.videos.streamsClient
+                .getManifest(cleanId)
+                .timeout(const Duration(seconds: 6));
+            if (fallback.audioOnly.isNotEmpty && !completer.isCompleted) {
+              final best = _selectBestAudioStream(fallback.audioOnly);
+              final url = best.url.toString();
+              final isAndroid = url.contains('c=ANDROID');
+              final isIos = url.contains('c=IOS');
+              final userAgent = isAndroid
+                  ? 'com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip'
+                  : isIos
+                      ? 'com.google.ios.youtube/17.36.4 (iPhone14,3; U; CPU iOS 15_6 like Mac OS X)'
+                      : 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36';
+              final info = YtStreamInfo(
+                url: url,
+                headers: {
+                  'User-Agent': userAgent,
+                  'Origin': 'https://www.youtube.com',
+                  'Referer': 'https://www.youtube.com/',
+                },
+                ext: best.container.name,
+              );
+              _streamInfoCache[cleanId] = info;
+              _streamCacheTime[cleanId] = DateTime.now();
+              completer.complete(info);
+              return;
+            }
+          } catch (_) {}
+          if (!completer.isCompleted) {
+            completer.completeError(Exception('Failed to resolve Android stream for $cleanId'));
+          }
         }
       }());
 
@@ -1399,10 +1474,11 @@ class YtDlpService {
 
     // 1. FAST Innertube APIs in parallel (200-300ms pure HTTP REST) - Instant on all platforms!
     try {
+      final ytLimit = limit < 30 ? limit : 30;
       final results = await Future.wait([
         searchYtMusicInnertube(query, limit: limit),
-        searchYoutubeVideoInnertube(query, limit: 30),
-      ]).timeout(const Duration(seconds: 12));
+        searchYoutubeVideoInnertube(query, limit: ytLimit),
+      ]).timeout(const Duration(seconds: 8));
       final musicTracks = results[0];
       final ytTracks = results[1];
 

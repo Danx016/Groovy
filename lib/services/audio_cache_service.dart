@@ -58,6 +58,7 @@ class AudioCacheService {
   String _filenameForSong(String songId) {
     final clean = songId
         .replaceFirst('ytmusic://', '')
+        .replaceFirst('yt_', '')
         .replaceAll(RegExp(r'[^\w\-]'), '_');
     return '$clean.audio';
   }
@@ -196,6 +197,9 @@ class AudioCacheService {
         final resp = await req.close().timeout(const Duration(seconds: 15));
         if (resp.statusCode != 200 && resp.statusCode != 206) {
           await resp.drain<void>().catchError((_) {});
+          if (resp.statusCode == 403 || resp.statusCode == 410) {
+            _ytdlp.invalidateCache(videoId);
+          }
           debugPrint('[AudioCache] Preload HTTP ${resp.statusCode} for $videoId');
           return null;
         }

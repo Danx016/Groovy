@@ -156,9 +156,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   void _startTelemetryHeartbeat() {
     _telemetryTimer?.cancel();
-    final interval = (_groovyConnectService?.isConnected == true)
-        ? const Duration(milliseconds: 350)
-        : const Duration(milliseconds: 600);
+    final interval = const Duration(milliseconds: 1500);
     _telemetryTimer = Timer.periodic(interval, (_) {
       if (_isPlaying) {
         _sendTelemetryHeartbeat();
@@ -257,17 +255,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           '[Player] App lifecycle state: $state - saving queue state immediately');
       _saveQueueStateImmediate();
     } else if (state == AppLifecycleState.detached) {
-      debugPrint('[Player] App lifecycle state: detached - stopping playback on remote devices');
-      if (_groovyConnectService?.isConnected == true) {
-        _groovyConnectService?.sendControl('pause').catchError((_) => false);
-        _groovyConnectService?.disconnect();
-      }
-      if (_isPlaying) {
+      debugPrint('[Player] App lifecycle state: detached');
+      // If controlling remotely, do NOT pause or disconnect the remote playback.
+      // Let the remote device continue playing uninterrupted!
+      if (!_isRenderingRemotely && _isPlaying) {
         _isPlaying = false;
         _sendTelemetryHeartbeat(overridePlaying: false);
       }
     } else if (state == AppLifecycleState.resumed) {
-      if (!_isRenderingRemotely && _audioPlayer.playing) {
+      if (_groovyConnectService?.isConnected == true) {
+        _groovyConnectService?.discover();
+      } else if (!_isRenderingRemotely && _audioPlayer.playing) {
         _position = _audioPlayer.position;
         _positionController.add(_position);
         notifyListeners();
@@ -1531,26 +1529,30 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               .replaceFirst('ytmusic://', '')
               .replaceFirst('yt_', '')
               .trim();
+          Song songToPreload = nextSong;
           if (!RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
             videoId = await _youtubeService.resolveVideoIdForSong(nextSong);
             if (videoId.isNotEmpty &&
                 RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
+              final updated = nextSong.copyWith(
+                id: videoId,
+                coverArt: (_queue.any((s) => s.id == nextSong.id) &&
+                        _queue.firstWhere((s) => s.id == nextSong.id).coverArt != null &&
+                        _queue.firstWhere((s) => s.id == nextSong.id).coverArt!.isNotEmpty)
+                    ? _queue.firstWhere((s) => s.id == nextSong.id).coverArt
+                    : videoId,
+              );
+              songToPreload = updated;
               final qIdx = _queue.indexWhere((s) => s.id == nextSong.id);
               if (qIdx != -1) {
-                _queue[qIdx] = _queue[qIdx].copyWith(
-                  id: videoId,
-                  coverArt: (_queue[qIdx].coverArt == null ||
-                          _queue[qIdx].coverArt!.isEmpty)
-                      ? videoId
-                      : _queue[qIdx].coverArt,
-                );
+                _queue[qIdx] = updated;
               }
             }
           }
           if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
             YtDlpService().warmUpStreamCache(videoId);
           }
-          await _audioCacheService.preloadSong(nextSong, _youtubeService);
+          await _audioCacheService.preloadSong(songToPreload, _youtubeService);
         } catch (e) {
           debugPrint('[Player Preload] Audio preload error (harmless): $e');
         }
@@ -2305,6 +2307,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       nextIndex++;
     }
 
+    if (_repeatMode == RepeatMode.all && nextIndex >= _queue.length && _queue.isNotEmpty) {
+      nextIndex = 0;
+    }
+
     if (nextIndex >= 0 && nextIndex < _queue.length) {
       final nextSong = _queue[nextIndex];
       _currentIndex = nextIndex;
@@ -2576,12 +2582,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Arm self-healing watchdog timer to ensure player never hangs in loading state
     _loadingWatchdogTimer?.cancel();
-    _loadingWatchdogTimer = Timer(const Duration(seconds: 14), () {
+    _loadingWatchdogTimer = Timer(const Duration(seconds: 22), () {
       final bool userPaused = !_isPlaying ||
           (_lastUserPauseTime != null &&
               DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 30));
       if (currentGen == _playGeneration && _isLoading && !userPaused) {
-        debugPrint('[Player Watchdog] ⚠️ Playback stalled in loading state for 14s. Auto-recovering...');
+        debugPrint('[Player Watchdog] ⚠️ Playback stalled in loading state for 22s. Auto-recovering...');
         _isLoading = false;
         notifyListeners();
         if (_queue.isNotEmpty && hasNext) {
@@ -2593,13 +2599,30 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     // Cancel any previous stream extraction so old processes do not waste CPU or starve UI
     YtDlpService().cancelCurrentExtraction();
 
-    // Fast-start: immediately launch background stream resolution for YouTube IDs
+    // Fast-start: immediately launch background stream resolution
     // so network and extraction run in parallel while Flutter stops previous audio and prepares playback
+    Future<String>? earlyResolutionFuture;
     if (song.isLocal != true) {
       final cleanId =
           song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
       if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
         YtDlpService().warmUpStreamCache(cleanId);
+      } else {
+        earlyResolutionFuture = _youtubeService.resolveVideoIdForSong(song).then((id) {
+          if (id.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(id)) {
+            YtDlpService().warmUpStreamCache(id);
+          }
+          return id;
+        }).catchError((_) => '');
+      }
+    }
+
+    // Warm up the upcoming track in the queue immediately in background for instant (0ms) future transitions
+    final upcomingSong = _getNextSongToPreload();
+    if (upcomingSong != null && upcomingSong.id != song.id && upcomingSong.isLocal != true) {
+      final cleanUpcoming = upcomingSong.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+      if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanUpcoming)) {
+        YtDlpService().warmUpStreamCache(cleanUpcoming);
       }
     }
 
@@ -2611,10 +2634,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _updateAndroidAuto();
     _refreshArtworkUrl().catchError((_) {});
 
-    // Ensure any previously active audio or faulted stream is detached without blocking UI
+    // Ensure any previously active audio stream is detached without blocking UI or delaying stream load
     try {
       if (_audioPlayer.playing || _audioPlayer.processingState != ProcessingState.idle) {
-        await _audioPlayer.stop().timeout(const Duration(milliseconds: 200));
+        _audioPlayer.stop().catchError((_) {});
       }
     } catch (_) {}
     if (currentGen != _playGeneration) return;
@@ -2627,8 +2650,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   .replaceFirst('ytmusic://', '')
                   .replaceFirst('yt_', '')))) {
         try {
-          final resolvedYtId =
-              await _youtubeService.resolveVideoIdForSong(song);
+          final resolvedYtId = (earlyResolutionFuture != null)
+              ? await earlyResolutionFuture
+              : await _youtubeService.resolveVideoIdForSong(song);
           if (resolvedYtId.isNotEmpty &&
               RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(resolvedYtId)) {
             YtDlpService().warmUpStreamCache(resolvedYtId);
@@ -2769,7 +2793,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   youtubeSource,
                   initialPosition: initialPosition ?? Duration.zero,
                 )
-                .timeout(const Duration(seconds: 12));
+                .timeout(const Duration(seconds: 18));
             loadedSuccessfully = true;
           } catch (sourceErr) {
             debugPrint('[Player] Primary youtubeSource error ($sourceErr), trying direct stream fallback...');
@@ -2838,14 +2862,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   ),
                   initialPosition: initialPosition ?? Duration.zero,
                 )
-                .timeout(const Duration(seconds: 12));
+                .timeout(const Duration(seconds: 18));
           } else {
             await _audioPlayer
                 .setUrl(
                   playUrl,
                   initialPosition: initialPosition ?? Duration.zero,
                 )
-                .timeout(const Duration(seconds: 12));
+                .timeout(const Duration(seconds: 18));
           }
           if (currentGen != _playGeneration) return;
 
@@ -2881,7 +2905,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               initialIndex: _currentIndex,
               initialPosition: initialPosition ?? Duration.zero,
               playGeneration: currentGen,
-            ).timeout(const Duration(seconds: 12));
+            ).timeout(const Duration(seconds: 18));
           } catch (e) {
             if (!_hasPlayedOnce) {
               debugPrint(
@@ -2892,7 +2916,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                 initialIndex: _currentIndex,
                 initialPosition: initialPosition ?? Duration.zero,
                 playGeneration: currentGen,
-              ).timeout(const Duration(seconds: 12));
+              ).timeout(const Duration(seconds: 18));
               _hasPlayedOnce = true;
             } else {
               rethrow;
@@ -2937,7 +2961,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   playUrl,
                   initialPosition: initialPosition ?? Duration.zero,
                 )
-                .timeout(const Duration(seconds: 12));
+                .timeout(const Duration(seconds: 18));
           } else {
             final cacheDir = await getTemporaryDirectory();
             final cacheFile = File(
@@ -2954,7 +2978,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   ),
                   initialPosition: initialPosition ?? Duration.zero,
                 )
-                .timeout(const Duration(seconds: 12));
+                .timeout(const Duration(seconds: 18));
           }
           if (currentGen != _playGeneration) return;
           await _applyReplayGain(song);
@@ -3045,7 +3069,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       debugPrint('[Player] ✗ Error playing song "${song.title}": $e');
       if (song.isLocal != true && !_hasRetriedCurrentPlay) {
         _hasRetriedCurrentPlay = true;
-        YtDlpService().invalidateCache(song.id);
+        final cleanId = song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+        YtDlpService().invalidateCache(cleanId);
+        final resolvedId = await _youtubeService.resolveVideoIdForSong(song).catchError((_) => '');
+        if (resolvedId.isNotEmpty) {
+          YtDlpService().invalidateCache(resolvedId);
+        }
         debugPrint(
             '[Player] Retrying playSong for "${song.title}" once with fresh cache...');
         await Future.delayed(const Duration(milliseconds: 300));
@@ -3081,7 +3110,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint(
               '[Player] Song "${song.title}" unplayable (failure #$_consecutiveAutoSkipFailures). Auto-skipping to next track...');
           Future.delayed(const Duration(milliseconds: 500), () {
-            if (currentGen == _playGeneration && _isPlaying && !wasRecentlySkippedManually) {
+            final bool userExplicitlyPaused = _lastUserPauseTime != null &&
+                DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 3);
+            if (currentGen == _playGeneration && !userExplicitlyPaused && !wasRecentlySkippedManually) {
               skipNext();
             }
           });
@@ -3547,9 +3578,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _shuffleHistory.add(_currentSong?.id ?? '');
       if (_shuffleHistory.length > 50) _shuffleHistory.removeAt(0);
       int next;
-      do {
-        next = Random().nextInt(_queue.length);
-      } while (next == _currentIndex);
+      if (_nextShuffledIndex != null &&
+          _nextShuffledIndex != _currentIndex &&
+          _nextShuffledIndex! < _queue.length) {
+        next = _nextShuffledIndex!;
+        _nextShuffledIndex = null;
+      } else {
+        do {
+          next = Random().nextInt(_queue.length);
+        } while (next == _currentIndex);
+      }
       _currentIndex = next;
       _currentSong = _queue[next];
       _position = Duration.zero;
@@ -4231,7 +4269,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _concatenatingSource = null;
         await _audioPlayer
             .setAudioSource(ytSource)
-            .timeout(const Duration(seconds: 10));
+            .timeout(const Duration(seconds: 15));
         _activeAudioSongId = _currentSong?.id;
         if (_position.inMilliseconds > 0) {
           await _audioPlayer.seek(_position);
@@ -4274,11 +4312,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                     tag: _currentSong!.id,
                   ),
                 )
-                .timeout(const Duration(seconds: 10));
+                .timeout(const Duration(seconds: 15));
           } else {
             await _audioPlayer
                 .setUrl(playUrl)
-                .timeout(const Duration(seconds: 10));
+                .timeout(const Duration(seconds: 15));
           }
         } else {
           final cacheDir = await getTemporaryDirectory();
@@ -4295,7 +4333,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
                   tag: _currentSong!.id,
                 ),
               )
-              .timeout(const Duration(seconds: 10));
+              .timeout(const Duration(seconds: 15));
         }
       }
       // Seek to the restored position after the source is loaded

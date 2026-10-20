@@ -92,7 +92,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     }
 
     try {
-      final req = await client.getUrl(Uri.parse(streamInfo.url));
+      final req = await client.getUrl(Uri.parse(streamInfo.url)).timeout(const Duration(seconds: 12));
       applyHeaders(req, streamInfo.headers);
 
       if (end != null) {
@@ -101,21 +101,21 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         req.headers.set('Range', 'bytes=$s-');
       }
 
-      final resp = await req.close();
+      final resp = await req.close().timeout(const Duration(seconds: 12));
 
       if (resp.statusCode == 403 || resp.statusCode == 410 || resp.statusCode == 429) {
         debugPrint('[YouTube] Stream rejected (${resp.statusCode}) for $cleanId, refreshing with forceRefresh...');
         await resp.drain<void>().catchError((_) {});
         _ytdlp.invalidateCache(cleanId);
         final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
-        final retryReq = await client.getUrl(Uri.parse(freshInfo.url));
+        final retryReq = await client.getUrl(Uri.parse(freshInfo.url)).timeout(const Duration(seconds: 12));
         applyHeaders(retryReq, freshInfo.headers);
         if (end != null) {
           retryReq.headers.set('Range', 'bytes=$s-$end');
         } else {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
-        final retryResp = await retryReq.close();
+        final retryResp = await retryReq.close().timeout(const Duration(seconds: 12));
         return _buildResponse(retryResp, s, freshInfo.ext);
       }
 
@@ -147,8 +147,11 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     }
     sourceLength ??= resp.contentLength >= 0 ? resp.contentLength + start : null;
 
+    final serverMime = resp.headers.contentType?.mimeType;
     final isWebm = (ext == 'webm' || ext == 'opus');
-    final type = isWebm ? 'audio/webm' : 'audio/mp4';
+    final type = (serverMime != null && serverMime.isNotEmpty)
+        ? serverMime
+        : (isWebm ? 'audio/webm' : 'audio/mp4');
 
     late StreamSubscription<List<int>> responseSubscription;
     late StreamController<List<int>> responseController;
@@ -223,6 +226,9 @@ class YoutubeService {
       // 1. Clean title and artist to strip suffixes like (Remastered...), [Official Audio], etc.
       String cleanTitle = song.title
           .replaceAll(RegExp(r'\s*[\(\[](?:remaster(?:ed)?|deluxe|version|explicit|radio edit|bonus track|official|audio|video|feat\.?|ft\.?).*?[\)\]]', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\s+feat\.?\s+.*', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\s+ft\.?\s+.*', caseSensitive: false), '')
+          .replaceAll(RegExp(r'\s+-\s+(?:single|ep|album)', caseSensitive: false), '')
           .replaceAll(RegExp(r'\s+'), ' ')
           .trim();
       if (cleanTitle.isEmpty) cleanTitle = song.title;
@@ -1235,7 +1241,18 @@ class YoutubeService {
 
   Future<List<Song>> getSimilarSongs(String videoId, {int count = 50}) async {
     try {
-      final cleanId = videoId.replaceFirst('ytmusic://', '');
+      var cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+      if (!RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+        final cached = _resolvedVideoIdCache[videoId];
+        if (cached != null && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cached)) {
+          cleanId = cached;
+        } else {
+          final dbResolved = await _db.getResolvedVideoId(videoId);
+          if (dbResolved != null && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(dbResolved)) {
+            cleanId = dbResolved;
+          }
+        }
+      }
       final radioRaw = await _ytdlp.getRadioTracks(cleanId, limit: count);
       if (radioRaw.isNotEmpty) {
         final songs = radioRaw.map(_mapDictToSong).toList();

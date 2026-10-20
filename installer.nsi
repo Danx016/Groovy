@@ -4,7 +4,7 @@
 ; Version (passed via /DGROOVY_VERSION=x.x.x from CI/script, or fallback)
 
 !ifndef GROOVY_VERSION
-  !define GROOVY_VERSION "1.9.3"
+  !define GROOVY_VERSION "1.9.4"
 !endif
 
 ;--------------------------------

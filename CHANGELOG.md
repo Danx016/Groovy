@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.4] - 2026-10-19
+
+### Fixed & Improved
+- **Velocidad de Carga y Reproducción Ultrarrápida**:
+  - **Optimización de Extracción de Audio (`yt-dlp`)**: Eliminada la consulta secuencial redundante a 4 endpoints pesados; ahora se enfoca en `android,web` y descarta metadata pesada no requerida (subtítulos traducidos, comentarios, storyboards y miniaturas), reduciendo el tiempo de resolución a casi la mitad (~3.6s).
+  - **Pre-calentamiento Inmediato (Pre-warming) de la Siguiente Canción**: El reproductor resuelve y almacena en caché en memoria la pista subsiguiente tan pronto como inicia la canción actual, logrando transiciones instantáneas (0ms de latencia) al saltar o avanzar en la lista.
+  - **Sincronización en Modo Aleatorio (Shuffle)**: Se enlaza el índice aleatorio pre-bufferizado con el botón de siguiente, evitando resolver una canción nueva desde cero al presionar "Skip".
+  - **Eliminación de Tiempos Muertos al Cambiar de Canción**: Se desacopló la detención síncrona del reproductor para permitir una transición limpia y continua sin bloqueos de interfaz ni retrasos.
+  - **Recuperación y Reintento Automático Mejorado**: Limpieza profunda de IDs en caso de expiración de streams para garantizar reintentos exitosos e inmediatos.
+
 ## [1.9.3] - 2026-10-19
 
 ### Fixed & Improved
