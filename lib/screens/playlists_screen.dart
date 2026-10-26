@@ -63,7 +63,7 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(
+            icon: Icon(
               CupertinoIcons.add,
               color: AppTheme.appleMusicRed,
               size: 24,
@@ -264,7 +264,7 @@ class _PlaylistTile extends StatelessWidget {
                 size: 56,
                 borderRadius: 8,
               )
-            : const Icon(
+            : Icon(
                 CupertinoIcons.music_note_list,
                 color: AppTheme.appleMusicRed,
                 size: 28,

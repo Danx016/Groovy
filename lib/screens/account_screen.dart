@@ -85,7 +85,7 @@ class AccountScreen extends StatelessWidget {
                   onPressed: () {
                     _showEditNameDialog(context, authProvider);
                   },
-                  child: const Text(
+                  child: Text(
                     'Editar',
                     style: TextStyle(
                       color: AppTheme.appleMusicRed,
@@ -141,7 +141,7 @@ class AccountScreen extends StatelessWidget {
           // 3. Suscripción
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
-            child: const Text(
+            child: Text(
               'Suscripción',
               style: TextStyle(
                 color: AppTheme.appleMusicRed,
@@ -330,10 +330,10 @@ class AccountScreen extends StatelessWidget {
                             ),
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(vertical: 6),
-                            enabledBorder: const UnderlineInputBorder(
+                            enabledBorder: UnderlineInputBorder(
                               borderSide: BorderSide(color: AppTheme.appleMusicRed, width: 1.5),
                             ),
-                            focusedBorder: const UnderlineInputBorder(
+                            focusedBorder: UnderlineInputBorder(
                               borderSide: BorderSide(color: AppTheme.appleMusicRed, width: 2.0),
                             ),
                           ),
@@ -360,7 +360,7 @@ class AccountScreen extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         minimumSize: Size.zero,
                       ),
-                      child: const Text(
+                      child: Text(
                         'Continuar',
                         style: TextStyle(
                           color: AppTheme.appleMusicRed,

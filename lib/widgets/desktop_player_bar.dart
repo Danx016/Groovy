@@ -289,9 +289,9 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                     return IconButton(
                       icon: GroovyConnectIcon(
                         size: 20,
-                        color: isConn ? AppTheme.appleMusicRed : iconColor,
+                        color: isConn ? theme.colorScheme.primary : iconColor,
                         isConnected: isConn,
-                        connectedColor: AppTheme.appleMusicRed,
+                        connectedColor: theme.colorScheme.primary,
                       ),
                       onPressed: () => GroovyConnectModal.show(context),
                       tooltip: 'Conectar a un dispositivo',
@@ -505,12 +505,12 @@ class _DesktopPlayerBarState extends State<DesktopPlayerBar> {
                       icon: GroovyDeviceConnectIcon(
                         size: 20,
                         color: isConn
-                            ? AppTheme.appleMusicRed
+                            ? theme.colorScheme.primary
                             : (isDark
                                 ? const Color(0xFFB3B3B3)
                                 : const Color(0xFF6B6B6B)),
                         isConnected: isConn,
-                        connectedColor: AppTheme.appleMusicRed,
+                        connectedColor: theme.colorScheme.primary,
                       ),
                       onPressed: () => GroovyConnectModal.show(context),
                       tooltip: 'Conectar a un dispositivo',

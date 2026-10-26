@@ -780,7 +780,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(
+                                Icon(
                                   Icons.speaker_phone_rounded,
                                   size: 11,
                                   color: AppTheme.appleMusicRed,
@@ -789,7 +789,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                 Flexible(
                                   child: Text(
                                     devName,
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.w600,
                                       color: AppTheme.appleMusicRed,
@@ -971,7 +971,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(
+                                        Icon(
                                           Icons.speaker_phone_rounded,
                                           size: 13,
                                           color: AppTheme.appleMusicRed,
@@ -980,7 +980,7 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                                         Flexible(
                                           child: Text(
                                             'Escuchando en $devName',
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               fontSize: 12,
                                               fontWeight: FontWeight.w600,
                                               color: AppTheme.appleMusicRed,

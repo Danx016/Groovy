@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.5] - 2026-10-26
+
+### Fixed & Improved
+- **Sincronización Total de Color de Apariencia**:
+  - Al cambiar el color de acento en Ajustes > Apariencia, toda la interfaz (pantallas, encabezados, barras de navegación móviles y de escritorio, mini reproductor, íconos de conexión y botones de acción) adopta de forma inmediata y global el color seleccionado.
+- **Reproducción Continua y Conteo de Segundos**:
+  - Corrección del temporizador de posición de audio en tiempo real para reflejar siempre los segundos exactos transcurridos.
+  - Eliminado el bucle de reinicio automático y saltos inesperados al terminar una pista, garantizando una transición impecable a la siguiente canción.
+
 ## [1.9.4] - 2026-10-19
 
 ### Fixed & Improved

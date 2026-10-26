@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../theme/app_theme.dart';
 import 'windows_title_bar_service.dart';
 
 enum AccentColor {
@@ -94,6 +95,7 @@ class ThemeService extends ChangeNotifier {
 
     final colorKey = prefs.getString(_keyAccentColor) ?? 'red';
     _accentColor = AccentColorExt.fromKey(colorKey);
+    AppTheme.appleMusicRed = _accentColor.color;
 
     _liquidGlass = prefs.getBool(_keyLiquidGlass) ?? false;
   }
@@ -113,6 +115,7 @@ class ThemeService extends ChangeNotifier {
 
   Future<void> setAccentColor(AccentColor color) async {
     _accentColor = color;
+    AppTheme.appleMusicRed = color.color;
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_keyAccentColor, color.persistKey);

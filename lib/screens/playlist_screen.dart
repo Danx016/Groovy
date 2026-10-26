@@ -482,7 +482,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                                     size: 150,
                                     borderRadius: 12,
                                   )
-                                : const Icon(
+                                : Icon(
                                     CupertinoIcons.music_note_list,
                                     color: AppTheme.appleMusicRed,
                                     size: 64,
@@ -629,7 +629,7 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                               size: 150,
                               borderRadius: 12,
                             )
-                          : const Icon(
+                          : Icon(
                               CupertinoIcons.music_note_list,
                               color: AppTheme.appleMusicRed,
                               size: 64,

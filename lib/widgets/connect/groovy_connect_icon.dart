@@ -7,20 +7,21 @@ class GroovyConnectIcon extends StatelessWidget {
   final double size;
   final Color? color;
   final bool isConnected;
-  final Color connectedColor;
+  final Color? connectedColor;
 
   const GroovyConnectIcon({
     super.key,
     this.size = 24.0,
     this.color,
     this.isConnected = false,
-    this.connectedColor = AppTheme.appleMusicRed,
+    this.connectedColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final effectiveConnectedColor = connectedColor ?? AppTheme.appleMusicRed;
     final effectiveColor = isConnected
-        ? connectedColor
+        ? effectiveConnectedColor
         : (color ?? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black));
 
     return CustomPaint(

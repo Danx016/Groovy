@@ -132,7 +132,7 @@ class LibrarySearchDelegate extends SearchDelegate<String> {
                 borderRadius: BorderRadius.circular(4),
                 color: AppTheme.appleMusicRed.withValues(alpha: 0.2),
               ),
-              child: const Icon(
+              child: Icon(
                 CupertinoIcons.music_note_list,
                 color: AppTheme.appleMusicRed,
               ),

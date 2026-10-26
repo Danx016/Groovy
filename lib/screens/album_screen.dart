@@ -895,7 +895,7 @@ class _AlbumScreenState extends State<AlbumScreen> {
   Widget _buildFallbackCover() {
     return Container(
       color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-      child: const Center(
+      child: Center(
         child: Icon(
           Icons.album_rounded,
           size: 26,
@@ -1469,7 +1469,7 @@ class _PlayButton extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppTheme.appleMusicRed,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

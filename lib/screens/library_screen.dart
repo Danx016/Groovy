@@ -141,7 +141,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             elevation: 0,
             actions: [
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Icons.playlist_add,
                   color: AppTheme.appleMusicRed,
                   size: 26,
@@ -150,7 +150,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 onPressed: () => _showCreatePlaylistDialog(context),
               ),
               PopupMenuButton<String>(
-                icon: const Icon(
+                icon: Icon(
                   CupertinoIcons.ellipsis_vertical,
                   color: AppTheme.appleMusicRed,
                   size: 22,
@@ -218,7 +218,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   ),
                   TextButton(
                     onPressed: () {},
-                    child: const Text(
+                    child: Text(
                       'Editar',
                       style: TextStyle(
                         color: AppTheme.appleMusicRed,

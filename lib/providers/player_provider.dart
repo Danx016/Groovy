@@ -1443,9 +1443,91 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
   ConcatenatingAudioSource? _concatenatingSource;
 
-  // Fallback timer for Windows where positionStream may not emit reliably
+  // Fallback timer for Windows/Linux where positionStream may not emit reliably
   Timer? _windowsPositionTimer;
   Duration? _lastPolledPosition;
+
+  bool _isSameSongId(String? a, String? b) {
+    if (a == null || b == null) return false;
+    if (a == b) return true;
+    final cleanA = a.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+    final cleanB = b.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
+    if (cleanA.isNotEmpty && cleanA == cleanB) return true;
+    if (cleanA.isNotEmpty && cleanB.isNotEmpty) {
+      if (cleanA.contains(cleanB) || cleanB.contains(cleanA)) return true;
+    }
+    return false;
+  }
+
+  void _manageDesktopPositionTimer() {
+    if (!Platform.isWindows && !Platform.isLinux) return;
+    if (_isRenderingRemotely || !_isPlaying) {
+      _windowsPositionTimer?.cancel();
+      _windowsPositionTimer = null;
+      _lastPolledPosition = null;
+      return;
+    }
+    if (_windowsPositionTimer != null && _windowsPositionTimer!.isActive) {
+      return;
+    }
+    _lastPolledPosition = null;
+    Duration? lastSystemUpdate;
+    _windowsPositionTimer = Timer.periodic(
+      const Duration(milliseconds: 50),
+      (_) {
+        if (!_isPlaying || _isRenderingRemotely) {
+          _windowsPositionTimer?.cancel();
+          _windowsPositionTimer = null;
+          _lastPolledPosition = null;
+          return;
+        }
+        final pos = _audioPlayer.position;
+        if (_lastPolledPosition == null ||
+            pos.inMilliseconds != _lastPolledPosition!.inMilliseconds) {
+          _lastPolledPosition = pos;
+          if (_currentSong != null &&
+              _activeAudioSongId != null &&
+              !_isSameSongId(_activeAudioSongId, _currentSong!.id)) {
+            return;
+          }
+          _position = pos;
+          _positionController.add(pos);
+          _checkAndPreloadNextSong(pos);
+          final effDur = _duration.inMilliseconds > 0
+              ? _duration
+              : (_currentSong?.duration != null
+                  ? Duration(seconds: _currentSong!.duration!)
+                  : Duration.zero);
+          if (!_isRenderingRemotely &&
+              _isPlaying &&
+              !_isTransitioningSong &&
+              _currentSong != null &&
+              _isSameSongId(_activeAudioSongId, _currentSong!.id) &&
+              effDur > const Duration(seconds: 5) &&
+              pos >= effDur - const Duration(milliseconds: 300)) {
+            final recentPause = _lastUserPauseTime != null &&
+                DateTime.now().difference(_lastUserPauseTime!) <
+                    const Duration(milliseconds: 2000);
+            if (!recentPause &&
+                _currentSong != null &&
+                _lastCompletedSongId != _currentSong!.id) {
+              _lastCompletedSongId = _currentSong!.id;
+              debugPrint(
+                  '[Player Desktop] ✓ Position reached end of track: "${_currentSong?.title}" — advancing automatically');
+              _onSongComplete().catchError((e) =>
+                  debugPrint('[Player] _onSongComplete error: $e'));
+            }
+          }
+          if (lastSystemUpdate == null ||
+              (pos.inMilliseconds - lastSystemUpdate!.inMilliseconds).abs() >
+                  1000) {
+            lastSystemUpdate = pos;
+            _updateAllServices();
+          }
+        }
+      },
+    );
+  }
 
   // Preloading state: tracks the last preloaded song ID to avoid redundant work
   String? _lastPreloadedSongId;
@@ -1855,73 +1937,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint(
               '[Player] ${_isPlaying ? '▶ Playing' : '⏸ Paused'} — "${_currentSong?.title ?? 'unknown'}" (${state.processingState.name})');
           _sendTelemetryHeartbeat(overridePlaying: _isPlaying);
-
-          // Start/stop desktop position polling timer (Windows and Linux both use just_audio_media_kit)
-          if (_isPlaying &&
-              (Platform.isWindows || Platform.isLinux) &&
-              !_isRenderingRemotely) {
-            _windowsPositionTimer?.cancel();
-            _lastPolledPosition = null;
-            Duration? lastSystemUpdate;
-            _windowsPositionTimer = Timer.periodic(
-              const Duration(milliseconds: 50),
-              (_) {
-                final pos = _audioPlayer.position;
-                if (_lastPolledPosition == null ||
-                    pos.inMilliseconds != _lastPolledPosition!.inMilliseconds) {
-                  _lastPolledPosition = pos;
-                  if (_activeAudioSongId != null &&
-                      _currentSong != null &&
-                      _activeAudioSongId != _currentSong!.id &&
-                      !_activeAudioSongId!.contains(_currentSong!.id) &&
-                      !_currentSong!.id.contains(_activeAudioSongId!)) {
-                    return;
-                  }
-                  _position = pos;
-                  _positionController.add(pos);
-                  _checkAndPreloadNextSong(pos);
-                  final effDur = _duration.inMilliseconds > 0
-                      ? _duration
-                      : (_currentSong?.duration != null
-                          ? Duration(seconds: _currentSong!.duration!)
-                          : Duration.zero);
-                  if (!_isRenderingRemotely &&
-                      _isPlaying &&
-                      !_isTransitioningSong &&
-                      _activeAudioSongId == _currentSong?.id &&
-                      effDur > const Duration(seconds: 5) &&
-                      pos >= effDur - const Duration(milliseconds: 250)) {
-                    // Guard: don't auto-complete if the user just pressed pause
-                    // (race condition where timer fires at same instant as pause tap)
-                    final recentPause = _lastUserPauseTime != null &&
-                        DateTime.now().difference(_lastUserPauseTime!) <
-                            const Duration(milliseconds: 2000);
-                    if (!recentPause &&
-                        _currentSong != null &&
-                        _lastCompletedSongId != _currentSong!.id) {
-                      _lastCompletedSongId = _currentSong!.id;
-                      debugPrint(
-                          '[Player Desktop] ✓ Position reached end of track: "${_currentSong?.title}" — advancing automatically');
-                      _onSongComplete().catchError((e) =>
-                          debugPrint('[Player] _onSongComplete error: $e'));
-                    }
-                  }
-                  if (lastSystemUpdate == null ||
-                      (pos.inMilliseconds - lastSystemUpdate!.inMilliseconds)
-                              .abs() >
-                          1000) {
-                    lastSystemUpdate = pos;
-                    _updateAllServices();
-                  }
-                }
-              },
-            );
-          } else {
-            _windowsPositionTimer?.cancel();
-            _windowsPositionTimer = null;
-            _lastPolledPosition = null;
-          }
         }
+
+        // Manage desktop position polling timer (Windows and Linux)
+        _manageDesktopPositionTimer();
 
         final bool userExplicitlyPaused = _lastUserPauseTime != null &&
             DateTime.now().difference(_lastUserPauseTime!) <
@@ -1943,11 +1962,17 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             isNearTrackEnd &&
             !userExplicitlyPaused);
 
+        final bool songMatches = _currentSong != null &&
+            (_activeAudioSongId == null ||
+             _isSameSongId(_activeAudioSongId, _currentSong!.id));
+
         final bool isGenuineTrackEnd = hasValidDuration
-            ? (_position >= effDur - const Duration(seconds: 3) && _position > const Duration(seconds: 2))
+            ? (_position >= effDur - const Duration(seconds: 12) ||
+               _position.inMilliseconds >= (effDur.inMilliseconds * 0.80) ||
+               _position <= const Duration(seconds: 2))
             : (_position > const Duration(seconds: 15));
 
-        if (_activeAudioSongId == _currentSong?.id &&
+        if (songMatches &&
             ((state.processingState == ProcessingState.completed &&
                 isGenuineTrackEnd) ||
             naturalTrackEnd)) {
@@ -1964,10 +1989,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _currentSong != null &&
             !userExplicitlyPaused &&
             _isPlaying &&
-            wasPlaying) {
-          // Premature EOF due to network/proxy chunk boundary in middle of track: auto-recover without restarting to 0
+            wasPlaying &&
+            !_hasRetriedCurrentPlay &&
+            _position > const Duration(seconds: 5)) {
+          _hasRetriedCurrentPlay = true;
+          // Premature EOF due to network/proxy chunk boundary in middle of track: auto-recover once without looping
           debugPrint(
-              '[Player] ⚠️ Premature stream EOF at $_position of $effDur for "${_currentSong?.title}". Auto-recovering playback...');
+              '[Player] ⚠️ Premature stream EOF at $_position of $effDur for "${_currentSong?.title}". Auto-recovering playback once...');
           final resumePos = _position;
           final songToResume = _currentSong;
           Future.microtask(() async {
@@ -1984,6 +2012,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
               }
             }
           });
+        } else if (state.processingState == ProcessingState.completed && songMatches) {
+          // Fallback: If completed and retry was already attempted or position didn't trigger above,
+          // advance to next song instead of getting trapped in a restart loop!
+          if (_currentSong != null && _lastCompletedSongId != _currentSong!.id) {
+            _lastCompletedSongId = _currentSong!.id;
+            debugPrint(
+                '[Player] ✓ Song completed (fallback completion): "${_currentSong?.title ?? 'unknown'}"');
+            _onSongComplete().catchError(
+                (e) => debugPrint('[Player] _onSongComplete error: $e'));
+          }
         }
 
         if (state.processingState == ProcessingState.buffering && !wasPlaying) {
@@ -2014,7 +2052,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (_isRenderingRemotely) return;
         if (_activeAudioSongId != null &&
             _currentSong != null &&
-            _activeAudioSongId != _currentSong!.id) {
+            !_isSameSongId(_activeAudioSongId, _currentSong!.id)) {
           return;
         }
 
@@ -2030,9 +2068,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (!_isRenderingRemotely &&
             _isPlaying &&
             !_isTransitioningSong &&
-            _activeAudioSongId == _currentSong?.id &&
+            _currentSong != null &&
+            _isSameSongId(_activeAudioSongId, _currentSong!.id) &&
             effDur > const Duration(seconds: 5) &&
-            position >= effDur - const Duration(milliseconds: 250)) {
+            position >= effDur - const Duration(milliseconds: 300)) {
           if (_currentSong != null &&
               _lastCompletedSongId != _currentSong!.id) {
             _lastCompletedSongId = _currentSong!.id;
@@ -2315,7 +2354,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       final nextSong = _queue[nextIndex];
       _currentIndex = nextIndex;
       _currentSong = nextSong;
+      _activeAudioSongId = nextSong.id;
       _position = Duration.zero;
+      _positionController.add(Duration.zero);
       _duration = nextSong.duration != null
           ? Duration(seconds: nextSong.duration!)
           : Duration.zero;
@@ -2330,7 +2371,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       }
 
       // Reset previous playback away from completed to prevent duplicate completion events
-      _activeAudioSongId = null;
+      _activeAudioSongId = nextSong.id;
       try {
         await _audioPlayer.stop();
       } catch (_) {}
@@ -2559,11 +2600,14 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     }
 
     _currentSong = song;
+    _activeAudioSongId = song.id;
     _lastCompletedSongId = null;
     _lastPreloadedSongId = null;
     _resolvedArtworkUrl = null;
     _resolvedArtworkSongId = null;
     _position = initialPosition ?? Duration.zero;
+    _positionController.add(_position);
+    _manageDesktopPositionTimer();
     if (song.duration != null && song.duration! > 0) {
       _duration = Duration(seconds: song.duration!);
     } else {
@@ -2670,6 +2714,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             song = updatedSong;
             if (_currentSong?.id == oldId || _currentSong?.id == updatedSong.id) {
               _currentSong = updatedSong;
+              _activeAudioSongId = updatedSong.id;
               notifyListeners();
             }
           }
@@ -2825,6 +2870,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _isPlaying = true;
           _isLoading = false;
           _loadingWatchdogTimer?.cancel();
+          _manageDesktopPositionTimer();
           notifyListeners();
 
           // Re-enforce volume shortly after play begins so libmpv/audio device never remains at volume 0
@@ -2891,6 +2937,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _isPlaying = true;
           _isLoading = false;
           _loadingWatchdogTimer?.cancel();
+          _manageDesktopPositionTimer();
           notifyListeners();
 
           // Re-enforce volume shortly after play begins
@@ -3285,6 +3332,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           debugPrint('[Player] Error during play(): $e');
         }));
       });
+      _manageDesktopPositionTimer();
     }
   }
 
@@ -3591,6 +3639,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentIndex = next;
       _currentSong = _queue[next];
       _position = Duration.zero;
+      _positionController.add(Duration.zero);
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
           : Duration.zero;
@@ -3610,6 +3659,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentIndex = nextIndex;
       _currentSong = _queue[nextIndex];
       _position = Duration.zero;
+      _positionController.add(Duration.zero);
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
           : Duration.zero;
@@ -3843,6 +3893,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _currentIndex = prev;
         _currentSong = _queue[prev];
         _position = Duration.zero;
+        _positionController.add(Duration.zero);
         _duration = _currentSong!.duration != null
             ? Duration(seconds: _currentSong!.duration!)
             : Duration.zero;
@@ -3865,6 +3916,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentIndex = prevIndex;
       _currentSong = _queue[prevIndex];
       _position = Duration.zero;
+      _positionController.add(Duration.zero);
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
           : Duration.zero;

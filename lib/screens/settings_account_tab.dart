@@ -67,7 +67,7 @@ class _SettingsAccountTabState extends State<SettingsAccountTab> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(
+                    icon: Icon(
                       CupertinoIcons.pencil_circle_fill,
                       color: AppTheme.appleMusicRed,
                       size: 30,

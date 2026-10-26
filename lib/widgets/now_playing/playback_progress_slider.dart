@@ -111,7 +111,11 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
   @override
   void didUpdateWidget(PlaybackProgressSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.positionStream == null && widget.position != oldWidget.position && !_isDragging) {
+    if (!_isDragging &&
+        (widget.positionStream == null ||
+         widget.position == Duration.zero ||
+         oldWidget.duration != widget.duration ||
+         (widget.position - _currentPosition).abs() > const Duration(seconds: 2))) {
       _currentPosition = widget.position;
     }
     if (widget.positionStream != oldWidget.positionStream) {

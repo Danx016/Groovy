@@ -242,7 +242,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
             actions: [
               if (_downloadedSongs.isNotEmpty && _selectedTab == 0)
                 IconButton(
-                  icon: const Icon(
+                  icon: Icon(
                     CupertinoIcons.shuffle,
                     color: AppTheme.appleMusicRed,
                     size: 22,
@@ -359,7 +359,7 @@ class _DownloadsScreenState extends State<DownloadsScreen> {
 
           // 6. Content Section
           if (_isLoading)
-            const SliverFillRemaining(
+            SliverFillRemaining(
               hasScrollBody: false,
               child: Center(
                 child: CircularProgressIndicator(color: AppTheme.appleMusicRed),

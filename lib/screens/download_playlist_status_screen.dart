@@ -56,7 +56,7 @@ class DownloadPlaylistStatusScreen extends StatelessWidget {
                           size: 48,
                           borderRadius: 8,
                         )
-                      : const Icon(
+                      : Icon(
                           CupertinoIcons.music_note_list,
                           color: AppTheme.appleMusicRed,
                           size: 24,

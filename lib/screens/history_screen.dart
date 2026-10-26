@@ -427,7 +427,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   shape: BoxShape.circle,
                   color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
                 ),
-                child: const Icon(
+                child: Icon(
                   CupertinoIcons.clock_fill,
                   size: 40,
                   color: AppTheme.appleMusicRed,
@@ -496,7 +496,7 @@ class _PlayButton extends StatelessWidget {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppTheme.appleMusicRed,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,

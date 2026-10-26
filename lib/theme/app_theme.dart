@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 
 class AppTheme {
-  static const Color appleMusicRed = Color(0xFFFA243C);
+  static Color appleMusicRed = const Color(0xFFFA243C);
   static const Color appleMusicPink = Color(0xFFFC5C65);
 
   static const Color spotifyGreen = Color(0xFF1DB954);

@@ -82,7 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             actions: [
               PopupMenuButton<String>(
-                icon: const Icon(
+                icon: Icon(
                   CupertinoIcons.ellipsis_vertical,
                   color: AppTheme.appleMusicRed,
                   size: 22,
@@ -719,7 +719,7 @@ class _DesktopSongCardState extends State<_DesktopSongCard> {
                           bottom: 8,
                           right: 8,
                           child: Container(
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               color: AppTheme.appleMusicRed,
                               shape: BoxShape.circle,
                             ),

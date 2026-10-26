@@ -166,7 +166,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                     ),
                     child: Text(
                       '${displayed.length}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: AppTheme.appleMusicRed,
@@ -373,7 +373,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
             ),
           ),
           if (isSelected)
-            const Icon(
+            Icon(
               CupertinoIcons.checkmark_alt,
               size: 16,
               color: AppTheme.appleMusicRed,
@@ -467,7 +467,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 shape: BoxShape.circle,
                 color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7),
               ),
-              child: const Icon(
+              child: Icon(
                 CupertinoIcons.music_albums,
                 size: 38,
                 color: AppTheme.appleMusicRed,
@@ -510,7 +510,7 @@ class _AlbumsScreenState extends State<AlbumsScreen> {
                 label: const Text('Restablecer filtros'),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.appleMusicRed,
-                  side: const BorderSide(color: AppTheme.appleMusicRed),
+                  side: BorderSide(color: AppTheme.appleMusicRed),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),

@@ -416,8 +416,9 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accentColor = Theme.of(context).colorScheme.primary;
     final textColor = isSelected
-        ? (isDark ? Colors.white : Colors.black)
+        ? accentColor
         : (isDark ? const Color(0xFFB3B3B3) : const Color(0xFF6B6B6B));
     final hoverBg = isDark
         ? Colors.white.withValues(alpha: 0.07)

@@ -110,8 +110,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('¡Perfil actualizado con éxito!'),
+        SnackBar(
+          content: const Text('¡Perfil actualizado con éxito!'),
           backgroundColor: AppTheme.appleMusicRed,
           behavior: SnackBarBehavior.floating,
         ),
@@ -314,7 +314,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             width: 1.0,
                           ),
                         ),
-                        focusedBorder: const UnderlineInputBorder(
+                        focusedBorder: UnderlineInputBorder(
                           borderSide: BorderSide(
                             color: AppTheme.appleMusicRed,
                             width: 1.8,
@@ -350,7 +350,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             width: 1.0,
                           ),
                         ),
-                        focusedBorder: const UnderlineInputBorder(
+                        focusedBorder: UnderlineInputBorder(
                           borderSide: BorderSide(
                             color: AppTheme.appleMusicRed,
                             width: 1.8,
@@ -380,7 +380,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ),
                   child: _isLoading
-                      ? const SizedBox(
+                      ? SizedBox(
                           width: 22,
                           height: 22,
                           child: CircularProgressIndicator(

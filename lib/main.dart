@@ -550,8 +550,8 @@ class AuthWrapper extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
 
     if (authProvider.isInitialLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF0C0D10),
+      return Scaffold(
+        backgroundColor: const Color(0xFF0C0D10),
         body: Center(
           child: CircularProgressIndicator(
             color: AppTheme.appleMusicRed,

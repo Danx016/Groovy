@@ -267,7 +267,7 @@ class _MiniPlayerRow extends StatelessWidget {
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.speaker_phone_rounded,
                             size: 13,
                             color: AppTheme.appleMusicRed,
@@ -276,7 +276,7 @@ class _MiniPlayerRow extends StatelessWidget {
                           Flexible(
                             child: Text(
                               remoteDeviceName,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: AppTheme.appleMusicRed,
