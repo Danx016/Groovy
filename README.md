@@ -36,6 +36,18 @@
 
 ---
 
+## 🏛️ Architecture
+
+Groovy is built following the **Hexagonal Architecture (Ports and Adapters)** pattern to ensure strict separation between core business logic and external infrastructure drivers:
+
+<p align="center">
+  <img src="docs/architecture/hexagonal_architecture.png" alt="Groovy Hexagonal Architecture" width="750"/>
+</p>
+
+For comprehensive technical breakdown and layer mapping, see [HEXAGONAL_ARCHITECTURE.md](docs/architecture/HEXAGONAL_ARCHITECTURE.md).
+
+---
+
 ## 🚀 Getting Started
 
 ### Prerequisites
