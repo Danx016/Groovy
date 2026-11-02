@@ -83,7 +83,7 @@ void main() {
     // ──────────────────────────────────────────────────────────────────────────
     test('📱 [Android] Streaming con ExoPlayer vía StreamAudioSource y Chunks HTTP 206', () async {
       print('\n--- PRUEBA ANDROID: ExoPlayer StreamAudioSource Chunks ---');
-      const testVideoId = 'kffacxfA7G4'; // Justin Bieber - Baby
+      const testVideoId = 'dQw4w9WgXcQ'; // Rick Astley - Never Gonna Give You Up
       
       final streamAudioSource = await youtubeService.buildAudioSource(testVideoId);
       expect(streamAudioSource, isNotNull);

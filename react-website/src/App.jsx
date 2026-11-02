@@ -5,6 +5,7 @@ import { LandingDownloadPage } from './components/views/LandingDownloadPage';
 import { PublicSite } from './components/views/PublicSite';
 
 import { DownloaderView } from './components/views/DownloaderView';
+import { TrackLandingView } from './components/views/TrackLandingView';
 
 /* Global layout + responsive styles */
 const layoutStyles = `
@@ -54,6 +55,13 @@ function MainApp() {
     return downloadHashes.some(dh => h.toLowerCase().startsWith(dh));
   };
 
+  const isMediaLandingRoute = (h, p) => {
+    return (
+      p.includes('/track/') || p.includes('/song/') || p.includes('/album/') || p.includes('/artist/') ||
+      h.includes('#track/') || h.includes('#song/') || h.includes('#album/') || h.includes('#artist/')
+    );
+  };
+
   const [currentRoute, setCurrentRoute] = useState(() => {
     const p = window.location.pathname;
     const h = window.location.hash;
@@ -61,6 +69,7 @@ function MainApp() {
     if (p.startsWith('/admin') || h === '#admin' || s.includes('admin=true')) return 'admin';
     if (isDownloaderRoute(h, p, s)) return 'downloader';
     if (isDownloadRoute(h, p, s)) return 'download';
+    if (isMediaLandingRoute(h, p)) return 'track';
     return 'public';
   });
 
@@ -75,6 +84,8 @@ function MainApp() {
         setCurrentRoute('downloader');
       } else if (isDownloadRoute(h, p, s)) {
         setCurrentRoute('download');
+      } else if (isMediaLandingRoute(h, p)) {
+        setCurrentRoute('track');
       } else {
         setCurrentRoute('public');
       }
@@ -130,6 +141,19 @@ function MainApp() {
         onOpenAdmin={() => {
           window.location.hash = 'admin';
           setCurrentRoute('admin');
+        }}
+      />
+    );
+  }
+
+  // 4. If visiting Shared Track Landing (Spotify style):
+  if (currentRoute === 'track') {
+    return (
+      <TrackLandingView
+        onBack={() => {
+          window.location.hash = '';
+          window.history.pushState({}, '', '/');
+          setCurrentRoute('public');
         }}
       />
     );

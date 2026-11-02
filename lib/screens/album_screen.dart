@@ -726,7 +726,19 @@ class _AlbumScreenState extends State<AlbumScreen> {
                   },
                 ),
 
-                // 3. Añadir a la cola
+                // 3. Compartir álbum
+                _buildMoreMenuItem(
+                  icon: CupertinoIcons.share,
+                  title: 'Compartir álbum',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    DeepLinkService.shareAlbum(context, _album!);
+                  },
+                ),
+
+                // 3b. Añadir a la cola
                 _buildMoreMenuItem(
                   icon: Icons.queue_music_rounded,
                   title: 'Añadir a la cola',

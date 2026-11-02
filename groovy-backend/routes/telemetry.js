@@ -111,7 +111,7 @@ router.get('/playback', authenticateToken, async (req, res) => {
       FROM user_live_playback
       WHERE user_id = ?
         AND LOWER(platform) NOT IN ('web', 'browser')
-        AND last_ping_at >= NOW() - INTERVAL 60 SECOND
+        AND last_ping_at >= NOW() - INTERVAL 120 SECOND
         AND (? = '' OR device_key != ?)
       ORDER BY last_ping_at DESC
     `, [userId, callerDeviceId, callerDeviceId]);
@@ -504,10 +504,10 @@ router.post('/playback', async (req, res) => {
       localPort || 42425,
     ]);
 
-    // Cleanup stale live sessions older than 120 seconds
-    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 120 SECOND').catch(() => {});
+    // Cleanup stale live sessions older than 300 seconds
+    pool.query('DELETE FROM user_live_playback WHERE last_ping_at < NOW() - INTERVAL 300 SECOND').catch(() => {});
 
-    // Purge only stale ghost/fallback rows for the same user and platform that have not pinged in > 25 seconds
+    // Purge only stale ghost/fallback rows for the same user and platform that have not pinged in > 180 seconds
     if (deviceId && dbUserId && resolvedPlatform) {
       pool.query(`
         DELETE FROM user_live_playback
@@ -515,7 +515,7 @@ router.post('/playback', async (req, res) => {
           AND device_key != ?
           AND LOWER(platform) = LOWER(?)
           AND (LOWER(device_name) = LOWER(?) OR LOWER(device_model) = LOWER(?))
-          AND last_ping_at < NOW() - INTERVAL 25 SECOND
+          AND last_ping_at < NOW() - INTERVAL 180 SECOND
       `, [dbUserId, deviceKey, resolvedPlatform, resolvedDevice, client.deviceModel || '']).catch(() => {});
     }
 

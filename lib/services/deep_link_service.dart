@@ -7,6 +7,10 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:win32_registry/win32_registry.dart';
 import '../models/song.dart';
+import '../models/album.dart';
+import '../models/artist.dart';
+import '../screens/album_screen.dart';
+import '../screens/artist_screen.dart';
 import '../providers/player_provider.dart';
 import '../providers/library_provider.dart';
 import '../services/ytdlp_service.dart';
@@ -133,18 +137,189 @@ class DeepLinkService {
     return null;
   }
 
-  /// Handles incoming URI and plays the track
+  /// Extracts album ID from:
+  /// - groovy://album/{id}
+  /// - https://groovyapi.duckdns.org/album/{id}
+  String? extractAlbumId(Uri uri) {
+    if (uri.scheme.toLowerCase() == 'groovy') {
+      final host = uri.host.toLowerCase();
+      if (host == 'album') {
+        if (uri.pathSegments.isNotEmpty) {
+          return uri.pathSegments.first;
+        }
+        if (uri.queryParameters.containsKey('id')) {
+          return uri.queryParameters['id'];
+        }
+      }
+      if (uri.pathSegments.contains('album')) {
+        final idx = uri.pathSegments.indexOf('album');
+        if (idx + 1 < uri.pathSegments.length) {
+          return uri.pathSegments[idx + 1];
+        }
+      }
+    }
+
+    final pathSegments = uri.pathSegments;
+    if (pathSegments.contains('album')) {
+      final idx = pathSegments.indexOf('album');
+      if (idx + 1 < pathSegments.length) {
+        return pathSegments[idx + 1];
+      }
+    }
+    return null;
+  }
+
+  /// Extracts artist ID from:
+  /// - groovy://artist/{id}
+  /// - https://groovyapi.duckdns.org/artist/{id}
+  String? extractArtistId(Uri uri) {
+    if (uri.scheme.toLowerCase() == 'groovy') {
+      final host = uri.host.toLowerCase();
+      if (host == 'artist') {
+        if (uri.pathSegments.isNotEmpty) {
+          return uri.pathSegments.first;
+        }
+        if (uri.queryParameters.containsKey('id')) {
+          return uri.queryParameters['id'];
+        }
+      }
+      if (uri.pathSegments.contains('artist')) {
+        final idx = uri.pathSegments.indexOf('artist');
+        if (idx + 1 < uri.pathSegments.length) {
+          return uri.pathSegments[idx + 1];
+        }
+      }
+    }
+
+    final pathSegments = uri.pathSegments;
+    if (pathSegments.contains('artist')) {
+      final idx = pathSegments.indexOf('artist');
+      if (idx + 1 < pathSegments.length) {
+        return pathSegments[idx + 1];
+      }
+    }
+    return null;
+  }
+
+  /// Handles incoming URI: dispatches to song, album, or artist
   Future<void> handleUri(Uri uri) async {
-    final trackId = extractTrackId(uri);
-    if (trackId == null || trackId.isEmpty) {
-      debugPrint('[DeepLinkService] ⚠️ Could not extract valid trackId from $uri');
+    // 1. Check if it's an album link
+    final albumId = extractAlbumId(uri);
+    if (albumId != null && albumId.isNotEmpty) {
+      final title = uri.queryParameters['title'] ?? uri.queryParameters['name'];
+      final artist = uri.queryParameters['artist'];
+      final cover = uri.queryParameters['cover'] ?? uri.queryParameters['image'];
+      final yearStr = uri.queryParameters['year'];
+      final year = yearStr != null ? int.tryParse(yearStr) : null;
+      await openAlbumById(albumId, title: title, artist: artist, cover: cover, year: year);
       return;
     }
-    await playTrackById(trackId);
+
+    // 2. Check if it's an artist link
+    final artistId = extractArtistId(uri);
+    if (artistId != null && artistId.isNotEmpty) {
+      final name = uri.queryParameters['name'] ?? uri.queryParameters['title'];
+      final image = uri.queryParameters['image'] ?? uri.queryParameters['cover'];
+      await openArtistById(artistId, name: name, image: image);
+      return;
+    }
+
+    // 3. Otherwise treat as a song/track
+    final trackId = extractTrackId(uri);
+    if (trackId != null && trackId.isNotEmpty) {
+      final title = uri.queryParameters['title'];
+      final artist = uri.queryParameters['artist'];
+      await playTrackById(trackId, title: title, artist: artist);
+      return;
+    }
+
+    debugPrint('[DeepLinkService] ⚠️ Could not extract recognizable content from $uri');
+  }
+
+  /// Opens an album in AlbumScreen
+  Future<void> openAlbumById(
+    String albumId, {
+    String? title,
+    String? artist,
+    String? cover,
+    int? year,
+  }) async {
+    final cleanId = albumId.trim();
+    if (cleanId.isEmpty) return;
+
+    Album? album;
+    final library = _libraryProvider;
+    if (library != null) {
+      final matches = library.cachedAllAlbums.where((a) => a.id == cleanId);
+      if (matches.isNotEmpty) {
+        album = matches.first;
+      }
+    }
+
+    album ??= Album(
+      id: cleanId,
+      name: (title != null && title.isNotEmpty) ? title : 'Álbum',
+      artist: artist,
+      coverArt: cover,
+      year: year,
+    );
+
+    debugPrint('[DeepLinkService] 💿 Opening album from deep link: ${album.name} ($cleanId)');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navState = NavigationHelper.navigatorKey.currentState;
+      if (navState != null) {
+        navState.push(
+          MaterialPageRoute(
+            builder: (_) => AlbumScreen(albumId: cleanId, album: album),
+          ),
+        );
+      }
+    });
+  }
+
+  /// Opens an artist in ArtistScreen
+  Future<void> openArtistById(
+    String artistId, {
+    String? name,
+    String? image,
+  }) async {
+    final cleanId = artistId.trim();
+    if (cleanId.isEmpty) return;
+
+    Artist? artist;
+    final library = _libraryProvider;
+    if (library != null) {
+      final matches = library.artists.where(
+        (a) => a.id == cleanId || (name != null && a.name.toLowerCase() == name.toLowerCase()),
+      );
+      if (matches.isNotEmpty) {
+        artist = matches.first;
+      }
+    }
+
+    artist ??= Artist(
+      id: cleanId,
+      name: (name != null && name.isNotEmpty) ? name : 'Artista',
+      artistImageUrl: image,
+    );
+
+    debugPrint('[DeepLinkService] 🎤 Opening artist from deep link: ${artist.name} ($cleanId)');
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final navState = NavigationHelper.navigatorKey.currentState;
+      if (navState != null) {
+        navState.push(
+          MaterialPageRoute(
+            builder: (_) => ArtistScreen(artistId: cleanId, artist: artist),
+          ),
+        );
+      }
+    });
   }
 
   /// Resolves track information and requests playback
-  Future<void> playTrackById(String trackId) async {
+  Future<void> playTrackById(String trackId, {String? title, String? artist}) async {
     final cleanId = trackId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
     if (cleanId.isEmpty) return;
 
@@ -168,7 +343,17 @@ class DeepLinkService {
       }
     }
 
-    // 2. If not cached, fetch online metadata using YtDlpService
+    // 2. If title is passed via deep link parameters, instantiate immediately for instant playback
+    if (song == null && title != null && title.isNotEmpty) {
+      song = Song(
+        id: cleanId,
+        title: title,
+        artist: (artist != null && artist.isNotEmpty) ? artist : 'Groovy',
+        coverArt: cleanId,
+      );
+    }
+
+    // 3. If not cached, fetch online metadata using YtDlpService
     if (song == null) {
       try {
         final videoInfo = await YtDlpService().getVideoInfo(cleanId);
@@ -195,10 +380,10 @@ class DeepLinkService {
       coverArt: cleanId,
     );
 
-    // 3. Start playback
+    // 4. Start playback
     await player.playSong(song, forcePlay: true);
 
-    // 4. Show friendly notification toast
+    // 5. Show friendly notification toast
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final ctx = NavigationHelper.navigatorKey.currentContext;
       if (ctx != null && ctx.mounted) {
@@ -210,7 +395,7 @@ class DeepLinkService {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Reproduciendo enlace: "${song!.title}"',
+                    'Reproduciendo: "${song!.title}"',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600),
@@ -230,7 +415,15 @@ class DeepLinkService {
   /// Builds a universal web URL: https://groovyapi.duckdns.org/track/{id}
   static String buildShareUrl(Song song) {
     final cleanId = song.id.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
-    return 'https://groovyapi.duckdns.org/track/$cleanId';
+    final params = <String, String>{};
+    if (song.title.isNotEmpty) params['title'] = song.title;
+    if (song.artist != null && song.artist!.isNotEmpty) params['artist'] = song.artist!;
+    if (song.album != null && song.album!.isNotEmpty) params['album'] = song.album!;
+    if (song.coverArt != null && song.coverArt!.startsWith('http')) {
+      params['cover'] = song.coverArt!;
+    }
+    final query = Uri(queryParameters: params).query;
+    return 'https://groovyapi.duckdns.org/track/$cleanId${query.isNotEmpty ? "?$query" : ""}';
   }
 
   /// Builds a native deep link URL: groovy://track/{id}
@@ -239,23 +432,19 @@ class DeepLinkService {
     return 'groovy://track/$cleanId';
   }
 
-  /// Copies URL to clipboard and triggers the OS share sheet
+  /// Copies URL to clipboard and triggers the OS share sheet (Spotify style: single clean link)
   static Future<void> shareSong(BuildContext context, Song song) async {
     final shareUrl = buildShareUrl(song);
-    final groovyUrl = buildGroovySchemeUrl(song);
     final title = song.title;
-    final artist = song.artist ?? 'Groovy';
+    final artist = (song.artist != null && song.artist!.isNotEmpty) ? song.artist! : 'Groovy';
 
-    final shareText = '🎵 Escucha "$title" de $artist en Groovy:\n$shareUrl\n(O abre en la app: $groovyUrl)';
-
-    // Copy to clipboard
+    // Spotify style: sending only the URL allows WhatsApp/Telegram to render the full rich preview card
     await Clipboard.setData(ClipboardData(text: shareUrl));
 
-    // Open system share sheet
     try {
       await SharePlus.instance.share(
         ShareParams(
-          text: shareText,
+          text: shareUrl,
           subject: '$title - $artist',
         ),
       );
@@ -273,6 +462,117 @@ class DeepLinkService {
               Expanded(
                 child: Text(
                   'Enlace copiado al portapapeles: $shareUrl',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// Builds an album web URL: https://groovyapi.duckdns.org/album/{id}
+  static String buildAlbumShareUrl(Album album) {
+    final cleanId = album.id.trim();
+    final params = <String, String>{};
+    if (album.name.isNotEmpty) params['title'] = album.name;
+    if (album.artist != null && album.artist!.isNotEmpty) params['artist'] = album.artist!;
+    if (album.year != null && album.year! > 0) params['year'] = album.year.toString();
+    if (album.coverArt != null && album.coverArt!.startsWith('http')) {
+      params['cover'] = album.coverArt!;
+    }
+    final query = Uri(queryParameters: params).query;
+    return 'https://groovyapi.duckdns.org/album/$cleanId${query.isNotEmpty ? "?$query" : ""}';
+  }
+
+  /// Copies album URL to clipboard and triggers the OS share sheet (Spotify style)
+  static Future<void> shareAlbum(BuildContext context, Album album) async {
+    final shareUrl = buildAlbumShareUrl(album);
+    final title = album.name;
+    final artist = (album.artist != null && album.artist!.isNotEmpty) ? album.artist! : 'Groovy';
+
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: shareUrl,
+          subject: '$title - $artist',
+        ),
+      );
+    } catch (e) {
+      debugPrint('[DeepLinkService] Share album note: $e');
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.album_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Enlace del álbum copiado al portapapeles: $shareUrl',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: const Color(0xFF2E7D32),
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  /// Builds an artist web URL: https://groovyapi.duckdns.org/artist/{id}
+  static String buildArtistShareUrl(Artist artist, {String? imageUrl}) {
+    final cleanId = artist.id.trim();
+    final params = <String, String>{};
+    if (artist.name.isNotEmpty) params['name'] = artist.name;
+    final img = imageUrl ?? artist.artistImageUrl ?? artist.coverArt;
+    if (img != null && img.startsWith('http')) {
+      params['image'] = img;
+    }
+    final query = Uri(queryParameters: params).query;
+    return 'https://groovyapi.duckdns.org/artist/$cleanId${query.isNotEmpty ? "?$query" : ""}';
+  }
+
+  /// Copies artist URL to clipboard and triggers the OS share sheet (Spotify style)
+  static Future<void> shareArtist(BuildContext context, Artist artist, {String? imageUrl}) async {
+    final shareUrl = buildArtistShareUrl(artist, imageUrl: imageUrl);
+
+    await Clipboard.setData(ClipboardData(text: shareUrl));
+
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: shareUrl,
+          subject: artist.name,
+        ),
+      );
+    } catch (e) {
+      debugPrint('[DeepLinkService] Share artist note: $e');
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.person_rounded, color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Enlace del artista copiado al portapapeles: $shareUrl',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),

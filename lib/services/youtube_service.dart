@@ -172,8 +172,9 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
       onCancel: () async {
         if (hasSubscribed && responseSubscription != null) {
           await responseSubscription!.cancel().catchError((_) {});
+        } else if (!hasSubscribed) {
+          await resp.drain<void>().catchError((_) {});
         }
-        await resp.drain<void>().catchError((_) {});
       },
     );
 

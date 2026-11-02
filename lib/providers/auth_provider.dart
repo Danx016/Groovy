@@ -99,9 +99,19 @@ class AuthProvider extends ChangeNotifier {
       final savedToken = await _storageService.getUserToken();
       final savedProfile = await _storageService.getUserProfile();
 
-      if (savedToken != null && savedToken.isNotEmpty && savedProfile != null) {
+      if (savedToken != null && savedToken.isNotEmpty) {
         _token = savedToken;
-        _currentUser = GroovyUser.fromJson(savedProfile);
+        if (savedProfile != null) {
+          try {
+            _currentUser = GroovyUser.fromJson(savedProfile);
+          } catch (_) {}
+        }
+        // Fallback user placeholder if profile JSON was null, so session is never lost prematurely
+        _currentUser ??= GroovyUser(
+          id: 0,
+          name: 'Usuario Groovy',
+          email: '',
+        );
         _state = AuthState.authenticated;
         _isInitialLoading = false;
         notifyListeners();
@@ -109,8 +119,8 @@ class AuthProvider extends ChangeNotifier {
         // Start real-time presence heartbeat
         _startSessionHeartbeat();
 
-        // Refresh user profile and cloud data in background (deferred to keep cold start silky smooth)
-        Future.delayed(const Duration(seconds: 2), () {
+        // Refresh user profile and cloud data in background (heals profile if it was null)
+        Future.delayed(const Duration(seconds: 1), () {
           if (!_disposed && _state == AuthState.authenticated) {
             _refreshUserProfile();
             syncUserDataFromCloud();

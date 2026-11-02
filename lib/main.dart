@@ -367,7 +367,6 @@ void main() async {
     int? queueIndex,
   ) async {
     debugPrint('[GroovyConnect] Playback transferred from $fromDevice: ${song.title} at ${positionMs}ms');
-    groovyConnectService.disconnect();
     playerProvider.disableGroovyConnectRemote();
     // Immediately report heartbeat with new song to backend so controller sees it instantly
     Duration? initialPos;

@@ -69,8 +69,8 @@ class GroovyApiService {
   /// Callback triggered when an authenticated endpoint returns 401 Unauthorized or 403 Forbidden.
   void Function()? onUnauthorized;
 
-  void checkUnauthorized(int statusCode) {
-    if (statusCode == 401 || statusCode == 403) {
+  void checkUnauthorized(int statusCode, {String? tokenUsed}) {
+    if ((statusCode == 401 || statusCode == 403) && tokenUsed != null && tokenUsed.trim().isNotEmpty) {
       onUnauthorized?.call();
     }
   }
@@ -252,7 +252,7 @@ class GroovyApiService {
         uri,
         headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 12000));
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: effectiveToken);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['commands'] is List) {
@@ -292,7 +292,7 @@ class GroovyApiService {
         uri,
         headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 6000));
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: effectiveToken);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['devices'] is List) {
@@ -664,7 +664,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/auth/me');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 8));
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: token);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         if (data['user'] != null) {
@@ -694,7 +694,7 @@ class GroovyApiService {
       ).timeout(const Duration(seconds: 12));
 
       final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: token);
       if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
         return AuthResponse(
           success: true,
@@ -723,7 +723,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/library/favorites');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: token);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         final list = (data['favorites'] as List<dynamic>?) ?? [];
@@ -787,7 +787,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/library/playlists');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: token);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         return List<Map<String, dynamic>>.from(data['playlists'] ?? []);
@@ -872,7 +872,7 @@ class GroovyApiService {
     try {
       final uri = Uri.parse('$_baseUrl/library/history?limit=$limit');
       final res = await http.get(uri, headers: _headers(token)).timeout(const Duration(seconds: 10));
-      checkUnauthorized(res.statusCode);
+      checkUnauthorized(res.statusCode, tokenUsed: token);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
         final list = (data['history'] as List<dynamic>?) ?? [];

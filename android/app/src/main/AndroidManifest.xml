@@ -98,15 +98,15 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="groovy" />
             </intent-filter>
-            <!-- Universal Web Links: https://groovyapi.duckdns.org/track/... and https://groovy.app/track/... -->
+            <!-- Universal Web Links: https://groovyapi.duckdns.org/track/..., /album/..., /artist/... -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="groovyapi.duckdns.org" android:pathPrefix="/track" />
                 <data android:scheme="https" android:host="groovyapi.duckdns.org" android:pathPrefix="/song" />
-                <data android:scheme="https" android:host="groovy.app" android:pathPrefix="/track" />
-                <data android:scheme="https" android:host="groovy.app" android:pathPrefix="/song" />
+                <data android:scheme="https" android:host="groovyapi.duckdns.org" android:pathPrefix="/album" />
+                <data android:scheme="https" android:host="groovyapi.duckdns.org" android:pathPrefix="/artist" />
             </intent-filter>
         </activity>
         

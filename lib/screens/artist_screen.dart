@@ -1125,7 +1125,19 @@ class _ArtistScreenState extends State<ArtistScreen> {
                   },
                 ),
 
-                // 3. Añadir a la cola
+                // 3. Compartir artista
+                _buildMoreMenuItem(
+                  icon: CupertinoIcons.share,
+                  title: 'Compartir artista',
+                  textColor: textColor,
+                  appleRed: appleRed,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    DeepLinkService.shareArtist(context, _artist!, imageUrl: _resolvedCoverArt);
+                  },
+                ),
+
+                // 3b. Añadir a la cola
                 _buildMoreMenuItem(
                   icon: Icons.queue_music_rounded,
                   title: 'Añadir a la cola',

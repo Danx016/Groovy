@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/song.dart';
@@ -31,43 +30,42 @@ class StorageService {
   Future<String?> _safeSecureRead(String key) async {
     try {
       return await _secureStorage.read(key: key);
-    } on PlatformException catch (e) {
-      if (e.code == '-34018' || e.message?.contains('entitlement') == true) {
+    } catch (_) {
+      try {
         final prefs = await _prefs;
         return prefs.getString('fallback_secure_$key');
+      } catch (_) {
+        return null;
       }
-      return null;
     }
   }
 
   Future<void> _safeSecureWrite(String key, String value) async {
     try {
       await _secureStorage.write(key: key, value: value);
-    } on PlatformException catch (e) {
-      if (e.code == '-34018' || e.message?.contains('entitlement') == true) {
+    } catch (_) {
+      try {
         final prefs = await _prefs;
         await prefs.setString('fallback_secure_$key', value);
-      }
+      } catch (_) {}
     }
   }
 
   Future<void> _safeSecureDelete(String key) async {
     try {
       await _secureStorage.delete(key: key);
-    } on PlatformException catch (e) {
-      if (e.code == '-34018' || e.message?.contains('entitlement') == true) {
+    } catch (_) {
+      try {
         final prefs = await _prefs;
         await prefs.remove('fallback_secure_$key');
-      }
+      } catch (_) {}
     }
   }
 
   Future<void> _safeSecureDeleteAll() async {
     try {
       await _secureStorage.deleteAll();
-    } on PlatformException catch (_) {
-      // Ignored for fallback
-    }
+    } catch (_) {}
   }
 
   Future<void> init() async {
@@ -254,10 +252,30 @@ class StorageService {
   }
 
   Future<String?> getUserToken() async {
-    final secure = await _safeSecureRead(_userTokenKey);
-    if (secure != null && secure.isNotEmpty) return secure;
-    final prefs = await _prefs;
-    return prefs.getString(_userTokenKey);
+    // 1. First check SharedPreferences: fastest (0ms), in-memory cached, and immune to Android KeyStore resets
+    try {
+      final prefs = await _prefs;
+      final prefToken = prefs.getString(_userTokenKey);
+      if (prefToken != null && prefToken.trim().isNotEmpty) {
+        return prefToken.trim();
+      }
+    } catch (_) {}
+
+    // 2. Fallback to secure storage (recovers token if prefs were cleared but keystore intact)
+    try {
+      final secure = await _safeSecureRead(_userTokenKey);
+      if (secure != null && secure.trim().isNotEmpty) {
+        final cleanToken = secure.trim();
+        // Heal SharedPreferences so subsequent reads on Android are instantaneous and resilient
+        try {
+          final prefs = await _prefs;
+          await prefs.setString(_userTokenKey, cleanToken);
+        } catch (_) {}
+        return cleanToken;
+      }
+    } catch (_) {}
+
+    return null;
   }
 
   Future<Map<String, dynamic>?> getUserProfile() async {

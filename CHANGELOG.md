@@ -5,6 +5,21 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.7] - 2026-11-02
+
+### Added
+- **Compartir Canciones, Álbumes y Artistas estilo Spotify (OpenGraph & Deep Linking)**:
+  - Generación de tarjetas visuales enriquecidas en WhatsApp, Telegram y redes sociales con portada en alta definición (640x640), título, separadores de metadatos (`·`), y enlace limpio.
+  - Soporte completo para compartir **Álbumes** (`/album/:id`) y **Artistas** (`/artist/:id`) desde los menús de tres puntos respectivos.
+  - Apertura y navegación automática inmediata en Android, Windows y Linux hacia la pantalla del álbum o artista correspondiente.
+  - Registro de dominios y App Links con auto-verificación en `AndroidManifest.xml` (`/track`, `/song`, `/album`, `/artist`).
+  - Landing pages web responsivas en el backend Node.js y la aplicación React con botón de apertura y redirección instantánea.
+
+### Fixed & Improved
+- **Estabilidad de Sesión en Android**: Redundancia en `SharedPreferences` que previene el cierre de sesión involuntario durante el modo Doze o bloqueos criptográficos del KeyStore de Android.
+- **Groovy Connect Multi-Dispositivo**: Corregida la desconexión accidental del receptor al transferir la reproducción y ampliada la ventana de ping de dispositivos activos en el servidor a 180s.
+- **Streaming de Audio Continuo**: Corregido el manejo de streams HTTP en `youtube_service.dart` para evitar `Bad state: Stream has already been listened to.` al cambiar rápidamente de canción.
+
 ## [1.9.6] - 2026-11-02
 
 ### Added
