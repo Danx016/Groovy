@@ -55,10 +55,9 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   final YtDlpService _ytdlp;
 
   static final HttpClient _sharedStreamClient = HttpClient()
-    ..connectionTimeout = const Duration(seconds: 12)
-    ..idleTimeout = const Duration(seconds: 4)
-    ..maxConnectionsPerHost = 128
-    ..autoUncompress = false
+    ..connectionTimeout = const Duration(seconds: 15)
+    ..idleTimeout = const Duration(seconds: 30)
+    ..maxConnectionsPerHost = 64
     ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
   _YoutubeStreamAudioSource(this._videoId, this._ytdlp) : super(tag: _videoId);
@@ -109,30 +108,24 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
       if (resp.statusCode == 403 || resp.statusCode == 410 || resp.statusCode == 429) {
         debugPrint('[YouTube] Stream rejected (${resp.statusCode}) for $cleanId, refreshing with forceRefresh...');
-        try {
-          req.abort();
-        } catch (_) {}
         await resp.drain<void>().catchError((_) {});
         _ytdlp.invalidateCache(cleanId);
         final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
         if (freshInfo.url.isEmpty) {
           throw Exception('Fresh stream URL empty for $cleanId');
         }
-        final retryReq = await client.getUrl(Uri.parse(freshInfo.url)).timeout(const Duration(seconds: 12));
+        final retryReq = await client.getUrl(Uri.parse(freshInfo.url)).timeout(const Duration(seconds: 15));
         applyHeaders(retryReq, freshInfo.headers);
         if (end != null) {
           retryReq.headers.set('Range', 'bytes=$s-$end');
         } else {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
-        final retryResp = await retryReq.close().timeout(const Duration(seconds: 12));
+        final retryResp = await retryReq.close().timeout(const Duration(seconds: 15));
         return _buildResponse(retryReq, retryResp, s, freshInfo.ext);
       }
 
       if (resp.statusCode >= 400) {
-        try {
-          req.abort();
-        } catch (_) {}
         await resp.drain<void>().catchError((_) {});
         throw Exception('GoogleVideo stream error: HTTP ${resp.statusCode}');
       }
@@ -171,7 +164,6 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     StreamSubscription<List<int>>? responseSubscription;
     late StreamController<List<int>> responseController;
     responseController = StreamController<List<int>>(
-      sync: true,
       onListen: () {
         hasSubscribed = true;
         responseSubscription = resp.listen(
@@ -197,9 +189,6 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         );
       },
       onCancel: () async {
-        try {
-          req.abort();
-        } catch (_) {}
         if (hasSubscribed && responseSubscription != null) {
           await responseSubscription!.cancel().catchError((_) {});
         } else if (!hasSubscribed) {

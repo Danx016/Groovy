@@ -138,7 +138,6 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void notifyListeners() {
     if (_isDisposed) return;
-    _checkAndEmitBuffering();
     super.notifyListeners();
   }
 
@@ -1437,11 +1436,16 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   Stream<bool> get isBufferingStream => _bufferingController.stream;
 
   void _checkAndEmitBuffering() {
+    if (_isDisposed) return;
     final cur = isBuffering;
     if (_lastEmittedBuffering != cur) {
       _lastEmittedBuffering = cur;
       if (!_bufferingController.isClosed) {
-        _bufferingController.add(cur);
+        scheduleMicrotask(() {
+          if (!_isDisposed && !_bufferingController.isClosed) {
+            _bufferingController.add(cur);
+          }
+        });
       }
     }
   }

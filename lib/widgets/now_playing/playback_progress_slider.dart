@@ -67,12 +67,11 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
 
   void _setBuffering(bool buffering) {
     if (_currentIsBuffering == buffering) return;
+    _currentIsBuffering = buffering;
     if (mounted) {
-      setState(() {
-        _currentIsBuffering = buffering;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() {});
       });
-    } else {
-      _currentIsBuffering = buffering;
     }
 
     if (buffering) {
@@ -125,7 +124,15 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
   void didUpdateWidget(PlaybackProgressSlider oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isBuffering != oldWidget.isBuffering) {
-      _setBuffering(widget.isBuffering);
+      _currentIsBuffering = widget.isBuffering;
+      if (widget.isBuffering) {
+        if (!_shimmerController.isAnimating) {
+          _shimmerController.repeat();
+        }
+      } else {
+        _shimmerController.stop();
+        _shimmerController.reset();
+      }
     }
     if (widget.bufferedPosition != oldWidget.bufferedPosition) {
       _currentBufferedPosition = widget.bufferedPosition;

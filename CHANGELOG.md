@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-11-02
+
+### Fixed & Optimized
+- **Arquitectura de Streaming y Reproducción Instantánea (ExoPlayer & libmpv)**:
+  - Eliminado el bloqueo/congelamiento de la aplicación (*app trabada*) causado por el uso sincrónico de `StreamController(sync: true)` y llamadas a `req.abort()` durante las lecturas por rangos de ExoPlayer.
+  - Ajustado `idleTimeout` del pool de conexiones HTTP a 30 segundos y habilitada la descompresión automática para permitir buffering prolongado sin desconexiones abruptas por parte de Google CDN.
+  - Separada la emisión de eventos de buffering mediante microtareas asíncronas (`scheduleMicrotask`), desacoplándola de `notifyListeners()` para evitar colisiones de ciclos de renderizado en Flutter.
+  - Optimizado el ciclo de vida del widget de progreso (`PlaybackProgressSlider`) con `addPostFrameCallback` para garantizar 60/120 FPS fluidos sin microtirones.
+- **CI/CD & Runner Disk Space**:
+  - Limpieza automática del espacio en disco del runner de GitHub Actions para evitar fallos de compilación (`java.io.IOException: No space left on device`).
+
 ## [1.9.9] - 2026-11-02
 
 ### Added & Improved
