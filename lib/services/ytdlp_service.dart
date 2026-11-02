@@ -81,10 +81,16 @@ class YtDlpService {
     return _fallbackYt!;
   }
 
+  void resetFallbackClient() {
+    try {
+      _fallbackYt?.close();
+    } catch (_) {}
+    _fallbackYt = null;
+  }
+
   void dispose() {
     cancelCurrentExtraction();
-    _fallbackYt?.close();
-    _fallbackYt = null;
+    resetFallbackClient();
     _streamInfoCache.clear();
     _streamCacheTime.clear();
     _inFlightResolutions.clear();
@@ -147,6 +153,7 @@ class YtDlpService {
   static final HttpClient _innertubeHttpClient = HttpClient()
     ..connectionTimeout = const Duration(seconds: 10)
     ..idleTimeout = const Duration(seconds: 15)
+    ..maxConnectionsPerHost = 20
     ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
   static const Map<String, String> _innertubeHeaders = {
@@ -982,14 +989,17 @@ class YtDlpService {
     }
   }
 
-  Process? _activeExtractionProcess;
+  final Set<Process> _activeProcesses = {};
 
-  /// Immediately cancels and terminates any running background extraction subprocess.
+  /// Immediately cancels and terminates any running background extraction subprocesses.
   /// Called when skipping tracks so old yt-dlp instances do not hog CPU or cause UI freezing.
   void cancelCurrentExtraction() {
-    if (_activeExtractionProcess != null) {
-      _killProcess(_activeExtractionProcess);
-      _activeExtractionProcess = null;
+    if (_activeProcesses.isNotEmpty) {
+      final toKill = List<Process>.from(_activeProcesses);
+      _activeProcesses.clear();
+      for (final p in toKill) {
+        _killProcess(p);
+      }
     }
   }
 
@@ -1014,11 +1024,10 @@ class YtDlpService {
     List<String> args,
     Duration timeout,
   ) async {
-    cancelCurrentExtraction();
     Process? process;
     try {
       process = await Process.start(executable, args);
-      _activeExtractionProcess = process;
+      _activeProcesses.add(process);
       final stdoutFuture = process.stdout.transform(utf8.decoder).join();
       final stderrFuture = process.stderr.transform(utf8.decoder).join();
 
@@ -1026,24 +1035,19 @@ class YtDlpService {
       final stdout = await stdoutFuture;
       final stderr = await stderrFuture;
 
-      if (_activeExtractionProcess == process) {
-        _activeExtractionProcess = null;
-      }
       return ProcessResult(process.pid, exitCode, stdout, stderr);
     } on TimeoutException {
       debugPrint('[yt-dlp] Process timed out ($timeout) for $executable. Killing PID ${process?.pid}...');
       _killProcess(process);
-      if (_activeExtractionProcess == process) {
-        _activeExtractionProcess = null;
-      }
       return null;
     } catch (e) {
       debugPrint('[yt-dlp] Process error for $executable: $e');
       _killProcess(process);
-      if (_activeExtractionProcess == process) {
-        _activeExtractionProcess = null;
-      }
       return null;
+    } finally {
+      if (process != null) {
+        _activeProcesses.remove(process);
+      }
     }
   }
 
@@ -1086,9 +1090,26 @@ class YtDlpService {
     if (!forceRefresh) {
       final cached = _streamInfoCache[cleanId];
       if (cached != null && cached.url.isNotEmpty) {
-        final age = DateTime.now().difference(_streamCacheTime[cleanId] ?? DateTime.now());
-        if (age < _cacheTtl) {
-          return cached;
+        bool isExpired = false;
+        final uri = Uri.tryParse(cached.url);
+        final expireParam = uri?.queryParameters['expire'];
+        if (expireParam != null) {
+          final expireSec = int.tryParse(expireParam);
+          if (expireSec != null) {
+            final nowSec = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+            if (nowSec >= expireSec - 180) {
+              isExpired = true;
+            }
+          }
+        }
+        if (!isExpired) {
+          final age = DateTime.now().difference(_streamCacheTime[cleanId] ?? DateTime.now());
+          if (age < _cacheTtl) {
+            return cached;
+          }
+        } else {
+          _streamInfoCache.remove(cleanId);
+          _streamCacheTime.remove(cleanId);
         }
       }
 
@@ -1112,7 +1133,7 @@ class YtDlpService {
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final completer = Completer<YtStreamInfo>();
 
-      // 1. FAST-PATH: Pure-Dart Innertube attempt (Android & iOS clients) - 1500ms fast race
+      // 1. FAST-PATH: Pure-Dart Innertube attempt (Android & iOS clients) - 3500ms fast race
       unawaited(() async {
         try {
           final manifest = await _fallbackClient.videos.streamsClient
@@ -1121,7 +1142,7 @@ class YtDlpService {
                 yt.YoutubeApiClient.ios,
                 yt.YoutubeApiClient.tv,
               ])
-              .timeout(const Duration(milliseconds: 1500));
+              .timeout(const Duration(milliseconds: 3500));
           final audioOnly = manifest.audioOnly;
           if (audioOnly.isNotEmpty) {
             final best = _selectBestAudioStream(audioOnly, preferTv: true);
@@ -1146,7 +1167,6 @@ class YtDlpService {
               _streamInfoCache[cleanId] = info;
               _streamCacheTime[cleanId] = DateTime.now();
               debugPrint('[yt-dlp/Desktop] ⚡ Resolved $cleanId via FastDart (fast path)');
-              cancelCurrentExtraction();
               completer.complete(info);
               return;
             }
@@ -1193,7 +1213,13 @@ class YtDlpService {
         if (!completer.isCompleted) {
           _triggerAutoRecovery();
           try {
-            final fallback = await _fallbackClient.videos.streamsClient.getManifest(cleanId).timeout(const Duration(seconds: 6));
+            final fallback = await _fallbackClient.videos.streamsClient
+                .getManifest(cleanId, ytClients: [
+                  yt.YoutubeApiClient.tv,
+                  yt.YoutubeApiClient.android,
+                  yt.YoutubeApiClient.ios,
+                ])
+                .timeout(const Duration(seconds: 8));
             if (fallback.audioOnly.isNotEmpty && !completer.isCompleted) {
               final best = _selectBestAudioStream(fallback.audioOnly, preferTv: true);
               final url = best.url.toString();
@@ -1216,7 +1242,9 @@ class YtDlpService {
               completer.complete(info);
               return;
             }
-          } catch (_) {}
+          } catch (_) {
+            resetFallbackClient();
+          }
           if (!completer.isCompleted) {
             completer.completeError(Exception('All Desktop stream extraction methods exhausted for $cleanId'));
           }
@@ -1297,8 +1325,12 @@ class YtDlpService {
         if (!completer.isCompleted) {
           try {
             final fallback = await _fallbackClient.videos.streamsClient
-                .getManifest(cleanId)
-                .timeout(const Duration(seconds: 6));
+                .getManifest(cleanId, ytClients: [
+                  yt.YoutubeApiClient.tv,
+                  yt.YoutubeApiClient.android,
+                  yt.YoutubeApiClient.ios,
+                ])
+                .timeout(const Duration(seconds: 8));
             if (fallback.audioOnly.isNotEmpty && !completer.isCompleted) {
               final best = _selectBestAudioStream(fallback.audioOnly);
               final url = best.url.toString();
@@ -1323,7 +1355,9 @@ class YtDlpService {
               completer.complete(info);
               return;
             }
-          } catch (_) {}
+          } catch (_) {
+            resetFallbackClient();
+          }
           if (!completer.isCompleted) {
             completer.completeError(Exception('Failed to resolve Android stream for $cleanId'));
           }
@@ -1423,6 +1457,7 @@ class YtDlpService {
       }
     }
 
+    resetFallbackClient();
     throw Exception('No audio streams available for video $cleanId');
   }
 
@@ -1461,6 +1496,7 @@ class YtDlpService {
       }).toList();
     } catch (e) {
       debugPrint('[yt-dlp/ExplodeFallback] error: $e');
+      resetFallbackClient();
       return [];
     }
   }

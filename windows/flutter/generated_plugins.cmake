@@ -3,6 +3,7 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
+  app_links
   battery_plus
   connectivity_plus
   dynamic_color
@@ -13,6 +14,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   media_kit_video
   permission_handler_windows
   screen_retriever
+  share_plus
   sqlite3_flutter_libs
   url_launcher_windows
   volume_controller

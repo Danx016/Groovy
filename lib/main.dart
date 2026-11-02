@@ -435,6 +435,11 @@ void main() async {
     };
   };
 
+  DeepLinkService().initialize(
+    playerProvider: playerProvider,
+    libraryProvider: libraryProvider,
+  );
+
   final Widget appWithProviders = MultiProvider(
     providers: [
       Provider<StorageService>.value(value: storageService),

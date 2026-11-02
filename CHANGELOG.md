@@ -5,6 +5,23 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.6] - 2026-11-02
+
+### Added
+- **Compartir Canciones mediante Enlaces (Deep Linking estilo Spotify)**:
+  - Nueva acción **"Compartir canción"** en el menú contextual de tres puntos en todas las pantallas (reproductor activo, búsquedas, listas y tarjetas).
+  - Generación de enlaces web universales (`https://groovyapi.duckdns.org/track/{id}`) y de esquema nativo directo (`groovy://track/{id}`).
+  - Soporte de Deep Links en **Android** mediante intent-filter y en **Windows** registrando el protocolo en el registro del sistema (`HKCU\Software\Classes\groovy`).
+  - Detección y arranque automático de reproducción al abrir enlaces (tanto en frío como en caliente), con resolución automática de metadatos y aviso visual toast.
+
+### Fixed & Improved
+- **Estabilidad y Continuidad de Carga de Música (Zero Lockups)**:
+  - **Aislamiento Concurrente de Procesos en `yt-dlp`**: Eliminado el conflicto donde la pre-carga (*warm-up*) de la siguiente canción cancelaba y mataba el proceso de la pista en reproducción activa. Cada extracción se maneja de forma segura e independiente.
+  - **Ampliación y Drenado del Pool HTTP**: Aumentado el límite de conexiones concurrentes por host de 6 a 32, reduciendo el `idleTimeout` y garantizando que los sockets de audio se drenen limpiamente al pausar o saltar canciones, evitando saturación del pool en Android.
+  - **Evasión de Bloqueos Anti-Bot de YouTube**: En caídas por fallback, ahora se solicitan explícitamente clientes móviles y de TV (`tv`, `android`, `ios`), evitando los bloqueos por Captcha/PO Token del cliente web.
+  - **Auto-Descarte de Streams Expirados**: Detección inteligente del parámetro `&expire=` de Google Video para invalidar URLs viejas antes de que fallen con 403 y forzar refresco inmediato.
+  - **Auto-Recuperación del Reproductor**: Optimizado el watchdog a 14 segundos y reseteo limpio del motor de audio ante canciones no disponibles para que la app nunca se quede congelada.
+
 ## [1.9.5] - 2026-10-26
 
 ### Fixed & Improved

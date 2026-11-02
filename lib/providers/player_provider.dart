@@ -2626,16 +2626,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Arm self-healing watchdog timer to ensure player never hangs in loading state
     _loadingWatchdogTimer?.cancel();
-    _loadingWatchdogTimer = Timer(const Duration(seconds: 22), () {
+    _loadingWatchdogTimer = Timer(const Duration(seconds: 14), () {
       final bool userPaused = !_isPlaying ||
           (_lastUserPauseTime != null &&
               DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 30));
       if (currentGen == _playGeneration && _isLoading && !userPaused) {
-        debugPrint('[Player Watchdog] ⚠️ Playback stalled in loading state for 22s. Auto-recovering...');
+        debugPrint('[Player Watchdog] ⚠️ Playback stalled in loading state for 14s. Auto-recovering...');
         _isLoading = false;
         notifyListeners();
         if (_queue.isNotEmpty && hasNext) {
           skipNext();
+        } else {
+          _isPlaying = false;
+          _activeAudioSongId = null;
+          notifyListeners();
         }
       }
     });
@@ -3169,6 +3173,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _isLoading = false;
           _isPlaying = false;
           _consecutiveAutoSkipFailures = 0;
+          _activeAudioSongId = null;
+          try {
+            await _audioPlayer.stop().timeout(const Duration(milliseconds: 500));
+          } catch (_) {}
           notifyListeners();
         }
       } else if (wasRecentlySkippedManually) {

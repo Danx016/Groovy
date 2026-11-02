@@ -15,6 +15,7 @@ import '../../services/offline_service.dart';
 import '../../services/device_download_service.dart';
 import '../../services/theme_service.dart';
 import '../../services/artist_image_service.dart';
+import '../../services/deep_link_service.dart';
 import '../../utils/album_sanitizer.dart';
 import '../../utils/navigation_helper.dart';
 import '../multi_artist_widget.dart';
@@ -256,6 +257,18 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 },
               ),
             ],
+
+            // Compartir canción
+            _buildMenuItem(
+              icon: CupertinoIcons.share,
+              title: 'Compartir canción',
+              textColor: textColor,
+              onTap: () {
+                final targetCtx = NavigationHelper.navigatorKey.currentContext ?? context;
+                Navigator.of(context).pop();
+                DeepLinkService.shareSong(targetCtx, currentSong);
+              },
+            ),
 
             if (isDownloaded) ...[
               _buildMenuItem(

@@ -56,8 +56,8 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
   static final HttpClient _sharedStreamClient = HttpClient()
     ..connectionTimeout = const Duration(seconds: 12)
-    ..idleTimeout = const Duration(seconds: 30)
-    ..maxConnectionsPerHost = 6
+    ..idleTimeout = const Duration(seconds: 15)
+    ..maxConnectionsPerHost = 32
     ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
   _YoutubeStreamAudioSource(this._videoId, this._ytdlp) : super(tag: _videoId);
@@ -153,21 +153,27 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         ? serverMime
         : (isWebm ? 'audio/webm' : 'audio/mp4');
 
-    late StreamSubscription<List<int>> responseSubscription;
+    bool hasSubscribed = false;
+    StreamSubscription<List<int>>? responseSubscription;
     late StreamController<List<int>> responseController;
     responseController = StreamController<List<int>>(
       sync: true,
       onListen: () {
+        hasSubscribed = true;
         responseSubscription = resp.listen(
           responseController.add,
           onError: responseController.addError,
           onDone: () {
             responseController.close();
           },
+          cancelOnError: true,
         );
       },
       onCancel: () async {
-        await responseSubscription.cancel().catchError((_) {});
+        if (hasSubscribed && responseSubscription != null) {
+          await responseSubscription!.cancel().catchError((_) {});
+        }
+        await resp.drain<void>().catchError((_) {});
       },
     );
 
@@ -345,7 +351,7 @@ class YoutubeService {
       // Passing the stream URL directly to AudioSource.uri without headers allows libmpv's native
       // C++ FFmpeg engine to stream directly from Google CDN with full HTTP range support.
       try {
-        final streamInfo = await _ytdlp.resolveStreamInfo(videoId);
+        var streamInfo = await _ytdlp.resolveStreamInfo(videoId);
         if (streamInfo.url.isNotEmpty) {
           debugPrint('[YouTube] Desktop: streaming directly via libmpv for $videoId');
           return AudioSource.uri(
@@ -354,7 +360,16 @@ class YoutubeService {
           );
         }
       } catch (e) {
-        debugPrint('[YouTube] Desktop stream resolve error for $videoId: $e');
+        debugPrint('[YouTube] Desktop stream resolve error for $videoId: $e, trying force refresh...');
+        try {
+          final streamInfo = await _ytdlp.resolveStreamInfo(videoId, forceRefresh: true);
+          if (streamInfo.url.isNotEmpty) {
+            return AudioSource.uri(
+              Uri.parse(streamInfo.url),
+              tag: song.id,
+            );
+          }
+        } catch (_) {}
       }
       // Desktop uses just_audio_media_kit (libmpv), which does NOT support StreamAudioSource.
       // We must NEVER return _YoutubeStreamAudioSource on desktop, as it causes an UnsupportedError.
