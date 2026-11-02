@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.8] - 2026-11-02
+
+### Fixed
+- **Reproducción Continua de Música y Agotamiento de Conexiones**:
+  - Solucionado el problema crítico donde la reproducción se detenía por completo tras reproducir 1 o 2 canciones debido al agotamiento del pool de sockets HTTP (`maxConnectionsPerHost`) en ExoPlayer (`StreamAudioSource`).
+  - Implementado `req.abort()` en la cancelación y descarte de chunks de audio, liberando de inmediato las conexiones TCP al pool y evitando bloqueos por `TimeoutException`.
+  - Incrementado el límite de conexiones por host a 128 y reducido el timeout inactivo para un reciclaje óptimo de sockets.
+  - Corregida la condición de fin de canción (`isGenuineTrackEnd`) para evitar que pistas recién iniciadas sean marcadas como completadas erróneamente por eventos residuales de cambio de canción.
+  - Limpieza segura de `_activeAudioSongId` durante transiciones automáticas para asegurar continuidad ininterrumpida en la cola.
+
 ## [1.9.7] - 2026-11-02
 
 ### Added

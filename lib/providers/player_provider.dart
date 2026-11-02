@@ -1924,13 +1924,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
 
-        if (state.playing ||
-            state.processingState == ProcessingState.ready ||
-            state.processingState == ProcessingState.idle) {
+        if (state.playing || state.processingState == ProcessingState.ready) {
           _isLoading = false;
-          if (state.playing || state.processingState == ProcessingState.ready) {
-            _consecutiveAutoSkipFailures = 0;
-          }
+          _consecutiveAutoSkipFailures = 0;
         }
 
         if (wasPlaying != _isPlaying && !_reactivatingSession) {
@@ -1968,8 +1964,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
         final bool isGenuineTrackEnd = hasValidDuration
             ? (_position >= effDur - const Duration(seconds: 12) ||
-               _position.inMilliseconds >= (effDur.inMilliseconds * 0.80) ||
-               _position <= const Duration(seconds: 2))
+               _position.inMilliseconds >= (effDur.inMilliseconds * 0.80))
             : (_position > const Duration(seconds: 15));
 
         if (songMatches &&
@@ -2370,8 +2365,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         _fetchAndQueueRadioTracks(nextSong).catchError((_) {});
       }
 
-      // Reset previous playback away from completed to prevent duplicate completion events
-      _activeAudioSongId = nextSong.id;
+      // Detach active audio song ID before stopping so any trailing idle/complete events from the previous track are safely ignored
+      _activeAudioSongId = null;
       try {
         await _audioPlayer.stop();
       } catch (_) {}

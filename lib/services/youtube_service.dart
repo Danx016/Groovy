@@ -56,8 +56,9 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
   static final HttpClient _sharedStreamClient = HttpClient()
     ..connectionTimeout = const Duration(seconds: 12)
-    ..idleTimeout = const Duration(seconds: 15)
-    ..maxConnectionsPerHost = 32
+    ..idleTimeout = const Duration(seconds: 4)
+    ..maxConnectionsPerHost = 128
+    ..autoUncompress = false
     ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
   _YoutubeStreamAudioSource(this._videoId, this._ytdlp) : super(tag: _videoId);
@@ -66,6 +67,9 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   Future<StreamAudioResponse> request([int? start, int? end]) async {
     final cleanId = _videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
     final streamInfo = await _ytdlp.resolveStreamInfo(cleanId);
+    if (streamInfo.url.isEmpty) {
+      throw Exception('Empty stream URL resolved for $cleanId');
+    }
 
     final s = start ?? 0;
     final client = _sharedStreamClient;
@@ -105,9 +109,15 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
 
       if (resp.statusCode == 403 || resp.statusCode == 410 || resp.statusCode == 429) {
         debugPrint('[YouTube] Stream rejected (${resp.statusCode}) for $cleanId, refreshing with forceRefresh...');
+        try {
+          req.abort();
+        } catch (_) {}
         await resp.drain<void>().catchError((_) {});
         _ytdlp.invalidateCache(cleanId);
         final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
+        if (freshInfo.url.isEmpty) {
+          throw Exception('Fresh stream URL empty for $cleanId');
+        }
         final retryReq = await client.getUrl(Uri.parse(freshInfo.url)).timeout(const Duration(seconds: 12));
         applyHeaders(retryReq, freshInfo.headers);
         if (end != null) {
@@ -116,15 +126,18 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
         final retryResp = await retryReq.close().timeout(const Duration(seconds: 12));
-        return _buildResponse(retryResp, s, freshInfo.ext);
+        return _buildResponse(retryReq, retryResp, s, freshInfo.ext);
       }
 
       if (resp.statusCode >= 400) {
+        try {
+          req.abort();
+        } catch (_) {}
         await resp.drain<void>().catchError((_) {});
         throw Exception('GoogleVideo stream error: HTTP ${resp.statusCode}');
       }
 
-      return _buildResponse(resp, s, streamInfo.ext);
+      return _buildResponse(req, resp, s, streamInfo.ext);
     } catch (e) {
       debugPrint('[YouTube] StreamAudioSource request error for $cleanId: $e');
       rethrow;
@@ -132,6 +145,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
   }
 
   StreamAudioResponse _buildResponse(
+    HttpClientRequest req,
     HttpClientResponse resp,
     int start,
     String ext,
@@ -161,15 +175,31 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
       onListen: () {
         hasSubscribed = true;
         responseSubscription = resp.listen(
-          responseController.add,
-          onError: responseController.addError,
+          (chunk) {
+            if (!responseController.isClosed) {
+              responseController.add(chunk);
+            }
+          },
+          onError: (e, st) {
+            try {
+              req.abort();
+            } catch (_) {}
+            if (!responseController.isClosed) {
+              responseController.addError(e, st);
+            }
+          },
           onDone: () {
-            responseController.close();
+            if (!responseController.isClosed) {
+              responseController.close();
+            }
           },
           cancelOnError: true,
         );
       },
       onCancel: () async {
+        try {
+          req.abort();
+        } catch (_) {}
         if (hasSubscribed && responseSubscription != null) {
           await responseSubscription!.cancel().catchError((_) {});
         } else if (!hasSubscribed) {
