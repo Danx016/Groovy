@@ -138,6 +138,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   @override
   void notifyListeners() {
     if (_isDisposed) return;
+    _checkAndEmitBuffering();
     super.notifyListeners();
   }
 
@@ -1430,8 +1431,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _isLoading ||
       _audioPlayer.processingState == ProcessingState.buffering ||
       _audioPlayer.processingState == ProcessingState.loading;
-  Stream<bool> get isBufferingStream => _audioPlayer.processingStateStream.map(
-      (s) => s == ProcessingState.buffering || s == ProcessingState.loading);
+
+  final _bufferingController = StreamController<bool>.broadcast();
+  bool? _lastEmittedBuffering;
+  Stream<bool> get isBufferingStream => _bufferingController.stream;
+
+  void _checkAndEmitBuffering() {
+    final cur = isBuffering;
+    if (_lastEmittedBuffering != cur) {
+      _lastEmittedBuffering = cur;
+      if (!_bufferingController.isClosed) {
+        _bufferingController.add(cur);
+      }
+    }
+  }
 
   // Subscriptions stored so they can be cancelled before dispose closes the
   // StreamController, preventing a late just_audio tick from calling add() on
@@ -1891,6 +1904,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // In remote-playback mode the local player is stopped/paused; ignore
         // its state so it doesn't overwrite the UPnP/Cast-managed values.
         if (_isRenderingRemotely) return;
+        _checkAndEmitBuffering();
 
         final wasPlaying = _isPlaying;
         final bool isOptimisticLocalActive =
@@ -4640,6 +4654,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _durationSub?.cancel();
     _currentIndexSub?.cancel();
     _positionController.close();
+    _bufferingController.close();
     super.dispose();
   }
 

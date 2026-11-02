@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.9] - 2026-11-02
+
+### Added & Improved
+- **Barra de Carga y Progreso Estilo Apple Music (Ultra Fluida)**:
+  - Rediseñada la animación de carga/búfer del reproductor (`PlaybackProgressSlider`) para replicar fielmente el efecto *luminous sheen* de Apple Music sin saltos ni tirones (*trabado*).
+  - Eliminada la pausa muerta del shimmer mediante un barrido continuo y coordinado con haz de luz suave (*specular highlight*) que transita de extremo a extremo sin cortes.
+  - Sincronización en tiempo real del estado de búfer y carga en `PlayerProvider` (`isBufferingStream`), emitiendo de forma reactiva al iniciar la resolución de pistas.
+  - Aislamiento en capa `RepaintBoundary` para garantizar un rendimiento constante a 60/120 FPS sin invalidar el resto de la interfaz en Android y Windows.
+  - Thumb interactivo de arrastre con elevación y sombra difusa estilo iOS.
+
 ## [1.9.8] - 2026-11-02
 
 ### Fixed
