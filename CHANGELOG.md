@@ -5,6 +5,35 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-11-04
+
+### Added & Improved
+- **Importador Universal de Playlists (Spotify, Apple Music, YouTube & M3U/CSV)**:
+  - Importación directa de enlaces de playlists de Spotify y YouTube mediante resolución y scraping embebido sin requerir credenciales de API.
+  - Soporte de archivos `.m3u`, `.m3u8`, `.csv` y texto plano (`Artista - Canción`).
+  - Vinculación y búsqueda automática en catálogo y streaming con indicador visual de progreso y guardado en la base de datos local SQLite.
+- **AI Mood Radio (Generador de Mixes Temáticos por Estado de Ánimo)**:
+  - 8 estaciones temáticas con diseño Glassmorphism (*Gym & Potencia, Noche de Lluvia, Café de Domingo, Enfoque & Estudio, Carretera al Atardecer, Fiesta & Descontrol, Despecho & Sentimiento, Cyberpunk & Gaming*).
+  - Entrada libre de prompt para generar estaciones contextuales personalizadas al instante.
+  - Fusión de palabras clave con el modelo de afinidad de artistas en `RecommendationService`.
+- **Ecualizador Gráfico & Efectos Sonoros (Modo Audiófilo)**:
+  - Ecualizador de 5 bandas (-12 dB a +12 dB) con curva spline reactiva y 9 presets acústicos calibrados.
+  - Deslizadores de efecto espacial 3D (*Virtualizer*) y refuerzo de graves (*Bass Boost*) procesados mediante mpv/lavfi en Windows y AudioEffects en Android.
+- **Compartir Letras como Imagen (Stories 9:16 & Cuadrado 1:1)**:
+  - Selección interactiva de 1 a 5 líneas de letras sincronizadas con portada, metadata y estilo Apple Music renderizado en alta resolución PNG para Instagram y WhatsApp.
+- **Diseñador y Mosaicos de Portadas para Playlists**:
+  - Generación automática de collages 2x2 para playlists a partir del arte de las canciones contenidas o gradientes de color personalizados.
+- **Groovy Replay (Resumen Musical Anual/Mensual)**:
+  - Métricas completas de minutos reproducidos, canciones número 1, horas de escucha y tarjetas estéticas listas para compartir.
+- **Groovy Jam (Sesiones Colaborativas en Vivo)**:
+  - Creación de salas `JAM-XXXX` y gestión de cola en tiempo real vía WebSockets.
+- **Temporizador de Apagado (Sleep Timer)**:
+  - Temporizador con apagado gradual de volumen (15, 30, 45, 60 minutos o al terminar la pista).
+- **Mezcla Armónica & Crossfade estilo DJ**:
+  - Transiciones armónicas automáticas analizando BPM para fusionar pistas sin silencios incómodos.
+- **Personalización de Biblioteca**:
+  - Reordenación y visibilidad de secciones en la pantalla de biblioteca con persistencia local.
+
 ## [2.0.0] - 2026-11-02
 
 ### Fixed & Optimized

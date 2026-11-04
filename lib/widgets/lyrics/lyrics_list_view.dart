@@ -1,3 +1,6 @@
+import 'package:provider/provider.dart';
+import '../../providers/player_provider.dart';
+import 'share_lyrics_sheet.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
@@ -528,6 +531,18 @@ class _LyricsListViewState extends State<LyricsListView> {
                   line: line,
                   state: state,
                   isUnsynced: isUnsynced,
+                  onLongPress: () {
+                    final player = Provider.of<PlayerProvider>(context, listen: false);
+                    final song = player.currentSong;
+                    if (song != null) {
+                      ShareLyricsSheet.show(
+                        context,
+                        song: song,
+                        lyrics: widget.lyrics,
+                        initialSelectedIndex: lyricIndex,
+                      );
+                    }
+                  },
                   onTap: () {
                     HapticFeedback.selectionClick();
                     widget.onSeek(line.startTime);

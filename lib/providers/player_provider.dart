@@ -1806,6 +1806,10 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     notifyListeners();
   }
 
+  void cancelSleepTimer() {
+    setSleepTimer(Duration.zero);
+  }
+
   void _startFadeOut([int fadeDurationSeconds = 30]) {
     _sleepTimerFadePeriodicTimer?.cancel();
     final steps = fadeDurationSeconds.clamp(5, 300);

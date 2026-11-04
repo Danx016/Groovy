@@ -1,3 +1,5 @@
+import 'groovy_replay_screen.dart';
+import 'mood_radio_screen.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -100,6 +102,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     NavigationHelper.push(context, const AccountScreen());
                   } else if (value == 'history') {
                     NavigationHelper.push(context, const HistoryScreen());
+                  } else if (value == 'replay') {
+                    NavigationHelper.push(context, const GroovyReplayScreen());
+                  } else if (value == 'mood_radio') {
+                    NavigationHelper.push(context, const MoodRadioScreen());
                   }
                 },
                 itemBuilder: (context) => [
@@ -125,6 +131,42 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w500,
                         color: isDark ? Colors.white : Colors.black87,
                       ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'replay',
+                    height: 44,
+                    child: Row(
+                      children: [
+                        Icon(CupertinoIcons.sparkles, color: AppTheme.appleMusicRed, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Groovy Replay',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'mood_radio',
+                    height: 44,
+                    child: Row(
+                      children: [
+                        Icon(CupertinoIcons.sparkles, color: AppTheme.appleMusicRed, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'AI Mood Radio',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   PopupMenuItem(
@@ -265,6 +307,110 @@ class _HomeScreenState extends State<HomeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const SizedBox(height: 12),
+
+                      // AI MOOD RADIO BANNER
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: hPad, vertical: 8),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: () => NavigationHelper.push(context, const MoodRadioScreen()),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: isDark
+                                      ? [
+                                          const Color(0xFF281524),
+                                          const Color(0xFF171328),
+                                        ]
+                                      : [
+                                          const Color(0xFFFFECEF),
+                                          const Color(0xFFF1EAFF),
+                                        ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: AppTheme.appleMusicRed.withValues(alpha: 0.2),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.appleMusicRed.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      CupertinoIcons.sparkles,
+                                      color: AppTheme.appleMusicRed,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              'AI Mood Radio',
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.bold,
+                                                color: isDark ? Colors.white : Colors.black87,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: AppTheme.appleMusicRed,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: const Text(
+                                                'NUEVO',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.bold,
+                                                  letterSpacing: 0.5,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          'Sintoniza mixes temáticos según tu vibra o actividad',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: isDark ? Colors.white60 : Colors.black54,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Icon(
+                                    CupertinoIcons.chevron_forward,
+                                    color: isDark ? Colors.white38 : Colors.black38,
+                                    size: 18,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
 
                       // 1. REPRODUCCIONES RECIENTES
                       if (recentSongs.isNotEmpty)

@@ -13,6 +13,7 @@ class LyricsLineWidget extends StatefulWidget {
   final LyricLine line;
   final LyricLineState state;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
   final bool isUnsynced;
   final int distance;
 
@@ -21,6 +22,7 @@ class LyricsLineWidget extends StatefulWidget {
     required this.line,
     required this.state,
     required this.onTap,
+    this.onLongPress,
     this.isUnsynced = false,
     this.distance = 0,
   });
@@ -88,6 +90,7 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
     if (_isMobilePlatform) {
       return GestureDetector(
         onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),
@@ -102,6 +105,7 @@ class _LyricsLineWidgetState extends State<LyricsLineWidget> {
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
         behavior: HitTestBehavior.opaque,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 13.0, horizontal: 28.0),

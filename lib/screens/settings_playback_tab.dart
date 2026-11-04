@@ -33,6 +33,7 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   int _autoDjSongsToAdd = 5;
   bool _fadeEnabled = false;
   int _fadeDurationMs = 300;
+  bool _djTransitionEnabled = false;
 
   @override
   void initState() {
@@ -57,6 +58,7 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
       _autoDjSongsToAdd = playerProvider.autoDjService.songsToAdd;
       _fadeEnabled = _fadeSettingsService.getFadeEnabled();
       _fadeDurationMs = _fadeSettingsService.getFadeDurationMs();
+      _djTransitionEnabled = _fadeSettingsService.getDjTransitionEnabled();
     });
   }
 
@@ -446,6 +448,49 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
             ),
           ),
         ],
+        const SettingsDivider(),
+        ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 4,
+          ),
+          leading: Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFFA2D48), Color(0xFFAF52DE)],
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              CupertinoIcons.metronome,
+              color: Colors.white,
+              size: 18,
+            ),
+          ),
+          title: const Text(
+            'Mezcla armónica estilo DJ (BPM)',
+            style: TextStyle(fontSize: 16),
+          ),
+          subtitle: Text(
+            'Calcula los tempos con BpmAnalyzer para transiciones fluidas al compás entre temas',
+            style: TextStyle(
+              fontSize: 13,
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Colors.white.withValues(alpha: 0.5)
+                  : Colors.black.withValues(alpha: 0.5),
+            ),
+          ),
+          trailing: CupertinoSwitch(
+            value: _djTransitionEnabled,
+            activeTrackColor: AppTheme.appleMusicRed,
+            onChanged: (v) async {
+              await _fadeSettingsService.setDjTransitionEnabled(v);
+              setState(() => _djTransitionEnabled = v);
+            },
+          ),
+        ),
       ],
     );
   }

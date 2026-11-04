@@ -1,3 +1,6 @@
+import '../widgets/playlist_import_modal.dart';
+import '../widgets/playlist_mosaic_cover.dart';
+import '../widgets/playlist_cover_designer_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -5,7 +8,6 @@ import '../models/models.dart';
 import '../providers/providers.dart';
 import '../services/offline_service.dart';
 import '../theme/app_theme.dart';
-import '../widgets/widgets.dart';
 import 'playlist_screen.dart';
 
 class PlaylistsScreen extends StatefulWidget {
@@ -62,6 +64,15 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
           ),
         ),
         actions: [
+          IconButton(
+            icon: Icon(
+              CupertinoIcons.square_arrow_down,
+              color: AppTheme.appleMusicRed,
+              size: 22,
+            ),
+            tooltip: 'Importar playlist de Spotify / M3U',
+            onPressed: () => PlaylistImportModal.show(context),
+          ),
           IconButton(
             icon: Icon(
               CupertinoIcons.add,
@@ -221,6 +232,14 @@ class _PlaylistsScreenState extends State<PlaylistsScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
+                leading: Icon(CupertinoIcons.paintbrush, color: AppTheme.appleMusicRed),
+                title: const Text('Personalizar portada'),
+                onTap: () {
+                  Navigator.pop(context);
+                  PlaylistCoverDesignerSheet.show(context, playlist);
+                },
+              ),
+              ListTile(
                 leading: const Icon(CupertinoIcons.trash, color: Colors.red),
                 title: const Text('Eliminar lista'),
                 onTap: () async {
@@ -251,24 +270,10 @@ class _PlaylistTile extends StatelessWidget {
 
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(
-        width: 56,
-        height: 56,
-        decoration: BoxDecoration(
-          color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: playlist.coverArt != null
-            ? AlbumArtwork(
-                coverArt: playlist.coverArt,
-                size: 56,
-                borderRadius: 8,
-              )
-            : Icon(
-                CupertinoIcons.music_note_list,
-                color: AppTheme.appleMusicRed,
-                size: 28,
-              ),
+      leading: PlaylistMosaicCover(
+        playlist: playlist,
+        size: 56,
+        borderRadius: 8,
       ),
       title: Text(
         playlist.name,

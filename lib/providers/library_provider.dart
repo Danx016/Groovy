@@ -1082,6 +1082,16 @@ class LibraryProvider extends ChangeNotifier {
     await loadPlaylists();
   }
 
+  Future<void> updatePlaylistCover(String playlistId, String coverArt) async {
+    final idx = _playlists.indexWhere((p) => p.id == playlistId);
+    if (idx != -1) {
+      final updated = _playlists[idx].copyWith(coverArt: coverArt);
+      _playlists[idx] = updated;
+      await _db.insertOrUpdatePlaylist(updated);
+      notifyListeners();
+    }
+  }
+
   Future<void> addSongToPlaylist(String playlistId, String songId) async {
     await _youtubeService.updatePlaylist(
       playlistId: playlistId,

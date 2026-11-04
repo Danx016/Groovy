@@ -1,3 +1,5 @@
+import 'groovy_jam_sheet.dart';
+import 'package:flutter/cupertino.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -553,7 +555,70 @@ class _GroovyConnectModalState extends State<GroovyConnectModal> {
                   player: player,
                 ),
 
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
+
+                // GROOVY JAM BANNER
+                InkWell(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    GroovyJamSheet.show(context);
+                  },
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          const Color(0xFFFA2D48).withValues(alpha: 0.16),
+                          const Color(0xFFAF52DE).withValues(alpha: 0.16),
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: const Color(0xFFFA2D48).withValues(alpha: 0.35),
+                        width: 0.8,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(7),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFFA2D48),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(CupertinoIcons.person_3_fill, color: Colors.white, size: 16),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Groovy Jam (Sesión compartida)',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                  color: primaryTextColor,
+                                ),
+                              ),
+                              Text(
+                                'Escucha con amigos y añade canciones en vivo',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: secondaryTextColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(CupertinoIcons.chevron_forward, size: 16, color: Color(0xFFFA2D48)),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
 
                 // 2. OTHER AVAILABLE DEVICES HEADER
                 Row(

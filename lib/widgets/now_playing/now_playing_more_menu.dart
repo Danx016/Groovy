@@ -1,3 +1,8 @@
+import '../lyrics/share_lyrics_sheet.dart';
+import 'sleep_timer_sheet.dart';
+import '../../screens/now_playing_screen.dart';
+import '../../services/lrclib_service.dart';
+import '../../services/lrc_ttml_parser.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -267,6 +272,85 @@ class _NowPlayingMoreMenuState extends State<NowPlayingMoreMenu> {
                 final targetCtx = NavigationHelper.navigatorKey.currentContext ?? context;
                 Navigator.of(context).pop();
                 DeepLinkService.shareSong(targetCtx, currentSong);
+              },
+            ),
+
+            // Compartir letra como imagen
+            _buildMenuItem(
+              icon: CupertinoIcons.quote_bubble,
+              title: 'Compartir letra como imagen',
+              textColor: textColor,
+              onTap: () async {
+                final cachedLyrics = NowPlayingScreen.getCachedLyrics(currentSong);
+                final nav = Navigator.of(context);
+                final targetCtx = NavigationHelper.navigatorKey.currentContext ?? context;
+                nav.pop();
+
+                if (cachedLyrics != null && cachedLyrics.isNotEmpty) {
+                  if (targetCtx.mounted) {
+                    ShareLyricsSheet.show(
+                      targetCtx,
+                      song: currentSong,
+                      lyrics: cachedLyrics,
+                      imageProvider: effectiveImage,
+                    );
+                  }
+                } else {
+                  final messenger = ScaffoldMessenger.of(targetCtx);
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('Buscando letras para compartir...'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                  final lrcLib = LrcLibService();
+                  final res = await lrcLib.searchLyrics(
+                    title: currentSong.title,
+                    artist: currentSong.artist,
+                    durationSeconds: currentSong.duration,
+                    songId: currentSong.id,
+                  );
+                  final syn = res?['syncedLyrics'] as String?;
+                  final plain = res?['plainLyrics'] as String?;
+                  final text = syn ?? plain;
+                  if (text != null && text.isNotEmpty) {
+                    final parsed = LrcParser.parseLrc(text);
+                    if (parsed.isNotEmpty) {
+                      NowPlayingScreen.setCachedLyrics(currentSong, parsed);
+                      if (targetCtx.mounted) {
+                        ShareLyricsSheet.show(
+                          targetCtx,
+                          song: currentSong,
+                          lyrics: parsed,
+                          imageProvider: effectiveImage,
+                        );
+                      }
+                      return;
+                    }
+                  }
+                  messenger.showSnackBar(
+                    const SnackBar(
+                      content: Text('No hay letras disponibles para esta canción'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+            ),
+
+            // Temporizador de apagado
+            _buildMenuItem(
+              icon: CupertinoIcons.timer,
+              title: playerProvider.hasSleepTimer
+                  ? 'Temporizador de apagado (Activo)'
+                  : 'Temporizador de apagado',
+              textColor: textColor,
+              onTap: () {
+                Navigator.of(context).pop();
+                final targetCtx = NavigationHelper.navigatorKey.currentContext ?? context;
+                if (targetCtx.mounted) {
+                  SleepTimerSheet.show(targetCtx);
+                }
               },
             ),
 

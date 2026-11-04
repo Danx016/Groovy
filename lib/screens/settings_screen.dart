@@ -1,3 +1,7 @@
+import 'settings_playback_tab.dart';
+import 'settings_storage_tab.dart';
+import 'equalizer_screen.dart';
+import 'groovy_replay_screen.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -171,15 +175,63 @@ class SettingsScreen extends StatelessWidget {
                   children: [
                     _AppleMusicSettingsTile(
                       isDark: isDark,
+                      icon: CupertinoIcons.slider_horizontal_3,
+                      iconColor: const Color(0xFFFA2D48),
+                      title: 'Ecualizador',
+                      subtitle: 'EQ de 5 bandas, Bass Boost y Efecto Espacial',
+                      onTap: () => _navigateToSubScreen(
+                        context,
+                        'Ecualizador',
+                        const EqualizerScreen(),
+                      ),
+                    ),
+                    _AppleMusicSettingsTile(
+                      isDark: isDark,
+                      icon: CupertinoIcons.play_circle_fill,
+                      iconColor: const Color(0xFF007AFF),
+                      title: 'Audio y Reproducción',
+                      subtitle: 'AutoDJ, ReplayGain, Transcodificación y Fade',
+                      onTap: () => _navigateToSubScreen(
+                        context,
+                        'Audio y Reproducción',
+                        const SettingsPlaybackTab(),
+                      ),
+                    ),
+                    _AppleMusicSettingsTile(
+                      isDark: isDark,
                       icon: CupertinoIcons.paintbrush_fill,
                       iconColor: const Color(0xFF5856D6),
                       title: 'Apariencia',
                       trailingText: themeName,
-                      isLast: true,
                       onTap: () => _navigateToSubScreen(
                         context,
                         'Apariencia',
                         const SettingsDisplayTab(),
+                      ),
+                    ),
+                    _AppleMusicSettingsTile(
+                      isDark: isDark,
+                      icon: CupertinoIcons.archivebox_fill,
+                      iconColor: const Color(0xFFFF9500),
+                      title: 'Almacenamiento y Caché',
+                      subtitle: 'Descargas offline y gestión de memoria',
+                      onTap: () => _navigateToSubScreen(
+                        context,
+                        'Almacenamiento y Caché',
+                        const SettingsStorageTab(),
+                      ),
+                    ),
+                    _AppleMusicSettingsTile(
+                      isDark: isDark,
+                      icon: CupertinoIcons.sparkles,
+                      iconColor: const Color(0xFFAF52DE),
+                      title: 'Groovy Replay',
+                      subtitle: 'Tus estadísticas, canciones top y resumen',
+                      isLast: true,
+                      onTap: () => _navigateToSubScreen(
+                        context,
+                        'Groovy Replay',
+                        const GroovyReplayScreen(),
                       ),
                     ),
                   ],

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/providers.dart';
 import '../theme/app_theme.dart';
 import '../utils/navigation_helper.dart';
@@ -10,11 +11,30 @@ import 'albums_screen.dart';
 import 'all_songs_screen.dart';
 import 'playlists_screen.dart';
 import 'downloads_screen.dart';
+import 'favorites_screen.dart';
+import 'genres_screen.dart';
+import 'history_screen.dart';
 import 'settings_screen.dart';
 import 'account_screen.dart';
 import '../l10n/app_localizations.dart';
 import '../models/models.dart';
 import '../widgets/album_artwork.dart';
+import '../widgets/playlist_import_modal.dart';
+
+class _LibraryCategoryItem {
+  final String id;
+  final String title;
+  final IconData icon;
+  final Widget Function() screenBuilder;
+  bool isVisible;
+
+  _LibraryCategoryItem({
+    required this.id,
+    required this.title,
+    required this.icon,
+    required this.screenBuilder,
+  }) : isVisible = true;
+}
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -24,10 +44,19 @@ class LibraryScreen extends StatefulWidget {
 }
 
 class _LibraryScreenState extends State<LibraryScreen> {
+  static const String _keyCategoryOrder = 'library_category_order_v2';
+  static const String _keyHiddenCategories = 'library_hidden_categories_v2';
+
+  bool _isEditing = false;
+  List<_LibraryCategoryItem> _categories = [];
+
   @override
   void initState() {
     super.initState();
+    _initCategories();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadCategoryPreferences();
+      if (!mounted) return;
       final libraryProvider = Provider.of<LibraryProvider>(context, listen: false);
       await libraryProvider.ensureLibraryLoaded();
       await Future.wait([
@@ -36,6 +65,106 @@ class _LibraryScreenState extends State<LibraryScreen> {
         libraryProvider.loadRecentAlbums(),
       ]);
     });
+  }
+
+  void _initCategories() {
+    _categories = [
+      _LibraryCategoryItem(
+        id: 'playlists',
+        title: 'Listas de reproducción',
+        icon: CupertinoIcons.music_note_list,
+        screenBuilder: () => const PlaylistsScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'artists',
+        title: 'Artistas',
+        icon: CupertinoIcons.mic,
+        screenBuilder: () => const ArtistsScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'albums',
+        title: 'Álbumes',
+        icon: CupertinoIcons.square_stack_3d_down_right,
+        screenBuilder: () => const AlbumsScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'songs',
+        title: 'Canciones',
+        icon: CupertinoIcons.music_note,
+        screenBuilder: () => const AllSongsScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'downloads',
+        title: 'Descargas',
+        icon: CupertinoIcons.arrow_down_circle,
+        screenBuilder: () => const DownloadsScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'favorites',
+        title: 'Favoritos',
+        icon: CupertinoIcons.star_fill,
+        screenBuilder: () => const FavoritesScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'genres',
+        title: 'Géneros',
+        icon: CupertinoIcons.guitars,
+        screenBuilder: () => const GenresScreen(),
+      ),
+      _LibraryCategoryItem(
+        id: 'history',
+        title: 'Historial',
+        icon: CupertinoIcons.time,
+        screenBuilder: () => const HistoryScreen(),
+      ),
+    ];
+  }
+
+  Future<void> _loadCategoryPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedOrder = prefs.getStringList(_keyCategoryOrder);
+      final hiddenSet = prefs.getStringList(_keyHiddenCategories)?.toSet() ?? {};
+
+      if (savedOrder != null && savedOrder.isNotEmpty) {
+        final byId = {for (final c in _categories) c.id: c};
+        final reordered = <_LibraryCategoryItem>[];
+        for (final id in savedOrder) {
+          if (byId.containsKey(id)) {
+            final item = byId.remove(id)!;
+            item.isVisible = !hiddenSet.contains(id);
+            reordered.add(item);
+          }
+        }
+        for (final remaining in byId.values) {
+          remaining.isVisible = !hiddenSet.contains(remaining.id);
+          reordered.add(remaining);
+        }
+        if (mounted) {
+          setState(() {
+            _categories = reordered;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() {
+            for (final c in _categories) {
+              c.isVisible = !hiddenSet.contains(c.id);
+            }
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveCategoryPreferences() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final order = _categories.map((c) => c.id).toList();
+      final hidden = _categories.where((c) => !c.isVisible).map((c) => c.id).toList();
+      await prefs.setStringList(_keyCategoryOrder, order);
+      await prefs.setStringList(_keyHiddenCategories, hidden);
+    } catch (_) {}
   }
 
   void _navigate(BuildContext context, Widget screen) {
@@ -142,6 +271,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
             actions: [
               IconButton(
                 icon: Icon(
+                  CupertinoIcons.square_arrow_down,
+                  color: AppTheme.appleMusicRed,
+                  size: 22,
+                ),
+                tooltip: 'Importar playlist',
+                onPressed: () => PlaylistImportModal.show(context),
+              ),
+              IconButton(
+                icon: Icon(
                   Icons.playlist_add,
                   color: AppTheme.appleMusicRed,
                   size: 26,
@@ -166,6 +304,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     NavigationHelper.push(context, const SettingsScreen());
                   } else if (value == 'account') {
                     NavigationHelper.push(context, const AccountScreen());
+                  } else if (value == 'import_playlist') {
+                    PlaylistImportModal.show(context);
                   }
                 },
                 itemBuilder: (context) => [
@@ -179,6 +319,24 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         fontWeight: FontWeight.w500,
                         color: isDark ? Colors.white : Colors.black87,
                       ),
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'import_playlist',
+                    height: 44,
+                    child: Row(
+                      children: [
+                        Icon(CupertinoIcons.square_arrow_down, color: AppTheme.appleMusicRed, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Importar playlist',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w500,
+                            color: isDark ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   PopupMenuItem(
@@ -199,7 +357,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ],
           ),
 
-          // 2. Large Apple Music Header ("Biblioteca" + "Editar")
+          // 2. Large Apple Music Header ("Biblioteca" + "Editar" / "Listo")
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16.0, 4.0, 16.0, 8.0),
@@ -217,9 +375,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
                     ),
                   ),
                   TextButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      setState(() {
+                        if (_isEditing) {
+                          _saveCategoryPreferences();
+                          _isEditing = false;
+                        } else {
+                          _isEditing = true;
+                        }
+                      });
+                    },
                     child: Text(
-                      'Editar',
+                      _isEditing ? 'Listo' : 'Editar',
                       style: TextStyle(
                         color: AppTheme.appleMusicRed,
                         fontSize: 16,
@@ -232,53 +399,107 @@ class _LibraryScreenState extends State<LibraryScreen> {
             ),
           ),
 
-          // 3. Apple Music Navigation Categories (Playlists, Artistas, Álbumes, Canciones)
+          // 3. Apple Music Navigation Categories (Normal or Edit Mode)
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: Column(
                 children: [
                   Divider(height: 1, color: dividerColor),
-
-                  // 1. Playlists
-                  _AppleMusicLibraryTile(
-                    icon: CupertinoIcons.music_note_list,
-                    title: 'Listas de reproducción',
-                    dividerColor: dividerColor,
-                    onTap: () => _navigate(context, const PlaylistsScreen()),
-                  ),
-
-                  // 2. Artistas
-                  _AppleMusicLibraryTile(
-                    icon: CupertinoIcons.mic,
-                    title: 'Artistas',
-                    dividerColor: dividerColor,
-                    onTap: () => _navigate(context, const ArtistsScreen()),
-                  ),
-
-                  // 3. Álbumes
-                  _AppleMusicLibraryTile(
-                    icon: CupertinoIcons.square_stack_3d_down_right,
-                    title: 'Álbumes',
-                    dividerColor: dividerColor,
-                    onTap: () => _navigate(context, const AlbumsScreen()),
-                  ),
-
-                  // 4. Canciones
-                  _AppleMusicLibraryTile(
-                    icon: CupertinoIcons.music_note,
-                    title: 'Canciones',
-                    dividerColor: dividerColor,
-                    onTap: () => _navigate(context, const AllSongsScreen()),
-                  ),
-
-                  // 5. Descargas
-                  _AppleMusicLibraryTile(
-                    icon: CupertinoIcons.arrow_down_circle,
-                    title: 'Descargas',
-                    dividerColor: dividerColor,
-                    onTap: () => _navigate(context, const DownloadsScreen()),
-                  ),
+                  if (_isEditing)
+                    ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _categories.length,
+                      buildDefaultDragHandles: false,
+                      onReorderItem: (oldIndex, newIndex) {
+                        setState(() {
+                          final item = _categories.removeAt(oldIndex);
+                          _categories.insert(newIndex, item);
+                        });
+                      },
+                      itemBuilder: (context, index) {
+                        final cat = _categories[index];
+                        return Container(
+                          key: ValueKey('edit_cat_${cat.id}'),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(color: dividerColor, width: 0.5),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8.0),
+                            child: Row(
+                              children: [
+                                // Checkbox / Toggle visibility
+                                GestureDetector(
+                                  onTap: () {
+                                    setState(() {
+                                      cat.isVisible = !cat.isVisible;
+                                    });
+                                  },
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(right: 12.0),
+                                    child: Icon(
+                                      cat.isVisible
+                                          ? CupertinoIcons.checkmark_circle_fill
+                                          : CupertinoIcons.circle,
+                                      color: cat.isVisible
+                                          ? AppTheme.appleMusicRed
+                                          : (isDark ? Colors.white30 : Colors.black26),
+                                      size: 24,
+                                    ),
+                                  ),
+                                ),
+                                Icon(
+                                  cat.icon,
+                                  color: cat.isVisible
+                                      ? AppTheme.appleMusicRed
+                                      : (isDark ? Colors.white30 : Colors.black38),
+                                  size: 22,
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    cat.title,
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w400,
+                                      color: cat.isVisible
+                                          ? (isDark ? Colors.white : Colors.black87)
+                                          : (isDark ? Colors.white38 : Colors.black38),
+                                    ),
+                                  ),
+                                ),
+                                // Drag handle
+                                ReorderableDragStartListener(
+                                  index: index,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(8.0),
+                                    child: Icon(
+                                      CupertinoIcons.bars,
+                                      color: isDark ? Colors.white38 : Colors.black38,
+                                      size: 22,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    ..._categories
+                        .where((cat) => cat.isVisible)
+                        .map(
+                          (cat) => _AppleMusicLibraryTile(
+                            icon: cat.icon,
+                            title: cat.title,
+                            dividerColor: dividerColor,
+                            onTap: () => _navigate(context, cat.screenBuilder()),
+                          ),
+                        ),
                 ],
               ),
             ),
@@ -328,93 +549,20 @@ class _LibraryScreenState extends State<LibraryScreen> {
                         children: [
                           Icon(
                             CupertinoIcons.music_albums,
-                            size: 48,
+                            size: 64,
                             color: isDark ? Colors.white24 : Colors.black26,
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 16),
                           Text(
-                            'No hay música en tu biblioteca',
+                            'Tu biblioteca está vacía',
                             style: TextStyle(
-                              color: isDark ? Colors.white70 : Colors.black87,
-                              fontSize: 16,
+                              fontSize: 17,
                               fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Agrega canciones, álbumes o playlists usando el menú (···) de cualquier canción.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: isDark ? Colors.white38 : Colors.black45,
-                              fontSize: 13,
+                              color: isDark ? Colors.white54 : Colors.black45,
                             ),
                           ),
                         ],
                       ),
-                    ),
-                  ),
-                );
-              }
-
-              if (albums.isEmpty && libraryProvider.cachedAllSongs.isNotEmpty) {
-                final songs = libraryProvider.cachedAllSongs.take(20).toList();
-                return SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                  sliver: SliverGrid(
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 18.0,
-                      crossAxisSpacing: 16.0,
-                      childAspectRatio: 0.78,
-                    ),
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final song = songs[index];
-                        return GestureDetector(
-                          onTap: () {
-                            final player = Provider.of<PlayerProvider>(context, listen: false);
-                            player.playSong(song);
-                          },
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: AlbumArtwork(
-                                    coverArt: song.coverArt,
-                                    size: double.infinity,
-                                    borderRadius: 10,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                song.title,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                  color: isDark ? Colors.white : Colors.black87,
-                                  letterSpacing: -0.2,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                song.artist ?? 'Artista desconocido',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: isDark ? Colors.white60 : Colors.black54,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                      childCount: songs.length,
                     ),
                   ),
                 );
@@ -425,28 +573,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 sliver: SliverGrid(
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
-                    mainAxisSpacing: 18.0,
-                    crossAxisSpacing: 16.0,
-                    childAspectRatio: 0.78,
+                    childAspectRatio: 0.76,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 20,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
                       final album = albums[index];
-                      final artistName = album.artistParticipants?.isNotEmpty == true
-                          ? album.artistParticipants!.map((r) => r.name).join(', ')
-                          : (album.artist ?? 'Varios Artistas');
+                      final artistName = album.artist?.isNotEmpty == true
+                          ? album.artist!
+                          : 'Artista desconocido';
 
-                      return GestureDetector(
+                      return InkWell(
                         onTap: () {
                           NavigationHelper.push(
                             context,
                             AlbumScreen(albumId: album.id, album: album),
                           );
                         },
+                        borderRadius: BorderRadius.circular(10),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Square Album Cover
+                            // Square Album Artwork
                             Expanded(
                               child: ClipRRect(
                                 borderRadius: BorderRadius.circular(10),

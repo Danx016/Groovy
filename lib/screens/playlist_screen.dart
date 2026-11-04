@@ -1,3 +1,5 @@
+import '../widgets/playlist_mosaic_cover.dart';
+import '../widgets/playlist_cover_designer_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:provider/provider.dart';
@@ -618,28 +620,25 @@ class _PlaylistScreenState extends State<PlaylistScreen> {
                       right: ScreenHelper.isSmallScreen(context) ? 24 : 40,
                       bottom: ScreenHelper.isSmallScreen(context) ? 60 : 80,
                     ),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: AppTheme.appleMusicRed.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: _playlist!.coverArt != null
-                          ? AlbumArtwork(
-                              coverArt: _playlist!.coverArt,
-                              size: 150,
-                              borderRadius: 12,
-                            )
-                          : Icon(
-                              CupertinoIcons.music_note_list,
-                              color: AppTheme.appleMusicRed,
-                              size: 64,
-                            ),
+                    child: PlaylistMosaicCover(
+                      playlist: _playlist!,
+                      size: 150,
+                      borderRadius: 12,
                     ),
                   ),
                 ],
               ),
             ),
             actions: [
+              if (!_isSelecting && _playlist != null)
+                IconButton(
+                  tooltip: 'Personalizar portada',
+                  icon: const Icon(CupertinoIcons.paintbrush),
+                  onPressed: () async {
+                    await PlaylistCoverDesignerSheet.show(context, _playlist!);
+                    await _loadPlaylist();
+                  },
+                ),
               if (_isSelecting) ...[
                 IconButton(
                   tooltip:
