@@ -603,12 +603,45 @@ class _SearchScreenState extends State<SearchScreen> {
       return slivers;
     }
 
-    // Filter: ALL ("Todo") - Unified Smart Stream
+    // Filter: ALL ("Todo") - Unified Smart Relational Stream
     if (_selectedFilter == SearchCategoryFilter.all) {
       final cleanQ = _query.toLowerCase().trim();
-      final hasDirectArtistMatch = result.artists.isNotEmpty &&
-          (result.artists.first.name.toLowerCase().trim() == cleanQ ||
-              cleanQ.startsWith(result.artists.first.name.toLowerCase().trim()));
+      final detectedGenre = YoutubeService.detectGenreInQuery(_query);
+
+      // 1. Banner de género musical detectado en la búsqueda
+      if (detectedGenre != null) {
+        slivers.add(
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+                decoration: BoxDecoration(
+                  color: primaryColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: primaryColor.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(CupertinoIcons.music_note_list, color: primaryColor, size: 18),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Género: ${detectedGenre.toUpperCase()} • Priorizando canciones, cantantes y álbumes del género',
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white70 : Colors.black87,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      }
 
       // Helper to build artist items
       Widget buildArtistTile(Artist artist) {
@@ -655,7 +688,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
         return _buildSpotifyItemTile(
           title: song.title,
-          subtitle: 'Canción • ${song.artist ?? "Desconocido"}',
+          subtitle: 'Canción • ${song.artist ?? "Desconocido"}${song.album != null && song.album!.trim().isNotEmpty && song.album!.toLowerCase() != "album" ? " • ${song.album}" : ""}',
           imageUrl: song.coverArt,
           isCircular: false,
           isDark: isDark,
@@ -680,17 +713,45 @@ class _SearchScreenState extends State<SearchScreen> {
         );
       }
 
-      if (hasDirectArtistMatch) {
-        // Query specifically matched artist (e.g. "Coldplay") -> show Artist at the top
-        final topArtist = result.artists.first;
+      final topArtist = result.artists.isNotEmpty ? result.artists.first : null;
+      final artistScore = topArtist != null ? YoutubeService.scoreArtistRelevance(topArtist, cleanQ) : 0;
+
+      final topAlbum = result.albums.isNotEmpty ? result.albums.first : null;
+      final albumScore = topAlbum != null ? YoutubeService.scoreAlbumRelevance(topAlbum, cleanQ) : 0;
+
+      final topSong = allSongs.isNotEmpty ? allSongs.first : null;
+
+      // ── MEJOR RESULTADO (TOP RESULT) ──────────────────────────────────
+      // 1. Prioridad: Coincidencia destacada con Cantante / Artista
+      if (topArtist != null && artistScore >= 650) {
         slivers.add(
           SliverToBoxAdapter(
-            child: buildArtistTile(topArtist),
+            child: _buildTopResultCard(
+              tag: 'Artista',
+              title: topArtist.name,
+              subtitle: 'Cantante / Artista',
+              imageUrl: topArtist.coverArt,
+              isCircular: true,
+              isDark: isDark,
+              primaryColor: primaryColor,
+              onTap: () {
+                RecentSearchesService().addArtist(topArtist);
+                NavigationHelper.push(
+                  context,
+                  ArtistScreen(artistId: topArtist.id, artist: topArtist),
+                );
+              },
+              onPlay: () {
+                if (allSongs.isNotEmpty) {
+                  _playSearchSong(context, allSongs.first, allSongs, 0);
+                }
+              },
+            ),
           ),
         );
 
-        // Then songs
         if (allSongs.isNotEmpty) {
+          slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Canciones de ${topArtist.name}', isDark)));
           slivers.add(
             SliverList.builder(
               itemCount: allSongs.length,
@@ -699,19 +760,47 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         }
 
-        // Then albums
         if (result.albums.isNotEmpty) {
-          final topAlbums = result.albums.take(2).toList();
+          slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Álbumes', isDark)));
+          final albumsToShow = result.albums.take(4).toList();
           slivers.add(
             SliverList.builder(
-              itemCount: topAlbums.length,
-              itemBuilder: (ctx, index) => buildAlbumTile(topAlbums[index]),
+              itemCount: albumsToShow.length,
+              itemBuilder: (ctx, index) => buildAlbumTile(albumsToShow[index]),
             ),
           );
         }
-      } else {
-        // Normal song / keyword search -> PRIORITIZE SONGS AT THE VERY TOP!
+      }
+      // 2. Prioridad: Coincidencia destacada con Álbum
+      else if (topAlbum != null && albumScore >= 650 && albumScore >= artistScore) {
+        slivers.add(
+          SliverToBoxAdapter(
+            child: _buildTopResultCard(
+              tag: 'Álbum',
+              title: topAlbum.name,
+              subtitle: 'Álbum • ${topAlbum.artist ?? "Varios Artistas"}',
+              imageUrl: topAlbum.coverArt,
+              isCircular: false,
+              isDark: isDark,
+              primaryColor: primaryColor,
+              onTap: () {
+                RecentSearchesService().addAlbum(topAlbum);
+                NavigationHelper.push(
+                  context,
+                  AlbumScreen(albumId: topAlbum.id, album: topAlbum),
+                );
+              },
+              onPlay: () {
+                if (allSongs.isNotEmpty) {
+                  _playSearchSong(context, allSongs.first, allSongs, 0);
+                }
+              },
+            ),
+          ),
+        );
+
         if (allSongs.isNotEmpty) {
+          slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Canciones del álbum', isDark)));
           slivers.add(
             SliverList.builder(
               itemCount: allSongs.length,
@@ -720,9 +809,54 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         }
 
-        // Matching artists right after songs
         if (result.artists.isNotEmpty) {
-          final topArtists = result.artists.take(2).toList();
+          slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Artistas relacionados', isDark)));
+          final artistsToShow = result.artists.take(3).toList();
+          slivers.add(
+            SliverList.builder(
+              itemCount: artistsToShow.length,
+              itemBuilder: (ctx, index) => buildArtistTile(artistsToShow[index]),
+            ),
+          );
+        }
+      }
+      // 3. Prioridad: Canción o búsqueda de Canción + Cantante / Título
+      else {
+        if (topSong != null) {
+          slivers.add(
+            SliverToBoxAdapter(
+              child: _buildTopResultCard(
+                tag: 'Canción',
+                title: topSong.title,
+                subtitle: '${topSong.artist ?? "Desconocido"}${topSong.album != null && topSong.album!.trim().isNotEmpty && topSong.album!.toLowerCase() != "album" ? " • ${topSong.album}" : ""}',
+                imageUrl: topSong.coverArt,
+                isCircular: false,
+                isDark: isDark,
+                primaryColor: primaryColor,
+                onTap: () {
+                  _playSearchSong(context, topSong, allSongs, 0);
+                },
+                onPlay: () {
+                  _playSearchSong(context, topSong, allSongs, 0);
+                },
+              ),
+            ),
+          );
+
+          if (allSongs.length > 1) {
+            slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Canciones relacionadas', isDark)));
+            slivers.add(
+              SliverList.builder(
+                itemCount: allSongs.length - 1,
+                itemBuilder: (ctx, index) => buildSongTile(allSongs[index + 1], index + 1),
+              ),
+            );
+          }
+        }
+
+        if (result.artists.isNotEmpty) {
+          slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Artistas relacionados', isDark)));
+          final topArtists = result.artists.take(3).toList();
           slivers.add(
             SliverList.builder(
               itemCount: topArtists.length,
@@ -731,9 +865,9 @@ class _SearchScreenState extends State<SearchScreen> {
           );
         }
 
-        // Matching albums
         if (result.albums.isNotEmpty) {
-          final topAlbums = result.albums.take(2).toList();
+          slivers.add(SliverToBoxAdapter(child: _buildSectionHeader('Álbumes relacionados', isDark)));
+          final topAlbums = result.albums.take(3).toList();
           slivers.add(
             SliverList.builder(
               itemCount: topAlbums.length,
@@ -745,6 +879,157 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     return slivers;
+  }
+
+  Widget _buildSectionHeader(String title, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, right: 16, top: 16, bottom: 8),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          letterSpacing: -0.2,
+          color: isDark ? Colors.white : Colors.black87,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopResultCard({
+    required String tag,
+    required String title,
+    required String subtitle,
+    required String? imageUrl,
+    required bool isCircular,
+    required bool isDark,
+    required Color primaryColor,
+    required VoidCallback onTap,
+    required VoidCallback onPlay,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'MEJOR RESULTADO',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.8,
+              color: isDark ? Colors.white60 : Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFF1E1E22).withValues(alpha: 0.9)
+                      : const Color(0xFFF2F2F7),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    if (isCircular)
+                      AlbumArtwork(
+                        coverArt: imageUrl,
+                        size: 68,
+                        borderRadius: 34,
+                        placeholderIcon: Icons.person_rounded,
+                      )
+                    else
+                      AlbumArtwork(
+                        coverArt: imageUrl,
+                        size: 68,
+                        borderRadius: 12,
+                      ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                            decoration: BoxDecoration(
+                              color: primaryColor.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              tag.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: primaryColor,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 5),
+                          Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            subtitle,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: isDark ? Colors.white60 : Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    GestureDetector(
+                      onTap: onPlay,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: primaryColor,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: primaryColor.withValues(alpha: 0.35),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 26,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyCategoryMessage(String message) {

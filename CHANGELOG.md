@@ -5,17 +5,18 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2026-11-04
+## [2.1.1] - 2026-11-04
 
 ### Added & Improved
 - **Importador Universal de Playlists (Spotify, Apple Music, YouTube & M3U/CSV)**:
   - Importación directa de enlaces de playlists de Spotify y YouTube mediante resolución y scraping embebido sin requerir credenciales de API.
   - Soporte de archivos `.m3u`, `.m3u8`, `.csv` y texto plano (`Artista - Canción`).
   - Vinculación y búsqueda automática en catálogo y streaming con indicador visual de progreso y guardado en la base de datos local SQLite.
-- **AI Mood Radio (Generador de Mixes Temáticos por Estado de Ánimo)**:
-  - 8 estaciones temáticas con diseño Glassmorphism (*Gym & Potencia, Noche de Lluvia, Café de Domingo, Enfoque & Estudio, Carretera al Atardecer, Fiesta & Descontrol, Despecho & Sentimiento, Cyberpunk & Gaming*).
-  - Entrada libre de prompt para generar estaciones contextuales personalizadas al instante.
-  - Fusión de palabras clave con el modelo de afinidad de artistas en `RecommendationService`.
+- **Buscador Relacional Inteligente (Priorización por Cantante, Álbum y Género)**:
+  - Sistema de puntuación multidimensional que correlaciona de forma cruzada el cantante, álbum, género musical y título de la canción.
+  - Si el usuario busca un cantante y una canción (ej. *feid luna* o *bad bunny dakiti*), la canción original oficial de ese cantante se prioriza automáticamente al primer lugar frente a remixes, parodias o covers de terceros.
+  - Detección automática de géneros musicales (*Reggaeton, Trap, Rock, Pop, Salsa, Bachata, Cumbia, Vallenato, Corridos, Electrónica, Lo-Fi, etc.*) con impulso temático en tiempo real.
+  - Tarjeta de 'Mejor Resultado' (Top Result) inspirada en Apple Music y Spotify para artistas, álbumes y canciones destacadas.
 - **Ecualizador Gráfico & Efectos Sonoros (Modo Audiófilo)**:
   - Ecualizador de 5 bandas (-12 dB a +12 dB) con curva spline reactiva y 9 presets acústicos calibrados.
   - Deslizadores de efecto espacial 3D (*Virtualizer*) y refuerzo de graves (*Bass Boost*) procesados mediante mpv/lavfi en Windows y AudioEffects en Android.

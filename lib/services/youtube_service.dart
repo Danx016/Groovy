@@ -856,7 +856,84 @@ class YoutubeService {
     return '$cleanTitle::$cleanArtist';
   }
 
-  /// Calculates relevance score to prioritize original artist recordings, exact query matches, and official releases over covers and fan edits.
+  static const Map<String, List<String>> genreSynonyms = {
+    'reggaeton': ['reggaeton', 'regueton', 'urbano', 'dembow', 'perreo', 'latino', 'mambo'],
+    'trap': ['trap', 'drill', 'trap latino', 'latin trap'],
+    'rap': ['rap', 'hip hop', 'hiphop', 'boom bap', 'freestyle', 'cypher'],
+    'rock': ['rock', 'hard rock', 'grunge', 'punk', 'metal', 'heavy metal', 'rock en espanol', 'rock en español'],
+    'pop': ['pop', 'electropop', 'dance pop', 'synthpop', 'kpop', 'k-pop'],
+    'salsa': ['salsa', 'timba', 'guaguanco', 'son cubano'],
+    'bachata': ['bachata', 'amargue'],
+    'cumbia': ['cumbia', 'cumbion', 'cumbia villera', 'cumbia sonidera'],
+    'vallenato': ['vallenato', 'acordeon'],
+    'regional': ['corridos', 'corrido', 'corridos tumbados', 'regional mexicano', 'banda', 'norteno', 'norteño', 'ranchera'],
+    'electronica': ['electronica', 'electronic', 'edm', 'house', 'techno', 'tech house', 'phonk', 'trance', 'darksynth', 'synthwave'],
+    'lofi': ['lofi', 'lo-fi', 'chillhop', 'ambient', 'chill'],
+    'rnb': ['r&b', 'rnb', 'soul', 'blues'],
+    'indie': ['indie', 'indie rock', 'indie pop', 'shoegaze'],
+    'jazz': ['jazz', 'bossa nova', 'bossa'],
+    'balada': ['balada', 'baladas', 'acustico', 'acústico', 'bolero', 'romantica'],
+  };
+
+  static String? detectGenreInQuery(String query) {
+    final q = _normalize(query);
+    for (final entry in genreSynonyms.entries) {
+      for (final syn in entry.value) {
+        final synNorm = _normalize(syn);
+        if (q == synNorm || q.startsWith('$synNorm ') || q.endsWith(' $synNorm') || q.contains(' $synNorm ')) {
+          return entry.key;
+        }
+      }
+    }
+    return null;
+  }
+
+  static int scoreArtistRelevance(Artist artist, String query) {
+    int score = 0;
+    final q = _normalize(query);
+    final name = _normalize(artist.name);
+    if (name.isEmpty || q.isEmpty) return 0;
+
+    if (name == q) {
+      score += 1000;
+    } else if (name.startsWith(q)) {
+      score += 750;
+    } else if (q.startsWith(name)) {
+      score += 650;
+    } else if (name.contains(q)) {
+      score += 450;
+    } else if (q.contains(name)) {
+      score += 400;
+    }
+    return score;
+  }
+
+  static int scoreAlbumRelevance(Album album, String query) {
+    int score = 0;
+    final q = _normalize(query);
+    final name = _normalize(album.name);
+    final artist = _normalize(album.artist ?? '');
+    if (name.isEmpty || q.isEmpty) return 0;
+
+    if (name == q) {
+      score += 1000;
+    } else if (name.startsWith(q)) {
+      score += 750;
+    } else if (name.contains(q)) {
+      score += 450;
+    } else if (q.contains(name)) {
+      score += 400;
+    }
+
+    if (artist == q) {
+      score += 500;
+    } else if (q.contains(artist)) {
+      score += 350;
+    }
+    return score;
+  }
+
+  /// Calculates multidimensional relevance score connecting Song Name, Artist/Singer, Album, and Musical Genre.
   int scoreSongRelevance(Song song, String query, {int originalIndex = 0}) {
     int score = 0;
     final qClean = _normalize(query);
@@ -865,75 +942,111 @@ class YoutubeService {
     final titleClean = _normalize(song.title);
     final artistClean = _normalize(song.artist ?? '');
     final albumClean = _normalize(song.album ?? '');
+    final genreClean = _normalize(song.genre ?? '');
     final combinedClean = '$titleClean $artistClean';
 
     final qWords = qClean.split(' ').where((w) => w.length > 1).toList();
 
-    // 1. Exact or high-match Title scoring
-    if (titleClean == qClean) {
-      score += 420;
-    } else if (titleClean.startsWith(qClean)) {
-      score += 260;
-    } else if (qClean.contains(titleClean) && titleClean.length >= 3) {
-      score += 230;
-    } else if (titleClean.contains(qClean)) {
-      score += 180;
+    // 1. GÉNERO MUSICAL: Detectar y relacionar el género buscado
+    final detectedGenre = detectGenreInQuery(query);
+    if (detectedGenre != null) {
+      final syns = genreSynonyms[detectedGenre] ?? [detectedGenre];
+      bool matchGenre = false;
+      for (final syn in syns) {
+        final sn = _normalize(syn);
+        if (genreClean.contains(sn) || titleClean.contains(sn) || albumClean.contains(sn) || artistClean.contains(sn)) {
+          matchGenre = true;
+          break;
+        }
+      }
+      if (matchGenre) {
+        score += 360; // Gran impulso para canciones que encajan con el género pedido
+      }
     }
 
-    // 2. Query token matching across Title + Artist (e.g. "Coldplay Yellow" or "Feid Luna")
+    // 2. CANTANTE / ARTISTA: Relacionar y priorizar si el usuario busca por nombre de cantante
+    if (artistClean.isNotEmpty) {
+      if (artistClean == qClean) {
+        score += 550; // La búsqueda es exactamente este cantante
+      } else if (qClean.contains(artistClean) && artistClean.length >= 3) {
+        score += 450; // La búsqueda incluye a este cantante
+
+        // Cross-match: ¿El resto de la búsqueda coincide con el nombre de la canción?
+        final remainder = _normalize(qClean.replaceAll(artistClean, ''));
+        if (remainder.isNotEmpty) {
+          if (titleClean == remainder) {
+            score += 650; // COINCIDENCIA PERFECTA: Cantante + Canción (ej. "feid luna" -> Luna de Feid)
+          } else if (titleClean.startsWith(remainder) || remainder.startsWith(titleClean)) {
+            score += 450;
+          } else if (titleClean.contains(remainder)) {
+            score += 300;
+          }
+        }
+      } else if (artistClean.contains(qClean) && qClean.length >= 3) {
+        score += 380;
+      } else {
+        // Coincidencia por palabras del artista
+        final aWords = artistClean.split(' ').where((w) => w.length > 2).toList();
+        if (aWords.isNotEmpty && aWords.every((w) => qClean.contains(w))) {
+          score += 340;
+        }
+      }
+    }
+
+    // 3. ÁLBUM: Relacionar canciones que pertenecen al álbum buscado
+    if (albumClean.isNotEmpty && albumClean != 'album' && albumClean != 'álbum' && albumClean != 'single') {
+      if (albumClean == qClean) {
+        score += 460; // Canción que pertenece exactamente al álbum buscado (ej. "Un Verano Sin Ti")
+      } else if (qClean.contains(albumClean) && albumClean.length >= 4) {
+        score += 360;
+      } else if (albumClean.contains(qClean) && qClean.length >= 4) {
+        score += 260;
+      }
+    }
+
+    // 4. NOMBRE DE CANCIÓN
+    if (titleClean == qClean) {
+      score += 520; // Búsqueda exacta del título de la canción
+    } else if (titleClean.startsWith(qClean)) {
+      score += 340;
+    } else if (qClean.startsWith(titleClean) && titleClean.length >= 3) {
+      score += 280;
+    } else if (titleClean.contains(qClean)) {
+      score += 220;
+    }
+
+    // 5. Coincidencia token por token en Title + Artist + Album
     if (qWords.isNotEmpty) {
       int matchedTokens = 0;
       for (final w in qWords) {
-        if (combinedClean.contains(w)) {
+        if (combinedClean.contains(w) || albumClean.contains(w) || genreClean.contains(w)) {
           matchedTokens++;
         }
       }
       final ratio = matchedTokens / qWords.length;
       if (ratio == 1.0) {
-        score += 320; // 100% of search terms match the title and/or artist
-      } else if (ratio >= 0.7) {
-        score += 190;
-      } else if (ratio >= 0.5) {
-        score += 100;
-      }
-    }
-
-    // 3. Artist match with search query
-    if (artistClean.isNotEmpty) {
-      if (artistClean == qClean) {
-        score += 220;
-      } else if (qClean.contains(artistClean) && artistClean.length >= 3) {
+        score += 320;
+      } else if (ratio >= 0.65) {
         score += 170;
-      } else if (artistClean.contains(qClean)) {
-        score += 120;
       }
     }
 
-    // 4. Position bonus from original YouTube search ranking (YouTube already ranks by popularity/views)
+    // 6. Bonus por ranking original de streaming / popularidad
     if (originalIndex >= 0 && originalIndex < 30) {
-      score += (30 - originalIndex) * 3; // #1 gets +90, #2 gets +87, etc.
+      score += (30 - originalIndex) * 3;
     }
 
-    // 5. Verified official album release (slight boost)
-    if (song.album != null &&
-        song.album!.trim().isNotEmpty &&
-        albumClean != 'album' &&
-        albumClean != 'álbum' &&
-        albumClean != 'single') {
-      score += 40;
-    }
-
-    // 6. Official artist channel / topic channel / official release tags
+    // 7. Canal oficial de artista / Audio oficial / Topic
     if (artistClean.contains('topic') ||
         artistClean.contains('official') ||
         titleClean.contains('official audio') ||
-        titleClean.contains('official video') ||
         titleClean.contains('audio oficial') ||
+        titleClean.contains('official video') ||
         titleClean.contains('video oficial')) {
-      score += 40;
+      score += 50;
     }
 
-    // 7. Demote unofficial / fan content (covers, karaoke, slowed+reverb, 8D audio, tributes)
+    // 8. Penalizaciones estrictas a grabaciones no oficiales, parodias, covers, karaoke, loops
     const penalties = [
       'cover',
       'tributo',
@@ -960,17 +1073,17 @@ class YoutubeService {
 
     for (final penalty in penalties) {
       if (!qClean.contains(penalty)) {
-        if (titleClean.contains(penalty)) score -= 150;
-        if (artistClean.contains(penalty)) score -= 150;
+        if (titleClean.contains(penalty)) score -= 220;
+        if (artistClean.contains(penalty)) score -= 220;
       }
     }
 
-    // 8. Normal studio song duration reward (1:30 to 7:00) vs extremes (sample / long loops)
+    // 9. Duración normal de estudio (entre 1:30 y 7:00 minutos)
     if (song.duration != null && song.duration! > 0) {
       if (song.duration! < 45 || song.duration! > 900) {
         score -= 90;
       } else if (song.duration! >= 90 && song.duration! <= 420) {
-        score += 25;
+        score += 30;
       }
     }
 
@@ -1126,6 +1239,10 @@ class YoutubeService {
         final scoreB = songScoreMap[b.id] ?? 0;
         return scoreB.compareTo(scoreA);
       });
+
+      // Prioritize artists and albums by relevance to user query
+      artists.sort((a, b) => scoreArtistRelevance(b, query).compareTo(scoreArtistRelevance(a, query)));
+      albums.sort((a, b) => scoreAlbumRelevance(b, query).compareTo(scoreAlbumRelevance(a, query)));
 
       final finalSongs = candidateSongs.take(songCount).toList();
 

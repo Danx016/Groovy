@@ -1175,20 +1175,22 @@ class LibraryProvider extends ChangeNotifier {
 
     final artists = _artists
         .where((a) => a.name.toLowerCase().contains(q))
-        .take(20)
         .toList();
+    artists.sort((a, b) => YoutubeService.scoreArtistRelevance(b, query).compareTo(YoutubeService.scoreArtistRelevance(a, query)));
+
     final albums = _cachedAllAlbums
         .where(
           (a) =>
               a.name.toLowerCase().contains(q) ||
               (a.artist?.toLowerCase().contains(q) ?? false),
         )
-        .take(20)
         .toList();
+    albums.sort((a, b) => YoutubeService.scoreAlbumRelevance(b, query).compareTo(YoutubeService.scoreAlbumRelevance(a, query)));
+
     return SearchResult(
       songs: scoredSongs.take(50).map((e) => e.song).toList(),
-      artists: artists,
-      albums: albums,
+      artists: artists.take(20).toList(),
+      albums: albums.take(20).toList(),
     );
   }
 
