@@ -1,4 +1,3 @@
-import 'groovy_replay_screen.dart';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
@@ -101,8 +100,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     NavigationHelper.push(context, const AccountScreen());
                   } else if (value == 'history') {
                     NavigationHelper.push(context, const HistoryScreen());
-                  } else if (value == 'replay') {
-                    NavigationHelper.push(context, const GroovyReplayScreen());
                   }
                 },
                 itemBuilder: (context) => [
@@ -130,24 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-                  PopupMenuItem(
-                    value: 'replay',
-                    height: 44,
-                    child: Row(
-                      children: [
-                        Icon(CupertinoIcons.sparkles, color: AppTheme.appleMusicRed, size: 18),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Groovy Replay',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black87,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+
                   PopupMenuItem(
                     value: 'history',
                     height: 44,

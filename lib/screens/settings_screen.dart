@@ -1,7 +1,6 @@
 import 'settings_playback_tab.dart';
 import 'settings_storage_tab.dart';
 import 'equalizer_screen.dart';
-import 'groovy_replay_screen.dart';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -215,25 +214,14 @@ class SettingsScreen extends StatelessWidget {
                       iconColor: const Color(0xFFFF9500),
                       title: 'Almacenamiento y Caché',
                       subtitle: 'Descargas offline y gestión de memoria',
+                      isLast: true,
                       onTap: () => _navigateToSubScreen(
                         context,
                         'Almacenamiento y Caché',
                         const SettingsStorageTab(),
                       ),
                     ),
-                    _AppleMusicSettingsTile(
-                      isDark: isDark,
-                      icon: CupertinoIcons.sparkles,
-                      iconColor: const Color(0xFFAF52DE),
-                      title: 'Groovy Replay',
-                      subtitle: 'Tus estadísticas, canciones top y resumen',
-                      isLast: true,
-                      onTap: () => _navigateToSubScreen(
-                        context,
-                        'Groovy Replay',
-                        const GroovyReplayScreen(),
-                      ),
-                    ),
+
                   ],
                 ),
               ],

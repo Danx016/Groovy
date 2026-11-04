@@ -5,7 +5,7 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.1] - 2026-11-04
+## [2.1.2] - 2026-11-04
 
 ### Added & Improved
 - **Importador Universal de Playlists (Spotify, Apple Music, YouTube & M3U/CSV)**:
@@ -24,8 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Selección interactiva de 1 a 5 líneas de letras sincronizadas con portada, metadata y estilo Apple Music renderizado en alta resolución PNG para Instagram y WhatsApp.
 - **Diseñador y Mosaicos de Portadas para Playlists**:
   - Generación automática de collages 2x2 para playlists a partir del arte de las canciones contenidas o gradientes de color personalizados.
-- **Groovy Replay (Resumen Musical Anual/Mensual)**:
-  - Métricas completas de minutos reproducidos, canciones número 1, horas de escucha y tarjetas estéticas listas para compartir.
 - **Groovy Jam (Sesiones Colaborativas en Vivo)**:
   - Creación de salas `JAM-XXXX` y gestión de cola en tiempo real vía WebSockets.
 - **Temporizador de Apagado (Sleep Timer)**:
