@@ -5,6 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.3] - 2026-11-04
+
+### Fixed & Localized
+- **Corrección de Diseño en Ajustes de Transcodificación & Calidad de Streaming**:
+  - Solucionado el problema visual en `Ajustes > Audio y Reproducción` donde el texto "Calidad WiFi" y su descripción se comprimían verticalmente en una sola columna estrecha de letras.
+  - Implementado `selectedItemBuilder` en los menús desplegables de Tasa de bits WiFi, Datos Móviles y Formato de audio para mostrar etiquetas compactas y elegantes cuando están plegados, manteniendo el menú desplegable desplegado con los textos descriptivos completos sin sobrecargar el ancho de pantalla en móviles.
+- **Traducción Completa al Español en Ajustes de Reproducción**:
+  - Traducido al 100% al español:
+    - Selector de letras: "Letras" (Lyrics).
+    - Sección de reproducción sin silencios: "Reproducción continua (Gapless)" y descripción "Elimina las pausas y silencios entre canciones".
+    - Etiqueta de red detectada: "Wi-Fi" y "Datos móviles".
+    - Modos de Auto DJ: "Desactivado", "Biblioteca aleatoria", "Canciones similares", "Mismo género", "Mismo artista", "Mix inteligente".
+
 ## [2.1.2] - 2026-11-04
 
 ### Added & Improved

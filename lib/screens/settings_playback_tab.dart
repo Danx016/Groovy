@@ -133,7 +133,20 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   }
 
   String _getAutoDjModeLabel(AutoDjMode mode) {
-    return AutoDjService.getModeDisplayName(mode);
+    switch (mode) {
+      case AutoDjMode.off:
+        return 'Desactivado';
+      case AutoDjMode.shuffleLibrary:
+        return 'Biblioteca aleatoria';
+      case AutoDjMode.similarSongs:
+        return 'Canciones similares';
+      case AutoDjMode.sameGenre:
+        return 'Mismo género';
+      case AutoDjMode.sameArtist:
+        return 'Mismo artista';
+      case AutoDjMode.smartMix:
+        return 'Mix inteligente';
+    }
   }
 
   void _setAutoDjMode(AutoDjMode mode) {
@@ -272,7 +285,7 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
   Widget _buildLrcLibSection() {
     final accent = Theme.of(context).colorScheme.primary;
     return SettingsSectionCard(
-      title: 'Lyrics',
+      title: 'Letras',
       children: [
         ListTile(
           contentPadding: const EdgeInsets.symmetric(
@@ -326,7 +339,7 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
       builder: (context, player, _) {
         final accent = Theme.of(context).colorScheme.primary;
         return SettingsSectionCard(
-          title: 'Gapless Playback',
+          title: 'Reproducción continua',
           children: [
             ListTile(
               contentPadding: const EdgeInsets.symmetric(
@@ -349,11 +362,11 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
                 ),
               ),
               title: const Text(
-                'Gapless Playback',
+                'Reproducción sin pausas (Gapless)',
                 style: TextStyle(fontSize: 16),
               ),
               subtitle: Text(
-                'Eliminate silence between songs',
+                'Elimina las pausas y silencios entre canciones',
                 style: TextStyle(
                   fontSize: 13,
                   color: Theme.of(context).brightness == Brightness.dark
@@ -521,7 +534,7 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  isWifi ? 'WiFi' : 'Mobile',
+                  isWifi ? 'Wi-Fi' : 'Datos móviles',
                   style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w600,
@@ -648,19 +661,40 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
                           .transcodingWifiQualitySubtitle,
                   style: TextStyle(fontSize: 12, color: secondaryText),
                 ),
-                trailing: DropdownButton<int>(
-                  value: ts.wifiBitrate,
-                  underline: const SizedBox(),
-                  items: TranscodeBitrate.options.map((bitrate) {
-                    final label = bitrate == TranscodeBitrate.original
-                        ? AppLocalizations.of(context)!
-                            .transcodingBitrateOriginal
-                        : '$bitrate kbps';
-                    return DropdownMenuItem(value: bitrate, child: Text(label));
-                  }).toList(),
-                  onChanged: (v) {
-                    if (v != null) ts.setWifiBitrate(v);
-                  },
+                trailing: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: ts.wifiBitrate,
+                    isDense: true,
+                    alignment: Alignment.centerRight,
+                    selectedItemBuilder: (BuildContext context) {
+                      return TranscodeBitrate.options.map((bitrate) {
+                        final label = bitrate == TranscodeBitrate.original
+                            ? 'Original'
+                            : '$bitrate kbps';
+                        return Container(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      }).toList();
+                    },
+                    items: TranscodeBitrate.options.map((bitrate) {
+                      final label = bitrate == TranscodeBitrate.original
+                          ? AppLocalizations.of(context)!
+                              .transcodingBitrateOriginal
+                          : '$bitrate kbps';
+                      return DropdownMenuItem(value: bitrate, child: Text(label));
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) ts.setWifiBitrate(v);
+                    },
+                  ),
                 ),
               ),
               const SettingsDivider(),
@@ -683,19 +717,40 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
                           .transcodingMobileQualitySubtitle,
                   style: TextStyle(fontSize: 12, color: secondaryText),
                 ),
-                trailing: DropdownButton<int>(
-                  value: ts.mobileBitrate,
-                  underline: const SizedBox(),
-                  items: TranscodeBitrate.options.map((bitrate) {
-                    final label = bitrate == TranscodeBitrate.original
-                        ? AppLocalizations.of(context)!
-                            .transcodingBitrateOriginal
-                        : '$bitrate kbps';
-                    return DropdownMenuItem(value: bitrate, child: Text(label));
-                  }).toList(),
-                  onChanged: (v) {
-                    if (v != null) ts.setMobileBitrate(v);
-                  },
+                trailing: DropdownButtonHideUnderline(
+                  child: DropdownButton<int>(
+                    value: ts.mobileBitrate,
+                    isDense: true,
+                    alignment: Alignment.centerRight,
+                    selectedItemBuilder: (BuildContext context) {
+                      return TranscodeBitrate.options.map((bitrate) {
+                        final label = bitrate == TranscodeBitrate.original
+                            ? 'Original'
+                            : '$bitrate kbps';
+                        return Container(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      }).toList();
+                    },
+                    items: TranscodeBitrate.options.map((bitrate) {
+                      final label = bitrate == TranscodeBitrate.original
+                          ? AppLocalizations.of(context)!
+                              .transcodingBitrateOriginal
+                          : '$bitrate kbps';
+                      return DropdownMenuItem(value: bitrate, child: Text(label));
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) ts.setMobileBitrate(v);
+                    },
+                  ),
                 ),
               ),
               const SettingsDivider(),
@@ -710,19 +765,40 @@ class _SettingsPlaybackTabState extends State<SettingsPlaybackTab> {
                   AppLocalizations.of(context)!.transcodingFormatSubtitle,
                   style: TextStyle(fontSize: 12, color: secondaryText),
                 ),
-                trailing: DropdownButton<String>(
-                  value: ts.format,
-                  underline: const SizedBox(),
-                  items: TranscodeFormat.options.map((format) {
-                    final label = format == TranscodeFormat.original
-                        ? AppLocalizations.of(context)!
-                            .transcodingFormatOriginal
-                        : format.toUpperCase();
-                    return DropdownMenuItem(value: format, child: Text(label));
-                  }).toList(),
-                  onChanged: (v) {
-                    if (v != null) ts.setFormat(v);
-                  },
+                trailing: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: ts.format,
+                    isDense: true,
+                    alignment: Alignment.centerRight,
+                    selectedItemBuilder: (BuildContext context) {
+                      return TranscodeFormat.options.map((format) {
+                        final label = format == TranscodeFormat.original
+                            ? 'Original'
+                            : format.toUpperCase();
+                        return Container(
+                          alignment: Alignment.centerRight,
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        );
+                      }).toList();
+                    },
+                    items: TranscodeFormat.options.map((format) {
+                      final label = format == TranscodeFormat.original
+                          ? AppLocalizations.of(context)!
+                              .transcodingFormatOriginal
+                          : format.toUpperCase();
+                      return DropdownMenuItem(value: format, child: Text(label));
+                    }).toList(),
+                    onChanged: (v) {
+                      if (v != null) ts.setFormat(v);
+                    },
+                  ),
                 ),
               ),
             ],
