@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.4] - 2026-11-07
+
+### Fixed & Improved
+- **Autenticación y Conectividad con el Servidor**:
+  - Migración del endpoint base del backend a `https://delosmontesdemaria.dev/groovy/api` con fallback a DuckDNS, eliminando los bloqueos de certificados autofirmados de firewalls (FortiGate/Fortinet).
+  - Optimización de geolocalización IP en registro y reseteo de contraseñas mediante caché local en memoria (`geoip-lite`), reduciendo el tiempo de respuesta de 16s a menos de 400ms y solucionando el error "No se pudo conectar con el servidor Groovy".
+  - Corrección de sincronización de token en telemetría y Google Sign-In para prevenir cierres de sesión involuntarios con error 401.
+- **Actualizaciones Silenciosas y OTA**:
+  - Implementación de actualización silenciosa en segundo plano para Windows con InnoSetup (`/VERYSILENT /SUPPRESSMSGBOXES`).
+  - Integración de Shorebird Code Push para actualizaciones instantáneas sobre el aire (OTA) sin requerir instalación manual.
+
 ## [2.1.3] - 2026-11-04
 
 ### Fixed & Localized

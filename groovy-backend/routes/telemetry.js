@@ -285,7 +285,7 @@ router.post('/command', authenticateToken, async (req, res) => {
  * GET /api/telemetry/command
  * Long-polls pending commands for the calling device and delivers in real time
  */
-router.get('/command', authenticateToken, async (req, res) => {
+router.get('/command', optionalAuth, async (req, res) => {
   try {
     const deviceId = req.query.deviceId;
     const platform = req.query.platform || '';

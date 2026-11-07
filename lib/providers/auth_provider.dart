@@ -36,6 +36,9 @@ class AuthProvider extends ChangeNotifier {
     if (_state != AuthState.authenticated && _token == null) return;
     _stopSessionHeartbeat();
     await _storageService.clearUserAuth();
+    try {
+      GroovyConnectService().updateAuth(token: null, userId: null, userEmail: null);
+    } catch (_) {}
     _currentUser = null;
     _token = null;
     _error = 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.';
@@ -114,6 +117,13 @@ class AuthProvider extends ChangeNotifier {
         );
         _state = AuthState.authenticated;
         _isInitialLoading = false;
+        try {
+          GroovyConnectService().updateAuth(
+            token: _token,
+            userId: _currentUser?.id,
+            userEmail: _currentUser?.email,
+          );
+        } catch (_) {}
         notifyListeners();
 
         // Start real-time presence heartbeat
@@ -194,6 +204,13 @@ class AuthProvider extends ChangeNotifier {
       await _storageService.saveUserAuth(token: _token!, userJson: _currentUser!.toJson());
 
       _state = AuthState.authenticated;
+      try {
+        GroovyConnectService().updateAuth(
+          token: _token,
+          userId: _currentUser?.id,
+          userEmail: _currentUser?.email,
+        );
+      } catch (_) {}
       notifyListeners();
       _startSessionHeartbeat();
       syncUserDataFromCloud();
@@ -225,6 +242,13 @@ class AuthProvider extends ChangeNotifier {
       await _storageService.saveUserAuth(token: _token!, userJson: _currentUser!.toJson());
 
       _state = AuthState.authenticated;
+      try {
+        GroovyConnectService().updateAuth(
+          token: _token,
+          userId: _currentUser?.id,
+          userEmail: _currentUser?.email,
+        );
+      } catch (_) {}
       notifyListeners();
       _startSessionHeartbeat();
       syncUserDataFromCloud();
@@ -264,6 +288,13 @@ class AuthProvider extends ChangeNotifier {
         await _storageService.saveUserAuth(token: _token!, userJson: _currentUser!.toJson());
 
         _state = AuthState.authenticated;
+        try {
+          GroovyConnectService().updateAuth(
+            token: _token,
+            userId: _currentUser?.id,
+            userEmail: _currentUser?.email,
+          );
+        } catch (_) {}
         notifyListeners();
         _startSessionHeartbeat();
         syncUserDataFromCloud();

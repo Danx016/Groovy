@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '2.1.3';
+  static String currentVersion = '2.1.4';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -356,18 +356,21 @@ class UpdateService {
       }
     } else if (!kIsWeb && Platform.isWindows) {
       try {
+        // Run InnoSetup fully silently without prompts or wizards, and auto-relaunch
+        final appExePath = Platform.resolvedExecutable;
+        final installCmd = 'start /wait "" "$filePath" /VERYSILENT /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS & start "" "$appExePath"';
         await Process.start(
-          filePath,
-          ['/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'],
+          'cmd.exe',
+          ['/c', installCmd],
           mode: ProcessStartMode.detached,
         );
-        await Future.delayed(const Duration(milliseconds: 1500));
+        await Future.delayed(const Duration(milliseconds: 800));
         exit(0);
       } catch (_) {
         try {
           await Process.start(
-            'cmd.exe',
-            ['/c', 'start', '""', filePath],
+            filePath,
+            ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS'],
             mode: ProcessStartMode.detached,
           );
           await Future.delayed(const Duration(milliseconds: 1500));

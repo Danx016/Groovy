@@ -110,70 +110,44 @@ async function resolveIpLocation(ip) {
 
   let locationData = null;
 
-  // 1. Query real provider: ip-api.com
+  // 1. Instant local offline lookup (0ms RAM, zero network latency)
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`https://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org,as`, {
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.status === 'success') {
-        const flag = getCountryFlag(data.countryCode);
-        locationData = {
-          country: `${flag} ${data.country}`,
-          countryCode: data.countryCode,
-          flag,
-          city: data.city || 'Desconocido',
-          region: data.regionName || '',
-          isp: data.org || data.isp || 'Desconocido',
-        };
-      }
+    const geo = geoip.lookup(cleanIp);
+    if (geo && geo.country) {
+      const flag = getCountryFlag(geo.country);
+      locationData = {
+        country: `${flag} ${geo.country}`,
+        countryCode: geo.country,
+        flag,
+        city: geo.city || 'Desconocido',
+        region: geo.region || '',
+        isp: 'Internet',
+      };
     }
   } catch (_) {}
 
-  // 2. Query real provider: ipwho.is
+  // 2. Optional fast background enrichment if offline db had missing country
   if (!locationData) {
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 3000);
-      const res = await fetch(`https://ipwho.is/${cleanIp}`, {
+      const timeout = setTimeout(() => controller.abort(), 1200);
+      const res = await fetch(`https://ip-api.com/json/${cleanIp}?fields=status,country,countryCode,regionName,city,isp,org,as`, {
         signal: controller.signal,
       });
       clearTimeout(timeout);
       if (res.ok) {
         const data = await res.json();
-        if (data.success !== false) {
-          const flag = data.flag?.emoji || getCountryFlag(data.country_code);
+        if (data.status === 'success') {
+          const flag = getCountryFlag(data.countryCode);
           locationData = {
             country: `${flag} ${data.country}`,
-            countryCode: data.country_code,
+            countryCode: data.countryCode,
             flag,
             city: data.city || 'Desconocido',
-            region: data.region || '',
-            isp: data.connection?.org || data.connection?.isp || 'Desconocido',
+            region: data.regionName || '',
+            isp: data.org || data.isp || 'Desconocido',
           };
         }
-      }
-    } catch (_) {}
-  }
-
-  // 3. Fallback: geoip-lite
-  if (!locationData) {
-    try {
-      const geo = geoip.lookup(cleanIp);
-      if (geo) {
-        const flag = getCountryFlag(geo.country);
-        locationData = {
-          country: `${flag} ${geo.country}`,
-          countryCode: geo.country,
-          flag,
-          city: geo.city || 'Desconocido',
-          region: geo.region || '',
-          isp: 'Desconocido',
-        };
       }
     } catch (_) {}
   }

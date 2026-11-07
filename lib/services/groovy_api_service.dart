@@ -62,7 +62,8 @@ class GroovyApiService {
     initDeviceInfo();
   }
 
-  static const String defaultBaseUrl = 'https://groovyapi.duckdns.org/api';
+  static const String defaultBaseUrl = 'https://delosmontesdemaria.dev/groovy/api';
+  static const String fallbackBaseUrl = 'https://groovyapi.duckdns.org/api';
   String _baseUrl = defaultBaseUrl;
   final http.Client _client = http.Client();
 
@@ -252,7 +253,6 @@ class GroovyApiService {
         uri,
         headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 12000));
-      checkUnauthorized(res.statusCode, tokenUsed: effectiveToken);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['commands'] is List) {
@@ -292,7 +292,6 @@ class GroovyApiService {
         uri,
         headers: _headers(effectiveToken),
       ).timeout(const Duration(milliseconds: 6000));
-      checkUnauthorized(res.statusCode, tokenUsed: effectiveToken);
       if (res.statusCode == 200) {
         final data = jsonDecode(utf8.decode(res.bodyBytes));
         if (data is Map && data['devices'] is List) {
@@ -440,7 +439,7 @@ class GroovyApiService {
           'deviceModel': dev.deviceModel,
           'osVersion': dev.osVersion,
         }),
-      ).timeout(const Duration(seconds: 6));
+      ).timeout(const Duration(seconds: 15));
 
       final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       if (res.statusCode >= 200 && res.statusCode < 300 && data['success'] == true) {
@@ -495,7 +494,7 @@ class GroovyApiService {
           'deviceModel': dev.deviceModel,
           'osVersion': dev.osVersion,
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 15));
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
@@ -606,7 +605,7 @@ class GroovyApiService {
           'newPassword': newPassword,
           if (code != null) 'code': code,
         }),
-      ).timeout(const Duration(seconds: 12));
+      ).timeout(const Duration(seconds: 15));
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final data = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
