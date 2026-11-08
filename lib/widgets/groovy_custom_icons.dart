@@ -350,7 +350,7 @@ class _DiagonalExpandPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final strokeWidth = (w * 0.09).clamp(1.5, 2.2);
+    final strokeWidth = (w * 0.10).clamp(1.8, 2.4);
 
     final paint = Paint()
       ..color = color
@@ -424,7 +424,7 @@ class _DiagonalCollapsePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final strokeWidth = (w * 0.09).clamp(1.5, 2.2);
+    final strokeWidth = (w * 0.10).clamp(1.8, 2.4);
 
     final paint = Paint()
       ..color = color
@@ -499,7 +499,7 @@ class _ViewfinderPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final strokeWidth = (w * 0.09).clamp(1.5, 2.2);
+    final strokeWidth = (w * 0.10).clamp(1.8, 2.4);
 
     final paint = Paint()
       ..color = color
@@ -579,7 +579,7 @@ class _InwardCornersPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
-    final strokeWidth = (w * 0.09).clamp(1.5, 2.2);
+    final strokeWidth = (w * 0.10).clamp(1.8, 2.4);
 
     final paint = Paint()
       ..color = color

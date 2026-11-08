@@ -5,6 +5,17 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.6] - 2026-11-08
+
+### Fixed & Improved
+- **Diseño de Botones en Pantalla Completa & Letras (Now Playing)**:
+  - Rediseño de los botones superiores derechos (colapsar pantalla completa y cerrar) con contenedores circulares de vidrio esmerilado translúcido (`_GlassIconButton`) de 38x38 px y sombra suave, asegurando legibilidad perfecta sobre cualquier color de portada (fondos claros, verdes o oscuros).
+  - Trazo y dimensiones optimizadas para los iconos diagonales (`GroovyDiagonalCollapseIcon` y `GroovyDiagonalExpandIcon`) con animación reactiva de pulsación (`AnimatedScale`).
+- **Actualizaciones Silenciosas en Segundo Plano (Sin Interrupciones)**:
+  - En Android y Windows, la app ya no bloquea el inicio con un diálogo modal intrusivo. Ahora descarga automáticamente el paquete de actualización en segundo plano mientras disfrutas de tu música.
+  - Al completar la descarga, muestra una notificación discreta flotante con acción directa de instalación en un solo toque.
+  - Añadido el permiso `UPDATE_PACKAGES_WITHOUT_USER_ACTION` para Android 12+ para agilizar instalaciones desatendidas.
+
 ## [2.1.5] - 2026-11-08
 
 ### Added & Optimized

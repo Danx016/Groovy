@@ -256,8 +256,70 @@ class _MainScreenState extends State<MainScreen> {
       }
       _hasCheckedUpdateThisSession = true;
       _updateRetryTimer?.cancel();
-      MainScreen.showUpdateDialog(context, release);
+
+      if (force) {
+        // Manual check from Settings -> show full dialog
+        MainScreen.showUpdateDialog(context, release);
+        return;
+      }
+
+      // Automatic background check on launch:
+      final isDownloaded = await UpdateService.isInstallerDownloaded(release);
+      if (isDownloaded) {
+        if (!mounted) return;
+        _showUpdateReadyBanner(release);
+      } else {
+        // Download silently in background without interrupting user
+        unawaited(UpdateService.startDownload(release, autoInstall: false).then((_) {
+          if (mounted && UpdateService.isInstallerReadyNotifier.value) {
+            _showUpdateReadyBanner(release);
+          }
+        }));
+      }
     } catch (_) {}
+  }
+
+  void _showUpdateReadyBanner(ReleaseInfo release) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).removeCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(CupertinoIcons.arrow_down_circle_fill, color: Color(0xFF1DB954), size: 24),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Groovy v${release.version} lista para instalar',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Colors.white),
+                  ),
+                  const SizedBox(height: 2),
+                  const Text(
+                    'Toca para actualizar ahora',
+                    style: TextStyle(fontSize: 11.5, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        action: SnackBarAction(
+          label: 'Instalar',
+          textColor: const Color(0xFF1DB954),
+          onPressed: () {
+            UpdateService.installDownloadedUpdate(release);
+          },
+        ),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: const Color(0xFF222222),
+      ),
+    );
   }
 
   static void showUpdateDialogStatic(BuildContext context, ReleaseInfo release) {

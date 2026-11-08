@@ -1293,28 +1293,28 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 top: 24,
                 right: 28,
                 child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _GlassIconButton(
-                    customIcon: _isWindowFullScreen
-                        ? const GroovyDiagonalCollapseIcon(size: 14, color: Colors.white)
-                        : const GroovyDiagonalExpandIcon(size: 14, color: Colors.white),
-                    size: 14,
-                    tooltip: _isWindowFullScreen
-                        ? 'Salir de pantalla completa (F11)'
-                        : 'Pantalla completa (F11)',
-                    onTap: _toggleWindowFullScreen,
-                  ),
-                  const SizedBox(width: 8),
-                  _GlassIconButton(
-                    icon: Icons.close_rounded,
-                    size: 18,
-                    tooltip: 'Cerrar (Esc)',
-                    onTap: _exitFullScreen,
-                  ),
-                ],
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _GlassIconButton(
+                      customIcon: _isWindowFullScreen
+                          ? const GroovyDiagonalCollapseIcon(size: 18, color: Colors.white)
+                          : const GroovyDiagonalExpandIcon(size: 18, color: Colors.white),
+                      size: 18,
+                      tooltip: _isWindowFullScreen
+                          ? 'Salir de pantalla completa (F11)'
+                          : 'Pantalla completa (F11)',
+                      onTap: _toggleWindowFullScreen,
+                    ),
+                    const SizedBox(width: 10),
+                    _GlassIconButton(
+                      icon: Icons.close_rounded,
+                      size: 20,
+                      tooltip: 'Cerrar (Esc)',
+                      onTap: _exitFullScreen,
+                    ),
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       );
@@ -1919,6 +1919,7 @@ class _GlassIconButton extends StatefulWidget {
 
 class _GlassIconButtonState extends State<_GlassIconButton> {
   bool _isHovered = false;
+  bool _isPressed = false;
 
   @override
   Widget build(BuildContext context) {
@@ -1929,25 +1930,43 @@ class _GlassIconButtonState extends State<_GlassIconButton> {
         onEnter: (_) => setState(() => _isHovered = true),
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(
-          onTap: widget.onTap,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _isHovered
-                  ? Colors.white.withValues(alpha: 0.28)
-                  : Colors.white.withValues(alpha: 0.12),
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setState(() => _isPressed = true),
+          onTapUp: (_) {
+            setState(() => _isPressed = false);
+            widget.onTap();
+          },
+          onTapCancel: () => setState(() => _isPressed = false),
+          child: AnimatedScale(
+            scale: _isPressed ? 0.88 : 1.0,
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.easeOutCubic,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: _isHovered
+                    ? Colors.white.withValues(alpha: 0.36)
+                    : Colors.white.withValues(alpha: 0.22),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.16),
+                    blurRadius: 8,
+                    spreadRadius: 0.5,
+                  ),
+                ],
+              ),
+              child: Center(
+                child: widget.customIcon ??
+                    Icon(
+                      widget.icon,
+                      size: widget.size,
+                      color: Colors.white.withValues(alpha: _isHovered ? 1.0 : 0.95),
+                    ),
+              ),
             ),
-            child: widget.customIcon ??
-                Icon(
-                  widget.icon,
-                  size: widget.size,
-                  color: _isHovered
-                      ? Colors.white
-                      : Colors.white.withValues(alpha: 0.75),
-                ),
           ),
         ),
       ),
