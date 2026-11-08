@@ -5,6 +5,13 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.7] - 2026-11-08
+
+### Fixed
+- **Controles de Pantalla Completa & Letras (Estilo Apple Music Minimalista)**:
+  - Eliminado el contenedor circular grande y tosco en los botones de salir de pantalla completa y cerrar.
+  - Implementado el diseño idéntico a Apple Music (macOS/Windows): iconos sutiles y limpios sin círculos alrededor, con transparencia suave en reposo y resaltado elegante al pasar el cursor o pulsar.
+
 ## [2.1.6] - 2026-11-08
 
 ### Fixed & Improved
