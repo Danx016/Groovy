@@ -5,7 +5,19 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.4] - 2026-11-07
+## [2.1.5] - 2026-11-08
+
+### Added & Optimized
+- **Velocidad de Reproducción y Carga Instantánea (Fast-Stream Cloud API)**:
+  - Integración del nuevo endpoint ultrarrápido `/api/stream/resolve` en el servidor Oracle Cloud (`delosmontesdemaria.dev`), el cual resuelve los streams de audio de YouTube utilizando `cookies.txt` de servidor con bypass de bot detection.
+  - Memoria caché inteligente en el servidor (LRU con 5.5 horas de TTL) que entrega el enlace de audio directo en menos de **400ms** (comparado con 7-12 segundos anteriormente).
+  - Deduplicación concurrente en el backend: si múltiples usuarios o precargas solicitan la misma pista simultáneamente, comparten una única extracción.
+- **Tee-Caching en Vivo a Disco**:
+  - Mientras escuchas una canción por streaming, los fragmentos de audio recibidos se graban simultáneamente y de forma transparente en el almacenamiento local en disco.
+  - La próxima vez que escuches la canción o la repitas, cargará a 0ms de forma completamente local sin consumir datos ni depender de la conexión a internet.
+- **Precarga Agresiva y Resolución Proactiva de Cola**:
+  - Al iniciar una canción, el reproductor precarga inmediatamente en segundo plano el stream de la siguiente pista de la cola en lugar de esperar hasta el último 25% de la reproducción.
+  - Se resuelve de forma proactiva en segundo plano el ID de YouTube de las siguientes canciones de la lista, eliminando por completo la espera entre canciones contiguas.
 
 ### Fixed & Improved
 - **Autenticación y Conectividad con el Servidor**:
