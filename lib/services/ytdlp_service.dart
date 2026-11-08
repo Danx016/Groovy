@@ -1128,7 +1128,52 @@ class YtDlpService {
     }
   }
 
+  static final HttpClient _cloudStreamClient = HttpClient()
+    ..connectionTimeout = const Duration(milliseconds: 3000)
+    ..badCertificateCallback = ((cert, host, port) => true);
+
+  /// Queries the high-speed Oracle Cloud Fast-Stream endpoint (delosmontesdemaria.dev)
+  /// which has a shared in-memory cache and cookies to return streams in < 400ms.
+  Future<YtStreamInfo?> queryCloudStreamEndpoint(String cleanId, {String? title, String? artist}) async {
+    try {
+      final queryParams = <String, String>{'id': cleanId};
+      if (title != null && title.isNotEmpty) queryParams['title'] = title;
+      if (artist != null && artist.isNotEmpty && artist != 'Unknown Artist') queryParams['artist'] = artist;
+
+      final uri = Uri.parse('https://delosmontesdemaria.dev/groovy/api/stream/resolve')
+          .replace(queryParameters: queryParams);
+
+      final req = await _cloudStreamClient.getUrl(uri).timeout(const Duration(milliseconds: 3000));
+      final resp = await req.close().timeout(const Duration(milliseconds: 3000));
+      if (resp.statusCode == 200) {
+        final body = await resp.transform(utf8.decoder).join();
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        if (json['success'] == true && json['url'] != null) {
+          final url = json['url'].toString();
+          if (url.isNotEmpty) {
+            final rawHeaders = json['headers'] as Map<String, dynamic>? ?? {};
+            final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
+            final ext = json['ext']?.toString() ?? 'webm';
+            return YtStreamInfo(url: url, headers: headers, ext: ext);
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
   Future<YtStreamInfo> _doResolveStreamInfo(String cleanId) async {
+    // 0. FAST CLOUD ENDPOINT: Query Oracle Cloud Fast-Stream API first (< 400ms)
+    try {
+      final cloudInfo = await queryCloudStreamEndpoint(cleanId);
+      if (cloudInfo != null && cloudInfo.url.isNotEmpty) {
+        _streamInfoCache[cleanId] = cloudInfo;
+        _streamCacheTime[cleanId] = DateTime.now();
+        debugPrint('[yt-dlp] ⚡ Resolved $cleanId via Oracle Cloud Fast-Stream API!');
+        return cloudInfo;
+      }
+    } catch (_) {}
+
     // ── DESKTOP (Windows / macOS / Linux) ──────────────────────────────────
     if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
       final completer = Completer<YtStreamInfo>();

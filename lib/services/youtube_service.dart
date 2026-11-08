@@ -488,6 +488,20 @@ class YoutubeService {
   }
 
   Future<YtStreamInfo> resolveStreamInfoAsync(Song song) async {
+    // 0. Fast-path: query Oracle Cloud with song title & artist directly
+    if (song.isLocal != true) {
+      try {
+        final cloud = await _ytdlp.queryCloudStreamEndpoint(
+          song.id,
+          title: song.title,
+          artist: song.artist,
+        );
+        if (cloud != null && cloud.url.isNotEmpty) {
+          return cloud;
+        }
+      } catch (_) {}
+    }
+
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) {
       throw Exception('No playable YouTube video found for "${song.title}" (${song.id})');

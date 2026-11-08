@@ -12,6 +12,7 @@ const adminRoutes = require('./routes/admin');
 const telemetryRoutes = require('./routes/telemetry');
 const musicRoutes = require('./routes/music');
 const downloadRoutes = require('./routes/download');
+const streamRoutes = require('./routes/stream');
 
 const app = express();
 app.set('trust proxy', 1); // Trust nginx X-Forwarded-For header for correct rate limiting and IP logging
@@ -101,6 +102,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/music', musicRoutes);
 app.use('/api/download', downloadRoutes);
+app.use('/api/stream', streamRoutes);
 
 // Digital Asset Links for Android App Links auto-verification
 app.get('/.well-known/assetlinks.json', (req, res) => {
