@@ -53,6 +53,7 @@ class SearchResult {
 class _YoutubeStreamAudioSource extends StreamAudioSource {
   final String _videoId;
   final YtDlpService _ytdlp;
+  final String? originalSongId;
 
   static final HttpClient _sharedStreamClient = HttpClient()
     ..connectionTimeout = const Duration(seconds: 15)
@@ -60,7 +61,7 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     ..maxConnectionsPerHost = 64
     ..badCertificateCallback = ((X509Certificate cert, String host, int port) => true);
 
-  _YoutubeStreamAudioSource(this._videoId, this._ytdlp) : super(tag: _videoId);
+  _YoutubeStreamAudioSource(this._videoId, this._ytdlp, {this.originalSongId}) : super(tag: _videoId);
 
   @override
   Future<StreamAudioResponse> request([int? start, int? end]) async {
@@ -94,6 +95,26 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
       req.headers.set(HttpHeaders.acceptHeader, '*/*');
     }
 
+    // Live tee-cache setup: only cache when streaming from byte 0 to completion
+    IOSink? cacheSink;
+    File? cachePartFile;
+    File? cacheTargetFile;
+    if (s == 0 && end == null) {
+      try {
+        final files = await AudioCacheService().getCacheFiles(cleanId);
+        if (files != null) {
+          cacheTargetFile = files.$1;
+          cachePartFile = files.$2;
+          if (await cachePartFile.exists()) {
+            await cachePartFile.delete().catchError((_) => cachePartFile!);
+          }
+          cacheSink = cachePartFile.openWrite();
+        }
+      } catch (_) {
+        cacheSink = null;
+      }
+    }
+
     try {
       final req = await client.getUrl(Uri.parse(streamInfo.url)).timeout(const Duration(seconds: 12));
       applyHeaders(req, streamInfo.headers);
@@ -109,6 +130,12 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
       if (resp.statusCode == 403 || resp.statusCode == 410 || resp.statusCode == 429) {
         debugPrint('[YouTube] Stream rejected (${resp.statusCode}) for $cleanId, refreshing with forceRefresh...');
         await resp.drain<void>().catchError((_) {});
+        try {
+          await cacheSink?.close();
+          await cachePartFile?.delete();
+        } catch (_) {}
+        cacheSink = null;
+
         _ytdlp.invalidateCache(cleanId);
         final freshInfo = await _ytdlp.resolveStreamInfo(cleanId, forceRefresh: true);
         if (freshInfo.url.isEmpty) {
@@ -122,16 +149,24 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
           retryReq.headers.set('Range', 'bytes=$s-');
         }
         final retryResp = await retryReq.close().timeout(const Duration(seconds: 15));
-        return _buildResponse(retryReq, retryResp, s, freshInfo.ext);
+        return _buildResponse(retryReq, retryResp, s, freshInfo.ext, null, null, null, cleanId);
       }
 
       if (resp.statusCode >= 400) {
         await resp.drain<void>().catchError((_) {});
+        try {
+          await cacheSink?.close();
+          await cachePartFile?.delete();
+        } catch (_) {}
         throw Exception('GoogleVideo stream error: HTTP ${resp.statusCode}');
       }
 
-      return _buildResponse(req, resp, s, streamInfo.ext);
+      return _buildResponse(req, resp, s, streamInfo.ext, cacheSink, cachePartFile, cacheTargetFile, cleanId);
     } catch (e) {
+      try {
+        await cacheSink?.close();
+        await cachePartFile?.delete();
+      } catch (_) {}
       debugPrint('[YouTube] StreamAudioSource request error for $cleanId: $e');
       rethrow;
     }
@@ -142,6 +177,10 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
     HttpClientResponse resp,
     int start,
     String ext,
+    IOSink? cacheSink,
+    File? cachePartFile,
+    File? cacheTargetFile,
+    String cleanId,
   ) {
     int? sourceLength;
     final contentRange = resp.headers.value('content-range');
@@ -171,8 +210,17 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
             if (!responseController.isClosed) {
               responseController.add(chunk);
             }
+            if (cacheSink != null) {
+              try {
+                cacheSink.add(chunk);
+              } catch (_) {}
+            }
           },
           onError: (e, st) {
+            try {
+              cacheSink?.close();
+              cachePartFile?.delete().catchError((_) => cachePartFile);
+            } catch (_) {}
             try {
               req.abort();
             } catch (_) {}
@@ -180,7 +228,37 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
               responseController.addError(e, st);
             }
           },
-          onDone: () {
+          onDone: () async {
+            if (cacheSink != null) {
+              try {
+                await cacheSink.flush();
+                await cacheSink.close();
+                if (cachePartFile != null && cacheTargetFile != null && await cachePartFile.exists()) {
+                  final len = await cachePartFile.length();
+                  if (len >= 100 * 1024) {
+                    if (await cacheTargetFile.exists()) {
+                      await cacheTargetFile.delete().catchError((_) => cacheTargetFile);
+                    }
+                    await cachePartFile.rename(cacheTargetFile.path);
+                    debugPrint('[AudioCache] ⚡ Live-cached "$cleanId" directly during playback (${(len / (1024 * 1024)).toStringAsFixed(2)} MB)!');
+
+                    // If played from Deezer/custom ID, also link original ID for instant 0ms startup
+                    if (originalSongId != null && originalSongId != cleanId) {
+                      try {
+                        final origFiles = await AudioCacheService().getCacheFiles(originalSongId!);
+                        if (origFiles != null && !await origFiles.$1.exists()) {
+                          await cacheTargetFile.copy(origFiles.$1.path);
+                        }
+                      } catch (_) {}
+                    }
+                  } else {
+                    await cachePartFile.delete().catchError((_) => cachePartFile);
+                  }
+                }
+              } catch (err) {
+                debugPrint('[AudioCache] Error finalizing live cache: $err');
+              }
+            }
             if (!responseController.isClosed) {
               responseController.close();
             }
@@ -189,6 +267,17 @@ class _YoutubeStreamAudioSource extends StreamAudioSource {
         );
       },
       onCancel: () async {
+        if (cacheSink != null) {
+          try {
+            await cacheSink.close();
+            if (cachePartFile != null && await cachePartFile.exists()) {
+              final len = await cachePartFile.length();
+              if (len < 100 * 1024) {
+                await cachePartFile.delete().catchError((_) => cachePartFile);
+              }
+            }
+          } catch (_) {}
+        }
         if (hasSubscribed && responseSubscription != null) {
           await responseSubscription!.cancel().catchError((_) {});
         } else if (!hasSubscribed) {
@@ -395,7 +484,7 @@ class YoutubeService {
       // We must NEVER return _YoutubeStreamAudioSource on desktop, as it causes an UnsupportedError.
       return null;
     }
-    return buildAudioSource(videoId);
+    return buildAudioSource(videoId, originalSongId: song.id);
   }
 
   Future<YtStreamInfo> resolveStreamInfoAsync(Song song) async {
@@ -496,9 +585,9 @@ class YoutubeService {
 
   /// Builds a [StreamAudioSource] that proxies audio through Dart's HttpClient
   /// with standard browser headers to prevent HTTP 403 on ExoPlayer / Media3.
-  Future<StreamAudioSource> buildAudioSource(String videoId) async {
+  Future<StreamAudioSource> buildAudioSource(String videoId, {String? originalSongId}) async {
     final cleanId = videoId.replaceFirst('ytmusic://', '').replaceFirst('yt_', '').trim();
-    return _YoutubeStreamAudioSource(cleanId, _ytdlp);
+    return _YoutubeStreamAudioSource(cleanId, _ytdlp, originalSongId: originalSongId);
   }
 
   // ── Model mappers ─────────────────────────────────────────────────────────

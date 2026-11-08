@@ -1572,9 +1572,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     // Start preloading early (after 2 seconds of playback so initial buffering isn't contested)
     // or when nearing end of the song
-    final shouldPreload = position.inSeconds >= 2 ||
-        (secondsRemaining <= 25 && secondsRemaining > 0) ||
-        (progressRatio >= 0.75 && position.inSeconds >= 5);
+    final shouldPreload = position.inSeconds >= 1 ||
+        (secondsRemaining <= 35 && secondsRemaining > 0) ||
+        (progressRatio >= 0.70 && position.inSeconds >= 3);
 
     if (!shouldPreload) return;
 
@@ -1691,6 +1691,53 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     if (_autoDjService.shouldAddSongs(_currentIndex + 1, _queue.length)) {
       _addAutoDjSongs().catchError((_) {});
     }
+  }
+
+  bool _isPreResolvingQueue = false;
+
+  /// Proactively resolves upcoming tracks in the active queue so when the user
+  /// skips or taps an upcoming song, it plays in < 400ms without search latency.
+  void _preResolveUpcomingQueue() {
+    if (_queue.length <= 1 || _isPreResolvingQueue) return;
+    _isPreResolvingQueue = true;
+    unawaited(() async {
+      try {
+        final startIndex = (_currentIndex + 1).clamp(0, _queue.length);
+        final upcoming = _queue.skip(startIndex).take(4).toList();
+        for (final queuedSong in upcoming) {
+          if (queuedSong.isLocal == true) continue;
+          final cleanId = queuedSong.id
+              .replaceFirst('ytmusic://', '')
+              .replaceFirst('yt_', '')
+              .trim();
+          if (RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(cleanId)) {
+            // Direct YouTube ID: warm up stream info cache in background
+            YtDlpService().warmUpStreamCache(cleanId);
+          } else {
+            // Non-YouTube ID (e.g. Deezer dz_...): pre-resolve YouTube video ID in background
+            try {
+              final resolvedId = await _youtubeService.resolveVideoIdForSong(queuedSong);
+              if (resolvedId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(resolvedId)) {
+                YtDlpService().warmUpStreamCache(resolvedId);
+                final idx = _queue.indexWhere((s) => s.id == queuedSong.id);
+                if (idx != -1) {
+                  _queue[idx] = queuedSong.copyWith(
+                    id: resolvedId,
+                    coverArt: (queuedSong.coverArt != null && queuedSong.coverArt!.isNotEmpty)
+                        ? queuedSong.coverArt
+                        : resolvedId,
+                  );
+                }
+              }
+            } catch (_) {}
+          }
+          // Yield slightly so UI and playback threads remain 100% responsive
+          await Future.delayed(const Duration(milliseconds: 200));
+        }
+      } finally {
+        _isPreResolvingQueue = false;
+      }
+    }());
   }
 
   double get progress {
@@ -2608,6 +2655,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentIndex = startIndex ?? playlist.indexWhere((s) => s.id == song.id);
       if (_currentIndex == -1) _currentIndex = 0;
       _shuffleHistory.clear();
+      _preResolveUpcomingQueue();
     } else if (_queue.isEmpty || !_queue.any((s) => s.id == song.id)) {
       _queue = [song];
       _currentIndex = 0;
@@ -2893,6 +2941,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           _loadingWatchdogTimer?.cancel();
           _manageDesktopPositionTimer();
           notifyListeners();
+
+          // Instant Preload: aggressively prepare the next track immediately
+          final nextSongToPreload = _getNextSongToPreload();
+          if (nextSongToPreload != null && nextSongToPreload.id != _currentSong?.id) {
+            _lastPreloadedSongId = nextSongToPreload.id;
+            _preloadSong(nextSongToPreload);
+          }
+
+          // Background auto-cache on Desktop for subsequent 0ms instant plays from disk
+          if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+            if (song.isLocal != true && _audioCacheService.getCachedSongFileSync(song.id) == null) {
+              unawaited(_audioCacheService.preloadSong(song, _youtubeService));
+            }
+          }
 
           // Re-enforce volume shortly after play begins so libmpv/audio device never remains at volume 0
           Future.delayed(const Duration(milliseconds: 60), () {
