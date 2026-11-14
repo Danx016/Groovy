@@ -164,10 +164,11 @@ function extractStreamInfo(videoId) {
   return new Promise((resolve, reject) => {
     const args = [
       '-j',
-      '-f', 'ba/b[acodec!=none]/bestaudio/best',
+      '-f', '140/251/ba/bestaudio',
       '--no-playlist',
       '--no-warnings',
       '--no-check-certificates',
+      '--skip-download',
     ];
 
     if (cookiesPath) {

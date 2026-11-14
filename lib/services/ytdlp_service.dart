@@ -1129,7 +1129,7 @@ class YtDlpService {
   }
 
   static final HttpClient _cloudStreamClient = HttpClient()
-    ..connectionTimeout = const Duration(milliseconds: 3000)
+    ..connectionTimeout = const Duration(milliseconds: 9000)
     ..badCertificateCallback = ((cert, host, port) => true);
 
   /// Queries the high-speed Oracle Cloud Fast-Stream endpoint (delosmontesdemaria.dev)
@@ -1143,8 +1143,8 @@ class YtDlpService {
       final uri = Uri.parse('https://delosmontesdemaria.dev/groovy/api/stream/resolve')
           .replace(queryParameters: queryParams);
 
-      final req = await _cloudStreamClient.getUrl(uri).timeout(const Duration(milliseconds: 3000));
-      final resp = await req.close().timeout(const Duration(milliseconds: 3000));
+      final req = await _cloudStreamClient.getUrl(uri).timeout(const Duration(milliseconds: 9000));
+      final resp = await req.close().timeout(const Duration(milliseconds: 9000));
       if (resp.statusCode == 200) {
         final body = await resp.transform(utf8.decoder).join();
         final json = jsonDecode(body) as Map<String, dynamic>;
@@ -1154,7 +1154,10 @@ class YtDlpService {
             final rawHeaders = json['headers'] as Map<String, dynamic>? ?? {};
             final headers = rawHeaders.map((k, v) => MapEntry(k.toString(), v.toString()));
             final ext = json['ext']?.toString() ?? 'webm';
-            return YtStreamInfo(url: url, headers: headers, ext: ext);
+            final info = YtStreamInfo(url: url, headers: headers, ext: ext);
+            _streamInfoCache[cleanId] = info;
+            _streamCacheTime[cleanId] = DateTime.now();
+            return info;
           }
         }
       }
@@ -1219,8 +1222,10 @@ class YtDlpService {
         } catch (_) {}
       }());
 
-      // 2. SUBPROCESS PATH: yt-dlp binary (runs concurrently from millisecond 0!)
+      // 2. SUBPROCESS PATH: yt-dlp binary (runs only if fast-path hasn't completed within 1500ms)
       unawaited(() async {
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (completer.isCompleted) return;
         final targetUrl = cleanId.startsWith('http') ? cleanId : 'https://www.youtube.com/watch?v=$cleanId';
         try {
           final result = await _runYtDlp([
@@ -1344,8 +1349,10 @@ class YtDlpService {
         } catch (_) {}
       }());
 
-      // 2. CHAQUOPY PYTHON: starts at millisecond 0 concurrently!
+      // 2. CHAQUOPY PYTHON: starts only if fast-path hasn't completed within 1200ms
       unawaited(() async {
+        await Future.delayed(const Duration(milliseconds: 1200));
+        if (completer.isCompleted) return;
         try {
           final jsonStr = await _androidChannel
               .invokeMethod<String>('getStreamUrl', {'videoId': cleanId})

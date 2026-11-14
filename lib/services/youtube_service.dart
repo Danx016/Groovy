@@ -429,6 +429,28 @@ class YoutubeService {
       );
     }
 
+    // 2. FAST PATH: Query Oracle Cloud Fast-Stream API FIRST with song ID / title / artist!
+    if (song.isLocal != true) {
+      try {
+        final cloudInfo = await _ytdlp.queryCloudStreamEndpoint(
+          song.id,
+          title: song.title,
+          artist: song.artist,
+        );
+        if (cloudInfo != null && cloudInfo.url.isNotEmpty) {
+          if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+            debugPrint('[YouTube] ⚡ Desktop: Playing "${song.title}" directly via Oracle Cloud Fast-Stream: ${cloudInfo.url.substring(0, (cloudInfo.url.length > 50 ? 50 : cloudInfo.url.length))}...');
+            return AudioSource.uri(
+              Uri.parse(cloudInfo.url),
+              tag: song.id,
+            );
+          } else {
+            return buildAudioSource(song.id, originalSongId: song.id);
+          }
+        }
+      } catch (_) {}
+    }
+
     final videoId = await _resolvePlayableVideoId(song);
     if (videoId.isEmpty || !RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(videoId)) return null;
 

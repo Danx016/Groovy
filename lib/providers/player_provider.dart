@@ -1714,22 +1714,12 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             // Direct YouTube ID: warm up stream info cache in background
             YtDlpService().warmUpStreamCache(cleanId);
           } else {
-            // Non-YouTube ID (e.g. Deezer dz_...): pre-resolve YouTube video ID in background
-            try {
-              final resolvedId = await _youtubeService.resolveVideoIdForSong(queuedSong);
-              if (resolvedId.isNotEmpty && RegExp(r'^[a-zA-Z0-9_-]{11}$').hasMatch(resolvedId)) {
-                YtDlpService().warmUpStreamCache(resolvedId);
-                final idx = _queue.indexWhere((s) => s.id == queuedSong.id);
-                if (idx != -1) {
-                  _queue[idx] = queuedSong.copyWith(
-                    id: resolvedId,
-                    coverArt: (queuedSong.coverArt != null && queuedSong.coverArt!.isNotEmpty)
-                        ? queuedSong.coverArt
-                        : resolvedId,
-                  );
-                }
-              }
-            } catch (_) {}
+            // Non-YouTube ID: warm up via cloud directly with title and artist
+            unawaited(YtDlpService().queryCloudStreamEndpoint(
+              queuedSong.id,
+              title: queuedSong.title,
+              artist: queuedSong.artist,
+            ));
           }
           // Yield slightly so UI and playback threads remain 100% responsive
           await Future.delayed(const Duration(milliseconds: 200));
