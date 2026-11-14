@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '2.1.7';
+  static String currentVersion = '2.1.8';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -356,24 +356,42 @@ class UpdateService {
       }
     } else if (!kIsWeb && Platform.isWindows) {
       try {
-        // Run InnoSetup fully silently without prompts or wizards, and auto-relaunch
         final appExePath = Platform.resolvedExecutable;
-        final installCmd = 'start /wait "" "$filePath" /VERYSILENT /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS & start "" "$appExePath"';
+        final normalizedInstaller = filePath.replaceAll('/', '\\');
+        final normalizedApp = appExePath.replaceAll('/', '\\');
+
+        // Create a dedicated launcher script in Temp to avoid cmd.exe quote-stripping bugs
+        final tempDir = await getTemporaryDirectory();
+        final scriptFile = File('${tempDir.path}\\groovy_silent_update.cmd');
+        await scriptFile.writeAsString(
+          '@echo off\r\n'
+          'timeout /t 1 /nobreak >nul\r\n'
+          '"$normalizedInstaller" /VERYSILENT /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS\r\n'
+          'start "" "$normalizedApp"\r\n'
+          'del "%~f0"\r\n',
+        );
+
         await Process.start(
-          'cmd.exe',
-          ['/c', installCmd],
+          'powershell.exe',
+          [
+            '-WindowStyle', 'Hidden',
+            '-NoProfile',
+            '-Command',
+            'Start-Process -FilePath "${scriptFile.path}" -WindowStyle Hidden',
+          ],
           mode: ProcessStartMode.detached,
         );
-        await Future.delayed(const Duration(milliseconds: 800));
+        await Future.delayed(const Duration(milliseconds: 600));
         exit(0);
       } catch (_) {
         try {
+          final normalizedInstaller = filePath.replaceAll('/', '\\');
           await Process.start(
-            filePath,
+            normalizedInstaller,
             ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS'],
             mode: ProcessStartMode.detached,
           );
-          await Future.delayed(const Duration(milliseconds: 1500));
+          await Future.delayed(const Duration(milliseconds: 1200));
           exit(0);
         } catch (err) {
           debugPrint('Failed to launch Windows update installer: $err');
