@@ -83,6 +83,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.9'
           channel: 'stable'
           cache: true
       
@@ -116,11 +117,11 @@ jobs:
         run: |
           if [ -n "$COUNTLY_APP_KEY" ]; then
             echo "::add-mask::$COUNTLY_APP_KEY"
-            flutter build apk --release \
+            flutter build apk --release --verbose \
               --dart-define=COUNTLY_SERVER_URL="$COUNTLY_SERVER_URL" \
               --dart-define=COUNTLY_APP_KEY="$COUNTLY_APP_KEY"
           else
-            flutter build apk --release
+            flutter build apk --release --verbose
           fi
           
           # Create branded Groovy.apk alongside app-release.apk
@@ -149,6 +150,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.9'
           channel: 'stable'
           cache: true
       
@@ -302,6 +304,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.47.9'
           channel: 'stable'
           cache: true
       
