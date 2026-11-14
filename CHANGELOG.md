@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-11-14
+
+### Added & Improved
+- **Priorización de Canciones Originales en Búsqueda**:
+  - Los temas oficiales de YouTube Music (álbumes de estudio, canales de artistas oficiales y - Topic) tienen prioridad absoluta en los resultados.
+  - Penalización estricta de versiones no oficiales (covers, karaoke, instrumentales, remixes no pedidos, grabaciones en vivo, tutoriales y videos con letra de fans).
+- **Reproducción Ininterrumpida (Cero Pausas Inesperadas)**:
+  - Eliminado el bug que dejaba las canciones en pausa tras cargarse debido a falsos positivos en el stream de estado nativo.
+  - Garantizada la reproducción inmediata (`forcePlay: true`) al pulsar cualquier canción de la búsqueda o biblioteca, evitando que al tocar un tema se alterne a pausa.
+
 ## [2.1.9] - 2026-11-13
 
 ### Optimized & Fixed

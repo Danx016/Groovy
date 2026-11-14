@@ -264,9 +264,9 @@ class _SearchScreenState extends State<SearchScreen> {
     // a specific song and results were variations/duplicates of that song),
     // launch Radio mode immediately so recommendations of that artist/genre take over.
     if (deduplicated.length <= 2) {
-      player.playSongWithRadio(song);
+      player.playSongWithRadio(song, forcePlay: true);
     } else {
-      player.playSong(song, playlist: deduplicated, startIndex: targetIndex);
+      player.playSong(song, playlist: deduplicated, startIndex: targetIndex, forcePlay: true);
     }
   }
 
@@ -1274,7 +1274,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   ),
                 );
               } else if (isSong && songObj != null) {
-                player.playSongWithRadio(songObj);
+                player.playSongWithRadio(songObj, forcePlay: true);
               }
             },
           );

@@ -1977,7 +1977,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _audioPlayer.pause().catchError((_) {});
             return; // skip notifyListeners — already done optimistically
           } else {
-            _isPlaying = state.playing;
+            // While a new track is loading (_isLoading == true), the native player
+            // prepares the audio source and temporarily emits state.playing == false.
+            // DO NOT flip _isPlaying to false during loading, as that would wrongly
+            // mark playback as paused before play() is invoked!
+            if (!_isLoading || state.playing) {
+              _isPlaying = state.playing;
+            }
             _optimisticLocalPlayPauseTime = null;
             _optimisticLocalPlayPauseState = null;
           }
@@ -2453,8 +2459,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   }
 
   /// Plays a single song immediately and automatically populates the queue with similar / radio songs in the background.
-  Future<void> playSongWithRadio(Song song) async {
-    await playSong(song);
+  Future<void> playSongWithRadio(Song song, {bool forcePlay = true}) async {
+    await playSong(song, forcePlay: forcePlay);
 
     _fetchAndQueueRadioTracks(song).catchError((e) {
       debugPrint('[Player] _fetchAndQueueRadioTracks error: $e');
@@ -2545,6 +2551,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     bool forcePlay = false,
   }) async {
     final currentGen = ++_playGeneration;
+    final playStartTime = DateTime.now();
 
     final bool hasValidLoadedSource = _audioPlayer.audioSource != null &&
         _audioPlayer.processingState != ProcessingState.idle &&
@@ -2554,7 +2561,9 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         !_isPlayingRadio &&
         initialPosition == null &&
         hasValidLoadedSource) {
-      await togglePlayPause();
+      if (!_isPlaying) {
+        await play();
+      }
       return;
     }
 
@@ -2905,14 +2914,13 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
         }
 
-        final bool userPausedDuringLoad = !_isPlaying ||
-            (_lastUserPauseTime != null &&
-                DateTime.now().difference(_lastUserPauseTime!) < const Duration(seconds: 15));
+        final bool userExplicitlyPaused = _lastUserPauseTime != null &&
+            _lastUserPauseTime!.isAfter(playStartTime);
 
         if (loadedSuccessfully) {
           if (currentGen != _playGeneration) return;
-          if (userPausedDuringLoad && !forcePlay) {
-            debugPrint('[Player] User paused while loading "${song.title}". Leaving paused.');
+          if (userExplicitlyPaused && !forcePlay) {
+            debugPrint('[Player] User explicitly paused while loading "${song.title}". Leaving paused.');
             _isLoading = false;
             _loadingWatchdogTimer?.cancel();
             notifyListeners();
@@ -2923,9 +2931,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _applyReplayGain(song);
           await _audioPlayer.setVolume(_effectiveVolume);
 
-          unawaited(_audioPlayer.play().catchError((e) {
+          try {
+            await _audioPlayer.play();
+          } catch (e) {
             debugPrint('[Player] Error during play(): $e');
-          }));
+          }
           _isPlaying = true;
           _isLoading = false;
           _loadingWatchdogTimer?.cancel();
@@ -2992,8 +3002,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           }
           if (currentGen != _playGeneration) return;
 
-          if (userPausedDuringLoad && !forcePlay) {
-            debugPrint('[Player] User paused while loading "${song.title}". Leaving paused.');
+          if (userExplicitlyPaused && !forcePlay) {
+            debugPrint('[Player] User explicitly paused while loading "${song.title}". Leaving paused.');
             _isLoading = false;
             _loadingWatchdogTimer?.cancel();
             notifyListeners();
@@ -3004,9 +3014,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
           await _applyReplayGain(song);
           await _audioPlayer.setVolume(_effectiveVolume);
 
-          unawaited(_audioPlayer.play().catchError((e) {
+          try {
+            await _audioPlayer.play();
+          } catch (e) {
             debugPrint('[Player] Error during play(): $e');
-          }));
+          }
           _isPlaying = true;
           _isLoading = false;
           _loadingWatchdogTimer?.cancel();

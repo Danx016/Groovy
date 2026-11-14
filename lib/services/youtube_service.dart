@@ -1161,54 +1161,158 @@ class YoutubeService {
       score += (30 - originalIndex) * 3;
     }
 
-    // 7. Canal oficial de artista / Audio oficial / Topic
-    if (artistClean.contains('topic') ||
+    // 7. CANCIÓN ORIGINAL: Canal oficial de artista / Audio oficial / Topic / Álbum de estudio
+    final bool isTopicOrOfficialArtist = artistClean.contains('topic') ||
         artistClean.contains('official') ||
-        titleClean.contains('official audio') ||
-        titleClean.contains('audio oficial') ||
-        titleClean.contains('official video') ||
-        titleClean.contains('video oficial')) {
-      score += 50;
+        artistClean.contains('vevo');
+    if (isTopicOrOfficialArtist) {
+      score += 450;
     }
 
-    // 8. Penalizaciones estrictas a grabaciones no oficiales, parodias, covers, karaoke, loops
-    const penalties = [
+    final bool hasOfficialTag = titleClean.contains('official audio') ||
+        titleClean.contains('audio oficial') ||
+        titleClean.contains('official video') ||
+        titleClean.contains('video oficial') ||
+        titleClean.contains('official music video');
+    if (hasOfficialTag) {
+      score += 350;
+    }
+
+    // Álbum de estudio oficial
+    if (albumClean.isNotEmpty &&
+        albumClean != 'album' &&
+        albumClean != 'álbum' &&
+        albumClean != 'single') {
+      score += 300;
+    }
+
+    // Título limpio de estudio (canciones originales no tienen etiquetas parasitarias en el título)
+    if (!song.title.contains('(') && !song.title.contains('[')) {
+      score += 250;
+    }
+
+    // 8. Penalizaciones contundentes a grabaciones no oficiales, parodias, covers, karaoke, loops y remixes no pedidos
+    // A. Covers, tributos, tutoriales, reacciones
+    const severePenalties = [
       'cover',
       'tributo',
       'tribute',
-      'karaoke',
-      'instrumental',
       'parodia',
       'parody',
-      'slowed',
-      'reverb',
-      '8d audio',
-      '8d',
-      'nightcore',
       'tutorial',
       'como tocar',
+      'guitar lesson',
+      'piano tutorial',
+      'clase',
       'reaccion',
       'reaction',
-      'clase',
-      'guitar lesson',
-      'bass boosted',
+      'review',
       '10 hours',
       '1 hour',
     ];
+    for (final p in severePenalties) {
+      if (!qClean.contains(p)) {
+        if (titleClean.contains(p)) score -= 900;
+        if (artistClean.contains(p)) score -= 900;
+      }
+    }
 
-    for (final penalty in penalties) {
-      if (!qClean.contains(penalty)) {
-        if (titleClean.contains(penalty)) score -= 220;
-        if (artistClean.contains(penalty)) score -= 220;
+    // B. Karaoke, instrumentales, pistas, playback
+    const karaokePenalties = [
+      'karaoke',
+      'instrumental',
+      'pista',
+      'backing track',
+      'play along',
+      'sin voz',
+      'playback',
+      'acapella',
+      'a capella',
+    ];
+    for (final p in karaokePenalties) {
+      if (!qClean.contains(p)) {
+        if (titleClean.contains(p)) score -= 850;
+        if (artistClean.contains(p)) score -= 850;
+      }
+    }
+
+    // C. Remixes, edits, sped up, bass boosted, mezclas
+    const remixPenalties = [
+      'remix',
+      'vip mix',
+      'club mix',
+      'extended mix',
+      'dub mix',
+      'rework',
+      'slowed',
+      'reverb',
+      'sped up',
+      'speed up',
+      'nightcore',
+      'bass boosted',
+      '8d audio',
+      '8d',
+      'mashup',
+      'amv',
+      'edit audio',
+      'tiktok',
+      'tik tok',
+      'enganchado',
+      'dj set',
+      'mega mix',
+    ];
+    for (final p in remixPenalties) {
+      if (!qClean.contains(p)) {
+        if (titleClean.contains(p)) score -= 650;
+        if (artistClean.contains(p)) score -= 650;
+      }
+    }
+
+    // D. En vivo / Concierto / Live (cuando no se busca en vivo)
+    const livePenalties = [
+      'en vivo',
+      'live',
+      'live at',
+      'live from',
+      'concierto',
+      'en directo',
+      'acustico',
+      'acústico',
+      'unplugged',
+      'sesion',
+      'session',
+    ];
+    for (final p in livePenalties) {
+      if (!qClean.contains(p)) {
+        if (titleClean.contains(p)) score -= 550;
+        if (artistClean.contains(p)) score -= 550;
+      }
+    }
+
+    // E. Videos con letra de fans (suelen tener audio degradado o voces intercaladas)
+    const lyricPenalties = [
+      'video con letra',
+      'con letra',
+      'lyrics',
+      'lyric video',
+      'subtitulado',
+      'subtitulada',
+      'sub español',
+      'sub espanol',
+    ];
+    for (final p in lyricPenalties) {
+      if (!qClean.contains(p)) {
+        if (titleClean.contains(p)) score -= 350;
+        if (artistClean.contains(p)) score -= 350;
       }
     }
 
     // 9. Duración normal de estudio (entre 1:30 y 7:00 minutos)
     if (song.duration != null && song.duration! > 0) {
-      if (song.duration! < 45 || song.duration! > 900) {
-        score -= 90;
-      } else if (song.duration! >= 90 && song.duration! <= 420) {
-        score += 30;
+      if (song.duration! < 50 || song.duration! > 720) {
+        score -= 250;
+      } else if (song.duration! >= 90 && song.duration! <= 360) {
+        score += 80;
       }
     }
 
@@ -1263,22 +1367,19 @@ class YoutubeService {
         }
       }
 
-      // Interleave music and youtube results so both are considered with their initial ranks
-      final maxLen = musicSongs.length > youtubeVideos.length ? musicSongs.length : youtubeVideos.length;
-      for (int i = 0; i < maxLen; i++) {
-        if (i < musicSongs.length) {
-          final s = musicSongs[i];
-          final fp = _songFingerprint(s);
-          if (seenIds.add(s.id) && (fp.isEmpty || seenFingerprints.add(fp))) {
-            candidateSongs.add(s);
-          }
+      // Add ALL YouTube Music official tracks FIRST so they claim fingerprints and top slots
+      for (final s in musicSongs) {
+        final fp = _songFingerprint(s);
+        if (seenIds.add(s.id) && (fp.isEmpty || seenFingerprints.add(fp))) {
+          candidateSongs.add(s);
         }
-        if (i < youtubeVideos.length) {
-          final s = youtubeVideos[i];
-          final fp = _songFingerprint(s);
-          if (seenIds.add(s.id) && (fp.isEmpty || seenFingerprints.add(fp))) {
-            candidateSongs.add(s);
-          }
+      }
+
+      // Add general YouTube video results only if they are not already covered by an official track
+      for (final s in youtubeVideos) {
+        final fp = _songFingerprint(s);
+        if (seenIds.add(s.id) && (fp.isEmpty || seenFingerprints.add(fp))) {
+          candidateSongs.add(s);
         }
       }
 
