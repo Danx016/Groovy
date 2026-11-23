@@ -1144,14 +1144,15 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
   }
 
   Widget _buildBottomSection(Color accentColor, bool isCompact) {
-    return Selector<PlayerProvider, (bool, bool, RepeatMode, Duration)>(
-      selector: (_, p) => (p.isPlaying, p.shuffleEnabled, p.repeatMode, p.duration),
+    return Selector<PlayerProvider, (String?, bool, bool, RepeatMode, Duration)>(
+      selector: (_, p) => (p.currentSong?.id, p.isPlaying, p.shuffleEnabled, p.repeatMode, p.duration),
       builder: (context, data, child) {
         final provider = Provider.of<PlayerProvider>(context, listen: false);
-        final isPlaying = data.$1;
-        final shuffleEnabled = data.$2;
-        final repeatMode = data.$3;
-        final duration = data.$4;
+        final currentSongId = data.$1;
+        final isPlaying = data.$2;
+        final shuffleEnabled = data.$3;
+        final repeatMode = data.$4;
+        final duration = data.$5;
 
         return RepaintBoundary(
           child: Column(
@@ -1162,6 +1163,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 28.0),
                 child: RepaintBoundary(
                   child: PlaybackProgressSlider(
+                    key: ValueKey('slider_${currentSongId ?? 'none'}'),
+                    songId: currentSongId,
                     position: provider.position,
                     duration: duration,
                     bufferedPosition: provider.bufferedPosition,
@@ -1433,6 +1436,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 380),
                   child: PlaybackProgressSlider(
+                    key: ValueKey('slider_landscape_${currentSong?.id ?? 'none'}'),
+                    songId: currentSong?.id,
                     position: provider.position,
                     duration: duration,
                     bufferedPosition: provider.bufferedPosition,
@@ -1552,6 +1557,8 @@ class _NowPlayingScreenState extends State<NowPlayingScreen> {
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 440),
                 child: PlaybackProgressSlider(
+                  key: ValueKey('slider_desktop_${currentSong?.id ?? 'none'}'),
+                  songId: currentSong?.id,
                   position: provider.position,
                   duration: duration,
                   bufferedPosition: provider.bufferedPosition,

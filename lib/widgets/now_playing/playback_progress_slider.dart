@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 class PlaybackProgressSlider extends StatefulWidget {
+  final String? songId;
   final Duration position;
   final Duration duration;
   final Duration bufferedPosition;
@@ -16,6 +17,7 @@ class PlaybackProgressSlider extends StatefulWidget {
 
   const PlaybackProgressSlider({
     super.key,
+    this.songId,
     required this.position,
     required this.duration,
     this.bufferedPosition = Duration.zero,
@@ -134,15 +136,23 @@ class _PlaybackProgressSliderState extends State<PlaybackProgressSlider>
         _shimmerController.reset();
       }
     }
-    if (widget.bufferedPosition != oldWidget.bufferedPosition) {
-      _currentBufferedPosition = widget.bufferedPosition;
-    }
-    if (!_isDragging &&
-        (widget.positionStream == null ||
-         widget.position == Duration.zero ||
-         oldWidget.duration != widget.duration ||
-         (widget.position - _currentPosition).abs() > const Duration(seconds: 2))) {
+    // Track changed: instantly reset position and buffer line to zero
+    if (widget.songId != oldWidget.songId) {
       _currentPosition = widget.position;
+      _currentBufferedPosition = widget.bufferedPosition;
+      _dragValue = 0.0;
+      _isDragging = false;
+    } else {
+      if (widget.bufferedPosition != oldWidget.bufferedPosition) {
+        _currentBufferedPosition = widget.bufferedPosition;
+      }
+      if (!_isDragging &&
+          (widget.positionStream == null ||
+           widget.position == Duration.zero ||
+           oldWidget.duration != widget.duration ||
+           (widget.position - _currentPosition).abs() > const Duration(seconds: 2))) {
+        _currentPosition = widget.position;
+      }
     }
     if (widget.positionStream != oldWidget.positionStream ||
         widget.bufferedPositionStream != oldWidget.bufferedPositionStream ||

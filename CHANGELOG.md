@@ -5,6 +5,15 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.1] - 2026-11-22
+
+### Fixed
+- **Línea de Carga y Progreso Instantáneo al Cambiar de Canción**:
+  - Solucionado el problema donde la línea de carga (buffer) y la barra de progreso se quedaban estancadas en el tiempo de la canción anterior durante varios segundos al pasar de pista.
+  - Implementado reseteo atómico e inmediato a `0:00` en `_bufferedPosition` y `_position` en `PlayerProvider` al cambiar de canción.
+  - Bloqueada la fuga de eventos rezagados de posición del reproductor nativo durante la carga de nuevas canciones.
+  - Añadido identificador de pista (`songId` y `ValueKey`) a `PlaybackProgressSlider` y `DesktopPlayerBar` para renderizado limpio e instantáneo desde el primer milisegundo.
+
 ## [2.2.0] - 2026-11-14
 
 ### Added & Improved

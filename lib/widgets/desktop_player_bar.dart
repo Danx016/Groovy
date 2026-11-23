@@ -640,6 +640,7 @@ class _ProgressBarState extends State<_ProgressBar> {
   bool _isDragging = false;
   bool _showRemainingTime = true;
   double _dragValue = 0.0;
+  String? _lastSongId;
   StreamSubscription<Duration>? _positionSub;
   Duration _currentPosition = Duration.zero;
   PlayerProvider? _playerProvider;
@@ -692,15 +693,20 @@ class _ProgressBarState extends State<_ProgressBar> {
       color: isDark ? Colors.grey[400] : Colors.grey[600],
     );
 
-    return Selector<PlayerProvider, Duration>(
-      selector: (_, p) => p.duration,
-      builder: (context, duration, _) {
+    return Selector<PlayerProvider, (String?, Duration)>(
+      selector: (_, p) => (p.currentSong?.id, p.duration),
+      builder: (context, data, _) {
+        final currentSongId = data.$1;
+        final duration = data.$2;
         final provider = context.read<PlayerProvider>();
         final providerPos = provider.position;
 
-        // Resync if track changed or position leaped significantly
+        // Resync immediately if track changed or position leaped significantly
         if (!_isDragging) {
-          if (duration > Duration.zero && _currentPosition > duration) {
+          if (_lastSongId != currentSongId) {
+            _lastSongId = currentSongId;
+            _currentPosition = Duration.zero;
+          } else if (duration > Duration.zero && _currentPosition > duration) {
             _currentPosition = duration;
           } else if ((_currentPosition.inMilliseconds - providerPos.inMilliseconds).abs() > 2500) {
             _currentPosition = providerPos;

@@ -1423,9 +1423,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
   final _positionController = StreamController<Duration>.broadcast();
   Stream<Duration> get positionStream => _positionController.stream;
 
-  Stream<Duration> get bufferedPositionStream =>
-      _audioPlayer.bufferedPositionStream;
-  Duration get bufferedPosition => _audioPlayer.bufferedPosition;
+  Duration _bufferedPosition = Duration.zero;
+  Duration get bufferedPosition => _bufferedPosition;
+  final _bufferedPositionController = StreamController<Duration>.broadcast();
+  Stream<Duration> get bufferedPositionStream => _bufferedPositionController.stream;
+  StreamSubscription<Duration>? _bufferedPositionSub;
   bool get isBuffering =>
       _isLoading ||
       _audioPlayer.processingState == ProcessingState.buffering ||
@@ -1502,8 +1504,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         if (_lastPolledPosition == null ||
             pos.inMilliseconds != _lastPolledPosition!.inMilliseconds) {
           _lastPolledPosition = pos;
-          if (_currentSong != null &&
-              _activeAudioSongId != null &&
+          if (_currentSong == null ||
+              _activeAudioSongId == null ||
               !_isSameSongId(_activeAudioSongId, _currentSong!.id)) {
             return;
           }
@@ -2110,8 +2112,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
         // In remote-playback mode the local player sits idle at position zero;
         // ignore its ticks so they don't overwrite the UPnP/Cast position.
         if (_isRenderingRemotely) return;
-        if (_activeAudioSongId != null &&
-            _currentSong != null &&
+        if (_currentSong == null ||
+            _activeAudioSongId == null ||
             !_isSameSongId(_activeAudioSongId, _currentSong!.id)) {
           return;
         }
@@ -2152,6 +2154,20 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       onError: (error) {
         debugPrint('Position stream error (can be ignored): $error');
       },
+    );
+
+    _bufferedPositionSub = _audioPlayer.bufferedPositionStream.listen(
+      (buf) {
+        if (_isRenderingRemotely) return;
+        if (_currentSong == null ||
+            _activeAudioSongId == null ||
+            !_isSameSongId(_activeAudioSongId, _currentSong!.id)) {
+          return;
+        }
+        _bufferedPosition = buf;
+        _bufferedPositionController.add(buf);
+      },
+      onError: (_) {},
     );
 
     _durationSub = _audioPlayer.durationStream.listen(
@@ -2417,6 +2433,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _activeAudioSongId = nextSong.id;
       _position = Duration.zero;
       _positionController.add(Duration.zero);
+      _bufferedPosition = Duration.zero;
+      _bufferedPositionController.add(Duration.zero);
       _duration = nextSong.duration != null
           ? Duration(seconds: nextSong.duration!)
           : Duration.zero;
@@ -2671,6 +2689,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
     _resolvedArtworkSongId = null;
     _position = initialPosition ?? Duration.zero;
     _positionController.add(_position);
+    _bufferedPosition = Duration.zero;
+    _bufferedPositionController.add(Duration.zero);
     _manageDesktopPositionTimer();
     if (song.duration != null && song.duration! > 0) {
       _duration = Duration(seconds: song.duration!);
@@ -3729,6 +3749,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentSong = _queue[next];
       _position = Duration.zero;
       _positionController.add(Duration.zero);
+      _bufferedPosition = Duration.zero;
+      _bufferedPositionController.add(Duration.zero);
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
           : Duration.zero;
@@ -3749,6 +3771,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentSong = _queue[nextIndex];
       _position = Duration.zero;
       _positionController.add(Duration.zero);
+      _bufferedPosition = Duration.zero;
+      _bufferedPositionController.add(Duration.zero);
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
           : Duration.zero;
@@ -3889,6 +3913,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _lastPreviousPressTime = now;
       _position = Duration.zero;
       _positionController.add(Duration.zero);
+      _bufferedPosition = Duration.zero;
+      _bufferedPositionController.add(Duration.zero);
       await seek(Duration.zero);
       return;
     }
@@ -4006,6 +4032,8 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
       _currentSong = _queue[prevIndex];
       _position = Duration.zero;
       _positionController.add(Duration.zero);
+      _bufferedPosition = Duration.zero;
+      _bufferedPositionController.add(Duration.zero);
       _duration = _currentSong!.duration != null
           ? Duration(seconds: _currentSong!.duration!)
           : Duration.zero;
@@ -4723,9 +4751,11 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
 
     _playerStateSub?.cancel();
     _positionSub?.cancel();
+    _bufferedPositionSub?.cancel();
     _durationSub?.cancel();
     _currentIndexSub?.cancel();
     _positionController.close();
+    _bufferedPositionController.close();
     _bufferingController.close();
     super.dispose();
   }
