@@ -23,6 +23,36 @@ import java.io.File
 
 class MainActivity : AudioServiceFragmentActivity() {
     private val CHANNEL = "com.groovy.music/ytdlp"
+    private var pendingApkFile: File? = null
+
+    private fun launchApkInstaller(file: File): Boolean {
+        return try {
+            file.setReadable(true, false)
+            val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                this@MainActivity,
+                "${applicationContext.packageName}.fileProvider",
+                file
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(apkUri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true)
+            }
+            val resInfoList = packageManager.queryIntentActivities(
+                intent,
+                android.content.pm.PackageManager.MATCH_DEFAULT_ONLY
+            )
+            for (resolveInfo in resInfoList) {
+                val pkgName = resolveInfo.activityInfo.packageName
+                grantUriPermission(pkgName, apkUri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(intent)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,6 +62,13 @@ class MainActivity : AudioServiceFragmentActivity() {
     override fun onResume() {
         super.onResume()
         setHighRefreshRate()
+        val apk = pendingApkFile
+        if (apk != null && apk.exists()) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || packageManager.canRequestPackageInstalls()) {
+                pendingApkFile = null
+                launchApkInstaller(apk)
+            }
+        }
     }
 
     override fun onAttachedToWindow() {
@@ -224,7 +261,7 @@ class MainActivity : AudioServiceFragmentActivity() {
                         return@setMethodCallHandler
                     }
                     try {
-                        val file = java.io.File(filePath)
+                        val file = File(filePath)
                         if (!file.exists()) {
                             result.error("FILE_NOT_FOUND", "APK file does not exist at $filePath", null)
                             return@setMethodCallHandler
@@ -232,34 +269,29 @@ class MainActivity : AudioServiceFragmentActivity() {
                         // Ensure unknown sources permission is granted on Android 8.0+
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                             if (!packageManager.canRequestPackageInstalls()) {
-                                val manageIntent = android.content.Intent(
+                                pendingApkFile = file
+                                val manageIntent = Intent(
                                     android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                                     android.net.Uri.parse("package:$packageName")
                                 ).apply {
-                                    addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                 }
                                 startActivity(manageIntent)
                                 result.error(
                                     "NEED_PERMISSION",
-                                    "Activa el permiso para instalar aplicaciones desde Groovy y pulsa Actualizar de nuevo.",
+                                    "Activa el permiso para instalar aplicaciones desde Groovy. Al volver a la app, se instalará automáticamente.",
                                     null
                                 )
                                 return@setMethodCallHandler
                             }
                         }
 
-                        val apkUri = androidx.core.content.FileProvider.getUriForFile(
-                            this@MainActivity,
-                            "${applicationContext.packageName}.fileProvider",
-                            file
-                        )
-                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
-                            setDataAndType(apkUri, "application/vnd.android.package-archive")
-                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val launched = launchApkInstaller(file)
+                        if (launched) {
+                            result.success(true)
+                        } else {
+                            result.error("INSTALL_ERROR", "No se pudo abrir el instalador de paquetes", null)
                         }
-                        startActivity(intent)
-                        result.success(true)
                     } catch (e: Exception) {
                         result.error("INSTALL_ERROR", e.message, e.stackTraceToString())
                     }

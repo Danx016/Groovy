@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '2.2.3';
+  static String currentVersion = '2.2.4';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -145,7 +145,19 @@ class UpdateService {
 
   /// Returns the local destination file path for this release's installer
   static Future<String> getInstallerFilePath(ReleaseInfo release) async {
-    final dir = await getTemporaryDirectory();
+    Directory dir;
+    if (!kIsWeb && Platform.isAndroid) {
+      try {
+        final extDirs = await getExternalCacheDirectories();
+        dir = (extDirs != null && extDirs.isNotEmpty)
+            ? extDirs.first
+            : await getTemporaryDirectory();
+      } catch (_) {
+        dir = await getTemporaryDirectory();
+      }
+    } else {
+      dir = await getTemporaryDirectory();
+    }
     return '${dir.path}/${getInstallerFileName(release)}';
   }
 
@@ -348,7 +360,7 @@ class UpdateService {
       } on PlatformException catch (pe) {
         if (pe.code == 'NEED_PERMISSION') {
           downloadErrorNotifier.value =
-              'Activa el permiso "Instalar apps desconocidas" en Ajustes y pulsa Instalar de nuevo.';
+              'Activa el permiso "Instalar apps desconocidas" en Ajustes. Al regresar a Groovy, la instalación continuará automáticamente.';
         } else {
           downloadErrorNotifier.value =
               'Error al iniciar instalación: ${pe.message ?? pe.code}';
