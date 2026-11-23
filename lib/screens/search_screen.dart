@@ -214,8 +214,10 @@ class _SearchScreenState extends State<SearchScreen> {
           _searchResult = result;
           _isSearching = false;
         });
-        if (result.songs.isNotEmpty && !result.songs.first.isLocal) {
-          YtDlpService().warmUpStreamCache(result.songs.first.id);
+        for (final s in result.songs.take(2)) {
+          if (!s.isLocal) {
+            YtDlpService().warmUpStreamCache(s.id);
+          }
         }
       }
     } catch (e) {

@@ -2968,6 +2968,7 @@ class PlayerProvider extends ChangeNotifier with WidgetsBindingObserver {
             _lastPreloadedSongId = nextSongToPreload.id;
             _preloadSong(nextSongToPreload);
           }
+          _preResolveUpcomingQueue();
 
           // Background auto-cache on Desktop for subsequent 0ms instant plays from disk
           if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {

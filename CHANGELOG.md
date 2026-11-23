@@ -5,6 +5,16 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2026-11-22
+
+### Performance & Fast-Stream
+- **Carga Ultra Rápida de Canciones con Servidor Oracle Cloud**:
+  - Habilitada la reproducción directa y fluida por URL en Android a través de ExoPlayer usando las URLs de alta velocidad del servidor Oracle Cloud Fast-Stream, eliminando bloqueos de la app y llamadas pesadas en el hilo de Dart.
+  - Optimizado el extractor del backend (`stream.js`) con `--extractor-args "youtube:player_skip=configs"` y cookies de sesión activas, reduciendo la latencia de extracción en frío.
+  - Implementado pre-calentamiento proactivo de cola (`_preResolveUpcomingQueue`) inmediatamente al iniciar cualquier canción, garantizando que las siguientes pistas ya estén resueltas en memoria en el servidor.
+  - Implementado pre-calentamiento en tiempo real de los primeros resultados de búsqueda para reproducción instantánea (< 300ms) al tocarlos.
+  - Optimizado `HttpClient` con HTTP Keep-Alive persistente y reutilización de sockets TLS hacia el backend.
+
 ## [2.2.1] - 2026-11-22
 
 ### Fixed

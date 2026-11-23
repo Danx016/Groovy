@@ -1129,7 +1129,9 @@ class YtDlpService {
   }
 
   static final HttpClient _cloudStreamClient = HttpClient()
-    ..connectionTimeout = const Duration(milliseconds: 9000)
+    ..connectionTimeout = const Duration(milliseconds: 8000)
+    ..idleTimeout = const Duration(seconds: 30)
+    ..maxConnectionsPerHost = 16
     ..badCertificateCallback = ((cert, host, port) => true);
 
   /// Queries the high-speed Oracle Cloud Fast-Stream endpoint (delosmontesdemaria.dev)

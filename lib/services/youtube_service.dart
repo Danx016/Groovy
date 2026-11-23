@@ -438,14 +438,18 @@ class YoutubeService {
           artist: song.artist,
         );
         if (cloudInfo != null && cloudInfo.url.isNotEmpty) {
+          debugPrint('[YouTube] ⚡ Playing "${song.title}" directly via Oracle Cloud Fast-Stream: ${cloudInfo.url.substring(0, (cloudInfo.url.length > 50 ? 50 : cloudInfo.url.length))}...');
           if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
-            debugPrint('[YouTube] ⚡ Desktop: Playing "${song.title}" directly via Oracle Cloud Fast-Stream: ${cloudInfo.url.substring(0, (cloudInfo.url.length > 50 ? 50 : cloudInfo.url.length))}...');
             return AudioSource.uri(
               Uri.parse(cloudInfo.url),
               tag: song.id,
             );
           } else {
-            return buildAudioSource(song.id, originalSongId: song.id);
+            return AudioSource.uri(
+              Uri.parse(cloudInfo.url),
+              headers: cloudInfo.headers.isNotEmpty ? cloudInfo.headers : null,
+              tag: song.id,
+            );
           }
         }
       } catch (_) {}

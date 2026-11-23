@@ -34,6 +34,7 @@ const ytDlpPath = getYtDlpPath();
 // Find cookies.txt
 function getCookiesPath() {
   const candidates = [
+    '/home/ubuntu/Groovy/groovy-backend/routes/cookies.txt',
     path.resolve(__dirname, 'cookies.txt'),
     path.resolve(__dirname, '../cookies.txt'),
     '/home/ubuntu/Groovy/cookies.txt',
@@ -169,6 +170,7 @@ function extractStreamInfo(videoId) {
       '--no-warnings',
       '--no-check-certificates',
       '--skip-download',
+      '--extractor-args', 'youtube:player_skip=configs',
     ];
 
     if (cookiesPath) {
@@ -183,8 +185,8 @@ function extractStreamInfo(videoId) {
 
     const timer = setTimeout(() => {
       try { child.kill('SIGKILL'); } catch (_) {}
-      reject(new Error('yt-dlp extraction timed out (8s)'));
-    }, 8000);
+      reject(new Error('yt-dlp extraction timed out (9s)'));
+    }, 9000);
 
     child.stdout.on('data', chunk => stdout += chunk);
     child.stderr.on('data', chunk => stderr += chunk);
