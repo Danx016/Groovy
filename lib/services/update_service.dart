@@ -84,7 +84,7 @@ class ReleaseInfo {
 }
 
 class UpdateService {
-  static String currentVersion = '2.2.2';
+  static String currentVersion = '2.2.3';
   static const MethodChannel _channel = MethodChannel('com.groovy.music/app_updater');
 
   static const String _apiUrl =
@@ -357,31 +357,30 @@ class UpdateService {
     } else if (!kIsWeb && Platform.isWindows) {
       try {
         final appExePath = Platform.resolvedExecutable;
-        final normalizedInstaller = filePath.replaceAll('/', '\\');
-        final normalizedApp = appExePath.replaceAll('/', '\\');
+        final installerPath = filePath.replaceAll('/', '\\');
+        final targetAppPath = appExePath.replaceAll('/', '\\');
 
-        // Create a dedicated launcher script in Temp to avoid cmd.exe quote-stripping bugs
-        final tempDir = await getTemporaryDirectory();
-        final scriptFile = File('${tempDir.path}\\groovy_silent_update.cmd');
-        await scriptFile.writeAsString(
-          '@echo off\r\n'
-          'timeout /t 1 /nobreak >nul\r\n'
-          '"$normalizedInstaller" /VERYSILENT /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS\r\n'
-          'start "" "$normalizedApp"\r\n'
-          'del "%~f0"\r\n',
-        );
+        // PowerShell one-liner:
+        // 1. Wait 1200ms so this current groovy.exe process exits completely and releases all file locks
+        // 2. Run the Inno Setup installer silently and wait for it (-Wait) to fully write all new files
+        // 3. Relaunch the updated groovy.exe automatically
+        final psCommand =
+            'Start-Sleep -Milliseconds 1200; '
+            'Start-Process -FilePath \'$installerPath\' -ArgumentList \'/VERYSILENT /SUPPRESSMSGBOXES /FORCECLOSEAPPLICATIONS\' -Wait; '
+            'Start-Process -FilePath \'$targetAppPath\'';
 
         await Process.start(
           'powershell.exe',
           [
             '-WindowStyle', 'Hidden',
             '-NoProfile',
+            '-ExecutionPolicy', 'Bypass',
             '-Command',
-            'Start-Process -FilePath "${scriptFile.path}" -WindowStyle Hidden',
+            psCommand,
           ],
           mode: ProcessStartMode.detached,
         );
-        await Future.delayed(const Duration(milliseconds: 600));
+        await Future.delayed(const Duration(milliseconds: 300));
         exit(0);
       } catch (_) {
         try {
@@ -391,7 +390,7 @@ class UpdateService {
             ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/FORCECLOSEAPPLICATIONS'],
             mode: ProcessStartMode.detached,
           );
-          await Future.delayed(const Duration(milliseconds: 1200));
+          await Future.delayed(const Duration(milliseconds: 500));
           exit(0);
         } catch (err) {
           debugPrint('Failed to launch Windows update installer: $err');

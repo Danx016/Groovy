@@ -5,6 +5,13 @@ All notable changes to Groovy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2026-11-22
+
+### Fixed
+- **Actualización Automática y Silenciosa en Windows**:
+  - Solucionado el problema donde la app se cerraba sin aplicar la actualización y mostraba un error de archivo `"\\"`.
+  - Reemplazado el script `.cmd` intermedio por una secuencia directa y segura en PowerShell con `-Wait`, garantizando que el proceso de Groovy libere todos los archivos antes de instalar y relance automáticamente la nueva versión.
+
 ## [2.2.2] - 2026-11-22
 
 ### Performance & Fast-Stream
